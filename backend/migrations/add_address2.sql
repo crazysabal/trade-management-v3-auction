@@ -10,3 +10,4 @@ ALTER TABLE company_info ADD COLUMN address2 VARCHAR(200) NULL AFTER address;
 
 
 
+
