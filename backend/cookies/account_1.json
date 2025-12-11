@@ -1,0 +1,30 @@
+[
+  {
+    "name": "bigchance_pw2",
+    "value": "gong3030",
+    "domain": "tgjungang.co.kr",
+    "path": "/",
+    "expires": 1765436681.689723,
+    "size": 21,
+    "httpOnly": false,
+    "secure": false,
+    "session": false,
+    "sameParty": false,
+    "sourceScheme": "NonSecure",
+    "sourcePort": 80
+  },
+  {
+    "name": "bigchance_id2",
+    "value": "075",
+    "domain": "tgjungang.co.kr",
+    "path": "/",
+    "expires": 1765436681.689547,
+    "size": 16,
+    "httpOnly": false,
+    "secure": false,
+    "session": false,
+    "sameParty": false,
+    "sourceScheme": "NonSecure",
+    "sourcePort": 80
+  }
+]
