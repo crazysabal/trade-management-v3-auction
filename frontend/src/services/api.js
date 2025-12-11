@@ -9,6 +9,34 @@ const api = axios.create({
   },
 });
 
+// 요청 인터셉터: 토큰 자동 추가
+api.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem('token');
+    if (token) {
+      config.headers['Authorization'] = `Bearer ${token}`;
+    }
+    return config;
+  },
+  (error) => {
+    return Promise.reject(error);
+  }
+);
+
+// 응답 인터셉터: 401 처리
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response && error.response.status === 401) {
+      // 토큰 만료 또는 인증 실패 시 로그아웃 처리
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      window.location.href = '/login';
+    }
+    return Promise.reject(error);
+  }
+);
+
 // 거래처 API
 export const companyAPI = {
   getAll: (params) => api.get('/companies', { params }),
@@ -92,17 +120,17 @@ export const auctionAPI = {
   getAccounts: () => api.get('/auction/accounts'),
   saveAccount: (data) => api.post('/auction/accounts', data),
   updateAccount: (id, data) => api.put(`/auction/accounts/${id}`, data),
-  
+
   // 크롤링 실행
   crawl: (data) => api.post('/auction/crawl', data),
-  
+
   // 원본 데이터 조회
   getRawData: (params) => api.get('/auction/raw-data', { params }),
-  
+
   // 원본 데이터 삭제
   deleteRawData: (id) => api.delete(`/auction/raw-data/${id}`),
   deleteRawDataBulk: (ids) => api.delete('/auction/raw-data', { data: { ids } }),
-  
+
   // 품목 매칭
   getMappings: () => api.get('/auction/mappings'),
   saveMapping: (data) => api.post('/auction/mappings', data),
@@ -119,32 +147,32 @@ export const paymentAPI = {
   // 잔고 조회
   getBalances: (params) => api.get('/payments/balances', { params }),
   getBalanceDetail: (companyId) => api.get(`/payments/balances/${companyId}`),
-  
+
   // 입금/출금 내역
   getTransactions: (params) => api.get('/payments/transactions', { params }),
   createTransaction: (data) => api.post('/payments/transactions', data),
   createTransactionWithAllocation: (data) => api.post('/payments/transactions-with-allocation', data),
   deleteTransaction: (id) => api.delete(`/payments/transactions/${id}`),
-  
+
   // 미결제 전표 조회
   getUnpaidTrades: (companyId, tradeType) => api.get(`/payments/unpaid-trades/${companyId}`, { params: { trade_type: tradeType } }),
-  
+
   // 거래처 원장
   getLedger: (companyId, params) => api.get(`/payments/ledger/${companyId}`, { params }),
-  
+
   // 거래처 오늘 거래 현황 (전표 등록 화면용)
-  getCompanyTodaySummary: (companyId, tradeType, tradeDate) => 
+  getCompanyTodaySummary: (companyId, tradeType, tradeDate) =>
     api.get(`/payments/company-today-summary/${companyId}`, { params: { trade_type: tradeType, trade_date: tradeDate } }),
-  
+
   // 전표와 연결된 입출금 조회
   getByTrade: (tradeId) => api.get(`/payments/by-trade/${tradeId}`),
-  
+
   // 입출금 수정
   updateTransaction: (id, data) => api.put(`/payments/transaction/${id}`, data),
-  
+
   // 입출금 삭제 (잔고 복원 포함)
   deleteLinkedTransaction: (id) => api.delete(`/payments/transaction/${id}`),
-  
+
   // 잔고 재계산 (정합성 복구용)
   recalculateBalance: (companyId) => api.post(`/payments/recalculate-balance/${companyId}`),
   recalculateAllBalances: () => api.post('/payments/recalculate-all-balances'),
