@@ -22,6 +22,7 @@ import CompanyInfo from './pages/CompanyInfo';
 import MatchingPage from './pages/MatchingPage';
 import CompanyBalances from './pages/CompanyBalances';
 import SaleFromInventory from './pages/SaleFromInventory';
+import Settings from './pages/Settings';
 
 function App() {
   // 열린 메뉴 상태 관리
@@ -127,6 +128,7 @@ function App() {
                   <span className="sidebar-arrow">▼</span>
                 </span>
                 <ul className="sidebar-submenu">
+                  <li><Link to="/settings">시스템 설정</Link></li>
                   <li><Link to="/settings/company-info">본사 정보</Link></li>
                 </ul>
               </li>
@@ -157,6 +159,7 @@ function App() {
             <Route path="/auction/import" element={<AuctionImport />} />
             <Route path="/statistics" element={<Statistics />} />
             <Route path="/payments/balances" element={<CompanyBalances />} />
+            <Route path="/settings" element={<Settings />} />
             <Route path="/settings/company-info" element={<CompanyInfo />} />
           </Routes>
         </main>

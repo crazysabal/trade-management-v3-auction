@@ -118,7 +118,8 @@ router.get('/check-duplicate', async (req, res) => {
       return res.json({
         success: true,
         isDuplicate: true,
-        trade: existingTrade[0]
+        trade: existingTrade[0],
+        existingTradeId: existingTrade[0].id
       });
     }
 

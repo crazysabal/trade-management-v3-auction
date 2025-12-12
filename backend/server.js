@@ -20,6 +20,7 @@ const companyInfoRouter = require('./routes/companyInfo');
 const purchaseInventoryRouter = require('./routes/purchaseInventory');
 const matchingRouter = require('./routes/matching');
 const paymentsRouter = require('./routes/payments');
+const settingsRouter = require('./routes/settings');
 
 app.use('/api/companies', companiesRouter);
 app.use('/api/products', productsRouter);
@@ -31,6 +32,7 @@ app.use('/api/company-info', companyInfoRouter);
 app.use('/api/purchase-inventory', purchaseInventoryRouter);
 app.use('/api/matching', matchingRouter);
 app.use('/api/payments', paymentsRouter);
+app.use('/api/settings', settingsRouter);
 
 // 헬스체크
 app.get('/api/health', (req, res) => {

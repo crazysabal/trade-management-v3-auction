@@ -62,6 +62,14 @@ export const productAPI = {
   reorder: (data) => api.put('/products/reorder', data),
 };
 
+// 설정 API
+export const settingsAPI = {
+  getPaymentMethods: (params) => api.get('/settings/payment-methods', { params }),
+  addPaymentMethod: (data) => api.post('/settings/payment-methods', data),
+  updatePaymentMethod: (id, data) => api.put(`/settings/payment-methods/${id}`, data),
+  reorderPaymentMethods: (items) => api.put('/settings/payment-methods/reorder', { items }),
+};
+
 // 품목분류 API
 export const categoryAPI = {
   getAll: (params) => api.get('/categories', { params }),

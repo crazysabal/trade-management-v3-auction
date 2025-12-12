@@ -1,0 +1,477 @@
+/* TradePanel.css */
+
+/* --- Layout & Container --- */
+.trade-panel-container {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    padding: 0.5rem;
+    background-color: #fff;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+/* --- Header Section --- */
+.trade-header-section {
+    flex-shrink: 0;
+    margin-bottom: 0.5rem;
+    background-color: #fff;
+    border-bottom: 1px solid #eee;
+    padding-bottom: 0.5rem;
+}
+
+.trade-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    align-items: flex-end;
+}
+
+
+.trade-form-row {
+    display: flex;
+    gap: 0.75rem;
+    align-items: flex-end;
+}
+
+.trade-date-group {
+    flex: 0 0 180px;
+}
+
+/* --- Table Styles --- */
+.trade-table-container {
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    overflow: auto;
+    flex: 1;
+}
+
+.trade-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.trade-table thead {
+    background-color: #f8f9fa;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+.trade-table th {
+    padding: 0.5rem;
+    text-align: center;
+    font-weight: 600;
+    border-bottom: 2px solid #ddd;
+    white-space: nowrap;
+    font-size: 0.95rem;
+    color: #555;
+}
+
+.trade-table td {
+    padding: 4px;
+    border-bottom: 1px solid #eee;
+    vertical-align: middle;
+}
+
+.trade-table-row {
+    background-color: white;
+}
+
+.trade-table-row:hover {
+    background-color: #f9f9f9;
+}
+
+.trade-table-row.is-dragging {
+    opacity: 0.5;
+    background-color: #f0f0f0;
+}
+
+.trade-table-row.is-over {
+    border-top: 2px solid #3498db;
+}
+
+/* Table Input Styles */
+.trade-input-table {
+    width: 100%;
+    padding: 0.4rem;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 0.9rem;
+}
+
+.trade-input-table:focus {
+    outline: none;
+    border-color: #3498db;
+    box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.1);
+}
+
+.trade-input-right {
+    text-align: right;
+}
+
+.trade-input-center {
+    text-align: center;
+}
+
+.trade-drag-handle {
+    cursor: grab;
+    text-align: center;
+    color: #aaa;
+    font-size: 1.2rem;
+    line-height: 1;
+}
+
+.trade-drag-handle:active {
+    cursor: grabbing;
+}
+
+.trade-index-cell {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    color: #666;
+    justify-content: center;
+    width: 100%;
+}
+
+/* Footer Totals */
+.trade-table-footer {
+    background-color: #f8f9fa;
+    font-weight: bold;
+}
+
+.trade-total-label {
+    padding: 8px;
+    text-align: right;
+}
+
+.trade-total-value {
+    padding: 8px;
+    text-align: right;
+    color: #c62828;
+    font-size: 1.1rem;
+}
+
+/* --- Form Elements --- */
+.trade-form-group {
+    display: flex;
+    flex-direction: column;
+}
+
+.trade-textarea {
+    width: 100%;
+    padding: 0.4rem;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    resize: vertical;
+    font-size: 1rem;
+}
+
+.trade-section-label {
+    display: block;
+    margin-bottom: 0.25rem;
+    font-weight: 500;
+    font-size: 1rem;
+}
+
+.trade-table-row.selected {
+    background-color: #e3f2fd;
+}
+
+
+.trade-label {
+    display: block;
+    margin-bottom: 0.25rem;
+    font-weight: 500;
+    color: #555;
+    font-size: 1rem;
+}
+
+.trade-label.required::after {
+    content: " *";
+    color: #e74c3c;
+}
+
+.trade-input-wrapper {
+    display: flex;
+    gap: 4px;
+}
+
+.trade-input {
+    padding: 0.5rem;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 1rem;
+    width: 100%;
+}
+
+.trade-input:focus {
+    outline: none;
+    border-color: #3498db;
+    box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.1);
+}
+
+.trade-date-input {
+    flex: 1;
+    padding: 0.5rem;
+    font-size: 1rem;
+}
+
+.trade-select-container {
+    flex: 1;
+}
+
+/* --- Buttons --- */
+.trade-action-buttons {
+    display: flex;
+    gap: 0.4rem;
+    flex-shrink: 0;
+}
+
+.btn-icon {
+    padding: 6px 10px;
+    min-width: auto;
+}
+
+.btn-custom {
+    padding: 0.5rem 0.75rem;
+    font-size: 1rem;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn-custom:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* Specific Button Styles */
+.btn-save-edit {
+    background-color: #3498db;
+    color: white;
+}
+
+.btn-save-edit.is-dirty {
+    background-color: #2980b9;
+    animation: buttonPulse 1.5s ease-in-out infinite;
+    font-weight: 700;
+}
+
+.btn-save-print {
+    background-color: #27ae60;
+    color: white;
+    white-space: nowrap;
+}
+
+.btn-save-print.is-dirty {
+    background-color: #27ae60;
+    animation: buttonPulse 1.5s ease-in-out infinite;
+    font-weight: 700;
+}
+
+@keyframes buttonPulse {
+    0% {
+        transform: scale(1);
+        box-shadow: 0 0 0 0 rgba(0, 0, 0, 0.2);
+    }
+
+    50% {
+        transform: scale(1.02);
+        box-shadow: 0 0 0 4px rgba(0, 0, 0, 0.1);
+    }
+
+    100% {
+        transform: scale(1);
+        box-shadow: 0 0 0 0 rgba(0, 0, 0, 0.2);
+    }
+}
+
+/* --- Content Layout --- */
+.trade-content-area {
+    display: flex;
+    gap: 0.5rem;
+    align-items: stretch;
+    flex: 1;
+    min-height: 0;
+}
+
+.trade-detail-card {
+    flex: 1;
+    min-width: 0;
+    padding: 0.75rem;
+    display: flex;
+    flex-direction: column;
+    /* background-color set via inline style for dynamic color */
+    border-radius: 8px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.trade-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.5rem;
+    flex-shrink: 0;
+}
+
+.trade-card-title {
+    margin: 0;
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: #2c3e50;
+}
+
+.trade-card-actions {
+    display: flex;
+    gap: 4px;
+}
+
+/* --- Balance Card (Right Side) --- */
+.trade-balance-card {
+    flex: 0 0 300px;
+    min-width: 300px;
+    padding: 0.75rem;
+    display: flex;
+    flex-direction: column;
+    border-radius: 8px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.balance-list {
+    margin-bottom: 0.5rem;
+    font-size: 1rem;
+    flex-shrink: 0;
+}
+
+.balance-item {
+    display: flex;
+    justify-content: space-between;
+    padding: 0.4rem;
+    border-bottom: 1px solid #eee;
+}
+
+.balance-item.header {
+    background-color: #f0f7ff;
+    border-radius: 4px 4px 0 0;
+}
+
+.balance-box {
+    display: flex;
+    justify-content: space-between;
+    padding: 0.5rem;
+    border-radius: 6px;
+    margin-bottom: 0.5rem;
+    flex-shrink: 0;
+}
+
+.balance-box.positive {
+    background-color: #fff3e0;
+    color: #e65100;
+}
+
+.balance-box.negative {
+    background-color: #e3f2fd;
+    color: #1565c0;
+}
+
+.balance-box.zero {
+    background-color: #e8f5e9;
+    color: #2e7d32;
+}
+
+.balance-box-label {
+    font-weight: 600;
+    font-size: 1rem;
+}
+
+.balance-box-value {
+    font-weight: 700;
+    font-size: 1rem;
+}
+
+/* --- Payment History --- */
+.payment-section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.4rem;
+    flex-shrink: 0;
+}
+
+.payment-add-btn {
+    padding: 4px 10px;
+    font-size: 0.95rem;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    color: white;
+}
+
+.payment-add-btn:disabled {
+    background-color: #ccc !important;
+    cursor: not-allowed;
+}
+
+.payment-list-container {
+    flex: 1;
+    overflow: auto;
+    min-height: 0;
+}
+
+.payment-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.4rem;
+    padding: 0.5rem;
+    border-radius: 4px;
+    border-left: 3px solid #ccc;
+    background-color: #f9f9f9;
+}
+
+.payment-item.direct {
+    background-color: #f0fff4;
+    border-left-color: #27ae60;
+}
+
+.payment-item.allocated {
+    background-color: #e3f2fd;
+    border-left-color: #2196f3;
+}
+
+.payment-item.general {
+    background-color: #f3e5f5;
+    border-left-color: #9c27b0;
+}
+
+.payment-badge {
+    padding: 2px 6px;
+    border-radius: 4px;
+    color: white;
+    font-size: 0.8rem;
+    margin-right: 6px;
+}
+
+.payment-badge.direct {
+    background-color: #27ae60;
+}
+
+.payment-badge.allocated {
+    background-color: #2196f3;
+}
+
+.payment-badge.general {
+    background-color: #9c27b0;
+}
+
+.payment-amount {
+    font-weight: 600;
+}
+
+.payment-actions {
+    display: flex;
+    gap: 4px;
+}
