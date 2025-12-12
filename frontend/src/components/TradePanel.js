@@ -21,6 +21,15 @@ function TradePanel({
 }) {
   const isPurchase = tradeType === 'PURCHASE';
 
+  // 모바일 감지
+  const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
+
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth <= 768);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
   // 기본 데이터
   const [companies, setCompanies] = useState([]);
   const [products, setProducts] = useState([]);
@@ -1060,46 +1069,33 @@ function TradePanel({
         </div>
 
         {/* 메인 콘텐츠 영역 (품목 상세 + 잔고) */}
-        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'stretch', flex: 1, minHeight: 0 }}>
+        <div className="trade-content-area">
 
           {/* 왼쪽: 품목 상세 카드 */}
-          <div className="card" style={{ flex: 1, minWidth: 0, padding: '0.75rem', display: 'flex', flexDirection: 'column', backgroundColor: cardColor }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem', flexShrink: 0 }}>
-              <h2 className="card-title" style={{ margin: 0, fontSize: fs(1) }}>품목 상세</h2>
-              <div style={{ display: 'flex', gap: '4px' }}>
+          <div className="trade-detail-card" style={{ backgroundColor: cardColor }}>
+            <div className="trade-card-header">
+              <h2 className="trade-card-title">품목 상세</h2>
+              <div className="trade-card-actions">
                 <button
                   type="button"
-                  className="btn btn-secondary btn-sm"
+                  className="btn btn-secondary btn-custom btn-xs"
                   onClick={refreshProducts}
-                  style={{ fontSize: fs(0.95), padding: '4px 8px' }}
                 >
                   🔄 새로고침
                 </button>
                 <button
                   type="button"
-                  className="btn btn-success btn-sm"
+                  className="btn btn-success btn-custom btn-xs"
                   onClick={addDetailRow}
                   disabled={!master.company_id}
-                  style={{
-                    fontSize: fs(0.95),
-                    padding: '4px 8px',
-                    opacity: !master.company_id ? 0.5 : 1,
-                    cursor: !master.company_id ? 'not-allowed' : 'pointer'
-                  }}
                 >
                   + 추가
                 </button>
                 <button
                   type="button"
-                  className="btn btn-danger btn-sm"
                   onClick={removeSelectedRow}
                   disabled={!master.company_id}
-                  style={{
-                    fontSize: fs(0.95),
-                    padding: '4px 8px',
-                    opacity: !master.company_id ? 0.5 : 1,
-                    cursor: !master.company_id ? 'not-allowed' : 'pointer'
-                  }}
+                  className="btn btn-custom btn-danger btn-xs"
                 >
                   삭제
                 </button>
@@ -1110,13 +1106,13 @@ function TradePanel({
               <table className="trade-table">
                 <thead>
                   <tr>
-                    <th style={{ width: '40px' }}>No</th>
-                    <th style={{ width: '180px' }}>품목</th>
-                    <th style={{ width: '80px' }}>수량</th>
-                    <th style={{ width: '100px' }}>단가</th>
-                    <th style={{ width: '100px' }}>금액</th>
-                    {isPurchase && <th style={{ width: '100px' }}>상차지</th>}
-                    {isPurchase && <th style={{ width: '100px' }}>화주</th>}
+                    <th className="col-no">No</th>
+                    <th className="col-product">품목</th>
+                    <th className="col-qty">수량</th>
+                    <th className="col-price">단가</th>
+                    <th className="col-amount">금액</th>
+                    {isPurchase && <th className="col-location">상차지</th>}
+                    {isPurchase && <th className="col-owner">화주</th>}
                     <th>비고</th>
                   </tr>
                 </thead>
@@ -1130,7 +1126,7 @@ function TradePanel({
                       onDrop={(e) => handleDrop(e, index)}
                       onDragEnd={handleDragEnd}
                       onClick={() => setSelectedRowIndex(index)}
-                      className={`trade-table-row ${selectedRowIndex === index ? 'selected' : ''} ${isDragging ? 'is-dragging' : ''} ${dragOverIndex === index ? 'is-over' : ''}`}
+                      className={`trade-table-row ${selectedRowIndex === index ? 'selected' : ''} ${draggedIndex === index ? 'is-dragging' : ''} ${dragOverIndex === index ? 'is-over' : ''}`}
                       style={{ transition: 'background-color 0.15s' }}
                     >
                       <td>
@@ -1245,7 +1241,7 @@ function TradePanel({
             </div>
 
             {/* 비고 */}
-            <div style={{ marginTop: '0.5rem', flexShrink: 0 }}>
+            <div className="note-section">
               <label className="trade-section-label">비고</label>
               <textarea
                 value={master.notes}
@@ -1266,25 +1262,25 @@ function TradePanel({
             {/* 잔고 정보 리스트 */}
             <div className="balance-list">
               <div className="balance-item header">
-                <span style={{ color: '#1565c0', fontWeight: '500' }}>금일 합계</span>
-                <span style={{ fontWeight: '600', color: isPurchase ? '#c62828' : '#1565c0' }}>
+                <span className="font-medium text-blue">금일 합계</span>
+                <span className={`font-bold ${isPurchase ? 'text-red' : 'text-blue'}`}>
                   {formatCurrency(currentTodayTotal)}원
                 </span>
               </div>
               <div className="balance-item">
-                <span style={{ color: '#666' }}>전잔고</span>
-                <span style={{ fontWeight: '600' }}>{formatCurrency(summary.previous_balance)}원</span>
+                <span className="balance-text-label">전잔고</span>
+                <span className="balance-text-value">{formatCurrency(summary.previous_balance)}원</span>
               </div>
               <div className="balance-item">
-                <span style={{ color: '#666' }}>전잔고 + 금일</span>
-                <span style={{ fontWeight: '600' }}>{formatCurrency(currentSubtotal)}원</span>
+                <span className="balance-text-label">전잔고 + 금일</span>
+                <span className="balance-text-value">{formatCurrency(currentSubtotal)}원</span>
               </div>
               <div className="balance-item">
-                <span style={{ color: '#666' }}>
+                <span className="balance-text-label">
                   {isPurchase ? '출금' : '입금'}
-                  {pendingTotal > 0 && <span style={{ fontSize: '0.95rem', color: '#ffc107' }}> ({pendingPayments.length}건)</span>}
+                  {pendingTotal > 0 && <span className="tag-pending-count"> ({pendingPayments.length}건)</span>}
                 </span>
-                <span style={{ fontWeight: '600', color: '#2e7d32' }}>
+                <span className="balance-text-value text-green">
                   {formatCurrency(displayPayment)}원
                 </span>
               </div>
@@ -1309,9 +1305,9 @@ function TradePanel({
             })()}
 
             {/* 입출금 내역 섹션 */}
-            <div style={{ borderTop: '1px solid #eee', paddingTop: '0.5rem', flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+            <div className="payment-section-wrapper">
               <div className="payment-section-header">
-                <h3 className="trade-section-label" style={{ margin: 0 }}>
+                <h3 className="trade-section-label m-0">
                   📋 {isPurchase ? '출금' : '입금'} 내역
                 </h3>
                 <button
@@ -1342,19 +1338,19 @@ function TradePanel({
                     // 유형별 스타일
                     return (
                       <div key={`${payment.id}-${linkType}`} className={`payment-item ${linkType}`}>
-                        <div style={{ flex: 1 }}>
-                          <div style={{ fontWeight: '500', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                        <div className="flex-1">
+                          <div className="payment-detail-row">
                             {formatCurrency(displayAmount)}원
                             <span className={`payment-badge ${linkType}`}>
                               {linkType === 'direct' ? '직접' : linkType === 'allocated' ? '배분' : '수금/지급'}
                             </span>
                             {isModified && (
-                              <span style={{ fontSize: '0.7rem', backgroundColor: '#ffc107', color: '#333', padding: '2px 5px', borderRadius: '3px' }}>
+                              <span className="tag-modified">
                                 수정됨
                               </span>
                             )}
                           </div>
-                          <div style={{ fontSize: '0.8rem', color: '#888' }}>
+                          <div className="payment-meta-row">
                             {payment.transaction_date?.substring(0, 10)} | {payment.payment_method || '미지정'}
                             {linkType === 'allocated' && payment.amount !== displayAmount && (
                               <span> (총 {formatCurrency(payment.amount)}원 중)</span>
@@ -1366,8 +1362,7 @@ function TradePanel({
                             <button
                               type="button"
                               onClick={() => setEditingPayment(payment)}
-                              className="btn btn-sm btn-custom btn-primary"
-                              style={{ padding: '3px 8px', fontSize: '0.8rem' }}
+                              className="btn btn-custom btn-primary btn-xs"
                             >
                               수정
                             </button>
@@ -1377,8 +1372,7 @@ function TradePanel({
                                 setDeletedPaymentIds(prev => [...prev, payment.id]);
                                 setLinkedPayments(prev => prev.filter(p => p.id !== payment.id));
                               }}
-                              className="btn btn-sm btn-custom btn-danger"
-                              style={{ padding: '3px 8px', fontSize: '0.8rem' }}
+                              className="btn btn-custom btn-danger btn-xs"
                             >
                               삭제
                             </button>
