@@ -246,7 +246,10 @@ const TradeController = {
                 );
             }
 
-            // 4. 매출 전표인 경우: 매칭 확인
+            // 4. 매출 전표인 경우: 매칭 확인 (수정 허용을 위해 제한 해제)
+            // 기존에는 매칭된 내역이 있으면 수정을 막았으나, 
+            // 아래 로직에서 재고 복원 및 재매칭을 처리하므로 이 제한을 제거함.
+            /*
             if (tradeType === 'SALE') {
                 const matchedItems = await TradeController.checkSaleMatching(connection, tradeId);
 
@@ -276,6 +279,7 @@ const TradeController = {
                     };
                 }
             }
+            */
 
             // 5. 매출 전표 로직 (매칭 없는 경우만 실행)
             let unmatchedItems = [];

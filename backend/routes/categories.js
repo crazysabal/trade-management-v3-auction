@@ -6,7 +6,7 @@ const db = require('../config/database');
 router.get('/', async (req, res) => {
   try {
     const { is_active, parent_id, flat } = req.query;
-    
+
     let query = `
       SELECT c.*, p.category_name as parent_name
       FROM categories c
@@ -14,12 +14,12 @@ router.get('/', async (req, res) => {
       WHERE 1=1
     `;
     const params = [];
-    
+
     if (is_active === 'true' || is_active === 'false') {
       query += ' AND c.is_active = ?';
       params.push(is_active === 'true' ? 1 : 0);
     }
-    
+
     // 특정 부모의 자식만 조회
     if (parent_id === 'null') {
       query += ' AND c.parent_id IS NULL';
@@ -27,11 +27,11 @@ router.get('/', async (req, res) => {
       query += ' AND c.parent_id = ?';
       params.push(parent_id);
     }
-    
+
     query += ' ORDER BY c.level, c.parent_id, c.sort_order, c.category_name';
-    
+
     const [rows] = await db.query(query, params);
-    
+
     // flat=true면 평탄화된 배열 반환, 아니면 계층 구조로 변환
     if (flat === 'true') {
       res.json({ success: true, data: rows });
@@ -50,12 +50,12 @@ router.get('/', async (req, res) => {
 function buildHierarchy(flatData) {
   const map = {};
   const roots = [];
-  
+
   // 먼저 모든 항목을 맵에 저장
   flatData.forEach(item => {
     map[item.id] = { ...item, children: [] };
   });
-  
+
   // 부모-자식 관계 설정
   flatData.forEach(item => {
     if (item.parent_id && map[item.parent_id]) {
@@ -64,7 +64,7 @@ function buildHierarchy(flatData) {
       roots.push(map[item.id]);
     }
   });
-  
+
   return roots;
 }
 
@@ -77,11 +77,11 @@ router.get('/:id', async (req, res) => {
       LEFT JOIN categories p ON c.parent_id = p.id
       WHERE c.id = ?
     `, [req.params.id]);
-    
+
     if (rows.length === 0) {
       return res.status(404).json({ success: false, message: '품목분류를 찾을 수 없습니다.' });
     }
-    
+
     res.json({ success: true, data: rows[0] });
   } catch (error) {
     console.error('품목분류 상세 조회 오류:', error);
@@ -93,17 +93,17 @@ router.get('/:id', async (req, res) => {
 router.post('/', async (req, res) => {
   try {
     const { category_name, parent_id, sort_order } = req.body;
-    
+
     if (!category_name) {
       return res.status(400).json({ success: false, message: '분류명은 필수입니다.' });
     }
-    
+
     // 중복 체크
     const [existing] = await db.query('SELECT id FROM categories WHERE category_name = ?', [category_name]);
     if (existing.length > 0) {
       return res.status(400).json({ success: false, message: '이미 존재하는 분류명입니다.' });
     }
-    
+
     // 레벨 결정
     let level = 1;
     if (parent_id) {
@@ -112,12 +112,12 @@ router.post('/', async (req, res) => {
         level = parent[0].level + 1;
       }
     }
-    
+
     const [result] = await db.query(
       'INSERT INTO categories (category_name, parent_id, level, sort_order) VALUES (?, ?, ?, ?)',
       [category_name, parent_id || null, level, sort_order || 0]
     );
-    
+
     res.status(201).json({
       success: true,
       message: '품목분류가 등록되었습니다.',
@@ -129,15 +129,52 @@ router.post('/', async (req, res) => {
   }
 });
 
+// 품목분류 순서 변경 (일괄 처리)
+router.put('/reorder', async (req, res) => {
+  try {
+    const { items } = req.body;
+
+    if (!items || !Array.isArray(items)) {
+      return res.status(400).json({ success: false, message: '잘못된 요청 데이터입니다.' });
+    }
+
+    const connection = await db.getConnection();
+
+    try {
+      await connection.beginTransaction();
+
+      for (const item of items) {
+        if (item.id && item.sort_order) {
+          await connection.query(
+            'UPDATE categories SET sort_order = ? WHERE id = ?',
+            [item.sort_order, item.id]
+          );
+        }
+      }
+
+      await connection.commit();
+      res.json({ success: true, message: '순서가 변경되었습니다.' });
+    } catch (err) {
+      await connection.rollback();
+      throw err;
+    } finally {
+      connection.release();
+    }
+  } catch (error) {
+    console.error('순서 변경 오류:', error);
+    res.status(500).json({ success: false, message: '서버 오류가 발생했습니다.' });
+  }
+});
+
 // 품목분류 수정
 router.put('/:id', async (req, res) => {
   try {
     const { category_name, parent_id, sort_order, is_active } = req.body;
-    
+
     if (!category_name) {
       return res.status(400).json({ success: false, message: '분류명은 필수입니다.' });
     }
-    
+
     // 중복 체크 (자기 자신 제외)
     const [existing] = await db.query(
       'SELECT id FROM categories WHERE category_name = ? AND id != ?',
@@ -146,12 +183,12 @@ router.put('/:id', async (req, res) => {
     if (existing.length > 0) {
       return res.status(400).json({ success: false, message: '이미 존재하는 분류명입니다.' });
     }
-    
+
     // 자기 자신을 부모로 설정하는 것 방지
     if (parent_id && parseInt(parent_id) === parseInt(req.params.id)) {
       return res.status(400).json({ success: false, message: '자기 자신을 상위 분류로 설정할 수 없습니다.' });
     }
-    
+
     // 레벨 결정
     let level = 1;
     if (parent_id) {
@@ -160,16 +197,16 @@ router.put('/:id', async (req, res) => {
         level = parent[0].level + 1;
       }
     }
-    
+
     const [result] = await db.query(
       'UPDATE categories SET category_name = ?, parent_id = ?, level = ?, sort_order = ?, is_active = ? WHERE id = ?',
       [category_name, parent_id || null, level, sort_order || 0, is_active !== false, req.params.id]
     );
-    
+
     if (result.affectedRows === 0) {
       return res.status(404).json({ success: false, message: '품목분류를 찾을 수 없습니다.' });
     }
-    
+
     res.json({ success: true, message: '품목분류가 수정되었습니다.' });
   } catch (error) {
     console.error('품목분류 수정 오류:', error);
@@ -185,33 +222,33 @@ router.delete('/:id', async (req, res) => {
       'SELECT id FROM categories WHERE parent_id = ? LIMIT 1',
       [req.params.id]
     );
-    
+
     if (children.length > 0) {
       return res.status(400).json({
         success: false,
         message: '하위 분류가 있어 삭제할 수 없습니다. 먼저 하위 분류를 삭제하세요.'
       });
     }
-    
+
     // 사용중인 품목이 있는지 체크
     const [products] = await db.query(
       'SELECT id FROM products WHERE category_id = ? LIMIT 1',
       [req.params.id]
     );
-    
+
     if (products.length > 0) {
       return res.status(400).json({
         success: false,
         message: '해당 분류를 사용하는 품목이 있어 삭제할 수 없습니다.'
       });
     }
-    
+
     const [result] = await db.query('DELETE FROM categories WHERE id = ?', [req.params.id]);
-    
+
     if (result.affectedRows === 0) {
       return res.status(404).json({ success: false, message: '품목분류를 찾을 수 없습니다.' });
     }
-    
+
     res.json({ success: true, message: '품목분류가 삭제되었습니다.' });
   } catch (error) {
     console.error('품목분류 삭제 오류:', error);

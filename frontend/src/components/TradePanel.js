@@ -3,6 +3,7 @@ import { tradeAPI, companyAPI, productAPI, paymentAPI, settingsAPI } from '../se
 import './TradePanel.css'; // 스타일 분리
 import SearchableSelect from './SearchableSelect';
 import TradeDeleteConfirmModal from './TradeDeleteConfirmModal';
+import ConfirmModal from './ConfirmModal';
 
 /**
  * TradePanel - 단일 전표 패널 컴포넌트
@@ -768,7 +769,9 @@ function TradePanel({
         setPendingPayments([]);
       }
 
-      showModal('success', '저장 완료', `전표가 ${isEdit ? '수정' : '등록'}되었습니다.`);
+      if (!shouldPrint) {
+        showModal('success', '저장 완료', `전표가 ${isEdit ? '수정' : '등록'}되었습니다.`);
+      }
 
       // 저장 후 전표 다시 로드
       await loadTrade(savedTradeId);
@@ -948,6 +951,7 @@ function TradePanel({
     }}>
       {/* 페이지 헤더 */}
       <div className="page-header" style={{
+        marginBottom: 0,
         display: 'flex',
         justifyContent: 'center',
         alignItems: 'center',
@@ -1112,7 +1116,7 @@ function TradePanel({
                     <th className="col-price">단가</th>
                     <th className="col-amount">금액</th>
                     {isPurchase && <th className="col-location">상차지</th>}
-                    {isPurchase && <th className="col-owner">화주</th>}
+                    {isPurchase && <th className="col-owner">출하주</th>}
                     <th>비고</th>
                   </tr>
                 </thead>
@@ -1476,58 +1480,17 @@ function TradePanel({
         </div>
       </div>
 
-      {/* 모달 */}
-      {modal.isOpen && (
-        <div
-          style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: 'rgba(0,0,0,0.5)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 2000
-          }}
-        >
-          <div
-            style={{
-              backgroundColor: 'white',
-              padding: '1.5rem',
-              borderRadius: '8px',
-              maxWidth: '400px',
-              width: '90%'
-            }}
-            tabIndex={-1}
-            ref={modalConfirmRef}
-          >
-            <h3 style={{ margin: '0 0 1rem 0' }}>{modal.title}</h3>
-            <p style={{ whiteSpace: 'pre-line', marginBottom: '1rem' }}>{modal.message}</p>
-            <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
-              {modal.showCancel && (
-                <button
-                  className="btn btn-secondary"
-                  onClick={() => setModal({ ...modal, isOpen: false })}
-                >
-                  취소
-                </button>
-              )}
-              <button
-                className="btn btn-primary"
-                autoFocus
-                onClick={() => {
-                  modal.onConfirm();
-                  setModal({ ...modal, isOpen: false });
-                }}
-              >
-                {modal.confirmText}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* 공통 Confirm Modal */}
+      <ConfirmModal
+        isOpen={modal.isOpen}
+        onClose={() => setModal(prev => ({ ...prev, isOpen: false }))}
+        onConfirm={modal.onConfirm}
+        title={modal.title}
+        message={modal.message}
+        type={modal.type}
+        confirmText={modal.confirmText}
+        showCancel={modal.showCancel}
+      />
 
       {/* 입금/출금 추가 모달 */}
       {addPaymentModal.isOpen && (
@@ -1931,7 +1894,6 @@ function TradePanel({
         </div>
       )}
 
-      {/* 삭제 확인 모달 - 공통 컴포넌트 사용 */}
       <TradeDeleteConfirmModal
         isOpen={deleteConfirmModal.isOpen}
         onClose={() => setDeleteConfirmModal({ isOpen: false })}
@@ -1942,6 +1904,9 @@ function TradePanel({
           '연결된 <strong>입출금 내역</strong>이 함께 삭제됩니다',
           '<strong>거래처 잔고</strong>가 자동으로 조정됩니다'
         ]}
+        tradeDate={master.trade_date}
+        tradeType={master.trade_type}
+        tradePartnerName={companies.find(c => String(c.id) === String(master.company_id))?.company_name}
       />
 
       {/* 대기 중 입출금 수정 모달 */}

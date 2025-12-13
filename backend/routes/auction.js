@@ -4,6 +4,7 @@ const db = require('../config/database');
 const puppeteer = require('puppeteer-extra');
 const StealthPlugin = require('puppeteer-extra-plugin-stealth');
 const crypto = require('crypto');
+const ALGORITHM = 'aes-256-cbc';
 const fs = require('fs');
 const path = require('path');
 

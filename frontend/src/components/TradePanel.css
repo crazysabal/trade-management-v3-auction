@@ -49,6 +49,8 @@
 .trade-table {
     width: 100%;
     border-collapse: collapse;
+    table-layout: fixed;
+    /* Important for responsive columns to behave */
 }
 
 .trade-table thead {
@@ -66,39 +68,49 @@
     white-space: nowrap;
     font-size: 0.95rem;
     color: #555;
+    /* overflow: hidden; */
+    /* text-overflow: ellipsis; */
 }
 
-/* Table Column Widths */
+/* Table Column Widths - Responsive (Percentages) */
 .col-no {
-    width: 40px;
+    width: 6%;
+    min-width: 40px;
 }
 
 .col-product {
-    width: 180px;
+    width: 28%;
+    min-width: 150px;
 }
 
 .col-qty {
-    width: 80px;
+    width: 10%;
+    min-width: 60px;
 }
 
 .col-price {
-    width: 100px;
+    width: 13%;
+    min-width: 80px;
 }
 
 .col-amount {
-    width: 100px;
+    width: 15%;
+    min-width: 90px;
 }
 
 .col-location {
-    width: 100px;
+    width: 13%;
+    min-width: 90px;
 }
 
 .col-owner {
-    width: 100px;
+    width: 15%;
+    min-width: 90px;
 }
 
 .trade-table td {
-    padding: 4px;
+    padding: 2px 4px;
+    /* Reduced vertical padding */
     border-bottom: 1px solid #eee;
     vertical-align: middle;
 }
@@ -127,6 +139,8 @@
     border: 1px solid #ddd;
     border-radius: 4px;
     font-size: 0.9rem;
+    box-sizing: border-box;
+    /* Ensure padding doesn't break width */
 }
 
 .trade-input-table:focus {
@@ -195,6 +209,7 @@
     border-radius: 4px;
     resize: vertical;
     font-size: 1rem;
+    box-sizing: border-box;
 }
 
 .trade-section-label {
@@ -233,6 +248,7 @@
     border-radius: 4px;
     font-size: 1rem;
     width: 100%;
+    box-sizing: border-box;
 }
 
 .trade-input:focus {

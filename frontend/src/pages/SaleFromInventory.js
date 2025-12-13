@@ -10,39 +10,39 @@ import TradeDeleteConfirmModal from '../components/TradeDeleteConfirmModal';
 
 function SaleFromInventory() {
   const navigate = useNavigate();
-  
+
   // 기본 정보
   const [companies, setCompanies] = useState([]);
   const [tradeDate, setTradeDate] = useState(getDateString(0));
   const [companyId, setCompanyId] = useState('');
   const [notes, setNotes] = useState('');
-  
+
   // ★ 수정 모드 관련
   const [currentTradeId, setCurrentTradeId] = useState(null);
   const [isEdit, setIsEdit] = useState(false);
   const [linkedPayments, setLinkedPayments] = useState([]); // 기존 저장된 입출금
   const [deletedPaymentIds, setDeletedPaymentIds] = useState([]); // 삭제할 입출금 ID 목록
   const [modifiedPayments, setModifiedPayments] = useState({}); // 수정 대기 중인 입출금
-  
+
   // 재고 목록 (오른쪽)
   const [inventory, setInventory] = useState([]);
   const [inventoryFilter, setInventoryFilter] = useState('');
-  
+
   // 매출 품목 (왼쪽) - 신규: inventory_id 있음, 기존: existing_detail_id 있음
   const [saleItems, setSaleItems] = useState([]);
-  
+
   // 삭제된 기존 품목 (재고 복원 예정 표시용)
   const [deletedExistingItems, setDeletedExistingItems] = useState([]);
-  
+
   // ★ 기존 품목 원본 상태 (수량 변경 추적용)
   const [originalItems, setOriginalItems] = useState([]);
-  
+
   // ★ 삭제 확인 모달
   const [deleteModal, setDeleteModal] = useState({ isOpen: false });
-  
+
   // 드래그 앤 드롭
   const [draggedItem, setDraggedItem] = useState(null);
-  
+
   // 수량/단가 입력 모달
   const [inputModal, setInputModal] = useState({
     isOpen: false,
@@ -51,22 +51,22 @@ function SaleFromInventory() {
     unitPrice: '',
     maxQuantity: 0
   });
-  
+
   // 저장 대기 중인 입금 (전표 저장 시 함께 저장)
   const [pendingPayments, setPendingPayments] = useState([]);
-  
+
   // 거래처 잔고 정보
   const [companySummary, setCompanySummary] = useState(null);
-  
+
   // 모달
   const [modal, setModal] = useState({
     isOpen: false, type: 'info', title: '', message: '',
-    onConfirm: () => {}, confirmText: '확인', showCancel: false
+    onConfirm: () => { }, confirmText: '확인', showCancel: false
   });
-  
+
   // 출력 모달
   const [printModal, setPrintModal] = useState({ isOpen: false, tradeId: null });
-  
+
   const [loading, setLoading] = useState(true);
 
   // 로컬 시간대 기준 YYYY-MM-DD 형식 반환
@@ -100,7 +100,7 @@ function SaleFromInventory() {
     }
   };
 
-  const showModal = (type, title, message, onConfirm = () => {}, confirmText = '확인', showCancel = false) => {
+  const showModal = (type, title, message, onConfirm = () => { }, confirmText = '확인', showCancel = false) => {
     setModal({ isOpen: true, type, title, message, onConfirm, confirmText, showCancel });
   };
 
@@ -109,14 +109,14 @@ function SaleFromInventory() {
     try {
       const response = await tradeAPI.getById(tradeId);
       const { master, details } = response.data.data;
-      
+
       // 기본 정보 설정
       setCurrentTradeId(tradeId);
       setIsEdit(true);
       setTradeDate(master.trade_date?.split('T')[0] || master.trade_date);
       setCompanyId(String(master.company_id));
       setNotes(master.notes || '');
-      
+
       // 기존 품목 변환 (existing_detail_id로 구분, 매칭 정보 포함)
       const existingItems = details.map((d, idx) => {
         const quantity = parseFloat(d.quantity);
@@ -124,7 +124,7 @@ function SaleFromInventory() {
         const purchasePrice = parseFloat(d.purchase_price) || 0;
         const supplyAmount = parseFloat(d.supply_amount);
         const margin = (unitPrice - purchasePrice) * quantity;
-        
+
         return {
           id: `existing-${d.id}`,
           existing_detail_id: d.id,
@@ -151,17 +151,17 @@ function SaleFromInventory() {
         };
       });
       setSaleItems(existingItems);
-      
+
       // ★ 원본 품목 상태 저장
       setOriginalItems(existingItems.map(item => ({
         id: item.id,
         matched_inventory_id: item.matched_inventory_id,
         original_quantity: item.quantity
       })));
-      
+
       // 삭제된 품목 초기화
       setDeletedExistingItems([]);
-      
+
       // 연결된 입출금 조회
       try {
         const paymentsRes = await paymentAPI.getByTrade(tradeId);
@@ -170,11 +170,11 @@ function SaleFromInventory() {
         console.error('입출금 조회 오류:', err);
         setLinkedPayments([]);
       }
-      
+
       // 대기 입출금 및 삭제 목록 초기화
       setPendingPayments([]);
       setDeletedPaymentIds([]);
-      
+
       // 잔고 정보 로드
       try {
         const summaryRes = await paymentAPI.getCompanyTodaySummary(master.company_id, 'SALE', master.trade_date?.split('T')[0]);
@@ -183,7 +183,7 @@ function SaleFromInventory() {
         console.error('잔고 조회 오류:', err);
         setCompanySummary(null);
       }
-      
+
       return true;
     } catch (error) {
       console.error('전표 로드 오류:', error);
@@ -219,7 +219,7 @@ function SaleFromInventory() {
   // 날짜 변경 핸들러
   const handleDateChange = (newDate) => {
     if (newDate === tradeDate) return;
-    
+
     if (hasUnsavedChanges()) {
       setModal({
         isOpen: true,
@@ -238,15 +238,15 @@ function SaleFromInventory() {
   // 거래처 변경 핸들러
   const handleCompanyChange = (option) => {
     const newCompanyId = option ? option.value : '';
-    
+
     if (!option) {
       setCompanyId('');
       setCompanySummary(null);
       return;
     }
-    
+
     if (String(newCompanyId) === String(companyId)) return;
-    
+
     if (hasUnsavedChanges()) {
       setModal({
         isOpen: true,
@@ -269,21 +269,21 @@ function SaleFromInventory() {
       resetToNewMode(newDate, '');
       return;
     }
-    
+
     try {
       const response = await tradeAPI.checkDuplicate({
         company_id: newCompanyId,
         trade_date: newDate,
         trade_type: 'SALE'  // 재고 기반 매출은 항상 SALE
       });
-      
+
       if (response.data.isDuplicate && response.data.existingTradeId) {
         // ★ 기존 전표가 있으면 현재 화면에서 데이터 로드 (페이지 이동 안함)
         await loadExistingTrade(response.data.existingTradeId);
       } else {
         // 기존 전표가 없으면 신규 모드로 초기화
         resetToNewMode(newDate, newCompanyId);
-        
+
         // 잔고 정보 로드
         try {
           const summaryRes = await paymentAPI.getCompanyTodaySummary(newCompanyId, 'SALE', newDate);
@@ -314,14 +314,14 @@ function SaleFromInventory() {
         setCompanySummary(null);
       }
     };
-    
+
     loadCompanySummary();
   }, [companyId, tradeDate]);
 
   // 거래처 옵션
   const companyOptions = companies.map(company => ({
     value: String(company.id),  // 문자열로 통일
-    label: company.alias 
+    label: company.alias
       ? `${company.company_name} - ${company.alias}`
       : company.company_name
   }));
@@ -329,14 +329,14 @@ function SaleFromInventory() {
   // 삭제된 기존 품목 + 수량 변경된 품목의 재고 변화량 계산 (inventory_id별)
   const restoredQuantityMap = useMemo(() => {
     const map = {};
-    
+
     // 1. 삭제된 품목: 전체 수량 복원 예정
     deletedExistingItems.forEach(item => {
       if (item.inventory_id) {
         map[item.inventory_id] = (map[item.inventory_id] || 0) + item.quantity;
       }
     });
-    
+
     // 2. 수량 변경된 품목: 차이만큼 복원/차감 예정
     saleItems.forEach(item => {
       // 기존 품목 중 매칭 정보가 있는 것만
@@ -350,7 +350,7 @@ function SaleFromInventory() {
         }
       }
     });
-    
+
     return map;
   }, [deletedExistingItems, saleItems, originalItems]);
 
@@ -369,10 +369,10 @@ function SaleFromInventory() {
       }
       return item;
     });
-    
+
     if (!inventoryFilter) return adjustedInventory;
     const keyword = inventoryFilter.toLowerCase();
-    return adjustedInventory.filter(item => 
+    return adjustedInventory.filter(item =>
       item.product_name?.toLowerCase().includes(keyword) ||
       item.company_name?.toLowerCase().includes(keyword) ||
       item.shipper_location?.toLowerCase().includes(keyword) ||
@@ -408,23 +408,23 @@ function SaleFromInventory() {
   const handleDrop = (e) => {
     e.preventDefault();
     if (!draggedItem) return;
-    
+
     // 거래처 선택 여부 확인
     if (!companyId) {
       showModal('warning', '거래처 미선택', '먼저 거래처를 선택해주세요.');
       setDraggedItem(null);
       return;
     }
-    
+
     const usedQty = getUsedQuantity(draggedItem.id);
     const availableQty = parseFloat(draggedItem.remaining_quantity) - usedQty;
-    
+
     if (availableQty <= 0) {
       showModal('warning', '재고 부족', '해당 재고는 이미 모두 사용되었습니다.');
       setDraggedItem(null);
       return;
     }
-    
+
     // 수량/단가 입력 모달 열기
     setInputModal({
       isOpen: true,
@@ -433,7 +433,7 @@ function SaleFromInventory() {
       unitPrice: draggedItem.unit_price ? Math.floor(draggedItem.unit_price).toString() : '',
       maxQuantity: availableQty
     });
-    
+
     setDraggedItem(null);
   };
 
@@ -441,22 +441,22 @@ function SaleFromInventory() {
   const handleInputConfirm = () => {
     const qty = parseFloat(inputModal.quantity) || 0;
     const price = parseFloat(inputModal.unitPrice) || 0;
-    
+
     if (qty <= 0) {
       showModal('warning', '입력 오류', '수량을 입력하세요.');
       return;
     }
-    
+
     if (qty > inputModal.maxQuantity) {
       showModal('warning', '수량 초과', `최대 ${inputModal.maxQuantity}개까지 가능합니다.`);
       return;
     }
-    
+
     if (price <= 0) {
       showModal('warning', '입력 오류', '단가를 입력하세요.');
       return;
     }
-    
+
     const inv = inputModal.inventory;
     const shipperInfo = [inv.shipper_location, inv.sender].filter(Boolean).join(' / ') || '';
     const newItem = {
@@ -476,7 +476,7 @@ function SaleFromInventory() {
       purchase_price: inv.unit_price, // 매입가
       margin: (price - (inv.unit_price || 0)) * qty // 마진
     };
-    
+
     setSaleItems(prev => [...prev, newItem]);
     setInputModal({ isOpen: false, inventory: null, quantity: '', unitPrice: '', maxQuantity: 0 });
   };
@@ -485,7 +485,7 @@ function SaleFromInventory() {
   const handleRemoveItem = (itemId) => {
     // 삭제할 품목 찾기
     const itemToRemove = saleItems.find(item => item.id === itemId);
-    
+
     // 기존 품목(매칭된 재고가 있는)이면 삭제 목록에 추가 (재고 복원 표시용)
     if (itemToRemove?.existing_detail_id && itemToRemove?.matched_inventory_id) {
       setDeletedExistingItems(prev => [...prev, {
@@ -494,9 +494,9 @@ function SaleFromInventory() {
         product_name: itemToRemove.product_name
       }]);
     }
-    
+
     // 신규 품목(재고에서 드래그한)이면 사용 수량에서 제외됨 (getUsedQuantity에서 자동 반영)
-    
+
     setSaleItems(prev => prev.filter(item => item.id !== itemId));
   };
 
@@ -504,7 +504,7 @@ function SaleFromInventory() {
   const handleItemChange = (itemId, field, value) => {
     setSaleItems(prev => prev.map(item => {
       if (item.id !== itemId) return item;
-      
+
       const updated = { ...item, [field]: parseFloat(value) || 0 };
       updated.supply_amount = updated.quantity * updated.unit_price;
       updated.margin = (updated.unit_price - (updated.purchase_price || 0)) * updated.quantity;
@@ -527,14 +527,14 @@ function SaleFromInventory() {
       showModal('warning', '입력 오류', '거래처를 선택하세요.');
       return;
     }
-    
+
     const pendingPaymentsTotal = pendingPayments.reduce((sum, p) => sum + (p.amount || 0), 0);
-    
+
     if (saleItems.length === 0 && pendingPaymentsTotal === 0 && deletedPaymentIds.length === 0) {
       showModal('warning', '입력 오류', '품목을 추가하거나 입금을 추가하세요.');
       return;
     }
-    
+
     // ★ 수정 모드가 아닐 때만 중복 체크
     if (!isEdit) {
       try {
@@ -543,12 +543,12 @@ function SaleFromInventory() {
           trade_date: tradeDate,
           trade_type: 'SALE'
         });
-        
+
         if (duplicateCheck.data.isDuplicate) {
           // 중복 전표가 있으면 해당 전표 로드
           showModal(
-            'info', 
-            '기존 전표 발견', 
+            'info',
+            '기존 전표 발견',
             `이미 동일 거래처에 ${tradeDate} 날짜로 전표가 존재합니다.\n(전표번호: ${duplicateCheck.data.existingTradeNumber})\n\n기존 전표를 불러와서 수정합니다.`,
             () => loadExistingTrade(duplicateCheck.data.existingTradeId),
             '확인',
@@ -560,10 +560,10 @@ function SaleFromInventory() {
         console.error('중복 체크 오류:', error);
       }
     }
-    
+
     let confirmMessage = '';
     const actionText = isEdit ? '수정' : '저장';
-    
+
     if (saleItems.length > 0 && pendingPaymentsTotal > 0) {
       confirmMessage = `${saleItems.length}건의 품목 (${formatCurrency(totals.amount)}원)과 입금 ${formatCurrency(pendingPaymentsTotal)}원을 ${actionText}하시겠습니까?`;
     } else if (saleItems.length > 0) {
@@ -573,7 +573,7 @@ function SaleFromInventory() {
     } else if (deletedPaymentIds.length > 0) {
       confirmMessage = `입금 ${deletedPaymentIds.length}건을 삭제하시겠습니까?`;
     }
-    
+
     setModal({
       isOpen: true,
       type: 'confirm',
@@ -584,7 +584,7 @@ function SaleFromInventory() {
       onConfirm: async () => {
         try {
           let savedTradeId = currentTradeId;
-          
+
           // ★ 수정 모드: update API 호출
           if (isEdit && currentTradeId) {
             // 품목이 있는 경우 전표 수정
@@ -615,16 +615,16 @@ function SaleFromInventory() {
                   purchase_price: item.purchase_price || null
                 }))
               };
-              
+
               await tradeAPI.update(currentTradeId, submitData);
             }
-            
+
             // 삭제할 입출금 처리
             for (const paymentId of deletedPaymentIds) {
               await paymentAPI.deleteLinkedTransaction(paymentId);
             }
             setDeletedPaymentIds([]);
-            
+
           } else {
             // ★ 신규 모드: create API 호출
             if (saleItems.length > 0) {
@@ -650,12 +650,12 @@ function SaleFromInventory() {
                   purchase_price: item.purchase_price || null
                 }))
               };
-              
+
               const response = await tradeAPI.createSaleFromInventory(submitData);
               savedTradeId = response.data.data?.id;
             }
           }
-          
+
           // 저장 대기 중인 입금들 처리 (신규/수정 공통)
           if (pendingPayments.length > 0) {
             for (const pendingPayment of pendingPayments) {
@@ -671,7 +671,7 @@ function SaleFromInventory() {
             }
             setPendingPayments([]);
           }
-          
+
           // 재고 목록 갱신 (저장/수정 후 재고 변화 반영)
           try {
             const inventoryRes = await purchaseInventoryAPI.getAll({ has_remaining: 'true' });
@@ -679,7 +679,7 @@ function SaleFromInventory() {
           } catch (err) {
             console.error('재고 목록 갱신 오류:', err);
           }
-          
+
           // 저장 및 출력인 경우 출력 모달 열기
           if (printAfterSave && savedTradeId) {
             // 출력 모달 닫힌 후 전표 재조회하도록 수정
@@ -692,7 +692,7 @@ function SaleFromInventory() {
               : (pendingPaymentsTotal > 0
                 ? `매출 전표가 저장되었습니다.\n입금 ${formatCurrency(pendingPaymentsTotal)}원도 처리되었습니다.`
                 : '매출 전표가 저장되었습니다.');
-            
+
             showModal('success', isEdit ? '수정 완료' : '저장 완료', message, async () => {
               // ★ 저장 후 해당 전표 재조회하여 화면 유지
               if (savedTradeId) {
@@ -711,10 +711,10 @@ function SaleFromInventory() {
   // ★ 전표 삭제 핸들러
   const handleDelete = async () => {
     if (!currentTradeId) return;
-    
+
     try {
       await tradeAPI.delete(currentTradeId);
-      
+
       showModal('success', '삭제 완료', '전표가 삭제되었습니다.', () => {
         // 삭제 후 초기화
         resetToNewMode(tradeDate, companyId);
@@ -733,7 +733,7 @@ function SaleFromInventory() {
       console.error('삭제 오류:', error);
       showModal('warning', '삭제 실패', error.response?.data?.message || '삭제에 실패했습니다.');
     }
-    
+
     setDeleteModal({ isOpen: false });
   };
 
@@ -769,7 +769,7 @@ function SaleFromInventory() {
   return (
     <div className="sale-from-inventory">
       {/* 헤더 */}
-      <div className="page-header" style={{ marginBottom: '1rem' }}>
+      <div className="page-header">
         <h1 className="page-title" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
           📦 전표 등록(재고 기반)
           {isEdit && (
@@ -813,7 +813,7 @@ function SaleFromInventory() {
             초기화
           </button>
           {isEdit && (
-            <button 
+            <button
               className="btn btn-danger"
               onClick={() => setDeleteModal({ isOpen: true })}
             >
@@ -855,13 +855,13 @@ function SaleFromInventory() {
 
       {/* 메인 컨텐츠 - 2단 레이아웃 */}
       <div style={{ display: 'flex', gap: '1rem', height: 'calc(100vh - 280px)' }}>
-        
+
         {/* 왼쪽: 매출 품목 */}
-        <div 
-          style={{ 
-            flex: 1, 
-            backgroundColor: 'white', 
-            borderRadius: '8px', 
+        <div
+          style={{
+            flex: 1,
+            backgroundColor: 'white',
+            borderRadius: '8px',
             boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
             display: 'flex',
             flexDirection: 'column',
@@ -871,8 +871,8 @@ function SaleFromInventory() {
           onDrop={handleDrop}
         >
           {/* 헤더 */}
-          <div style={{ 
-            padding: '0.75rem 1rem', 
+          <div style={{
+            padding: '0.75rem 1rem',
             borderBottom: '1px solid #eee',
             display: 'flex',
             justifyContent: 'space-between',
@@ -884,7 +884,7 @@ function SaleFromInventory() {
                 👈 오른쪽 재고에서 드래그
               </span>
               {saleItems.length > 0 && (
-                <button 
+                <button
                   className="btn btn-danger btn-sm"
                   onClick={() => setSaleItems([])}
                   style={{ padding: '0.25rem 0.5rem', fontSize: '0.8rem' }}
@@ -927,11 +927,11 @@ function SaleFromInventory() {
                     /* 빈 상태 - 전체 영역 사용 */
                     <tr style={{ height: '100%' }}>
                       <td colSpan="8" style={{ padding: '1rem', height: '100%' }}>
-                        <div style={{ 
+                        <div style={{
                           height: '100%',
                           minHeight: '200px',
-                          display: 'flex', 
-                          alignItems: 'center', 
+                          display: 'flex',
+                          alignItems: 'center',
                           justifyContent: 'center',
                           color: '#95a5a6',
                           fontSize: '1rem',
@@ -945,84 +945,84 @@ function SaleFromInventory() {
                     </tr>
                   ) : (
                     saleItems.map((item, index) => (
-                    <tr key={item.id} style={{ borderBottom: '1px solid #eee' }}>
-                      <td style={{ padding: '0.5rem', textAlign: 'center', color: '#7f8c8d' }}>{index + 1}</td>
-                      <td style={{ padding: '0.5rem' }}>
-                        {formatProductName(item)}
-                      </td>
-                      <td style={{ padding: '0.5rem', textAlign: 'center' }}>
-                        <input
-                          type="text"
-                          inputMode="numeric"
-                          value={item.quantity ? formatNumber(item.quantity) : ''}
-                          onChange={(e) => {
-                            const val = e.target.value.replace(/,/g, '');
-                            handleItemChange(item.id, 'quantity', val);
-                          }}
-                          style={{ 
-                            width: '70px', 
-                            textAlign: 'center', 
-                            padding: '0.5rem', 
-                            border: '1px solid #ddd', 
-                            borderRadius: '4px',
-                            fontSize: '0.9rem'
-                          }}
-                        />
-                      </td>
-                      <td style={{ padding: '0.5rem', textAlign: 'center' }}>
-                        <input
-                          type="text"
-                          inputMode="numeric"
-                          value={item.unit_price ? formatCurrency(item.unit_price) : ''}
-                          onChange={(e) => {
-                            const val = e.target.value.replace(/,/g, '');
-                            handleItemChange(item.id, 'unit_price', val);
-                          }}
-                          style={{ 
-                            width: '90px', 
-                            textAlign: 'right', 
-                            padding: '0.5rem', 
-                            border: '1px solid #ddd', 
-                            borderRadius: '4px',
-                            fontSize: '0.9rem'
-                          }}
-                        />
-                      </td>
-                      <td style={{ padding: '0.5rem', textAlign: 'right', fontWeight: '500' }}>
-                        {formatCurrency(item.supply_amount)}
-                      </td>
-                      <td style={{ 
-                        padding: '0.5rem', 
-                        textAlign: 'right',
-                        color: item.margin >= 0 ? '#27ae60' : '#e74c3c',
-                        fontWeight: '500'
-                      }}>
-                        {formatCurrency(item.margin)}
-                      </td>
-                      <td style={{ padding: '0.5rem', fontSize: '0.85rem', color: '#666' }}>
-                        {item.sender || item.shipper_info || '-'}
-                      </td>
-                      <td style={{ padding: '0.5rem', textAlign: 'center' }}>
-                        <button
-                          onClick={() => handleRemoveItem(item.id)}
-                          style={{ 
-                            background: 'none', 
-                            border: 'none', 
-                            color: '#e74c3c', 
-                            cursor: 'pointer',
-                            fontSize: '1rem'
-                          }}
-                        >
-                          ✕
-                        </button>
-                      </td>
-                    </tr>
+                      <tr key={item.id} style={{ borderBottom: '1px solid #eee' }}>
+                        <td style={{ padding: '0.5rem', textAlign: 'center', color: '#7f8c8d' }}>{index + 1}</td>
+                        <td style={{ padding: '0.5rem' }}>
+                          {formatProductName(item)}
+                        </td>
+                        <td style={{ padding: '0.5rem', textAlign: 'center' }}>
+                          <input
+                            type="text"
+                            inputMode="numeric"
+                            value={item.quantity ? formatNumber(item.quantity) : ''}
+                            onChange={(e) => {
+                              const val = e.target.value.replace(/,/g, '');
+                              handleItemChange(item.id, 'quantity', val);
+                            }}
+                            style={{
+                              width: '70px',
+                              textAlign: 'center',
+                              padding: '0.5rem',
+                              border: '1px solid #ddd',
+                              borderRadius: '4px',
+                              fontSize: '0.9rem'
+                            }}
+                          />
+                        </td>
+                        <td style={{ padding: '0.5rem', textAlign: 'center' }}>
+                          <input
+                            type="text"
+                            inputMode="numeric"
+                            value={item.unit_price ? formatCurrency(item.unit_price) : ''}
+                            onChange={(e) => {
+                              const val = e.target.value.replace(/,/g, '');
+                              handleItemChange(item.id, 'unit_price', val);
+                            }}
+                            style={{
+                              width: '90px',
+                              textAlign: 'right',
+                              padding: '0.5rem',
+                              border: '1px solid #ddd',
+                              borderRadius: '4px',
+                              fontSize: '0.9rem'
+                            }}
+                          />
+                        </td>
+                        <td style={{ padding: '0.5rem', textAlign: 'right', fontWeight: '500' }}>
+                          {formatCurrency(item.supply_amount)}
+                        </td>
+                        <td style={{
+                          padding: '0.5rem',
+                          textAlign: 'right',
+                          color: item.margin >= 0 ? '#27ae60' : '#e74c3c',
+                          fontWeight: '500'
+                        }}>
+                          {formatCurrency(item.margin)}
+                        </td>
+                        <td style={{ padding: '0.5rem', fontSize: '0.85rem', color: '#666' }}>
+                          {item.sender || item.shipper_info || '-'}
+                        </td>
+                        <td style={{ padding: '0.5rem', textAlign: 'center' }}>
+                          <button
+                            onClick={() => handleRemoveItem(item.id)}
+                            style={{
+                              background: 'none',
+                              border: 'none',
+                              color: '#e74c3c',
+                              cursor: 'pointer',
+                              fontSize: '1rem'
+                            }}
+                          >
+                            ✕
+                          </button>
+                        </td>
+                      </tr>
                     ))
                   )}
                 </tbody>
               </table>
             </div>
-            
+
             {/* 합계 행 - 항상 하단에 고정 */}
             <table className="table" style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed', flexShrink: 0 }}>
               <colgroup>
@@ -1041,9 +1041,9 @@ function SaleFromInventory() {
                   <td style={{ padding: '0.75rem', textAlign: 'right', fontWeight: '700', color: '#2980b9' }}>
                     {formatCurrency(totals.amount)}
                   </td>
-                  <td style={{ 
-                    padding: '0.75rem', 
-                    textAlign: 'right', 
+                  <td style={{
+                    padding: '0.75rem',
+                    textAlign: 'right',
                     fontWeight: '700',
                     color: totals.margin >= 0 ? '#27ae60' : '#e74c3c'
                   }}>
@@ -1064,11 +1064,11 @@ function SaleFromInventory() {
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
                 placeholder="메모 입력..."
-                style={{ 
-                  width: '100%', 
+                style={{
+                  width: '100%',
                   flex: 1,
-                  padding: '10px', 
-                  border: '1px solid #ddd', 
+                  padding: '10px',
+                  border: '1px solid #ddd',
                   borderRadius: '4px',
                   resize: 'none',
                   minHeight: '150px',
@@ -1076,7 +1076,7 @@ function SaleFromInventory() {
                 }}
               />
             </div>
-            
+
             {/* 우측: 거래처 잔고 현황 - PaymentCard 컴포넌트 사용 */}
             <PaymentCard
               isPurchase={false}
@@ -1100,19 +1100,19 @@ function SaleFromInventory() {
         </div>
 
         {/* 오른쪽: 재고 목록 */}
-        <div style={{ 
+        <div style={{
           flex: 1,
-          backgroundColor: 'white', 
-          borderRadius: '8px', 
+          backgroundColor: 'white',
+          borderRadius: '8px',
           boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
           display: 'flex',
           flexDirection: 'column',
           overflow: 'hidden'
         }}>
           {/* 헤더 */}
-          <div style={{ 
-            padding: '1rem', 
-            backgroundColor: '#3498db', 
+          <div style={{
+            padding: '1rem',
+            backgroundColor: '#3498db',
             color: 'white',
             display: 'flex',
             justifyContent: 'space-between',
@@ -1162,7 +1162,7 @@ function SaleFromInventory() {
                     const qtyChange = item._qtyChange || 0;
                     const isRestored = qtyChange > 0; // 복원 예정
                     const isReduced = qtyChange < 0; // 추가 차감 예정
-                    
+
                     return (
                       <tr
                         key={item.id}
@@ -1170,15 +1170,15 @@ function SaleFromInventory() {
                         onDragStart={(e) => handleDragStart(e, item)}
                         onDragEnd={handleDragEnd}
                         style={{
-                          backgroundColor: hasChange 
+                          backgroundColor: hasChange
                             ? (isRestored ? '#fff3cd' : '#ffe4e6') // 복원: 노란색, 차감: 분홍색
                             : (isDisabled ? '#f5f5f5' : (draggedItem?.id === item.id ? '#e8f4fd' : 'transparent')),
                           cursor: isDisabled ? 'not-allowed' : 'grab',
                           opacity: isDisabled ? 0.5 : 1,
                           transition: 'background-color 0.2s'
                         }}
-                        title={hasChange 
-                          ? `저장 시 ${Math.abs(qtyChange)}개 ${isRestored ? '복원' : '차감'} 예정` 
+                        title={hasChange
+                          ? `저장 시 ${Math.abs(qtyChange)}개 ${isRestored ? '복원' : '차감'} 예정`
                           : (isDisabled ? '잔량 없음' : '드래그하여 매출 품목에 추가')}
                       >
                         <td style={{ padding: '0.5rem', textAlign: 'center', borderBottom: '1px solid #eee', fontSize: '0.85rem' }}>
@@ -1187,13 +1187,13 @@ function SaleFromInventory() {
                         <td style={{ padding: '0.5rem', borderBottom: '1px solid #eee', whiteSpace: 'nowrap', fontSize: '0.85rem' }}>
                           <span style={{ fontWeight: '500' }}>{formatProductName(item)}</span>
                           {hasChange && (
-                            <span style={{ 
+                            <span style={{
                               marginLeft: '0.3rem',
-                              fontSize: '0.7rem', 
-                              backgroundColor: isRestored ? '#ffc107' : '#f87171', 
-                              color: isRestored ? '#333' : '#fff', 
-                              padding: '1px 4px', 
-                              borderRadius: '3px' 
+                              fontSize: '0.7rem',
+                              backgroundColor: isRestored ? '#ffc107' : '#f87171',
+                              color: isRestored ? '#333' : '#fff',
+                              padding: '1px 4px',
+                              borderRadius: '3px'
                             }}>
                               {isRestored ? '복원예정' : '차감예정'}
                             </span>
@@ -1211,12 +1211,12 @@ function SaleFromInventory() {
                         <td style={{ padding: '0.5rem', textAlign: 'right', borderBottom: '1px solid #eee', fontSize: '0.85rem' }}>
                           {formatCurrency(item.unit_price)}
                         </td>
-                        <td style={{ 
-                          padding: '0.5rem', 
-                          textAlign: 'right', 
+                        <td style={{
+                          padding: '0.5rem',
+                          textAlign: 'right',
                           borderBottom: '1px solid #eee',
                           fontSize: '0.85rem',
-                          color: hasChange 
+                          color: hasChange
                             ? (isRestored ? '#e67e22' : '#dc2626')
                             : (availableQty > 0 ? '#27ae60' : '#e74c3c'),
                           fontWeight: '600'
@@ -1241,32 +1241,32 @@ function SaleFromInventory() {
       {/* 수량/단가 입력 모달 - 매칭 모달 스타일 */}
       {inputModal.isOpen && createPortal(
         <div className="modal-overlay" onClick={() => setInputModal({ isOpen: false, inventory: null, quantity: '', unitPrice: '', maxQuantity: 0 })}>
-          <div 
+          <div
             className="qty-input-modal"
             style={{ minWidth: '400px', maxWidth: '450px' }}
             onClick={(e) => e.stopPropagation()}
           >
             {/* 품목명 - 강조 표시 */}
-            <div style={{ 
-              textAlign: 'center', 
+            <div style={{
+              textAlign: 'center',
               padding: '1rem',
               backgroundColor: '#f8fafc',
               borderRadius: '8px',
               marginBottom: '1rem'
             }}>
               {/* 품목명 - 첫 번째 줄, 크게 강조 */}
-              <div style={{ 
-                fontSize: '1.25rem', 
-                fontWeight: '700', 
+              <div style={{
+                fontSize: '1.25rem',
+                fontWeight: '700',
                 color: '#1e40af',
                 marginBottom: '0.75rem'
               }}>
                 {formatProductName(inputModal.inventory || {})}
               </div>
-              
+
               {/* 출하주/출하지 정보 */}
               {(inputModal.inventory?.sender || inputModal.inventory?.shipper_location) && (
-                <div style={{ 
+                <div style={{
                   display: 'flex',
                   justifyContent: 'center',
                   gap: '1.5rem',
@@ -1276,9 +1276,9 @@ function SaleFromInventory() {
                   {inputModal.inventory?.sender && (
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
                       <span style={{ fontSize: '0.8rem', color: '#6b7280' }}>출하주:</span>
-                      <span style={{ 
-                        fontSize: '1rem', 
-                        fontWeight: '600', 
+                      <span style={{
+                        fontSize: '1rem',
+                        fontWeight: '600',
                         color: '#059669'
                       }}>
                         {inputModal.inventory.sender}
@@ -1288,9 +1288,9 @@ function SaleFromInventory() {
                   {inputModal.inventory?.shipper_location && (
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
                       <span style={{ fontSize: '0.8rem', color: '#6b7280' }}>출하지:</span>
-                      <span style={{ 
-                        fontSize: '1rem', 
-                        fontWeight: '600', 
+                      <span style={{
+                        fontSize: '1rem',
+                        fontWeight: '600',
                         color: '#0284c7'
                       }}>
                         {inputModal.inventory.shipper_location}
@@ -1299,13 +1299,13 @@ function SaleFromInventory() {
                   )}
                 </div>
               )}
-              
+
               {/* 매입처 */}
               <div style={{ fontSize: '0.85rem', color: '#64748b' }}>
                 매입처: {inputModal.inventory?.company_name || '-'}
               </div>
             </div>
-            
+
             {/* 정보 영역 */}
             <div className="qty-input-info">
               <div className="qty-input-row">
@@ -1319,7 +1319,7 @@ function SaleFromInventory() {
                 <span className="qty-input-value">{formatCurrency(inputModal.inventory?.unit_price)}원</span>
               </div>
             </div>
-            
+
             {/* 수량/단가 입력 - 한 줄 */}
             <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1rem', width: '100%' }}>
               <div style={{ flex: 1, minWidth: 0 }}>
@@ -1352,18 +1352,18 @@ function SaleFromInventory() {
                       setInputModal({ isOpen: false, inventory: null, quantity: '', unitPrice: '', maxQuantity: 0 });
                     }
                   }}
-                  style={{ 
-                    width: '100%', 
-                    padding: '0.75rem', 
-                    fontSize: '1.1rem', 
-                    border: '2px solid #e5e7eb', 
+                  style={{
+                    width: '100%',
+                    padding: '0.75rem',
+                    fontSize: '1.1rem',
+                    border: '2px solid #e5e7eb',
                     borderRadius: '8px',
                     textAlign: 'center',
                     boxSizing: 'border-box'
                   }}
                 />
               </div>
-              
+
               <div style={{ flex: 1, minWidth: 0 }}>
                 <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: '600', color: '#374151', marginBottom: '0.35rem' }}>판매 단가</label>
                 <input
@@ -1376,11 +1376,11 @@ function SaleFromInventory() {
                     const val = e.target.value.replace(/[^0-9]/g, '');
                     setInputModal(prev => ({ ...prev, unitPrice: val }));
                   }}
-                  style={{ 
-                    width: '100%', 
-                    padding: '0.75rem', 
-                    fontSize: '1.1rem', 
-                    border: '2px solid #e5e7eb', 
+                  style={{
+                    width: '100%',
+                    padding: '0.75rem',
+                    fontSize: '1.1rem',
+                    border: '2px solid #e5e7eb',
                     borderRadius: '8px',
                     textAlign: 'center',
                     boxSizing: 'border-box'
@@ -1399,7 +1399,7 @@ function SaleFromInventory() {
                 />
               </div>
             </div>
-            
+
             {/* 예상 금액 */}
             {inputModal.quantity && inputModal.unitPrice && (() => {
               const qty = parseFloat(inputModal.quantity) || 0;
@@ -1407,18 +1407,18 @@ function SaleFromInventory() {
               const purchasePrice = inputModal.inventory?.unit_price || 0;
               const amount = qty * price;
               const margin = (price - purchasePrice) * qty;
-              
+
               // 소수점 이하가 있으면 표시, 없으면 정수로
               const formatAmount = (val) => {
-                return val % 1 === 0 
-                  ? formatCurrency(val) 
+                return val % 1 === 0
+                  ? formatCurrency(val)
                   : new Intl.NumberFormat('ko-KR', { minimumFractionDigits: 1, maximumFractionDigits: 2 }).format(val);
               };
-              
+
               return (
-                <div style={{ 
-                  padding: '0.75rem', 
-                  backgroundColor: '#f0fdf4', 
+                <div style={{
+                  padding: '0.75rem',
+                  backgroundColor: '#f0fdf4',
                   borderRadius: '8px',
                   textAlign: 'center',
                   marginTop: '1rem',
@@ -1433,8 +1433,8 @@ function SaleFromInventory() {
                     </div>
                     <div>
                       <span style={{ fontSize: '0.8rem', color: '#666' }}>마진 </span>
-                      <span style={{ 
-                        fontSize: '1rem', 
+                      <span style={{
+                        fontSize: '1rem',
                         fontWeight: '600',
                         color: margin >= 0 ? '#16a34a' : '#dc2626'
                       }}>
@@ -1445,22 +1445,22 @@ function SaleFromInventory() {
                 </div>
               );
             })()}
-            
+
             {/* 버튼 */}
-            <div style={{ 
-              display: 'flex', 
-              gap: '1rem', 
+            <div style={{
+              display: 'flex',
+              gap: '1rem',
               marginTop: '1.5rem',
               justifyContent: 'center'
             }}>
-              <button 
+              <button
                 className="modal-btn modal-btn-cancel"
                 style={{ minWidth: '100px', padding: '0.75rem 1.5rem' }}
                 onClick={() => setInputModal({ isOpen: false, inventory: null, quantity: '', unitPrice: '', maxQuantity: 0 })}
               >
                 취소
               </button>
-              <button 
+              <button
                 className="modal-btn modal-btn-primary"
                 style={{ minWidth: '100px', padding: '0.75rem 1.5rem' }}
                 onClick={handleInputConfirm}
@@ -1496,12 +1496,15 @@ function SaleFromInventory() {
           '연결된 <strong>입출금 내역</strong>이 함께 삭제됩니다',
           '<strong>재고 매칭 정보</strong>도 삭제됩니다 (재고가 복원됩니다)'
         ]}
+        tradeDate={tradeDate}
+        tradeType="SALE"
+        tradePartnerName={companies.find(c => String(c.id) === String(companyId))?.company_name}
         additionalContent={
           saleItems.length > 0 && (
-            <div style={{ 
-              backgroundColor: '#f0f9ff', 
+            <div style={{
+              backgroundColor: '#f0f9ff',
               border: '1px solid #0ea5e9',
-              borderRadius: '8px', 
+              borderRadius: '8px',
               padding: '0.75rem'
             }}>
               <p style={{ margin: 0, fontSize: '0.9rem', color: '#0369a1' }}>
