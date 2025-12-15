@@ -29,7 +29,8 @@ const ModalShell = ({ isOpen, onClose, title, children }) => {
             position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
             backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000
         }} onClick={(e) => {
-            if (e.target === e.currentTarget) onClose();
+            // if (e.target === e.currentTarget) onClose();
+            e.stopPropagation();
         }}>
             <div style={{
                 backgroundColor: 'white', borderRadius: '12px', width: '90%', maxWidth: '400px',

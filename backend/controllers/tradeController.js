@@ -74,13 +74,13 @@ const TradeController = {
                 `INSERT INTO trade_masters (
                   trade_number, trade_type, trade_date, company_id,
                   total_amount, tax_amount, total_price,
-                  payment_method, notes, status, created_by
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                  payment_method, notes, status, created_by, warehouse_id
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
                 [
                     tradeNumber, master.trade_type, master.trade_date, master.company_id,
                     master.total_amount || 0, master.tax_amount || 0, master.total_price || 0,
                     master.payment_method, master.notes, master.status || 'DRAFT',
-                    master.created_by || 'admin'
+                    master.created_by || 'admin', master.warehouse_id || null
                 ]
             );
 
@@ -338,12 +338,12 @@ const TradeController = {
                 `UPDATE trade_masters SET
           trade_date = ?, company_id = ?,
           total_amount = ?, tax_amount = ?, total_price = ?,
-          payment_method = ?, notes = ?, status = ?
+          payment_method = ?, notes = ?, status = ?, warehouse_id = ?
         WHERE id = ?`,
                 [
                     master.trade_date, master.company_id, master.total_amount,
                     master.tax_amount, master.total_price, master.payment_method,
-                    master.notes, master.status, tradeId
+                    master.notes, master.status, master.warehouse_id || null, tradeId
                 ]
             );
 

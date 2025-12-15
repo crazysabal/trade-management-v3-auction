@@ -187,4 +187,26 @@ export const paymentAPI = {
   recalculateAllBalances: () => api.post('/payments/recalculate-all-balances'),
 };
 
+// 창고 관리 API
+export const warehousesAPI = {
+  getAll: () => api.get('/warehouses'),
+  create: (data) => api.post('/warehouses', data),
+  update: (id, data) => api.put(`/warehouses/${id}`, data),
+  reorder: (orderedIds) => api.put('/warehouses/reorder', { orderedIds }),
+};
+
+// 재고 이동 API
+export const inventoryTransferAPI = {
+  transfer: (data) => api.post('/inventory/transfer', data),
+};
+
+
+export const inventoryAdjustmentAPI = {
+  create: (data) => api.post('/inventory-adjustment', data),
+};
+
+export const inventoryProductionAPI = {
+  create: (data) => api.post('/inventory-production', data),
+};
+
 export default api;

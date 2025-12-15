@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
-import { purchaseInventoryAPI, companyAPI, tradeAPI, paymentAPI } from '../services/api';
+import { purchaseInventoryAPI, companyAPI, tradeAPI, paymentAPI, warehousesAPI } from '../services/api';
 import SearchableSelect from '../components/SearchableSelect';
 import ConfirmModal from '../components/ConfirmModal';
 import TradePrintModal from '../components/TradePrintModal';
@@ -16,6 +16,8 @@ function SaleFromInventory() {
   const [tradeDate, setTradeDate] = useState(getDateString(0));
   const [companyId, setCompanyId] = useState('');
   const [notes, setNotes] = useState('');
+  const [warehouses, setWarehouses] = useState([]); // 창고 목록
+  const [selectedWarehouseId, setSelectedWarehouseId] = useState(''); // 창고 필터
 
   // ★ 수정 모드 관련
   const [currentTradeId, setCurrentTradeId] = useState(null);
@@ -55,6 +57,7 @@ function SaleFromInventory() {
   // 저장 대기 중인 입금 (전표 저장 시 함께 저장)
   const [pendingPayments, setPendingPayments] = useState([]);
 
+
   // 거래처 잔고 정보
   const [companySummary, setCompanySummary] = useState(null);
 
@@ -86,12 +89,14 @@ function SaleFromInventory() {
   const loadInitialData = async () => {
     try {
       setLoading(true);
-      const [companiesRes, inventoryRes] = await Promise.all([
+      const [companiesRes, inventoryRes, warehousesRes] = await Promise.all([
         companyAPI.getAll({ is_active: 'true', type: 'CUSTOMER' }),
-        purchaseInventoryAPI.getAll({ has_remaining: 'true' })
+        purchaseInventoryAPI.getAll({ has_remaining: 'true' }),
+        warehousesAPI.getAll()
       ]);
       setCompanies(companiesRes.data.data || []);
       setInventory(inventoryRes.data.data || []);
+      setWarehouses(warehousesRes.data.data || []);
     } catch (error) {
       console.error('초기 데이터 로딩 오류:', error);
       showModal('warning', '로딩 실패', '데이터를 불러오는데 실패했습니다.');
@@ -370,9 +375,16 @@ function SaleFromInventory() {
       return item;
     });
 
-    if (!inventoryFilter) return adjustedInventory;
+    let result = adjustedInventory;
+
+    // 창고 필터
+    if (selectedWarehouseId) {
+      result = result.filter(item => String(item.warehouse_id) === String(selectedWarehouseId));
+    }
+
+    if (!inventoryFilter) return result;
     const keyword = inventoryFilter.toLowerCase();
-    return adjustedInventory.filter(item =>
+    return result.filter(item =>
       item.product_name?.toLowerCase().includes(keyword) ||
       item.company_name?.toLowerCase().includes(keyword) ||
       item.shipper_location?.toLowerCase().includes(keyword) ||
@@ -1123,14 +1135,25 @@ function SaleFromInventory() {
           </div>
 
           {/* 검색 */}
-          <div style={{ padding: '0.5rem' }}>
-            <input
-              type="text"
-              value={inventoryFilter}
-              onChange={(e) => setInventoryFilter(e.target.value)}
-              placeholder="품목/매입처/출하주 검색..."
-              style={{ width: '100%', padding: '0.5rem' }}
-            />
+          {/* 검색 및 필터 */}
+          <div style={{ padding: '0.5rem', display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+            <div style={{ width: '140px' }}>
+              <SearchableSelect
+                options={[{ value: '', label: '전체 창고' }, ...warehouses.map(w => ({ value: String(w.id), label: w.name }))]}
+                value={selectedWarehouseId}
+                onChange={(o) => setSelectedWarehouseId(o ? o.value : '')}
+                placeholder="창고 선택"
+              />
+            </div>
+            <div style={{ flex: 1 }}>
+              <input
+                type="text"
+                value={inventoryFilter}
+                onChange={(e) => setInventoryFilter(e.target.value)}
+                placeholder="품목/매입처/출하주 검색..."
+                style={{ width: '100%', padding: '0.5rem', border: '1px solid #ddd', borderRadius: '4px' }}
+              />
+            </div>
           </div>
 
           {/* 재고 목록 - 테이블 형태 */}
@@ -1473,6 +1496,20 @@ function SaleFromInventory() {
         </div>,
         document.body
       )}
+
+      {/* 재고 이동 모달 */}
+      <StockTransferModal
+        isOpen={transferModal.isOpen}
+        inventory={transferModal.inventory}
+        onClose={() => setTransferModal({ isOpen: false, inventory: null })}
+        onSuccess={() => {
+          // 재고 목록 새로고침
+          purchaseInventoryAPI.getAll({ has_remaining: 'true' })
+            .then(res => setInventory(res.data.data || []))
+            .catch(err => console.error('재고 목록 갱신 오류:', err));
+          showModal('success', '이동 완료', '재고가 이동되었습니다.');
+        }}
+      />
 
       <ConfirmModal
         isOpen={modal.isOpen}

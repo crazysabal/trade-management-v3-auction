@@ -40,6 +40,21 @@ function TradeDeleteConfirmModal({
     }
   }, [isOpen]);
 
+  // ESC 키로 닫기 (전역 리스너)
+  useEffect(() => {
+    const handleEsc = (e) => {
+      if (e.key === 'Escape' && isOpen) {
+        e.preventDefault();
+        e.stopPropagation();
+        // 기존 handleClose 호출
+        setConfirmText('');
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleEsc);
+    return () => window.removeEventListener('keydown', handleEsc);
+  }, [isOpen, onClose]);
+
   const isConfirmed = confirmText === confirmPhrase;
 
   const handleConfirm = () => {
@@ -78,7 +93,7 @@ function TradeDeleteConfirmModal({
         justifyContent: 'center',
         zIndex: 2000
       }}
-      onClick={handleClose}
+    // onClick={handleClose}  <-- 배경 클릭 닫기 비활성화
     >
       <div
         style={{
@@ -297,7 +312,7 @@ function TradeDeleteConfirmModal({
           </button>
         </div>
       </div>
-    </div>,
+    </div >,
     document.body
   );
 }

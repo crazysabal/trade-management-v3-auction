@@ -29,10 +29,10 @@ const formatDate = (dateString) => {
 // 다중 필터링 함수 (AND 조건, 금액은 쉼표 유무 모두 지원)
 const filterInventory = (items, filterText) => {
   if (!filterText.trim()) return items;
-  
+
   const keywords = filterText.toLowerCase().trim().split(/\s+/).filter(k => k);
   if (keywords.length === 0) return items;
-  
+
   return items.filter(item => {
     const priceFormatted = formatCurrency(item.unit_price);
     const priceRaw = String(item.unit_price || 0);
@@ -45,7 +45,7 @@ const filterInventory = (items, filterText) => {
       priceFormatted,
       priceRaw
     ].join(' ');
-    
+
     return keywords.every(keyword => searchableText.includes(keyword));
   });
 };
@@ -55,11 +55,11 @@ function InventoryList() {
   const [summary, setSummary] = useState([]);
   const [viewMode, setViewMode] = useState('detail'); // 'detail' | 'summary'
   const [loading, setLoading] = useState(true);
-  
+
   // 개별 필터링 키워드
   const [availableFilter, setAvailableFilter] = useState('');
   const [depletedFilter, setDepletedFilter] = useState('');
-  
+
   // 좌우 위치 설정 (localStorage에 저장)
   const [layoutOrder, setLayoutOrder] = useState(() => {
     const saved = localStorage.getItem('inventoryListLayout');
@@ -75,15 +75,15 @@ function InventoryList() {
   // 드래그 상태
   const [isDragging, setIsDragging] = useState(false);
   const containerRef = useRef(null);
-  
-  const [modal, setModal] = useState({ isOpen: false, type: 'info', title: '', message: '', onConfirm: () => {}, confirmText: '확인', showCancel: false });
-  
+
+  const [modal, setModal] = useState({ isOpen: false, type: 'info', title: '', message: '', onConfirm: () => { }, confirmText: '확인', showCancel: false });
+
   // 전표 상세 모달 상태
   const [tradeDetailModal, setTradeDetailModal] = useState({
     isOpen: false,
     tradeId: null
   });
-  
+
   // 상세 보기 모달 상태
   const [detailModal, setDetailModal] = useState({
     isOpen: false,
@@ -116,12 +116,12 @@ function InventoryList() {
 
   const handleMouseMove = useCallback((e) => {
     if (!isDragging || !containerRef.current) return;
-    
+
     const container = containerRef.current;
     const rect = container.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const newRatio = Math.min(Math.max(x / rect.width, 0.3), 0.7);
-    
+
     setSplitRatio(newRatio);
   }, [isDragging]);
 
@@ -161,17 +161,19 @@ function InventoryList() {
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (e.key === 'Escape' && detailModal.isOpen) {
+        e.preventDefault();
+        e.stopPropagation();
         setDetailModal(prev => ({ ...prev, isOpen: false }));
       }
     };
-    
+
     if (detailModal.isOpen) {
       document.addEventListener('keydown', handleKeyDown);
       document.body.style.overflow = 'hidden';
     } else {
       document.body.style.overflow = '';
     }
-    
+
     return () => {
       document.removeEventListener('keydown', handleKeyDown);
       document.body.style.overflow = '';
@@ -190,7 +192,7 @@ function InventoryList() {
       setSummary(summaryRes.data.data || []);
     } catch (error) {
       console.error('재고 데이터 로딩 오류:', error);
-      setModal({ isOpen: true, type: 'warning', title: '로딩 실패', message: '재고 데이터를 불러오는데 실패했습니다.', confirmText: '확인', showCancel: false, onConfirm: () => {} });
+      setModal({ isOpen: true, type: 'warning', title: '로딩 실패', message: '재고 데이터를 불러오는데 실패했습니다.', confirmText: '확인', showCancel: false, onConfirm: () => { } });
     } finally {
       setLoading(false);
     }
@@ -198,7 +200,7 @@ function InventoryList() {
 
   // 상태별로 분리
   const availableInventory = useMemo(() => {
-    return allInventory.filter(item => item.status === 'AVAILABLE');
+    return allInventory.filter(item => item.status === 'AVAILABLE' && Number(item.remaining_quantity) > 0);
   }, [allInventory]);
 
   const depletedInventory = useMemo(() => {
@@ -272,7 +274,7 @@ function InventoryList() {
     const headerBgColor = isAvailable ? '#f0fdf4' : '#f8fafc';
     const headerTextColor = isAvailable ? '#16a34a' : '#64748b';
     const headerBorderColor = isAvailable ? '#16a34a' : '#94a3b8';
-    
+
     return (
       <div style={{ width: '100%' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -299,7 +301,7 @@ function InventoryList() {
               items.map((item) => {
                 const usedQuantity = parseFloat(item.original_quantity) - parseFloat(item.remaining_quantity);
                 const originalWeight = parseFloat(item.total_weight || 0);
-                
+
                 return (
                   <tr key={item.id} style={{ borderBottom: '1px solid #eee' }}>
                     <td style={{ padding: '0.4rem 0.5rem', fontSize: '0.8rem' }}>{formatDate(item.purchase_date)}</td>
@@ -371,11 +373,11 @@ function InventoryList() {
     const bgColor = isAvailable ? '#f0fdf4' : '#f8fafc';
     const icon = isAvailable ? '✅' : '📦';
     const label = isAvailable ? '사용가능' : '소진';
-    
+
     return (
-      <div style={{ 
-        display: 'flex', 
-        flexDirection: 'column', 
+      <div style={{
+        display: 'flex',
+        flexDirection: 'column',
         height: '100%',
         width: '100%',
         backgroundColor: '#fff',
@@ -384,7 +386,7 @@ function InventoryList() {
         boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
       }}>
         {/* 패널 헤더 */}
-        <div style={{ 
+        <div style={{
           padding: '0.6rem 0.75rem',
           backgroundColor: bgColor,
           borderBottom: `2px solid ${color}`,
@@ -395,8 +397,8 @@ function InventoryList() {
         }}>
           <h2 style={{ margin: 0, fontSize: '0.95rem', color: color, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
             {icon} {label} 재고
-            <span style={{ 
-              fontSize: '0.75rem', 
+            <span style={{
+              fontSize: '0.75rem',
               backgroundColor: color,
               color: 'white',
               padding: '2px 8px',
@@ -410,7 +412,7 @@ function InventoryList() {
             {formatCurrency(total)}원
           </span>
         </div>
-        
+
         {/* 필터 입력 */}
         <div style={{ padding: '0.4rem 0.5rem', borderBottom: '1px solid #eee', flexShrink: 0 }}>
           <input
@@ -428,7 +430,7 @@ function InventoryList() {
             }}
           />
         </div>
-        
+
         {/* 테이블 영역 (스크롤) */}
         <div style={{ flex: 1, overflow: 'auto', minHeight: 0 }}>
           <InventoryTable items={items} status={status} />
@@ -438,16 +440,16 @@ function InventoryList() {
   };
 
   return (
-    <div style={{ 
-      display: 'flex', 
-      flexDirection: 'column', 
+    <div style={{
+      display: 'flex',
+      flexDirection: 'column',
       height: 'calc(100vh - 60px)',
       backgroundColor: '#f5f6fa'
     }}>
       {/* 헤더 */}
-      <div style={{ 
-        display: 'flex', 
-        justifyContent: 'space-between', 
+      <div style={{
+        display: 'flex',
+        justifyContent: 'space-between',
         alignItems: 'center',
         padding: '0.5rem 1rem',
         backgroundColor: '#fff',
@@ -478,8 +480,8 @@ function InventoryList() {
             title="좌우 위치 변경"
           >
             🔄 위치 변경
-            <span style={{ 
-              fontSize: '0.75rem', 
+            <span style={{
+              fontSize: '0.75rem',
               opacity: 0.9,
               backgroundColor: 'rgba(255,255,255,0.2)',
               padding: '0.15rem 0.4rem',
@@ -522,11 +524,11 @@ function InventoryList() {
             🔄 새로고침
           </button>
         </div>
-        
+
         {/* 통계 요약 */}
-        <div style={{ 
-          display: 'flex', 
-          alignItems: 'center', 
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
           gap: '1rem',
           fontSize: '0.85rem'
         }}>
@@ -546,11 +548,11 @@ function InventoryList() {
       </div>
 
       {/* 메인 컨텐츠 - 좌우 분할 */}
-      <div 
+      <div
         ref={containerRef}
-        style={{ 
-          flex: 1, 
-          display: 'flex', 
+        style={{
+          flex: 1,
+          display: 'flex',
           padding: '0.75rem',
           overflow: 'hidden',
           minHeight: 0,
@@ -558,7 +560,7 @@ function InventoryList() {
         }}
       >
         {/* 왼쪽 패널 */}
-        <div style={{ 
+        <div style={{
           flex: `0 0 calc(${splitRatio * 100}% - 4px)`,
           display: 'flex',
           minWidth: '300px',
@@ -568,7 +570,7 @@ function InventoryList() {
         </div>
 
         {/* 리사이즈 핸들 */}
-        <div 
+        <div
           onMouseDown={handleMouseDown}
           style={{
             width: '8px',
@@ -590,7 +592,7 @@ function InventoryList() {
             flexDirection: 'column',
             gap: '2px'
           }}>
-            {[1,2,3].map(i => (
+            {[1, 2, 3].map(i => (
               <div key={i} style={{
                 width: '3px',
                 height: '3px',
@@ -602,7 +604,7 @@ function InventoryList() {
         </div>
 
         {/* 오른쪽 패널 */}
-        <div style={{ 
+        <div style={{
           flex: 1,
           display: 'flex',
           minWidth: '300px',
@@ -615,7 +617,7 @@ function InventoryList() {
       {/* 상세 보기 모달 */}
       {detailModal.isOpen && createPortal(
         <div className="modal-overlay">
-          <div 
+          <div
             style={{
               backgroundColor: '#fff',
               borderRadius: '12px',
@@ -635,11 +637,11 @@ function InventoryList() {
               alignItems: 'center',
               backgroundColor: '#fff'
             }}>
-              <h3 style={{margin: 0, color: '#1e293b', fontSize: '1.1rem', fontWeight: '600'}}>
+              <h3 style={{ margin: 0, color: '#1e293b', fontSize: '1.1rem', fontWeight: '600' }}>
                 🔍 매입 재고 상세
               </h3>
               <button
-                onClick={() => setDetailModal(prev => ({...prev, isOpen: false}))}
+                onClick={() => setDetailModal(prev => ({ ...prev, isOpen: false }))}
                 style={{
                   background: 'none',
                   border: 'none',
@@ -659,15 +661,15 @@ function InventoryList() {
               backgroundColor: '#fff'
             }}>
               {detailModal.loading ? (
-                <div style={{textAlign: 'center', padding: '2rem', color: '#64748b'}}>
+                <div style={{ textAlign: 'center', padding: '2rem', color: '#64748b' }}>
                   불러오는 중...
                 </div>
               ) : detailModal.inventory && (
                 <>
                   {/* 기본 정보 */}
-                  <div style={{ 
-                    display: 'grid', 
-                    gridTemplateColumns: 'repeat(2, 1fr)', 
+                  <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(2, 1fr)',
                     gap: '1rem',
                     marginBottom: '1.5rem',
                     padding: '1rem',
@@ -695,10 +697,10 @@ function InventoryList() {
                     </div>
                     <div>
                       <label style={{ color: '#64748b', fontSize: '0.875rem' }}>전표번호</label>
-                      <div 
+                      <div
                         style={{ color: '#3b82f6', cursor: 'pointer' }}
                         onClick={() => {
-                          setDetailModal(prev => ({...prev, isOpen: false}));
+                          setDetailModal(prev => ({ ...prev, isOpen: false }));
                           setTradeDetailModal({ isOpen: true, tradeId: detailModal.inventory.trade_master_id });
                         }}
                       >
@@ -742,9 +744,9 @@ function InventoryList() {
                     📋 매출 매칭 이력 ({detailModal.matchings.length}건)
                   </h4>
                   {detailModal.matchings.length === 0 ? (
-                    <div style={{ 
-                      textAlign: 'center', 
-                      padding: '2rem', 
+                    <div style={{
+                      textAlign: 'center',
+                      padding: '2rem',
                       color: '#64748b',
                       backgroundColor: '#f8fafc',
                       borderRadius: '8px'
@@ -752,24 +754,24 @@ function InventoryList() {
                       아직 매출과 매칭된 이력이 없습니다.
                     </div>
                   ) : (
-                    <table style={{width: '100%', borderCollapse: 'collapse'}}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                       <thead>
-                        <tr style={{backgroundColor: '#334155'}}>
-                          <th style={{padding: '10px', color: '#fff', fontWeight: '500', textAlign: 'left', fontSize: '0.9rem'}}>매칭일</th>
-                          <th style={{padding: '10px', color: '#fff', fontWeight: '500', textAlign: 'left', fontSize: '0.9rem'}}>매출전표</th>
-                          <th style={{padding: '10px', color: '#fff', fontWeight: '500', textAlign: 'left', fontSize: '0.9rem'}}>고객</th>
-                          <th style={{padding: '10px', color: '#fff', fontWeight: '500', textAlign: 'right', fontSize: '0.9rem'}}>매칭수량</th>
-                          <th style={{padding: '10px', color: '#fff', fontWeight: '500', textAlign: 'right', fontSize: '0.9rem'}}>매출단가</th>
+                        <tr style={{ backgroundColor: '#334155' }}>
+                          <th style={{ padding: '10px', color: '#fff', fontWeight: '500', textAlign: 'left', fontSize: '0.9rem' }}>매칭일</th>
+                          <th style={{ padding: '10px', color: '#fff', fontWeight: '500', textAlign: 'left', fontSize: '0.9rem' }}>매출전표</th>
+                          <th style={{ padding: '10px', color: '#fff', fontWeight: '500', textAlign: 'left', fontSize: '0.9rem' }}>고객</th>
+                          <th style={{ padding: '10px', color: '#fff', fontWeight: '500', textAlign: 'right', fontSize: '0.9rem' }}>매칭수량</th>
+                          <th style={{ padding: '10px', color: '#fff', fontWeight: '500', textAlign: 'right', fontSize: '0.9rem' }}>매출단가</th>
                         </tr>
                       </thead>
                       <tbody>
                         {detailModal.matchings.map((match, index) => (
-                          <tr key={index} style={{borderBottom: '1px solid #e2e8f0'}}>
-                            <td style={{padding: '10px'}}>{formatDate(match.matched_at)}</td>
-                            <td style={{padding: '10px'}}>
+                          <tr key={index} style={{ borderBottom: '1px solid #e2e8f0' }}>
+                            <td style={{ padding: '10px' }}>{formatDate(match.matched_at)}</td>
+                            <td style={{ padding: '10px' }}>
                               <span
                                 onClick={() => {
-                                  setDetailModal(prev => ({...prev, isOpen: false}));
+                                  setDetailModal(prev => ({ ...prev, isOpen: false }));
                                   setTradeDetailModal({ isOpen: true, tradeId: match.sale_trade_master_id });
                                 }}
                                 style={{
@@ -782,11 +784,11 @@ function InventoryList() {
                                 {match.sale_trade_number}
                               </span>
                             </td>
-                            <td style={{padding: '10px'}}>{match.customer_name}</td>
-                            <td style={{padding: '10px', textAlign: 'right', fontWeight: 'bold', color: '#ef4444'}}>
+                            <td style={{ padding: '10px' }}>{match.customer_name}</td>
+                            <td style={{ padding: '10px', textAlign: 'right', fontWeight: 'bold', color: '#ef4444' }}>
                               -{formatNumber(match.matched_quantity)}개
                             </td>
-                            <td style={{padding: '10px', textAlign: 'right'}}>{formatCurrency(match.sale_unit_price)}원</td>
+                            <td style={{ padding: '10px', textAlign: 'right' }}>{formatCurrency(match.sale_unit_price)}원</td>
                           </tr>
                         ))}
                       </tbody>
@@ -802,7 +804,7 @@ function InventoryList() {
               backgroundColor: '#f8fafc'
             }}>
               <button
-                onClick={() => setDetailModal(prev => ({...prev, isOpen: false}))}
+                onClick={() => setDetailModal(prev => ({ ...prev, isOpen: false }))}
                 className="btn btn-secondary"
               >
                 닫기
@@ -812,9 +814,9 @@ function InventoryList() {
         </div>,
         document.body
       )}
-      
+
       <ConfirmModal isOpen={modal.isOpen} onClose={() => setModal(prev => ({ ...prev, isOpen: false }))} onConfirm={modal.onConfirm} title={modal.title} message={modal.message} type={modal.type} confirmText={modal.confirmText} showCancel={modal.showCancel} />
-      
+
       <TradeDetailModal
         isOpen={tradeDetailModal.isOpen}
         onClose={() => setTradeDetailModal({ isOpen: false, tradeId: null })}

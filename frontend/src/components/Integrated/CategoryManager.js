@@ -211,7 +211,6 @@ function CategoryManager({ onSelectCategory, selectedCategoryId }) {
             borderRadius: '10px',
             backgroundColor: isSelected ? '#eff6ff' : '#ffffff',
             border: isSelected ? '1px solid #bfdbfe' : '1px solid transparent',
-            border: isSelected ? '1px solid #bfdbfe' : '1px solid transparent',
             cursor: 'pointer',
             transition: 'all 0.2s',
             position: 'relative',

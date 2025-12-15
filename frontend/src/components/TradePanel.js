@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { tradeAPI, companyAPI, productAPI, paymentAPI, settingsAPI } from '../services/api';
+import { tradeAPI, companyAPI, productAPI, paymentAPI, settingsAPI, warehousesAPI } from '../services/api';
 import './TradePanel.css'; // 스타일 분리
 import SearchableSelect from './SearchableSelect';
 import TradeDeleteConfirmModal from './TradeDeleteConfirmModal';
@@ -33,6 +33,7 @@ function TradePanel({
 
   // 기본 데이터
   const [companies, setCompanies] = useState([]);
+  const [warehouses, setWarehouses] = useState([]);
   const [products, setProducts] = useState([]);
   const [paymentMethods, setPaymentMethods] = useState([]); // 결제 방법 목록
   const [loading, setLoading] = useState(true);
@@ -61,6 +62,7 @@ function TradePanel({
     trade_type: tradeType,
     trade_date: formatLocalDate(new Date()),
     company_id: '',
+    warehouse_id: '',
     notes: '',
     status: 'CONFIRMED',
     total_amount: 0
@@ -150,6 +152,7 @@ function TradePanel({
     if (!initialData) return false;
     if (master.trade_date !== initialData.master.trade_date) return true;
     if (String(master.company_id || '') !== String(initialData.master.company_id || '')) return true;
+    if (String(master.warehouse_id || '') !== String(initialData.master.warehouse_id || '')) return true;
     if ((master.notes || '') !== (initialData.master.notes || '')) return true;
 
     const currentDetails = details.filter(d => d.product_id && d.quantity);
@@ -186,12 +189,14 @@ function TradePanel({
     try {
       setLoading(true);
       const typeFilter = isPurchase ? 'SUPPLIER' : 'CUSTOMER';
-      const [companiesRes, productsRes] = await Promise.all([
+      const [companiesRes, productsRes, warehousesRes] = await Promise.all([
         companyAPI.getAll({ is_active: 'true', type: typeFilter }),
-        productAPI.getAll({ is_active: 'true' })
+        productAPI.getAll({ is_active: 'true' }),
+        warehousesAPI.getAll()
       ]);
       setCompanies(companiesRes.data.data);
       setProducts(productsRes.data.data);
+      setWarehouses(warehousesRes.data.data || []);
 
       // 결제 방법 로드
       try {
@@ -410,6 +415,7 @@ function TradePanel({
       trade_type: tradeType,
       trade_date: date || formatLocalDate(new Date()),
       company_id: companyId,
+      warehouse_id: '',
       notes: '',
       status: 'CONFIRMED',
       total_amount: 0
@@ -423,7 +429,7 @@ function TradePanel({
     setDeletedPaymentIds([]);
     setModifiedPayments({});
     setInitialData({
-      master: { trade_type: tradeType, trade_date: date, company_id: companyId, notes: '' },
+      master: { trade_type: tradeType, trade_date: date, company_id: companyId, warehouse_id: '', notes: '' },
       details: []
     });
 
@@ -1033,6 +1039,17 @@ function TradePanel({
                 noOptionsMessage="거래처 없음"
               />
             </div>
+            {isPurchase && (
+              <div className="trade-form-group" style={{ width: '180px' }}>
+                <label className="trade-label">입고 창고</label>
+                <SearchableSelect
+                  options={warehouses.map(w => ({ value: w.id, label: w.name }))}
+                  value={master.warehouse_id}
+                  onChange={(o) => setMaster({ ...master, warehouse_id: o ? o.value : '' })}
+                  placeholder="기본 창고"
+                />
+              </div>
+            )}
             {/* 버튼 영역 */}
             <div className="trade-action-buttons">
               <button
@@ -1082,14 +1099,14 @@ function TradePanel({
               <div className="trade-card-actions">
                 <button
                   type="button"
-                  className="btn btn-secondary btn-custom btn-xs"
+                  className="btn btn-secondary btn-custom btn-sm"
                   onClick={refreshProducts}
                 >
                   🔄 새로고침
                 </button>
                 <button
                   type="button"
-                  className="btn btn-success btn-custom btn-xs"
+                  className="btn btn-success btn-custom btn-sm"
                   onClick={addDetailRow}
                   disabled={!master.company_id}
                 >
@@ -1099,7 +1116,7 @@ function TradePanel({
                   type="button"
                   onClick={removeSelectedRow}
                   disabled={!master.company_id}
-                  className="btn btn-custom btn-danger btn-xs"
+                  className="btn btn-custom btn-danger btn-sm"
                 >
                   삭제
                 </button>

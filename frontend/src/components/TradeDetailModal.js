@@ -33,7 +33,7 @@ function TradeDetailModal({ isOpen, onClose, tradeId }) {
       const { master, details } = response.data.data;
       const tradeData = { ...master, details };
       setTrade(tradeData);
-      
+
       // 거래처 잔고 정보 로드
       if (master.company_id && master.trade_type && master.trade_date) {
         try {
@@ -60,6 +60,8 @@ function TradeDetailModal({ isOpen, onClose, tradeId }) {
   useEffect(() => {
     const handleEsc = (e) => {
       if (e.key === 'Escape' && isOpen) {
+        e.preventDefault();
+        e.stopPropagation();
         onClose();
       }
     };
@@ -127,7 +129,7 @@ function TradeDetailModal({ isOpen, onClose, tradeId }) {
 
   return createPortal(
     <div className="modal-overlay">
-      <div 
+      <div
         className="trade-detail-modal"
         onClick={(e) => e.stopPropagation()}
       >
@@ -193,10 +195,10 @@ function TradeDetailModal({ isOpen, onClose, tradeId }) {
                 <div className="trade-detail-info-item">
                   <label>결제방법</label>
                   <div className="trade-detail-info-value">
-                    {trade.payment_method === 'CASH' ? '현금' : 
-                     trade.payment_method === 'CARD' ? '카드' : 
-                     trade.payment_method === 'TRANSFER' ? '계좌이체' : 
-                     trade.payment_method === 'CREDIT' ? '외상' : trade.payment_method || '-'}
+                    {trade.payment_method === 'CASH' ? '현금' :
+                      trade.payment_method === 'CARD' ? '카드' :
+                        trade.payment_method === 'TRANSFER' ? '계좌이체' :
+                          trade.payment_method === 'CREDIT' ? '외상' : trade.payment_method || '-'}
                   </div>
                 </div>
                 {trade.notes && (
@@ -211,9 +213,9 @@ function TradeDetailModal({ isOpen, onClose, tradeId }) {
 
               {/* 거래처 잔고 정보 */}
               {companySummary && (
-                <div style={{ 
-                  display: 'flex', 
-                  gap: '0.5rem', 
+                <div style={{
+                  display: 'flex',
+                  gap: '0.5rem',
                   marginTop: '1rem',
                   padding: '1rem',
                   backgroundColor: '#f8fafc',

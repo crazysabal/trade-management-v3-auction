@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { openProductPopup } from '../utils/popup';
 import Select from 'react-select';
-import { auctionAPI, productAPI, tradeAPI, companyAPI } from '../services/api';
+import { auctionAPI, productAPI, tradeAPI, companyAPI, warehousesAPI } from '../services/api';
 import SearchableSelect from '../components/SearchableSelect';
 import ConfirmModal from '../components/ConfirmModal';
 
@@ -164,6 +164,7 @@ function AuctionImportV2() {
     const [mappings, setMappings] = useState({});
     const [products, setProducts] = useState([]);
     const [companies, setCompanies] = useState([]);
+    const [warehouses, setWarehouses] = useState([]);
     const [loading, setLoading] = useState(false);
     const [loadingMessage, setLoadingMessage] = useState('');
     const [step, setStep] = useState(1);
@@ -176,7 +177,8 @@ function AuctionImportV2() {
 
     const [importConfig, setImportConfig] = useState({
         supplier_id: '',
-        trade_date: new Date().toISOString().split('T')[0]
+        trade_date: new Date().toISOString().split('T')[0],
+        warehouse_id: ''
     });
 
     const [modal, setModal] = useState({
@@ -230,16 +232,24 @@ function AuctionImportV2() {
 
     const loadInitialData = async () => {
         try {
-            const [accountsRes, productsRes, companiesRes] = await Promise.all([
+            const [accountsRes, productsRes, companiesRes, warehousesRes] = await Promise.all([
                 auctionAPI.getAccounts(),
                 productAPI.getAll({ is_active: 'true' }),
-                companyAPI.getAll({ type: 'SUPPLIER', is_active: 'true' })
+                companyAPI.getAll({ type: 'SUPPLIER', is_active: 'true' }),
+                warehousesAPI.getAll()
             ]);
 
             const accountsData = accountsRes.data?.data || [];
             setAccounts(accountsData.filter(a => a.is_active));
             setProducts(productsRes.data?.data || []);
             setCompanies(companiesRes.data?.data || []);
+            setWarehouses(warehousesRes.data?.data || []);
+
+            // 기본 창고 설정
+            const defaultWh = warehousesRes.data?.data?.find(w => w.is_default);
+            if (defaultWh) {
+                setImportConfig(prev => ({ ...prev, warehouse_id: defaultWh.id }));
+            }
 
             try {
                 const mappingsRes = await auctionAPI.getMappings();
@@ -389,7 +399,8 @@ function AuctionImportV2() {
                 tax_amount: 0,
                 total_price: details.reduce((sum, d) => sum + d.total_amount, 0),
                 status: 'CONFIRMED',
-                notes: `경매 낙찰 자동 임포트 (${crawlData.crawl_date})`
+                notes: `경매 낙찰 자동 임포트 (${crawlData.crawl_date})`,
+                warehouse_id: importConfig.warehouse_id || null
             };
 
             await tradeAPI.create({ master, details });
@@ -593,6 +604,15 @@ function AuctionImportV2() {
                                         options={companies.map(c => ({ value: c.id, label: c.company_name }))}
                                         value={importConfig.supplier_id}
                                         onChange={o => setImportConfig({ ...importConfig, supplier_id: o ? o.value : '' })}
+                                    />
+                                </div>
+                                <div className="form-group">
+                                    <label>입고 창고</label>
+                                    <SearchableSelect
+                                        options={warehouses.map(w => ({ value: w.id, label: w.name }))}
+                                        value={importConfig.warehouse_id}
+                                        onChange={o => setImportConfig({ ...importConfig, warehouse_id: o ? o.value : '' })}
+                                        placeholder="창고 선택 (기본값 사용)"
                                     />
                                 </div>
                                 <div className="form-group">

@@ -35,7 +35,7 @@ function CompanyForm() {
     type: 'info',
     title: '',
     message: '',
-    onConfirm: () => {},
+    onConfirm: () => { },
     confirmText: '확인',
     showCancel: false
   });
@@ -84,7 +84,7 @@ function CompanyForm() {
         message: '거래처명은 필수입니다.',
         confirmText: '확인',
         showCancel: false,
-        onConfirm: () => {}
+        onConfirm: () => { }
       });
       return;
     }
@@ -122,7 +122,7 @@ function CompanyForm() {
         message: error.response?.data?.message || '거래처 저장에 실패했습니다.',
         confirmText: '확인',
         showCancel: false,
-        onConfirm: () => {}
+        onConfirm: () => { }
       });
     }
   };
@@ -144,11 +144,11 @@ function CompanyForm() {
   });
 
   return (
-    <div className="company-form">
+    <div className="company-form" style={{ maxWidth: '1000px', margin: '0 auto' }}>
       <div className="page-header">
         <h1 className="page-title">🏢 {isEdit ? '거래처 수정' : '거래처 등록'}</h1>
         {!isEdit && (
-          <p style={{color: '#6b7280', marginTop: '0.5rem'}}>
+          <p style={{ color: '#6b7280', marginTop: '0.5rem' }}>
             새로운 거래처 정보를 등록합니다.
           </p>
         )}
@@ -164,7 +164,7 @@ function CompanyForm() {
             borderRadius: '8px',
             border: '1px solid #fcd34d'
           }}>
-            <p style={{margin: 0, color: '#92400e', fontSize: '0.9rem'}}>
+            <p style={{ margin: 0, color: '#92400e', fontSize: '0.9rem' }}>
               💡 <strong>거래처코드는 자동 생성됩니다.</strong> 등록 시 C001, C002... 형태로 순차적으로 부여됩니다.
             </p>
           </div>
@@ -184,18 +184,18 @@ function CompanyForm() {
                 type="text"
                 value={formData.company_code || ''}
                 disabled
-                style={{backgroundColor: '#f3f4f6', color: '#6b7280', cursor: 'not-allowed'}}
+                style={{ backgroundColor: '#f3f4f6', color: '#6b7280', cursor: 'not-allowed' }}
               />
             </div>
             <div className="form-group">
               <label>사용여부</label>
-              <label style={{display: 'flex', alignItems: 'center', fontWeight: 'normal', cursor: 'pointer', marginTop: '0.5rem'}}>
+              <label style={{ display: 'flex', alignItems: 'center', fontWeight: 'normal', cursor: 'pointer', marginTop: '0.5rem' }}>
                 <input
                   type="checkbox"
                   name="is_active"
                   checked={formData.is_active}
                   onChange={handleChange}
-                  style={{width: '18px', height: '18px', marginRight: '0.5rem', cursor: 'pointer'}}
+                  style={{ width: '18px', height: '18px', marginRight: '0.5rem', cursor: 'pointer' }}
                 />
                 사용
               </label>
@@ -285,7 +285,7 @@ function CompanyForm() {
         </div>
 
         <div className="form-row">
-          <div className="form-group" style={{gridColumn: '1 / -1'}}>
+          <div className="form-group" style={{ gridColumn: '1 / -1' }}>
             <label>주소</label>
             <input
               type="text"
@@ -297,7 +297,7 @@ function CompanyForm() {
         </div>
 
         {/* ===== 연락처 정보 섹션 ===== */}
-        <div style={{...sectionHeaderStyle('#faf5ff', '#9333ea', '#7e22ce'), marginTop: '2rem'}}>
+        <div style={{ ...sectionHeaderStyle('#faf5ff', '#9333ea', '#7e22ce'), marginTop: '2rem' }}>
           <h3 style={sectionTitleStyle('#7e22ce')}>📞 연락처 정보</h3>
         </div>
 
@@ -354,7 +354,7 @@ function CompanyForm() {
         </div>
 
         {/* ===== 계좌 정보 섹션 ===== */}
-        <div style={{...sectionHeaderStyle('#f0fdf4', '#16a34a', '#166534'), marginTop: '2rem'}}>
+        <div style={{ ...sectionHeaderStyle('#f0fdf4', '#16a34a', '#166534'), marginTop: '2rem' }}>
           <h3 style={sectionTitleStyle('#166534')}>💳 계좌 정보</h3>
         </div>
 
@@ -390,25 +390,25 @@ function CompanyForm() {
         </div>
 
         {/* ===== 기타 정보 섹션 ===== */}
-        <div style={{...sectionHeaderStyle('#fef3c7', '#f59e0b', '#b45309'), marginTop: '2rem'}}>
+        <div style={{ ...sectionHeaderStyle('#fef3c7', '#f59e0b', '#b45309'), marginTop: '2rem' }}>
           <h3 style={sectionTitleStyle('#b45309')}>📝 기타 정보</h3>
         </div>
 
         <div className="form-row">
           <div className="form-group">
             <label>전자계산서 발행</label>
-            <label style={{display: 'flex', alignItems: 'center', fontWeight: 'normal', cursor: 'pointer', marginTop: '0.5rem'}}>
+            <label style={{ display: 'flex', alignItems: 'center', fontWeight: 'normal', cursor: 'pointer', marginTop: '0.5rem' }}>
               <input
                 type="checkbox"
                 name="e_tax_invoice"
                 checked={formData.e_tax_invoice || false}
                 onChange={handleChange}
-                style={{width: '18px', height: '18px', marginRight: '0.5rem', cursor: 'pointer'}}
+                style={{ width: '18px', height: '18px', marginRight: '0.5rem', cursor: 'pointer' }}
               />
               발행 대상
             </label>
           </div>
-          <div className="form-group" style={{gridColumn: '2 / -1'}}>
+          <div className="form-group" style={{ gridColumn: '2 / -1' }}>
             <label>비고</label>
             <textarea
               name="notes"
@@ -420,7 +420,7 @@ function CompanyForm() {
           </div>
         </div>
 
-        <div className="form-actions" style={{marginTop: '2rem'}}>
+        <div className="form-actions" style={{ marginTop: '2rem' }}>
           <button type="button" onClick={() => navigate('/companies')} className="btn btn-secondary">
             취소
           </button>

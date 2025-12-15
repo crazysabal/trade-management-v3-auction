@@ -26,18 +26,18 @@ function TradePrintModal({ isOpen, onClose, tradeId }) {
     try {
       setLoading(true);
       setError(null);
-      
+
       // 전표 정보와 본사 정보 동시 로드
       const [tradeRes, companyRes] = await Promise.all([
         tradeAPI.getById(tradeId),
         companyInfoAPI.get().catch(() => ({ data: { data: null } }))
       ]);
-      
+
       const { master, details } = tradeRes.data.data;
       const tradeData = { ...master, details };
       setTrade(tradeData);
       setCompanyInfo(companyRes.data.data);
-      
+
       // 거래처 잔고 정보 로드
       if (master.company_id && master.trade_type && master.trade_date) {
         try {
@@ -64,6 +64,8 @@ function TradePrintModal({ isOpen, onClose, tradeId }) {
   useEffect(() => {
     const handleEsc = (e) => {
       if (e.key === 'Escape' && isOpen) {
+        e.preventDefault();
+        e.stopPropagation();
         onClose();
       }
     };
@@ -357,7 +359,7 @@ function TradePrintModal({ isOpen, onClose, tradeId }) {
     `);
     printWindow.document.close();
     printWindow.focus();
-    
+
     setTimeout(() => {
       printWindow.print();
       printWindow.close();
@@ -442,11 +444,11 @@ function TradePrintModal({ isOpen, onClose, tradeId }) {
 
   // 페이지당 품목 수
   const ITEMS_PER_PAGE = 20;
-  
+
   // 품목을 페이지별로 나누기
   const details = trade?.details || [];
   const totalPages = Math.max(1, Math.ceil(details.length / ITEMS_PER_PAGE));
-  
+
   const getPageItems = (pageNumber) => {
     const start = (pageNumber - 1) * ITEMS_PER_PAGE;
     const end = start + ITEMS_PER_PAGE;
@@ -468,175 +470,175 @@ function TradePrintModal({ isOpen, onClose, tradeId }) {
   const renderHalfContent = (position = 'left', pageNumber = 1, isLastPage = true) => {
     const pageItems = getPageItems(pageNumber);
     const startIndex = (pageNumber - 1) * ITEMS_PER_PAGE;
-    
+
     return (
-    <div className="print-half">
-      {/* 새로운 상단 헤더 */}
-      <div className="new-header">
-        {/* 왼쪽 박스: 거래처, 발행일, 페이지 */}
-        <div className="header-left-box">
-          <table>
-            <tbody>
-              <tr>
-                <th>거래처</th>
-                <td style={{ fontSize: '11pt' }}>{receiver?.company_name || '-'}</td>
-              </tr>
-              <tr>
-                <th>거래일</th>
-                <td>{trade?.trade_date ? trade.trade_date.split('T')[0].replace(/-/g, '-') : '-'}</td>
-              </tr>
-              <tr>
-                <th>페이지</th>
-                <td>{pageNumber} / {totalPages}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-
-        {/* 중앙: 제목 */}
-        <div className="header-center">
-          <div className="document-title">{documentTitle}</div>
-          <div className="document-subtitle">({getSubtitle(position)})</div>
-        </div>
-
-        {/* 오른쪽 박스: 본사(공급자) 정보 - 테이블 버전 */}
-        <div className="header-right-box">
-          <table>
-            <tbody>
-              <tr>
-                <td colSpan="2" className="company-name-cell">{supplier?.company_name || '-'}</td>
-              </tr>
-              <tr>
-                <td colSpan="2" className="address-cell">{supplier?.address || '-'}</td>
-              </tr>
-              {supplier?.address2 && (
+      <div className="print-half">
+        {/* 새로운 상단 헤더 */}
+        <div className="new-header">
+          {/* 왼쪽 박스: 거래처, 발행일, 페이지 */}
+          <div className="header-left-box">
+            <table>
+              <tbody>
                 <tr>
-                  <td colSpan="2" className="address-cell">{supplier.address2}</td>
+                  <th>거래처</th>
+                  <td style={{ fontSize: '11pt' }}>{receiver?.company_name || '-'}</td>
                 </tr>
-              )}
-              <tr>
-                <th>전화</th>
-                <td>{supplier?.phone || '-'}</td>
-              </tr>
-              <tr>
-                <th>팩스</th>
-                <td>{supplier?.fax || '-'}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
+                <tr>
+                  <th>거래일</th>
+                  <td>{trade?.trade_date ? trade.trade_date.split('T')[0].replace(/-/g, '-') : '-'}</td>
+                </tr>
+                <tr>
+                  <th>페이지</th>
+                  <td>{pageNumber} / {totalPages}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
 
-      {/* 품목 목록 */}
-      <table className="items-table">
-        <thead>
-          <tr>
-            <th style={{ width: '25px' }}>No</th>
-            <th style={{ width: '180px' }}>품목명</th>
-            <th style={{ width: '45px' }}>수량</th>
-            <th style={{ width: '60px' }}>단가</th>
-            <th style={{ width: '75px' }}>금액</th>
-            <th>비고</th>
-          </tr>
-        </thead>
-        <tbody>
-          {pageItems.map((detail, index) => (
-            <tr key={detail.id || index}>
-              <td>{startIndex + index + 1}</td>
-              <td className="text-left">{formatProductName(detail)}</td>
-              <td>{formatNumber(detail.quantity)}</td>
-              <td className="text-right">{formatCurrency(detail.unit_price)}</td>
-              <td className="text-right">{formatCurrency(detail.supply_amount || (detail.quantity * detail.unit_price))}</td>
-              <td className="text-left" style={{ fontSize: '7pt' }}>{detail.notes || ''}</td>
+          {/* 중앙: 제목 */}
+          <div className="header-center">
+            <div className="document-title">{documentTitle}</div>
+            <div className="document-subtitle">({getSubtitle(position)})</div>
+          </div>
+
+          {/* 오른쪽 박스: 본사(공급자) 정보 - 테이블 버전 */}
+          <div className="header-right-box">
+            <table>
+              <tbody>
+                <tr>
+                  <td colSpan="2" className="company-name-cell">{supplier?.company_name || '-'}</td>
+                </tr>
+                <tr>
+                  <td colSpan="2" className="address-cell">{supplier?.address || '-'}</td>
+                </tr>
+                {supplier?.address2 && (
+                  <tr>
+                    <td colSpan="2" className="address-cell">{supplier.address2}</td>
+                  </tr>
+                )}
+                <tr>
+                  <th>전화</th>
+                  <td>{supplier?.phone || '-'}</td>
+                </tr>
+                <tr>
+                  <th>팩스</th>
+                  <td>{supplier?.fax || '-'}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* 품목 목록 */}
+        <table className="items-table">
+          <thead>
+            <tr>
+              <th style={{ width: '25px' }}>No</th>
+              <th style={{ width: '180px' }}>품목명</th>
+              <th style={{ width: '45px' }}>수량</th>
+              <th style={{ width: '60px' }}>단가</th>
+              <th style={{ width: '75px' }}>금액</th>
+              <th>비고</th>
             </tr>
-          ))}
-          {/* 빈 행 추가 (A4 용지에 맞게 총 20행 유지) */}
-          {Array.from({ length: Math.max(0, ITEMS_PER_PAGE - pageItems.length) }).map((_, index) => (
-            <tr key={`empty-${index}`}>
-              <td>&nbsp;</td>
-              <td></td>
-              <td></td>
-              <td></td>
-              <td></td>
-              <td></td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {pageItems.map((detail, index) => (
+              <tr key={detail.id || index}>
+                <td>{startIndex + index + 1}</td>
+                <td className="text-left">{formatProductName(detail)}</td>
+                <td>{formatNumber(detail.quantity)}</td>
+                <td className="text-right">{formatCurrency(detail.unit_price)}</td>
+                <td className="text-right">{formatCurrency(detail.supply_amount || (detail.quantity * detail.unit_price))}</td>
+                <td className="text-left" style={{ fontSize: '7pt' }}>{detail.notes || ''}</td>
+              </tr>
+            ))}
+            {/* 빈 행 추가 (A4 용지에 맞게 총 20행 유지) */}
+            {Array.from({ length: Math.max(0, ITEMS_PER_PAGE - pageItems.length) }).map((_, index) => (
+              <tr key={`empty-${index}`}>
+                <td>&nbsp;</td>
+                <td></td>
+                <td></td>
+                <td></td>
+                <td></td>
+                <td></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
 
-      {/* 하단: 비고 + 잔고 정보 */}
-      <div className="footer-section">
-        {/* 비고 (좌측) */}
-        <div className="notes-section">
-          <div className="notes-title">비고</div>
-          <div className="notes-content">{isLastPage ? (trade?.notes || '') : ''}</div>
+        {/* 하단: 비고 + 잔고 정보 */}
+        <div className="footer-section">
+          {/* 비고 (좌측) */}
+          <div className="notes-section">
+            <div className="notes-title">비고</div>
+            <div className="notes-content">{isLastPage ? (trade?.notes || '') : ''}</div>
+          </div>
+
+          {/* 잔고 정보 (우측, 세로) - 마지막 페이지에만 표시 */}
+          <div className="balance-section">
+            <table className="balance-table-vertical">
+              <tbody>
+                <tr>
+                  <th>금일합계</th>
+                  <td>{isLastPage ? formatCurrency(todayTotal) : ''}</td>
+                </tr>
+                <tr>
+                  <th>전 잔 금</th>
+                  <td>{isLastPage ? formatCurrency(previousBalance) : ''}</td>
+                </tr>
+                <tr>
+                  <th>합계금액</th>
+                  <td>{isLastPage ? formatCurrency(previousPlusTodayTotal) : ''}</td>
+                </tr>
+                <tr>
+                  <th>
+                    {(() => {
+                      const cash = companySummary?.cash_payment || 0;
+                      const bank = companySummary?.bank_payment || 0;
+                      const label = isSale ? '입금' : '출금';
+                      if (cash > 0 && bank > 0) return label;
+                      if (cash > 0) return `현금${label}`;
+                      if (bank > 0) return `통장${label}`;
+                      return label;
+                    })()}
+                  </th>
+                  <td>{isLastPage ? formatCurrency(companySummary?.today_payment || 0) : ''}</td>
+                </tr>
+                <tr className="balance-row">
+                  <th>잔 액</th>
+                  <td className="balance-amount">{isLastPage ? formatCurrency(finalBalance) : ''}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
         </div>
 
-        {/* 잔고 정보 (우측, 세로) - 마지막 페이지에만 표시 */}
-        <div className="balance-section">
-          <table className="balance-table-vertical">
-            <tbody>
-              <tr>
-                <th>금일합계</th>
-                <td>{isLastPage ? formatCurrency(todayTotal) : ''}</td>
-              </tr>
-              <tr>
-                <th>전 잔 금</th>
-                <td>{isLastPage ? formatCurrency(previousBalance) : ''}</td>
-              </tr>
-              <tr>
-                <th>합계금액</th>
-                <td>{isLastPage ? formatCurrency(previousPlusTodayTotal) : ''}</td>
-              </tr>
-              <tr>
-                <th>
-                  {(() => {
-                    const cash = companySummary?.cash_payment || 0;
-                    const bank = companySummary?.bank_payment || 0;
-                    const label = isSale ? '입금' : '출금';
-                    if (cash > 0 && bank > 0) return label;
-                    if (cash > 0) return `현금${label}`;
-                    if (bank > 0) return `통장${label}`;
-                    return label;
-                  })()}
-                </th>
-                <td>{isLastPage ? formatCurrency(companySummary?.today_payment || 0) : ''}</td>
-              </tr>
-              <tr className="balance-row">
-                <th>잔 액</th>
-                <td className="balance-amount">{isLastPage ? formatCurrency(finalBalance) : ''}</td>
-              </tr>
-            </tbody>
-          </table>
+        {/* 하단 정보: 계좌정보 + 전표번호 + 저장 시각 - 모든 페이지에 표시 */}
+        <div className="bottom-info">
+          <div className="account-info">
+            {companyInfo?.bank_name && companyInfo?.account_number ? (
+              <>
+                {companyInfo.bank_name} {companyInfo.account_number}
+                {companyInfo.account_holder ? ` ${companyInfo.account_holder}` : ''}
+              </>
+            ) : ''}
+          </div>
+          <div className="trade-number-info">
+            {trade?.trade_number || ''}
+          </div>
+          <div className="saved-time">
+            {trade?.updated_at || trade?.created_at ? (
+              formatDateTime(trade.updated_at || trade.created_at)
+            ) : ''}
+          </div>
         </div>
       </div>
-
-      {/* 하단 정보: 계좌정보 + 전표번호 + 저장 시각 - 모든 페이지에 표시 */}
-      <div className="bottom-info">
-        <div className="account-info">
-          {companyInfo?.bank_name && companyInfo?.account_number ? (
-            <>
-              {companyInfo.bank_name} {companyInfo.account_number}
-              {companyInfo.account_holder ? ` ${companyInfo.account_holder}` : ''}
-            </>
-          ) : ''}
-        </div>
-        <div className="trade-number-info">
-          {trade?.trade_number || ''}
-        </div>
-        <div className="saved-time">
-          {trade?.updated_at || trade?.created_at ? (
-            formatDateTime(trade.updated_at || trade.created_at)
-          ) : ''}
-        </div>
-      </div>
-    </div>
-  );
+    );
   };
 
   return createPortal(
     <div className="modal-overlay">
-      <div 
+      <div
         className="trade-print-modal"
         onClick={(e) => e.stopPropagation()}
         style={{
@@ -724,7 +726,7 @@ function TradePrintModal({ isOpen, onClose, tradeId }) {
                       📄 {pageIndex + 1} / {totalPages} 페이지
                     </div>
                   )}
-                  <div 
+                  <div
                     style={{
                       backgroundColor: '#fff',
                       margin: '0 auto',
@@ -738,9 +740,9 @@ function TradePrintModal({ isOpen, onClose, tradeId }) {
                   </div>
                 </div>
               ))}
-              
+
               {/* 인쇄용 (모든 페이지, 숨김) */}
-              <div 
+              <div
                 ref={printRef}
                 style={{ display: 'none' }}
               >

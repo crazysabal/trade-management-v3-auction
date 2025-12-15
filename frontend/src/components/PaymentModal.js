@@ -28,7 +28,7 @@ const PaymentModal = ({
 }) => {
   // 입금/출금 상태
   const [payment, setPayment] = useState(initialPayment);
-  
+
   // 미결제 전표 목록
   const [unpaidTrades, setUnpaidTrades] = useState([]);
   const [loadingTrades, setLoadingTrades] = useState(false);
@@ -41,10 +41,23 @@ const PaymentModal = ({
     }
   }, [isOpen, companyId]);
 
+  // ESC 키로 닫기
+  useEffect(() => {
+    const handleEsc = (e) => {
+      if (e.key === 'Escape' && isOpen) {
+        e.preventDefault();
+        e.stopPropagation();
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleEsc);
+    return () => window.removeEventListener('keydown', handleEsc);
+  }, [isOpen, onClose]);
+
   // 미결제 전표 로드
   const loadUnpaidTrades = async () => {
     if (!companyId) return;
-    
+
     setLoadingTrades(true);
     try {
       const tradeType = isPurchase ? 'PURCHASE' : 'SALE';
@@ -101,17 +114,17 @@ const PaymentModal = ({
     let remaining = amount;
     let paidCount = 0;
     let partialCount = 0;
-    
+
     const allocations = unpaidTrades.map(trade => {
       const unpaid = parseFloat(trade.unpaid_amount) || 0;
-      
+
       if (remaining <= 0) {
         return { ...trade, allocatedAmount: 0, status: 'pending' };
       }
-      
+
       const allocated = Math.min(remaining, unpaid);
       remaining -= allocated;
-      
+
       let status = 'pending';
       if (allocated >= unpaid) {
         status = 'paid';
@@ -120,7 +133,7 @@ const PaymentModal = ({
         status = 'partial';
         partialCount++;
       }
-      
+
       return { ...trade, allocatedAmount: allocated, status };
     });
 
@@ -167,13 +180,13 @@ const PaymentModal = ({
 
   return createPortal(
     <div className="modal-overlay">
-      <div 
-        className="modal-container" 
-        style={{ maxWidth: '700px', maxHeight: '90vh', overflow: 'auto', padding: '1.5rem' }} 
+      <div
+        className="modal-container"
+        style={{ maxWidth: '700px', maxHeight: '90vh', overflow: 'auto', padding: '1.5rem' }}
         onClick={(e) => e.stopPropagation()}
       >
         {/* 거래처명 강조 헤더 */}
-        <div style={{ 
+        <div style={{
           backgroundColor: headerColor,
           color: 'white',
           padding: '1rem 1.5rem',
@@ -193,13 +206,13 @@ const PaymentModal = ({
             </div>
           </div>
         </div>
-        
+
         {/* 현재 잔액 및 입금 후 잔액 표시 */}
         {companySummary && (
-          <div style={{ 
-            marginBottom: '1rem', 
-            padding: '1rem', 
-            backgroundColor: '#f8f9fa', 
+          <div style={{
+            marginBottom: '1rem',
+            padding: '1rem',
+            backgroundColor: '#f8f9fa',
             borderRadius: '8px',
             display: 'grid',
             gridTemplateColumns: '1fr 1fr 1fr',
@@ -226,9 +239,9 @@ const PaymentModal = ({
               <div style={{ color: '#7f8c8d', fontSize: '0.85rem', marginBottom: '4px' }}>
                 {transactionLabel} 후 잔액
               </div>
-              <div style={{ 
-                fontWeight: '700', 
-                fontSize: '1.1rem', 
+              <div style={{
+                fontWeight: '700',
+                fontSize: '1.1rem',
                 color: fifoAllocation.balanceAfter <= 0 ? '#27ae60' : '#e74c3c'
               }}>
                 {payment.amount ? formatCurrency(Math.max(0, fifoAllocation.balanceAfter)) + '원' : '-'}
@@ -236,7 +249,7 @@ const PaymentModal = ({
             </div>
           </div>
         )}
-        
+
         <div style={{ textAlign: 'left' }}>
           {/* 기본 정보 입력 */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
@@ -249,7 +262,7 @@ const PaymentModal = ({
                 style={{ backgroundColor: '#f5f5f5' }}
               />
             </div>
-            
+
             <div className="form-group">
               <label className="required">금액</label>
               <div style={{ display: 'flex', gap: '8px' }}>
@@ -297,7 +310,7 @@ const PaymentModal = ({
                 <option value="기타">기타</option>
               </select>
             </div>
-            
+
             <div className="form-group">
               <label>비고</label>
               <input
@@ -319,7 +332,7 @@ const PaymentModal = ({
                 </span>
               )}
             </h4>
-            
+
             {loadingTrades ? (
               <div style={{ padding: '1rem', textAlign: 'center', color: '#7f8c8d' }}>
                 불러오는 중...
@@ -343,12 +356,12 @@ const PaymentModal = ({
                     </thead>
                     <tbody>
                       {fifoAllocation.allocations.map((trade) => (
-                        <tr 
-                          key={trade.id} 
-                          style={{ 
+                        <tr
+                          key={trade.id}
+                          style={{
                             borderBottom: '1px solid #eee',
-                            backgroundColor: trade.status === 'paid' ? '#e8f8f0' : 
-                                            trade.status === 'partial' ? '#fef9e7' : 'white'
+                            backgroundColor: trade.status === 'paid' ? '#e8f8f0' :
+                              trade.status === 'partial' ? '#fef9e7' : 'white'
                           }}
                         >
                           <td style={{ padding: '8px' }}>{trade.trade_number}</td>
@@ -358,8 +371,8 @@ const PaymentModal = ({
                           <td style={{ padding: '8px', textAlign: 'right' }}>
                             {formatCurrency(trade.unpaid_amount)}
                           </td>
-                          <td style={{ 
-                            padding: '8px', 
+                          <td style={{
+                            padding: '8px',
                             textAlign: 'right',
                             fontWeight: trade.allocatedAmount > 0 ? '600' : '400',
                             color: trade.allocatedAmount > 0 ? '#27ae60' : '#bdc3c7'
@@ -368,28 +381,28 @@ const PaymentModal = ({
                           </td>
                           <td style={{ padding: '8px', textAlign: 'center' }}>
                             {trade.status === 'paid' && (
-                              <span style={{ 
-                                backgroundColor: '#27ae60', 
-                                color: 'white', 
-                                padding: '2px 8px', 
+                              <span style={{
+                                backgroundColor: '#27ae60',
+                                color: 'white',
+                                padding: '2px 8px',
                                 borderRadius: '10px',
                                 fontSize: '0.75rem'
                               }}>완납</span>
                             )}
                             {trade.status === 'partial' && (
-                              <span style={{ 
-                                backgroundColor: '#f39c12', 
-                                color: 'white', 
-                                padding: '2px 8px', 
+                              <span style={{
+                                backgroundColor: '#f39c12',
+                                color: 'white',
+                                padding: '2px 8px',
                                 borderRadius: '10px',
                                 fontSize: '0.75rem'
                               }}>부분</span>
                             )}
                             {trade.status === 'pending' && (
-                              <span style={{ 
-                                backgroundColor: '#bdc3c7', 
-                                color: 'white', 
-                                padding: '2px 8px', 
+                              <span style={{
+                                backgroundColor: '#bdc3c7',
+                                color: 'white',
+                                padding: '2px 8px',
                                 borderRadius: '10px',
                                 fontSize: '0.75rem'
                               }}>대기</span>
@@ -400,12 +413,12 @@ const PaymentModal = ({
                     </tbody>
                   </table>
                 </div>
-                
+
                 {/* 합계 */}
-                <div style={{ 
-                  marginTop: '0.5rem', 
-                  padding: '0.75rem', 
-                  backgroundColor: '#34495e', 
+                <div style={{
+                  marginTop: '0.5rem',
+                  padding: '0.75rem',
+                  backgroundColor: '#34495e',
                   borderRadius: '6px',
                   display: 'flex',
                   justifyContent: 'space-between',
@@ -427,10 +440,10 @@ const PaymentModal = ({
           </div>
 
           {/* 안내 메시지 */}
-          <div style={{ 
+          <div style={{
             marginTop: '1rem',
-            padding: '0.75rem', 
-            backgroundColor: '#fff3e0', 
+            padding: '0.75rem',
+            backgroundColor: '#fff3e0',
             borderRadius: '4px',
             fontSize: '0.85rem',
             color: '#e65100',
@@ -439,15 +452,15 @@ const PaymentModal = ({
             ⚠️ 전표 저장 버튼을 클릭해야 입출금이 처리됩니다.
           </div>
         </div>
-        
+
         <div className="modal-buttons" style={{ marginTop: '1.5rem', display: 'flex', justifyContent: 'space-between' }}>
           <div>
             {/* 기존에 설정된 입출금이 있을 때만 삭제 버튼 표시 */}
             {initialPayment.amount && parseFloat(initialPayment.amount) !== 0 && (
-              <button 
+              <button
                 className="modal-btn"
-                style={{ 
-                  backgroundColor: '#e74c3c', 
+                style={{
+                  backgroundColor: '#e74c3c',
                   color: 'white',
                   border: 'none'
                 }}
@@ -458,13 +471,13 @@ const PaymentModal = ({
             )}
           </div>
           <div style={{ display: 'flex', gap: '0.5rem' }}>
-            <button 
+            <button
               className="modal-btn modal-btn-cancel"
               onClick={handleCancel}
             >
               취소
             </button>
-            <button 
+            <button
               className="modal-btn modal-btn-primary"
               onClick={handleConfirm}
             >

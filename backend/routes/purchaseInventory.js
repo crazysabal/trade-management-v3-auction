@@ -8,14 +8,16 @@ const db = require('../config/database');
  */
 router.get('/', async (req, res) => {
   try {
-    const { product_id, company_id, status, start_date, end_date } = req.query;
-    
+    const { product_id, company_id, warehouse_id, status, start_date, end_date } = req.query;
+
     let query = `
       SELECT 
         pi.id,
         pi.trade_detail_id,
         pi.product_id,
         pi.company_id,
+        pi.warehouse_id,
+        w.name as warehouse_name,
         pi.purchase_date,
         pi.original_quantity,
         pi.remaining_quantity,
@@ -34,43 +36,54 @@ router.get('/', async (req, res) => {
       FROM purchase_inventory pi
       JOIN products p ON pi.product_id = p.id
       JOIN companies c ON pi.company_id = c.id
+      JOIN warehouses w ON pi.warehouse_id = w.id
       JOIN trade_details td ON pi.trade_detail_id = td.id
       JOIN trade_masters tm ON td.trade_master_id = tm.id
       WHERE 1=1
     `;
     const params = [];
-    
+
     if (product_id) {
       query += ' AND pi.product_id = ?';
       params.push(product_id);
     }
-    
+
     if (company_id) {
       query += ' AND pi.company_id = ?';
       params.push(company_id);
     }
-    
+
+    if (warehouse_id) {
+      query += ' AND pi.warehouse_id = ?';
+      params.push(warehouse_id);
+    }
+
+    // 잔여 수량 있는 것만 조회
+    if (req.query.has_remaining === 'true') {
+      query += ' AND pi.remaining_quantity > 0';
+    }
+
     // status가 'ALL' 또는 빈 문자열이면 모든 상태 조회, 그 외에는 해당 상태만
     if (status && status !== 'ALL' && status !== '') {
       query += ' AND pi.status = ?';
       params.push(status);
     }
     // status가 없거나 'ALL' 또는 ''이면 모든 상태 조회 (필터 없음)
-    
+
     if (start_date) {
       query += ' AND pi.purchase_date >= ?';
       params.push(start_date);
     }
-    
+
     if (end_date) {
       query += ' AND pi.purchase_date <= ?';
       params.push(end_date);
     }
-    
+
     query += ' ORDER BY p.product_name ASC, p.sort_order ASC, pi.purchase_date ASC';
-    
+
     const [rows] = await db.query(query, params);
-    
+
     res.json({ success: true, data: rows });
   } catch (error) {
     console.error('매입 건별 재고 조회 오류:', error);
@@ -87,26 +100,26 @@ router.get('/', async (req, res) => {
 router.get('/transactions', async (req, res) => {
   try {
     const { product_id, start_date, end_date } = req.query;
-    
+
     let params = [];
     let productFilter = '';
     let dateFilter = '';
-    
+
     if (product_id) {
       productFilter = ' AND pi.product_id = ?';
       params.push(product_id);
     }
-    
+
     if (start_date) {
       dateFilter += ' AND pi.purchase_date >= ?';
       params.push(start_date);
     }
-    
+
     if (end_date) {
       dateFilter += ' AND pi.purchase_date <= ?';
       params.push(end_date);
     }
-    
+
     // 입고 내역 (매입)
     const inQuery = `
       SELECT 
@@ -132,27 +145,27 @@ router.get('/transactions', async (req, res) => {
       JOIN trade_masters tm ON td.trade_master_id = tm.id
       WHERE 1=1 ${productFilter} ${dateFilter}
     `;
-    
+
     // 출고 내역 (매칭)
     let outParams = [];
     let outProductFilter = '';
     let outDateFilter = '';
-    
+
     if (product_id) {
       outProductFilter = ' AND pi.product_id = ?';
       outParams.push(product_id);
     }
-    
+
     if (start_date) {
       outDateFilter += ' AND DATE(spm.matched_at) >= ?';
       outParams.push(start_date);
     }
-    
+
     if (end_date) {
       outDateFilter += ' AND DATE(spm.matched_at) <= ?';
       outParams.push(end_date);
     }
-    
+
     const outQuery = `
       SELECT 
         'OUT' as transaction_type,
@@ -178,10 +191,10 @@ router.get('/transactions', async (req, res) => {
       JOIN companies c ON tm_sale.company_id = c.id
       WHERE 1=1 ${outProductFilter} ${outDateFilter}
     `;
-    
+
     const [inRows] = await db.query(inQuery, params);
     const [outRows] = await db.query(outQuery, outParams);
-    
+
     // 합치고 정렬
     const allRows = [...inRows, ...outRows].sort((a, b) => {
       // 날짜 기준 정렬, 같으면 상세 시간 기준
@@ -192,7 +205,7 @@ router.get('/transactions', async (req, res) => {
       }
       return new Date(a.detail_date) - new Date(b.detail_date);
     });
-    
+
     // 누적 재고 계산 (품목별)
     const stockByProduct = {};
     const result = allRows.map(row => {
@@ -200,20 +213,20 @@ router.get('/transactions', async (req, res) => {
       if (!stockByProduct[key]) {
         stockByProduct[key] = 0;
       }
-      
+
       const qty = parseFloat(row.quantity);
       if (row.transaction_type === 'IN') {
         stockByProduct[key] += qty;
       } else {
         stockByProduct[key] -= qty;
       }
-      
+
       return {
         ...row,
         running_stock: stockByProduct[key]
       };
     });
-    
+
     res.json({ success: true, data: result });
   } catch (error) {
     console.error('재고 수불부 조회 오류:', error);
@@ -248,7 +261,7 @@ router.get('/summary/by-product', async (req, res) => {
       GROUP BY pi.product_id, p.product_name, p.grade, p.weight, p.sort_order
       ORDER BY p.product_name ASC, p.sort_order ASC
     `);
-    
+
     res.json({ success: true, data: rows });
   } catch (error) {
     console.error('품목별 재고 요약 조회 오류:', error);
@@ -285,7 +298,7 @@ router.get('/available/:productId', async (req, res) => {
         AND pi.remaining_quantity > 0
       ORDER BY pi.purchase_date ASC
     `, [req.params.productId]);
-    
+
     res.json({ success: true, data: rows });
   } catch (error) {
     console.error('사용 가능한 재고 조회 오류:', error);
@@ -318,11 +331,11 @@ router.get('/:id', async (req, res) => {
       JOIN trade_masters tm ON td.trade_master_id = tm.id
       WHERE pi.id = ?
     `, [req.params.id]);
-    
+
     if (rows.length === 0) {
       return res.status(404).json({ success: false, message: '재고를 찾을 수 없습니다.' });
     }
-    
+
     // 매칭 이력 조회
     const [matchings] = await db.query(`
       SELECT 
@@ -340,9 +353,9 @@ router.get('/:id', async (req, res) => {
       WHERE spm.purchase_inventory_id = ?
       ORDER BY spm.matched_at DESC
     `, [req.params.id]);
-    
-    res.json({ 
-      success: true, 
+
+    res.json({
+      success: true,
       data: {
         inventory: rows[0],
         matchings: matchings

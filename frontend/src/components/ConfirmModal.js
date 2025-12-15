@@ -30,6 +30,8 @@ function ConfirmModal({
   useEffect(() => {
     const handleEsc = (e) => {
       if (e.key === 'Escape' && isOpen) {
+        e.preventDefault();
+        e.stopPropagation();
         onClose();
       }
     };
@@ -89,13 +91,14 @@ function ConfirmModal({
 
   // Portal을 사용하여 body에 직접 렌더링 (부모 CSS 영향 받지 않음)
   return createPortal(
-    <div className="modal-overlay" onClick={onClose}>
-      <div 
+    <div className="modal-overlay">
+
+      <div
         className="modal-container"
         onClick={(e) => e.stopPropagation()}
       >
         {/* 아이콘 */}
-        <div 
+        <div
           className="modal-icon"
           style={{ backgroundColor: config.iconBg }}
         >
@@ -111,14 +114,14 @@ function ConfirmModal({
         {/* 버튼 */}
         <div className="modal-buttons">
           {showCancel && (
-            <button 
+            <button
               className="modal-btn modal-btn-cancel"
               onClick={onClose}
             >
               {cancelText}
             </button>
           )}
-          <button 
+          <button
             className={`modal-btn ${config.confirmBtnClass}`}
             onClick={() => {
               onConfirm();

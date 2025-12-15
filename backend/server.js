@@ -21,6 +21,10 @@ const purchaseInventoryRouter = require('./routes/purchaseInventory');
 const matchingRouter = require('./routes/matching');
 const paymentsRouter = require('./routes/payments');
 const settingsRouter = require('./routes/settings');
+const warehousesRouter = require('./routes/warehouses');
+const inventoryTransferRouter = require('./routes/inventoryTransfer');
+const inventoryAdjustmentRouter = require('./routes/inventoryAdjustment');
+const inventoryProductionRouter = require('./routes/inventoryProduction'); // 신규 추가
 
 app.use('/api/companies', companiesRouter);
 app.use('/api/products', productsRouter);
@@ -33,6 +37,8 @@ app.use('/api/purchase-inventory', purchaseInventoryRouter);
 app.use('/api/matching', matchingRouter);
 app.use('/api/payments', paymentsRouter);
 app.use('/api/settings', settingsRouter);
+app.use('/api/warehouses', warehousesRouter);
+app.use('/api/inventory/transfer', inventoryTransferRouter);
 
 // 헬스체크
 app.get('/api/health', (req, res) => {

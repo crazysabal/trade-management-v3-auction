@@ -25,7 +25,10 @@ import MatchingPage from './pages/MatchingPage';
 import CompanyBalances from './pages/CompanyBalances';
 import SaleFromInventory from './pages/SaleFromInventory';
 import Settings from './pages/Settings';
+import WarehouseManagement from './pages/WarehouseManagement';
 import MessageTestPage from './pages/MessageTestPage';
+import InventoryTransferManagement from './pages/InventoryTransferManagement';
+import InventoryProductionManagement from './pages/InventoryProductionManagement';
 
 function AppContent() {
   const location = useLocation();
@@ -102,6 +105,8 @@ function AppContent() {
                 </span>
                 <ul className="sidebar-submenu">
                   <li><Link to="/inventory">재고 현황</Link></li>
+                  <li><Link to="/inventory/transfer">재고 이동</Link></li>
+                  <li><Link to="/inventory-production">재고 작업</Link></li> {/* Menu Item */}
                   <li><Link to="/matching">마감 (매칭)</Link></li>
                   <li><Link to="/inventory/transactions">재고 수불부</Link></li>
                   <li><Link to="/inventory/adjust">재고 조정</Link></li>
@@ -141,6 +146,7 @@ function AppContent() {
                 </span>
                 <ul className="sidebar-submenu">
                   <li><Link to="/settings">시스템 설정</Link></li>
+                  <li><Link to="/settings/warehouses">창고 관리</Link></li>
                   <li><Link to="/settings/company-info">본사 정보</Link></li>
                 </ul>
               </li>
@@ -187,7 +193,9 @@ function AppContent() {
           <Route path="/trades/edit/:id" element={<DualTradeForm />} />
           <Route path="/trades/view/:id" element={<TradeView />} />
           <Route path="/trades/sale-from-inventory" element={<SaleFromInventory />} />
-          <Route path="/inventory" element={<InventoryList />} />
+          <Route path="/inventory-list" element={<InventoryList />} />
+          <Route path="/inventory-transfer" element={<InventoryTransferManagement />} />
+          <Route path="/inventory-production" element={<InventoryProductionManagement />} /> {/* Route */}
           <Route path="/matching" element={<MatchingPage />} />
           <Route path="/inventory/transactions" element={<InventoryTransactions />} />
           <Route path="/inventory/adjust" element={<InventoryAdjust />} />
@@ -197,6 +205,7 @@ function AppContent() {
           <Route path="/statistics" element={<Statistics />} />
           <Route path="/payments/balances" element={<CompanyBalances />} />
           <Route path="/settings" element={<Settings />} />
+          <Route path="/settings/warehouses" element={<WarehouseManagement />} />
           <Route path="/settings/company-info" element={<CompanyInfo />} />
           <Route path="/message-test" element={<MessageTestPage />} />
         </Routes>
