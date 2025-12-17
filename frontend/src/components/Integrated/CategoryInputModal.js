@@ -50,7 +50,8 @@ const ModalShell = ({ isOpen, onClose, title, children }) => {
 };
 
 const CategoryInputModal = ({ isOpen, onClose, onSuccess, initialData, parentId }) => {
-    const isEdit = !!initialData;
+    // Fix: check for ID to determine if it's an edit operations
+    const isEdit = !!(initialData && initialData.id);
     const [formData, setFormData] = useState({
         category_name: '',
         parent_id: null

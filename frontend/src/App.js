@@ -18,7 +18,7 @@ import InventoryList from './pages/InventoryList';
 import InventoryTransactions from './pages/InventoryTransactions';
 import InventoryAdjust from './pages/InventoryAdjust';
 import AuctionAccounts from './pages/AuctionAccounts';
-import AuctionImport from './pages/AuctionImport';
+
 import AuctionImportV2 from './pages/AuctionImportV2';
 import CompanyInfo from './pages/CompanyInfo';
 import MatchingPage from './pages/MatchingPage';
@@ -29,6 +29,7 @@ import WarehouseManagement from './pages/WarehouseManagement';
 import MessageTestPage from './pages/MessageTestPage';
 import InventoryTransferManagement from './pages/InventoryTransferManagement';
 import InventoryProductionManagement from './pages/InventoryProductionManagement';
+import InventoryProductionHistory from './pages/InventoryProductionHistory';
 
 function AppContent() {
   const location = useLocation();
@@ -92,8 +93,7 @@ function AppContent() {
                   <span className="sidebar-arrow">▼</span>
                 </span>
                 <ul className="sidebar-submenu">
-                  <li><Link to="/auction/import">낙찰 데이터 가져오기</Link></li>
-                  <li><Link to="/auction/import-v2">낙찰 데이터 가져오기 (개선판)</Link></li>
+                  <li><Link to="/auction/import-v2">낙찰 데이터 가져오기</Link></li>
                   <li><Link to="/auction/accounts">경매 계정 관리</Link></li>
                 </ul>
               </li>
@@ -106,7 +106,8 @@ function AppContent() {
                 <ul className="sidebar-submenu">
                   <li><Link to="/inventory">재고 현황</Link></li>
                   <li><Link to="/inventory/transfer">재고 이동</Link></li>
-                  <li><Link to="/inventory-production">재고 작업</Link></li> {/* Menu Item */}
+                  <li><Link to="/inventory-production">재고 작업 (등록)</Link></li>
+                  <li><Link to="/inventory-production/history">재고 작업 이력</Link></li>
                   <li><Link to="/matching">마감 (매칭)</Link></li>
                   <li><Link to="/inventory/transactions">재고 수불부</Link></li>
                   <li><Link to="/inventory/adjust">재고 조정</Link></li>
@@ -161,6 +162,7 @@ function AppContent() {
                 <ul className="sidebar-submenu">
                   <li><Link to="/products/legacy">구) 품목 목록</Link></li>
                   <li><Link to="/categories/legacy">구) 품목분류 관리</Link></li>
+
                 </ul>
               </li>
             </ul>
@@ -193,14 +195,16 @@ function AppContent() {
           <Route path="/trades/edit/:id" element={<DualTradeForm />} />
           <Route path="/trades/view/:id" element={<TradeView />} />
           <Route path="/trades/sale-from-inventory" element={<SaleFromInventory />} />
-          <Route path="/inventory-list" element={<InventoryList />} />
-          <Route path="/inventory-transfer" element={<InventoryTransferManagement />} />
-          <Route path="/inventory-production" element={<InventoryProductionManagement />} /> {/* Route */}
+          <Route path="/inventory" element={<InventoryList />} />
+          <Route path="/inventory/transfer" element={<InventoryTransferManagement />} />
+          <Route path="/inventory/transfer" element={<InventoryTransferManagement />} />
+          <Route path="/inventory-production" element={<InventoryProductionManagement />} />
+          <Route path="/inventory-production/history" element={<InventoryProductionHistory />} />
           <Route path="/matching" element={<MatchingPage />} />
           <Route path="/inventory/transactions" element={<InventoryTransactions />} />
           <Route path="/inventory/adjust" element={<InventoryAdjust />} />
           <Route path="/auction/accounts" element={<AuctionAccounts />} />
-          <Route path="/auction/import" element={<AuctionImport />} />
+
           <Route path="/auction/import-v2" element={<AuctionImportV2 />} />
           <Route path="/statistics" element={<Statistics />} />
           <Route path="/payments/balances" element={<CompanyBalances />} />

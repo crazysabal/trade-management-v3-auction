@@ -163,8 +163,8 @@ const Settings = () => {
 
     return (
         <div className="settings-container fade-in">
-            <div className="page-header">
-                <h1>⚙️ 시스템 설정</h1>
+            <div className="page-header" style={{ display: 'flex', alignItems: 'center' }}>
+                <h1 className="page-title" style={{ margin: 0 }}>⚙️ 시스템 설정</h1>
             </div>
 
             {status.message && (

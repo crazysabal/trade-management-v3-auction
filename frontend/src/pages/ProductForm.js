@@ -35,7 +35,7 @@ function ProductForm() {
     type: 'info',
     title: '',
     message: '',
-    onConfirm: () => {},
+    onConfirm: () => { },
     confirmText: '확인',
     showCancel: false
   });
@@ -112,7 +112,7 @@ function ProductForm() {
       setOriginalProductName(data.product_name);
       // weight가 없는 경우 빈 문자열로 통일
       setOriginalWeight(data.weight !== null && data.weight !== undefined ? data.weight : '');
-      
+
       // 같은 품목명의 다른 등급 개수 확인
       const allProducts = await productAPI.getAll({});
       const sameNameProducts = allProducts.data.data.filter(
@@ -178,7 +178,7 @@ function ProductForm() {
         message: '품목명은 필수입니다.',
         confirmText: '확인',
         showCancel: false,
-        onConfirm: () => {}
+        onConfirm: () => { }
       });
       return;
     }
@@ -188,7 +188,7 @@ function ProductForm() {
         // 품목명/중량이 변경되고, 같은 품목명의 다른 등급이 있는 경우
         const isNameChanged = formData.product_name !== originalProductName;
         const isWeightChanged = String(formData.weight || '') !== String(originalWeight || '');
-        
+
         const submitData = {
           ...formData,
           updateAllGrades: updateAllGrades && sameNameCount > 0 && isNameChanged,
@@ -207,13 +207,13 @@ function ProductForm() {
         });
       } else {
         let submitData = { ...formData };
-        
+
         if (isMultiGrade && formData.grades) {
           const gradeList = formData.grades
             .split(',')
             .map(g => g.trim())
             .filter(g => g);
-          
+
           if (gradeList.length === 0) {
             setModal({
               isOpen: true,
@@ -222,15 +222,15 @@ function ProductForm() {
               message: '등급을 입력하세요.',
               confirmText: '확인',
               showCancel: false,
-              onConfirm: () => {}
+              onConfirm: () => { }
             });
             return;
           }
-          
+
           submitData.grades = gradeList;
           delete submitData.grade;
         }
-        
+
         const response = await productAPI.create(submitData);
         setModal({
           isOpen: true,
@@ -251,7 +251,7 @@ function ProductForm() {
         message: error.response?.data?.message || '품목 저장에 실패했습니다.',
         confirmText: '확인',
         showCancel: false,
-        onConfirm: () => {}
+        onConfirm: () => { }
       });
     }
   };
@@ -270,7 +270,7 @@ function ProductForm() {
   const buildCategoryOptions = () => {
     const options = [];
     const mainCategories = categories.filter(c => !c.parent_id);
-    
+
     mainCategories.forEach(main => {
       // 대분류 (선택 불가, 그룹 헤더로만 사용)
       options.push({
@@ -278,7 +278,7 @@ function ProductForm() {
         label: `📁 ${main.category_name}`,
         isMain: true
       });
-      
+
       // 하위 분류
       const children = categories.filter(c => c.parent_id === main.id);
       children.forEach(child => {
@@ -289,7 +289,7 @@ function ProductForm() {
         });
       });
     });
-    
+
     return options;
   };
 
@@ -297,8 +297,8 @@ function ProductForm() {
 
   return (
     <div className="product-form">
-      <div className="page-header">
-        <h1 className="page-title">{isEdit ? '품목 수정' : '품목 등록'}</h1>
+      <div className="page-header" style={{ display: 'flex', alignItems: 'center' }}>
+        <h1 className="page-title" style={{ margin: 0 }}>📦 {isEdit ? '품목 수정' : '품목 등록'}</h1>
       </div>
 
       <form onSubmit={handleSubmit} className="form-container">
@@ -311,11 +311,11 @@ function ProductForm() {
             border: isAddingGrade ? '1px solid #fcd34d' : '1px solid #b8daff'
           }}>
             {isAddingGrade ? (
-              <p style={{margin: 0, color: '#92400e', fontSize: '0.9rem'}}>
+              <p style={{ margin: 0, color: '#92400e', fontSize: '0.9rem' }}>
                 📌 <strong>기존 품목에 등급 추가 모드</strong> - "{formData.product_name}" 품목에 새로운 등급을 추가합니다.
               </p>
             ) : (
-              <p style={{margin: 0, color: '#0056b3', fontSize: '0.9rem'}}>
+              <p style={{ margin: 0, color: '#0056b3', fontSize: '0.9rem' }}>
                 💡 <strong>품목코드는 자동 생성됩니다.</strong> 등록 시 F001, F002... 형태로 순차적으로 부여됩니다.
               </p>
             )}
@@ -330,7 +330,7 @@ function ProductForm() {
                 type="text"
                 value={formData.product_code || ''}
                 disabled
-                style={{...inputStyle, backgroundColor: '#f3f4f6', color: '#6b7280'}}
+                style={{ ...inputStyle, backgroundColor: '#f3f4f6', color: '#6b7280' }}
               />
             </div>
           </div>
@@ -338,7 +338,7 @@ function ProductForm() {
 
         {!isEdit && existingProducts.length > 0 && !isAddingGrade && (
           <div className="form-row">
-            <div className="form-group" style={{gridColumn: '1 / -1'}}>
+            <div className="form-group" style={{ gridColumn: '1 / -1' }}>
               <label>기존 품목에 등급 추가</label>
               <SearchableSelect
                 options={existingProducts.map(p => ({
@@ -351,7 +351,7 @@ function ProductForm() {
                 noOptionsMessage="등록된 품목 없음"
                 isClearable={true}
               />
-              <p style={{margin: '0.5rem 0 0', fontSize: '0.85rem', color: '#6b7280'}}>
+              <p style={{ margin: '0.5rem 0 0', fontSize: '0.85rem', color: '#6b7280' }}>
                 💡 기존 품목에 등급을 추가하려면 위에서 품목을 선택하세요. 새 품목을 등록하려면 아래에서 직접 입력하세요.
               </p>
             </div>
@@ -359,12 +359,12 @@ function ProductForm() {
         )}
 
         {isAddingGrade && !isEdit && (
-          <div style={{marginBottom: '1rem'}}>
-            <button 
-              type="button" 
+          <div style={{ marginBottom: '1rem' }}>
+            <button
+              type="button"
               onClick={() => {
                 setIsAddingGrade(false);
-                setFormData({...formData, product_name: '', unit: 'Box', category_id: '', weight: ''});
+                setFormData({ ...formData, product_name: '', unit: 'Box', category_id: '', weight: '' });
               }}
               style={{
                 padding: '0.5rem 1rem',
@@ -417,7 +417,7 @@ function ProductForm() {
                   type="checkbox"
                   checked={updateAllGrades}
                   onChange={(e) => setUpdateAllGrades(e.target.checked)}
-                  style={{width: '18px', height: '18px', cursor: 'pointer'}}
+                  style={{ width: '18px', height: '18px', cursor: 'pointer' }}
                 />
                 <span>
                   같은 품목명(<strong>{originalProductName}</strong>)의 다른 등급 <strong>{sameNameCount}개</strong>도 함께 변경
@@ -441,12 +441,12 @@ function ProductForm() {
         {/* 등급 입력 */}
         {!isEdit && (
           <div className="form-row">
-            <div className="form-group" style={{gridColumn: '1 / -1'}}>
-              <div style={{display: 'flex', alignItems: 'center', marginBottom: '0.5rem'}}>
-                <label style={{marginRight: '1rem', marginBottom: 0}}>등급</label>
+            <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+              <div style={{ display: 'flex', alignItems: 'center', marginBottom: '0.5rem' }}>
+                <label style={{ marginRight: '1rem', marginBottom: 0 }}>등급</label>
                 <label style={{
-                  display: 'flex', 
-                  alignItems: 'center', 
+                  display: 'flex',
+                  alignItems: 'center',
                   cursor: 'pointer',
                   fontSize: '0.9rem',
                   color: '#4a5568'
@@ -455,12 +455,12 @@ function ProductForm() {
                     type="checkbox"
                     checked={isMultiGrade}
                     onChange={(e) => setIsMultiGrade(e.target.checked)}
-                    style={{width: '18px', height: '18px', marginRight: '0.5rem', cursor: 'pointer'}}
+                    style={{ width: '18px', height: '18px', marginRight: '0.5rem', cursor: 'pointer' }}
                   />
                   여러 등급 한번에 등록
                 </label>
               </div>
-              
+
               {isMultiGrade ? (
                 <div>
                   <input
@@ -471,8 +471,8 @@ function ProductForm() {
                     placeholder="예: 2L, L, M, S (쉼표로 구분)"
                     style={inputStyle}
                   />
-                  <p style={{margin: '0.5rem 0 0', fontSize: '0.85rem', color: '#6b7280'}}>
-                    💡 쉼표로 구분하여 입력하면 각 등급별로 품목이 자동 생성됩니다.<br/>
+                  <p style={{ margin: '0.5rem 0 0', fontSize: '0.85rem', color: '#6b7280' }}>
+                    💡 쉼표로 구분하여 입력하면 각 등급별로 품목이 자동 생성됩니다.<br />
                     예: 품목명 "감귤", 등급 "2L, L, M" → 3개 품목 생성 (각각 등급 2L, L, M)
                   </p>
                 </div>
@@ -530,7 +530,7 @@ function ProductForm() {
               min="0"
               style={inputStyle}
             />
-            <p style={{margin: '0.25rem 0 0', fontSize: '0.8rem', color: '#6b7280'}}>
+            <p style={{ margin: '0.25rem 0 0', fontSize: '0.8rem', color: '#6b7280' }}>
               박스당 중량을 입력하세요
             </p>
             {/* 중량 일괄 변경 옵션 */}
@@ -552,7 +552,7 @@ function ProductForm() {
                   type="checkbox"
                   checked={updateAllWeights}
                   onChange={(e) => setUpdateAllWeights(e.target.checked)}
-                  style={{width: '18px', height: '18px', cursor: 'pointer'}}
+                  style={{ width: '18px', height: '18px', cursor: 'pointer' }}
                 />
                 <span>
                   같은 품목명의 다른 등급 <strong>{sameNameCount}개</strong>도 중량 함께 변경
@@ -563,7 +563,7 @@ function ProductForm() {
         </div>
 
         <div className="form-row">
-          <div className="form-group" style={{gridColumn: '1 / -1'}}>
+          <div className="form-group" style={{ gridColumn: '1 / -1' }}>
             <label>비고</label>
             <textarea
               name="notes"
@@ -571,7 +571,7 @@ function ProductForm() {
               onChange={handleChange}
               rows="3"
               placeholder="추가 정보 입력"
-              style={{...inputStyle, resize: 'vertical'}}
+              style={{ ...inputStyle, resize: 'vertical' }}
             />
           </div>
         </div>
@@ -579,13 +579,13 @@ function ProductForm() {
         {isEdit && (
           <div className="form-row">
             <div className="form-group">
-              <label style={{display: 'flex', alignItems: 'center', cursor: 'pointer'}}>
+              <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
                 <input
                   type="checkbox"
                   name="is_active"
                   checked={formData.is_active}
                   onChange={handleChange}
-                  style={{width: '18px', height: '18px', marginRight: '0.5rem', cursor: 'pointer'}}
+                  style={{ width: '18px', height: '18px', marginRight: '0.5rem', cursor: 'pointer' }}
                 />
                 사용
               </label>

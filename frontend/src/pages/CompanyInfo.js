@@ -3,7 +3,7 @@ import { companyInfoAPI } from '../services/api';
 import ConfirmModal from '../components/ConfirmModal';
 
 function CompanyInfo() {
-  const [modal, setModal] = useState({ isOpen: false, type: 'info', title: '', message: '', onConfirm: () => {}, confirmText: '확인', showCancel: false });
+  const [modal, setModal] = useState({ isOpen: false, type: 'info', title: '', message: '', onConfirm: () => { }, confirmText: '확인', showCancel: false });
   const [formData, setFormData] = useState({
     company_name: '',
     business_number: '',
@@ -52,19 +52,19 @@ function CompanyInfo() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
     if (!formData.company_name) {
-      setModal({ isOpen: true, type: 'warning', title: '입력 오류', message: '회사명은 필수입니다.', confirmText: '확인', showCancel: false, onConfirm: () => {} });
+      setModal({ isOpen: true, type: 'warning', title: '입력 오류', message: '회사명은 필수입니다.', confirmText: '확인', showCancel: false, onConfirm: () => { } });
       return;
     }
 
     setSaving(true);
     try {
       await companyInfoAPI.update(formData);
-      setModal({ isOpen: true, type: 'success', title: '저장 완료', message: '본사 정보가 저장되었습니다.', confirmText: '확인', showCancel: false, onConfirm: () => {} });
+      setModal({ isOpen: true, type: 'success', title: '저장 완료', message: '본사 정보가 저장되었습니다.', confirmText: '확인', showCancel: false, onConfirm: () => { } });
     } catch (error) {
       console.error('본사 정보 저장 오류:', error);
-      setModal({ isOpen: true, type: 'warning', title: '저장 실패', message: '저장에 실패했습니다.', confirmText: '확인', showCancel: false, onConfirm: () => {} });
+      setModal({ isOpen: true, type: 'warning', title: '저장 실패', message: '저장에 실패했습니다.', confirmText: '확인', showCancel: false, onConfirm: () => { } });
     } finally {
       setSaving(false);
     }
@@ -75,10 +75,10 @@ function CompanyInfo() {
   }
 
   return (
-    <div className="company-info-page">
+    <div className="company-info-page" style={{ maxWidth: '800px', margin: '0 auto', paddingBottom: '3rem' }}>
       <div className="page-header">
         <h1 className="page-title">🏢 본사 정보</h1>
-        <p style={{color: '#6b7280', marginTop: '0.5rem'}}>
+        <p style={{ color: '#6b7280', marginTop: '0.5rem' }}>
           거래명세서에 표시되는 본사 정보를 관리합니다.
         </p>
       </div>
@@ -92,7 +92,7 @@ function CompanyInfo() {
           borderRadius: '8px',
           borderLeft: '4px solid #0284c7'
         }}>
-          <h3 style={{margin: '0 0 0.5rem 0', color: '#0369a1', fontSize: '1rem'}}>
+          <h3 style={{ margin: '0 0 0.5rem 0', color: '#0369a1', fontSize: '1rem' }}>
             📋 기본 정보
           </h3>
         </div>
@@ -151,7 +151,7 @@ function CompanyInfo() {
         </div>
 
         <div className="form-row">
-          <div className="form-group" style={{gridColumn: '1 / -1'}}>
+          <div className="form-group" style={{ gridColumn: '1 / -1' }}>
             <label>주소 1</label>
             <input
               type="text"
@@ -164,7 +164,7 @@ function CompanyInfo() {
         </div>
 
         <div className="form-row">
-          <div className="form-group" style={{gridColumn: '1 / -1'}}>
+          <div className="form-group" style={{ gridColumn: '1 / -1' }}>
             <label>주소 2</label>
             <input
               type="text"
@@ -215,7 +215,7 @@ function CompanyInfo() {
           borderRadius: '8px',
           borderLeft: '4px solid #16a34a'
         }}>
-          <h3 style={{margin: '0 0 0.5rem 0', color: '#166534', fontSize: '1rem'}}>
+          <h3 style={{ margin: '0 0 0.5rem 0', color: '#166534', fontSize: '1rem' }}>
             💳 계좌 정보
           </h3>
         </div>
@@ -260,7 +260,7 @@ function CompanyInfo() {
           borderRadius: '8px',
           borderLeft: '4px solid #f59e0b'
         }}>
-          <h3 style={{margin: '0 0 0.5rem 0', color: '#b45309', fontSize: '1rem'}}>
+          <h3 style={{ margin: '0 0 0.5rem 0', color: '#b45309', fontSize: '1rem' }}>
             🖼️ 이미지 (선택)
           </h3>
         </div>
@@ -289,8 +289,8 @@ function CompanyInfo() {
         </div>
 
         {/* 비고 */}
-        <div className="form-row" style={{marginTop: '1.5rem'}}>
-          <div className="form-group" style={{gridColumn: '1 / -1'}}>
+        <div className="form-row" style={{ marginTop: '1.5rem' }}>
+          <div className="form-group" style={{ gridColumn: '1 / -1' }}>
             <label>비고</label>
             <textarea
               name="notes"
@@ -302,9 +302,9 @@ function CompanyInfo() {
           </div>
         </div>
 
-        <div className="form-actions" style={{marginTop: '2rem'}}>
-          <button 
-            type="submit" 
+        <div className="form-actions" style={{ marginTop: '2rem' }}>
+          <button
+            type="submit"
             className="btn btn-primary"
             disabled={saving}
           >

@@ -54,7 +54,7 @@ function IntegratedProductManagement() {
     // Split Pane Style - Modern Dashboard Look
     const containerStyle = {
         display: 'flex',
-        height: isPopup ? '100vh' : 'calc(100vh - 120px)',
+        flex: 1,                     // Fill remaining height
         overflow: 'hidden',
         backgroundColor: '#f1f5f9', // Soft slate background
         padding: '1.5rem',           // Breathing room
@@ -106,28 +106,35 @@ function IntegratedProductManagement() {
     };
 
     return (
-        <div className="integrated-product-management" style={containerStyle}>
-            {/* Left Panel: Category Management */}
-            <div style={leftPanelStyle}>
-                <CategoryManager
-                    onSelectCategory={(category) => setSelectedCategory(category)}
-                    selectedCategoryId={selectedCategory?.id}
-                />
-            </div>
+        <div style={{ display: 'flex', flexDirection: 'column', height: isPopup ? '100vh' : 'calc(100vh - 60px)' }}>
+            {!isPopup && (
+                <div className="page-header" style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
+                    <h1 className="page-title" style={{ margin: 0 }}>🧩 통합 품목 관리</h1>
+                </div>
+            )}
+            <div className="integrated-product-management" style={containerStyle}>
+                {/* Left Panel: Category Management */}
+                <div style={leftPanelStyle}>
+                    <CategoryManager
+                        onSelectCategory={(category) => setSelectedCategory(category)}
+                        selectedCategoryId={selectedCategory?.id}
+                    />
+                </div>
 
-            {/* Resizer Handle */}
-            <div
-                style={resizerStyle}
-                onMouseDown={handleMouseDown}
-                title="너비 조절"
-            >
-                <div style={resizerLineStyle} />
-            </div>
+                {/* Resizer Handle */}
+                <div
+                    style={resizerStyle}
+                    onMouseDown={handleMouseDown}
+                    title="너비 조절"
+                >
+                    <div style={resizerLineStyle} />
+                </div>
 
-            {/* Right Panel: Product Management */}
-            <div style={rightPanelStyle}>
-                {/* We pass the selected category ID to filter products */}
-                <ProductManager selectedCategoryId={selectedCategory?.id} />
+                {/* Right Panel: Product Management */}
+                <div style={rightPanelStyle}>
+                    {/* We pass the selected category ID to filter products */}
+                    <ProductManager selectedCategoryId={selectedCategory?.id} />
+                </div>
             </div>
         </div>
     );

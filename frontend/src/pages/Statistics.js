@@ -6,11 +6,11 @@ function Statistics() {
   const [purchaseStats, setPurchaseStats] = useState([]);
   const [saleStats, setSaleStats] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [modal, setModal] = useState({ isOpen: false, type: 'info', title: '', message: '', onConfirm: () => {}, confirmText: '확인', showCancel: false });
-  
+  const [modal, setModal] = useState({ isOpen: false, type: 'info', title: '', message: '', onConfirm: () => { }, confirmText: '확인', showCancel: false });
+
   // 조회 유형: daily, monthly, yearly
   const [viewType, setViewType] = useState('daily');
-  
+
   const [filters, setFilters] = useState({
     start_date: new Date(new Date().setMonth(new Date().getMonth() - 1)).toISOString().split('T')[0],
     end_date: new Date().toISOString().split('T')[0]
@@ -46,10 +46,10 @@ function Statistics() {
   useEffect(() => {
     const handleMouseMove = (e) => {
       if (!isDragging || !containerRef.current) return;
-      
+
       const containerRect = containerRef.current.getBoundingClientRect();
       const newRatio = (e.clientX - containerRect.left) / containerRect.width;
-      
+
       // 최소/최대 비율 제한
       const clampedRatio = Math.max(0.3, Math.min(0.7, newRatio));
       setSplitRatio(clampedRatio);
@@ -91,7 +91,7 @@ function Statistics() {
   const getDateRange = (type) => {
     const today = new Date();
     let start_date, end_date;
-    
+
     switch (type) {
       case 'daily':
         // 최근 1개월
@@ -112,7 +112,7 @@ function Statistics() {
         start_date = new Date(today.setMonth(today.getMonth() - 1)).toISOString().split('T')[0];
         end_date = new Date().toISOString().split('T')[0];
     }
-    
+
     return { start_date, end_date };
   };
 
@@ -126,18 +126,18 @@ function Statistics() {
   const loadStatistics = async () => {
     try {
       setLoading(true);
-      
+
       // 매입/매출 통계 동시 조회
       const [purchaseResponse, saleResponse] = await Promise.all([
         tradeAPI.getStatsByCompany({ ...filters, trade_type: 'PURCHASE' }),
         tradeAPI.getStatsByCompany({ ...filters, trade_type: 'SALE' })
       ]);
-      
+
       setPurchaseStats(purchaseResponse.data.data);
       setSaleStats(saleResponse.data.data);
     } catch (error) {
       console.error('통계 로딩 오류:', error);
-      setModal({ isOpen: true, type: 'warning', title: '로딩 실패', message: '통계 데이터를 불러오는데 실패했습니다.', confirmText: '확인', showCancel: false, onConfirm: () => {} });
+      setModal({ isOpen: true, type: 'warning', title: '로딩 실패', message: '통계 데이터를 불러오는데 실패했습니다.', confirmText: '확인', showCancel: false, onConfirm: () => { } });
     } finally {
       setLoading(false);
     }
@@ -179,11 +179,11 @@ function Statistics() {
   const StatsTable = ({ stats, type }) => {
     const totalAmount = getTotalAmount(stats);
     const colorScheme = type === 'PURCHASE' ? colors.purchase : colors.sale;
-    
+
     return (
-      <div style={{ 
-        display: 'flex', 
-        flexDirection: 'column', 
+      <div style={{
+        display: 'flex',
+        flexDirection: 'column',
         height: '100%',
         overflow: 'hidden',
         width: '100%'
@@ -195,9 +195,9 @@ function Statistics() {
           borderBottom: `2px solid ${colorScheme.accent}`,
           flexShrink: 0
         }}>
-          <h2 style={{ 
-            margin: 0, 
-            fontSize: '1.1rem', 
+          <h2 style={{
+            margin: 0,
+            fontSize: '1.1rem',
             fontWeight: '700',
             color: colorScheme.text,
             display: 'flex',
@@ -254,8 +254,8 @@ function Statistics() {
         </div>
 
         {/* 테이블 */}
-        <div style={{ 
-          flex: 1, 
+        <div style={{
+          flex: 1,
           overflow: 'auto',
           padding: '0 0.75rem 0.75rem'
         }}>
@@ -279,11 +279,11 @@ function Statistics() {
               ) : (
                 stats.map((stat, index) => {
                   const percentage = totalAmount > 0 ? (parseFloat(stat.total_price) / totalAmount * 100) : 0;
-                  
+
                   return (
-                    <tr 
+                    <tr
                       key={stat.id}
-                      style={{ 
+                      style={{
                         borderBottom: '1px solid #eee',
                         backgroundColor: index % 2 === 0 ? '#fff' : '#fafafa'
                       }}
@@ -361,28 +361,19 @@ function Statistics() {
   }
 
   return (
-    <div style={{ 
-      display: 'flex', 
-      flexDirection: 'column', 
+    <div style={{
+      display: 'flex',
+      flexDirection: 'column',
       height: 'calc(100vh - 60px)',
       backgroundColor: '#f5f6fa'
     }}>
       {/* 헤더 */}
-      <div style={{ 
-        display: 'flex', 
-        justifyContent: 'space-between', 
-        alignItems: 'center',
-        padding: '0.75rem 1rem',
-        backgroundColor: '#fff',
-        borderBottom: '1px solid #ddd',
-        boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
-        flexShrink: 0
-      }}>
+      <div className="page-header" style={{ display: 'flex', alignItems: 'center' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-          <h1 style={{ margin: 0, fontSize: '1.2rem', fontWeight: '700', color: '#2c3e50' }}>
+          <h1 className="page-title" style={{ margin: 0 }}>
             📈 거래처별 통계
           </h1>
-          
+
           {/* 좌우 위치 변경 버튼 */}
           <button
             onClick={toggleLayout}
@@ -403,8 +394,8 @@ function Statistics() {
             title="좌우 위치 변경"
           >
             🔄 위치 변경
-            <span style={{ 
-              fontSize: '0.75rem', 
+            <span style={{
+              fontSize: '0.75rem',
               opacity: 0.9,
               backgroundColor: 'rgba(255,255,255,0.2)',
               padding: '0.15rem 0.4rem',
@@ -413,7 +404,7 @@ function Statistics() {
               {layoutOrder.left === 'PURCHASE' ? '매입←→매출' : '매출←→매입'}
             </span>
           </button>
-          
+
           {/* 크기 초기화 버튼 (변경 시에만 표시) */}
           {splitRatio !== 0.5 && (
             <button
@@ -425,7 +416,7 @@ function Statistics() {
                 border: 'none',
                 borderRadius: '6px',
                 cursor: 'pointer',
-                fontSize: '0.85rem',
+                fontSize: '0.9rem',
                 fontWeight: '500'
               }}
               title="패널 크기 초기화"
@@ -433,10 +424,10 @@ function Statistics() {
               ↔ 크기 초기화
             </button>
           )}
-          
+
           {/* 조회 유형 선택 */}
-          <div style={{ 
-            display: 'flex', 
+          <div style={{
+            display: 'flex',
             gap: '0.25rem',
             backgroundColor: '#f1f3f5',
             padding: '0.25rem',
@@ -467,33 +458,33 @@ function Statistics() {
               </button>
             ))}
           </div>
-          
+
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginLeft: '0.5rem' }}>
             <span style={{ fontSize: '0.85rem', color: '#666' }}>기간:</span>
             <input
               type="date"
               value={filters.start_date}
-              onChange={(e) => setFilters({...filters, start_date: e.target.value})}
+              onChange={(e) => setFilters({ ...filters, start_date: e.target.value })}
               style={{
                 padding: '0.4rem 0.6rem',
                 border: '1px solid #ddd',
                 borderRadius: '6px',
-                fontSize: '0.85rem'
+                fontSize: '0.9rem'
               }}
             />
             <span style={{ color: '#999' }}>~</span>
             <input
               type="date"
               value={filters.end_date}
-              onChange={(e) => setFilters({...filters, end_date: e.target.value})}
+              onChange={(e) => setFilters({ ...filters, end_date: e.target.value })}
               style={{
                 padding: '0.4rem 0.6rem',
                 border: '1px solid #ddd',
                 borderRadius: '6px',
-                fontSize: '0.85rem'
+                fontSize: '0.9rem'
               }}
             />
-            <button 
+            <button
               onClick={handleSearch}
               style={{
                 padding: '0.4rem 1rem',
@@ -501,7 +492,7 @@ function Statistics() {
                 color: '#fff',
                 border: 'none',
                 borderRadius: '6px',
-                fontSize: '0.85rem',
+                fontSize: '0.9rem',
                 fontWeight: '600',
                 cursor: 'pointer'
               }}
@@ -525,16 +516,16 @@ function Statistics() {
               {formatCurrency(getTotalAmount(saleStats))}원
             </div>
           </div>
-          <div style={{ 
+          <div style={{
             textAlign: 'right',
             padding: '0.5rem 1rem',
             backgroundColor: '#f0f0f0',
             borderRadius: '8px'
           }}>
             <div style={{ fontSize: '0.75rem', color: '#666' }}>순이익</div>
-            <div style={{ 
-              fontSize: '1.1rem', 
-              fontWeight: '700', 
+            <div style={{
+              fontSize: '1.1rem',
+              fontWeight: '700',
               color: getTotalAmount(saleStats) - getTotalAmount(purchaseStats) >= 0 ? '#2980b9' : '#c0392b'
             }}>
               {formatCurrency(getTotalAmount(saleStats) - getTotalAmount(purchaseStats))}원
@@ -544,11 +535,11 @@ function Statistics() {
       </div>
 
       {/* 메인 컨텐츠 - 좌우 분할 */}
-      <div 
+      <div
         ref={containerRef}
-        style={{ 
-          flex: 1, 
-          display: 'flex', 
+        style={{
+          flex: 1,
+          display: 'flex',
           padding: '0.75rem',
           overflow: 'hidden',
           minHeight: 0,
@@ -556,7 +547,7 @@ function Statistics() {
         }}
       >
         {/* 왼쪽 패널 */}
-        <div style={{ 
+        <div style={{
           flex: `0 0 calc(${splitRatio * 100}% - 4px)`,
           display: 'flex',
           minWidth: '300px',
@@ -570,7 +561,7 @@ function Statistics() {
         </div>
 
         {/* 리사이즈 핸들 */}
-        <div 
+        <div
           onMouseDown={handleMouseDown}
           style={{
             width: '8px',
@@ -602,7 +593,7 @@ function Statistics() {
         </div>
 
         {/* 오른쪽 패널 */}
-        <div style={{ 
+        <div style={{
           flex: 1,
           display: 'flex',
           minWidth: '300px',
@@ -616,15 +607,15 @@ function Statistics() {
         </div>
       </div>
 
-      <ConfirmModal 
-        isOpen={modal.isOpen} 
-        onClose={() => setModal(prev => ({ ...prev, isOpen: false }))} 
-        onConfirm={modal.onConfirm} 
-        title={modal.title} 
-        message={modal.message} 
-        type={modal.type} 
-        confirmText={modal.confirmText} 
-        showCancel={modal.showCancel} 
+      <ConfirmModal
+        isOpen={modal.isOpen}
+        onClose={() => setModal(prev => ({ ...prev, isOpen: false }))}
+        onConfirm={modal.onConfirm}
+        title={modal.title}
+        message={modal.message}
+        type={modal.type}
+        confirmText={modal.confirmText}
+        showCancel={modal.showCancel}
       />
     </div>
   );

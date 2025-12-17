@@ -132,8 +132,8 @@ const WarehouseManagement = () => {
 
     return (
         <div className="settings-container fade-in">
-            <div className="page-header">
-                <h1>🏭 창고 관리</h1>
+            <div className="page-header" style={{ display: 'flex', alignItems: 'center' }}>
+                <h1 className="page-title" style={{ margin: 0 }}>🏭 창고 관리</h1>
             </div>
 
 

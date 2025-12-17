@@ -207,6 +207,10 @@ export const inventoryAdjustmentAPI = {
 
 export const inventoryProductionAPI = {
   create: (data) => api.post('/inventory-production', data),
+  cancel: (id) => api.delete(`/inventory-production/${id}`),
+  getRecent: () => api.get('/inventory-production/recent'), // @deprecated
+  getHistory: (params) => api.get('/inventory-production', { params }), // 전체 이력 조회
+  getDetail: (id) => api.get(`/inventory-production/${id}`), // 상세 조회 (재료 포함)
 };
 
 export default api;

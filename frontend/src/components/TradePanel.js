@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { tradeAPI, companyAPI, productAPI, paymentAPI, settingsAPI, warehousesAPI } from '../services/api';
 import './TradePanel.css'; // 스타일 분리
 import SearchableSelect from './SearchableSelect';
@@ -58,6 +59,18 @@ function TradePanel({
     return `${year}-${month}-${day}`;
   };
 
+  // 숫자 포맷팅 (콤마)
+  const formatNumber = (num) => {
+    if (num === null || num === undefined || num === '') return '';
+    return num.toLocaleString();
+  };
+
+  // 통화 포맷팅 (원화, 소수점 버림)
+  const formatCurrency = (amount) => {
+    if (amount === null || amount === undefined || amount === '') return '0';
+    return Math.floor(amount).toLocaleString();
+  };
+
   const [master, setMaster] = useState({
     trade_type: tradeType,
     trade_date: formatLocalDate(new Date()),
@@ -90,6 +103,16 @@ function TradePanel({
     notes: ''
   });
 
+  // [재고 드롭 모달] 상태
+  const [inventoryInputModal, setInventoryInputModal] = useState({
+    isOpen: false,
+    inventory: null, // 드롭된 재고 아이템 원본
+    quantity: '',
+    unitPrice: '',
+    maxQuantity: 0,
+    dropIndex: null // 드롭된 위치
+  });
+
   // 모달
   const [modal, setModal] = useState({
     isOpen: false,
@@ -114,11 +137,7 @@ function TradePanel({
   const notesRefs = useRef([]);
   const modalConfirmRef = useRef(null);
 
-  // 통화 포맷
-  const formatCurrency = (value) => {
-    if (!value && value !== 0) return '0';
-    return Math.round(Number(value)).toLocaleString('ko-KR');
-  };
+
 
   // 모달 표시
   const showModal = (type, title, message, onConfirm = () => { }, confirmText = '확인', showCancel = false) => {
@@ -497,9 +516,17 @@ function TradePanel({
 
   const handleDragOver = (e, index) => {
     e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-    if (draggedIndex !== null && index !== draggedIndex) {
-      setDragOverIndex(index);
+
+    // 내부 드래그인 경우
+    if (draggedIndex !== null) {
+      e.dataTransfer.dropEffect = 'move';
+      if (index !== draggedIndex) {
+        setDragOverIndex(index);
+      }
+    } else {
+      // 외부 드래그(재고 목록 등)인 경우
+      e.dataTransfer.dropEffect = 'copy';
+      setDragOverIndex(index); // 드롭 위치 표시
     }
   };
 
@@ -507,8 +534,60 @@ function TradePanel({
     setDragOverIndex(null);
   };
 
+  // 재고 입력 모달 ESC 키 핸들러 (규칙 준수)
+  useEffect(() => {
+    const handleEsc = (e) => {
+      if (inventoryInputModal.isOpen && e.key === 'Escape') {
+        e.preventDefault();
+        e.stopPropagation();
+        setInventoryInputModal(prev => ({ ...prev, isOpen: false }));
+      }
+    };
+
+    if (inventoryInputModal.isOpen) {
+      window.addEventListener('keydown', handleEsc);
+    }
+
+    return () => {
+      window.removeEventListener('keydown', handleEsc);
+    };
+  }, [inventoryInputModal.isOpen]);
+
   const handleDrop = (e, dropIndex) => {
     e.preventDefault();
+    const inventoryJson = e.dataTransfer.getData('application/json');
+
+    // 1. 외부 재고 아이템 드래그 앤 드롭
+    if (inventoryJson) {
+      // 거래처 선택 확인
+      if (!master.company_id) {
+        showModal('warning', '거래처 미선택', '먼저 거래처를 선택해주세요.');
+        setDragOverIndex(null);
+        return;
+      }
+
+      try {
+        const item = JSON.parse(inventoryJson);
+        const availableQty = parseFloat(item.remaining_quantity) || 0;
+
+        // 모달 열기
+        setInventoryInputModal({
+          isOpen: true,
+          inventory: item,
+          quantity: availableQty.toString(),
+          unitPrice: item.unit_price ? Math.floor(item.unit_price).toString() : '',
+          maxQuantity: availableQty,
+          dropIndex: dropIndex
+        });
+
+        setDragOverIndex(null);
+        return;
+      } catch (err) {
+        console.error('재고 드롭 처리 오류:', err);
+      }
+    }
+
+    // 2. 내부 행 순서 변경
     const dragIndex = draggedIndex;
 
     if (dragIndex === null || dragIndex === dropIndex) {
@@ -526,6 +605,56 @@ function TradePanel({
     setDraggedIndex(null);
     setDragOverIndex(null);
     setSelectedRowIndex(dropIndex);
+  };
+
+  // 재고 입력 모달 확인 핸들러
+  const handleInventoryInputConfirm = () => {
+    const { inventory: item, quantity, unitPrice, dropIndex } = inventoryInputModal;
+    const qty = parseFloat(quantity) || 0;
+    const price = parseFloat(unitPrice) || 0;
+
+    if (qty <= 0) {
+      showModal('warning', '입력 오류', '수량을 입력하세요.');
+      return;
+    }
+
+    // 새 전표 상세 객체 생성
+    const newDetail = {
+      rowIndex: 0,
+      product_id: item.product_id,
+      product_name: item.product_name,
+      unit: '',
+      quantity: qty,
+      unit_price: price,
+      supply_amount: qty * price,
+      shipper_location: item.shipper_location || '',
+      sender_name: item.sender || '',
+      notes: '',
+      inventory_id: item.id
+    };
+
+    const newDetails = [...details];
+
+    // 드롭된 위치에 삽입
+    if (typeof dropIndex === 'number' && dropIndex < newDetails.length) {
+      const targetRow = newDetails[dropIndex];
+      const isEmptyRow = !targetRow.product_id && !targetRow.quantity && !targetRow.unit_price;
+
+      if (isEmptyRow) {
+        newDetails[dropIndex] = { ...newDetail, rowIndex: dropIndex };
+      } else {
+        newDetails.splice(dropIndex, 0, newDetail);
+      }
+    } else {
+      newDetails.push(newDetail);
+    }
+
+    // 인덱스 재정렬
+    newDetails.forEach((d, i) => d.rowIndex = i);
+    setDetails(newDetails);
+
+    // 모달 닫기
+    setInventoryInputModal({ isOpen: false, inventory: null, quantity: '', unitPrice: '', maxQuantity: 0, dropIndex: null });
   };
 
   const handleDetailChange = (index, field, value) => {
@@ -1235,7 +1364,13 @@ function TradePanel({
                   ))}
                   {/* 빈 행 추가 (최소 10행 표시) */}
                   {Array.from({ length: Math.max(0, 10 - details.length) }).map((_, i) => (
-                    <tr key={`empty-${i}`} className="trade-table-row" style={{ height: '40px' }}>
+                    <tr
+                      key={`empty-${i}`}
+                      className="trade-table-row"
+                      style={{ height: '40px' }}
+                      onDragOver={(e) => handleDragOver(e, details.length)}
+                      onDrop={(e) => handleDrop(e, details.length)}
+                    >
                       <td className="trade-index-cell" style={{ color: '#ccc' }}>{details.length + i + 1}</td>
                       <td></td>
                       <td></td>
@@ -1267,7 +1402,7 @@ function TradePanel({
               <textarea
                 value={master.notes}
                 onChange={(e) => setMaster({ ...master, notes: e.target.value })}
-                rows="2"
+                rows="4"
                 className="trade-textarea"
                 placeholder="메모 입력..."
               />
@@ -2073,6 +2208,155 @@ function TradePanel({
             </div>
           </div>
         </div>
+      )}
+      {/* 네비게이션 차단 모달 */}
+      {/* ... (생략) ... */}
+
+      {/* [재고 드롭] 수량/단가 입력 모달 */}
+      {inventoryInputModal.isOpen && createPortal(
+        <div
+          className="modal-overlay"
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            width: '100vw',
+            height: '100vh',
+            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            zIndex: 99999
+          }}
+        >
+          <div
+            className="modal-container"
+            style={{
+              width: '450px',
+              maxWidth: '90%',
+              padding: '1.5rem',
+              textAlign: 'left' // modal-container 기본이 center일 수 있으므로
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* 헤더 */}
+            <div style={{
+              textAlign: 'center',
+              marginBottom: '1.5rem'
+            }}>
+              <h3 style={{ margin: '0 0 0.5rem 0', color: '#2c3e50', fontSize: '1.4rem' }}>재고 품목 추가</h3>
+              <div style={{
+                fontSize: '1.1rem',
+                fontWeight: '700',
+                color: '#3498db'
+              }}>
+                {inventoryInputModal.inventory?.product_name || '품목명'}
+                <span style={{ fontSize: '0.9rem', color: '#7f8c8d', marginLeft: '0.5rem', fontWeight: 'normal' }}>
+                  {inventoryInputModal.inventory?.sender ? `(${inventoryInputModal.inventory.sender})` : ''}
+                </span>
+              </div>
+            </div>
+
+            {/* 정보 */}
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              marginBottom: '1.5rem',
+              backgroundColor: '#f8f9fa',
+              padding: '1rem',
+              borderRadius: '8px'
+            }}>
+              <div style={{ textAlign: 'center', flex: 1 }}>
+                <div style={{ fontSize: '0.85rem', color: '#7f8c8d', marginBottom: '0.25rem' }}>재고 잔량</div>
+                <div style={{ fontWeight: '700', color: '#27ae60' }}>
+                  {inventoryInputModal.maxQuantity}
+                </div>
+              </div>
+              <div style={{ width: '1px', backgroundColor: '#e0e0e0' }}></div>
+              <div style={{ textAlign: 'center', flex: 1 }}>
+                <div style={{ fontSize: '0.85rem', color: '#7f8c8d', marginBottom: '0.25rem' }}>기준 단가</div>
+                <div style={{ fontWeight: '700' }}>
+                  {formatCurrency(inventoryInputModal.inventory?.unit_price || 0)}원
+                </div>
+              </div>
+            </div>
+
+            {/* 입력 폼 */}
+            <div style={{ display: 'flex', gap: '1rem', marginBottom: '1.5rem' }}>
+              <div style={{ flex: 1 }}>
+                <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.5rem', fontWeight: '600' }}>수량</label>
+                <input
+                  type="text"
+                  value={inventoryInputModal.quantity ? formatCurrency(parseFloat(inventoryInputModal.quantity)) : ''}
+                  onChange={(e) => {
+                    const val = e.target.value.replace(/[^0-9.]/g, '');
+                    setInventoryInputModal(prev => ({ ...prev, quantity: val }));
+                  }}
+                  className="form-control"
+                  style={{
+                    width: '100%',
+                    padding: '0.8rem',
+                    fontSize: '1.1rem',
+                    textAlign: 'right',
+                    border: '2px solid #3498db',
+                    borderRadius: '6px',
+                    outline: 'none',
+                    boxSizing: 'border-box'
+                  }}
+                  autoFocus
+                  onFocus={(e) => e.target.select()}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') document.getElementById('modal-price-input')?.focus();
+                  }}
+                />
+              </div>
+              <div style={{ flex: 1 }}>
+                <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.5rem', fontWeight: '600' }}>단가</label>
+                <input
+                  id="modal-price-input"
+                  type="text"
+                  value={inventoryInputModal.unitPrice ? formatCurrency(parseFloat(inventoryInputModal.unitPrice)) : ''}
+                  onChange={(e) => {
+                    const val = e.target.value.replace(/[^0-9]/g, '');
+                    setInventoryInputModal(prev => ({ ...prev, unitPrice: val }));
+                  }}
+                  className="form-control"
+                  style={{
+                    width: '100%',
+                    padding: '0.8rem',
+                    fontSize: '1.1rem',
+                    textAlign: 'right',
+                    border: '1px solid #ddd',
+                    borderRadius: '6px',
+                    boxSizing: 'border-box'
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') handleInventoryInputConfirm();
+                  }}
+                />
+              </div>
+            </div>
+
+            {/* 버튼 */}
+            <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <button
+                onClick={() => setInventoryInputModal(prev => ({ ...prev, isOpen: false }))}
+                className="modal-btn modal-btn-cancel"
+                style={{ flex: 1 }}
+              >
+                취소
+              </button>
+              <button
+                onClick={handleInventoryInputConfirm}
+                className="modal-btn modal-btn-primary"
+                style={{ flex: 2 }}
+              >
+                추가하기
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
       )}
     </div>
   );

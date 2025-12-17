@@ -15,14 +15,14 @@ function CompanyBalances() {
   const [searchReceivable, setSearchReceivable] = useState('');
   const [searchPayable, setSearchPayable] = useState('');
   const [hasBalanceOnly, setHasBalanceOnly] = useState(true);
-  
+
   // 입금/출금 모달
   const [paymentModal, setPaymentModal] = useState({
     isOpen: false,
     type: 'RECEIPT',
     company: null
   });
-  
+
   const [paymentForm, setPaymentForm] = useState({
     transaction_date: formatLocalDate(new Date()),
     amount: '',
@@ -30,10 +30,10 @@ function CompanyBalances() {
     payment_method: '계좌이체',
     notes: ''
   });
-  
+
   const [unpaidTrades, setUnpaidTrades] = useState([]);
   const [loadingTrades, setLoadingTrades] = useState(false);
-  
+
   // 입출금 내역 모달
   const [historyModal, setHistoryModal] = useState({
     isOpen: false,
@@ -42,19 +42,19 @@ function CompanyBalances() {
   });
   const [paymentHistory, setPaymentHistory] = useState([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
-  
+
   // 수정 모달
   const [editModal, setEditModal] = useState({
     isOpen: false,
     transaction: null
   });
-  
+
   const [modal, setModal] = useState({
     isOpen: false,
     type: 'info',
     title: '',
     message: '',
-    onConfirm: () => {},
+    onConfirm: () => { },
     confirmText: '확인',
     showCancel: false
   });
@@ -88,27 +88,27 @@ function CompanyBalances() {
       setLoading(true);
       const response = await paymentAPI.getBalances({});
       const data = response.data.data || [];
-      
+
       const receivableList = data
         .filter(item => item.company_type_flag === 'CUSTOMER' || item.company_type_flag === 'BOTH')
         .map(item => ({
           ...item,
           balance: parseFloat(item.receivable || 0)
         }));
-      
+
       const payableList = data
         .filter(item => item.company_type_flag === 'SUPPLIER' || item.company_type_flag === 'BOTH')
         .map(item => ({
           ...item,
           balance: parseFloat(item.payable || 0)
         }));
-      
+
       setReceivables(receivableList);
       setPayables(payableList);
-      
+
       const receivableWithBalance = receivableList.filter(item => item.balance > 0);
       const payableWithBalance = payableList.filter(item => item.balance > 0);
-      
+
       setSummary({
         totalReceivable: receivableWithBalance.reduce((sum, item) => sum + item.balance, 0),
         totalPayable: payableWithBalance.reduce((sum, item) => sum + item.balance, 0),
@@ -128,8 +128,8 @@ function CompanyBalances() {
 
   const getFilteredReceivables = () => {
     return receivables.filter(item => {
-      if (searchReceivable && !item.company_name.toLowerCase().includes(searchReceivable.toLowerCase()) 
-          && !item.company_code?.toLowerCase().includes(searchReceivable.toLowerCase())) {
+      if (searchReceivable && !item.company_name.toLowerCase().includes(searchReceivable.toLowerCase())
+        && !item.company_code?.toLowerCase().includes(searchReceivable.toLowerCase())) {
         return false;
       }
       if (hasBalanceOnly && item.balance <= 0) {
@@ -141,8 +141,8 @@ function CompanyBalances() {
 
   const getFilteredPayables = () => {
     return payables.filter(item => {
-      if (searchPayable && !item.company_name.toLowerCase().includes(searchPayable.toLowerCase()) 
-          && !item.company_code?.toLowerCase().includes(searchPayable.toLowerCase())) {
+      if (searchPayable && !item.company_name.toLowerCase().includes(searchPayable.toLowerCase())
+        && !item.company_code?.toLowerCase().includes(searchPayable.toLowerCase())) {
         return false;
       }
       if (hasBalanceOnly && item.balance <= 0) {
@@ -174,13 +174,13 @@ function CompanyBalances() {
       notes: ''
     });
     setUnpaidTrades([]);
-    
+
     setPaymentModal({
       isOpen: true,
       type,
       company
     });
-    
+
     await loadUnpaidTrades(company.company_id, type === 'RECEIPT' ? 'SALE' : 'PURCHASE');
   };
 
@@ -201,7 +201,7 @@ function CompanyBalances() {
     const inputAmount = parseFloat(paymentForm.amount) || 0;
     let remainingAmount = inputAmount;
     const allocations = [];
-    
+
     for (const trade of unpaidTrades) {
       const unpaidAmount = parseFloat(trade.unpaid_amount || 0);
       if (remainingAmount <= 0 || unpaidAmount <= 0) {
@@ -213,24 +213,24 @@ function CompanyBalances() {
         });
         continue;
       }
-      
+
       const allocated = Math.min(remainingAmount, unpaidAmount);
       const remaining = unpaidAmount - allocated;
-      
+
       allocations.push({
         ...trade,
         allocatedAmount: allocated,
         remainingAfter: remaining,
         status: remaining === 0 ? 'paid' : (allocated > 0 ? 'partial' : 'pending')
       });
-      
+
       remainingAmount -= allocated;
     }
-    
+
     const totalAllocated = allocations.reduce((sum, a) => sum + a.allocatedAmount, 0);
     const currentBalance = paymentModal.company?.balance || 0;
     const balanceAfter = currentBalance - inputAmount;
-    
+
     return {
       allocations,
       totalAllocated,
@@ -249,7 +249,7 @@ function CompanyBalances() {
   // 실제 입금/출금 처리
   const executePayment = async () => {
     const amount = parseFloat(paymentForm.amount);
-    
+
     try {
       const allocationList = fifoAllocation.allocations
         .filter(a => a.allocatedAmount > 0)
@@ -269,7 +269,7 @@ function CompanyBalances() {
       };
 
       await paymentAPI.createTransactionWithAllocation(data);
-      
+
       setModal({
         isOpen: true,
         type: 'success',
@@ -291,7 +291,7 @@ function CompanyBalances() {
         message: error.response?.data?.message || '처리에 실패했습니다.',
         confirmText: '확인',
         showCancel: false,
-        onConfirm: () => {}
+        onConfirm: () => { }
       });
     }
   };
@@ -306,11 +306,11 @@ function CompanyBalances() {
         message: '금액을 입력하세요.',
         confirmText: '확인',
         showCancel: false,
-        onConfirm: () => {}
+        onConfirm: () => { }
       });
       return;
     }
-    
+
     // 마이너스 금액인 경우 (기초잔고 설정) - 바로 처리
     if (amount < 0) {
       executePayment();
@@ -321,11 +321,11 @@ function CompanyBalances() {
     const currentBalance = paymentModal.company?.balance || 0;
     const isReceipt = paymentModal.type === 'RECEIPT';
     const actionName = isReceipt ? '입금' : '출금';
-    
+
     if (amount > currentBalance) {
       const overAmount = amount - currentBalance;
       const newBalance = currentBalance - amount;
-      
+
       setModal({
         isOpen: true,
         type: 'warning',
@@ -373,9 +373,9 @@ function CompanyBalances() {
   const loadPaymentHistory = async (companyId, transactionType) => {
     try {
       setLoadingHistory(true);
-      const response = await paymentAPI.getTransactions({ 
+      const response = await paymentAPI.getTransactions({
         company_id: companyId,
-        transaction_type: transactionType 
+        transaction_type: transactionType
       });
       setPaymentHistory(response.data.data || []);
     } catch (error) {
@@ -423,7 +423,7 @@ function CompanyBalances() {
             message: error.response?.data?.message || '삭제에 실패했습니다.',
             confirmText: '확인',
             showCancel: false,
-            onConfirm: () => {}
+            onConfirm: () => { }
           });
         }
       }
@@ -443,7 +443,7 @@ function CompanyBalances() {
         }
       }
     };
-    
+
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [paymentModal.isOpen, historyModal.isOpen, editModal.isOpen]);
@@ -457,8 +457,8 @@ function CompanyBalances() {
 
   return (
     <div className="company-balances">
-      <div className="page-header" style={{ marginBottom: '1rem' }}>
-        <h1 className="page-title">거래처 잔고 관리</h1>
+      <div className="page-header" style={{ display: 'flex', alignItems: 'center', marginBottom: '1rem' }}>
+        <h1 className="page-title" style={{ margin: 0 }}>💰 거래처 잔고 관리</h1>
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
           <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
             <input
@@ -496,19 +496,19 @@ function CompanyBalances() {
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
         {/* 왼쪽: 매입처 (미지급금) */}
         <div className="card" style={{ padding: '1rem' }}>
-          <div style={{ 
-            display: 'flex', 
-            justifyContent: 'space-between', 
+          <div style={{
+            display: 'flex',
+            justifyContent: 'space-between',
             alignItems: 'center',
             marginBottom: '1rem',
             paddingBottom: '0.75rem',
             borderBottom: '2px solid #3498db'
           }}>
             <h3 style={{ margin: 0, color: '#2c3e50' }}>매입처 (미지급금)</h3>
-            <span style={{ 
-              backgroundColor: '#ebf5fb', 
-              color: '#3498db', 
-              padding: '4px 12px', 
+            <span style={{
+              backgroundColor: '#ebf5fb',
+              color: '#3498db',
+              padding: '4px 12px',
               borderRadius: '20px',
               fontSize: '0.9rem',
               fontWeight: '600'
@@ -516,7 +516,7 @@ function CompanyBalances() {
               {summary.payableCount}건
             </span>
           </div>
-          
+
           <div style={{ marginBottom: '0.75rem' }}>
             <input
               type="text"
@@ -526,7 +526,7 @@ function CompanyBalances() {
               style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #ddd' }}
             />
           </div>
-          
+
           <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
             <table style={{ width: '100%', fontSize: '0.9rem' }}>
               <thead>
@@ -553,8 +553,8 @@ function CompanyBalances() {
                       <td style={{ padding: '10px 8px', textAlign: 'center', fontSize: '0.85rem', color: '#7f8c8d' }}>
                         {item.last_transaction_date || '-'}
                       </td>
-                      <td style={{ 
-                        padding: '10px 8px', 
+                      <td style={{
+                        padding: '10px 8px',
                         textAlign: 'right',
                         color: item.balance > 0 ? '#2c3e50' : '#7f8c8d',
                         fontWeight: item.balance > 0 ? '600' : '400'
@@ -564,7 +564,7 @@ function CompanyBalances() {
                       <td style={{ padding: '10px 8px', textAlign: 'center' }}>
                         <div style={{ display: 'flex', gap: '4px', justifyContent: 'center', flexWrap: 'nowrap' }}>
                           {item.balance > 0 && (
-                            <button 
+                            <button
                               className="btn btn-sm btn-primary"
                               onClick={() => openPaymentModal(item, 'PAYMENT')}
                               style={{ padding: '4px 8px', fontSize: '0.75rem', whiteSpace: 'nowrap' }}
@@ -572,7 +572,7 @@ function CompanyBalances() {
                               출금
                             </button>
                           )}
-                          <button 
+                          <button
                             className="btn btn-sm"
                             onClick={() => openHistoryModal(item, 'payable')}
                             style={{ padding: '4px 8px', fontSize: '0.75rem', backgroundColor: '#7f8c8d', color: 'white', border: 'none', whiteSpace: 'nowrap' }}
@@ -587,11 +587,11 @@ function CompanyBalances() {
               </tbody>
             </table>
           </div>
-          
+
           {filteredPayables.length > 0 && (
-            <div style={{ 
-              marginTop: '0.75rem', 
-              padding: '0.75rem', 
+            <div style={{
+              marginTop: '0.75rem',
+              padding: '0.75rem',
               backgroundColor: '#34495e',
               borderRadius: '6px',
               display: 'flex',
@@ -610,19 +610,19 @@ function CompanyBalances() {
 
         {/* 오른쪽: 매출처 (미수금) */}
         <div className="card" style={{ padding: '1rem' }}>
-          <div style={{ 
-            display: 'flex', 
-            justifyContent: 'space-between', 
+          <div style={{
+            display: 'flex',
+            justifyContent: 'space-between',
             alignItems: 'center',
             marginBottom: '1rem',
             paddingBottom: '0.75rem',
             borderBottom: '2px solid #3498db'
           }}>
             <h3 style={{ margin: 0, color: '#2c3e50' }}>매출처 (미수금)</h3>
-            <span style={{ 
-              backgroundColor: '#ebf5fb', 
-              color: '#3498db', 
-              padding: '4px 12px', 
+            <span style={{
+              backgroundColor: '#ebf5fb',
+              color: '#3498db',
+              padding: '4px 12px',
               borderRadius: '20px',
               fontSize: '0.9rem',
               fontWeight: '600'
@@ -630,7 +630,7 @@ function CompanyBalances() {
               {summary.receivableCount}건
             </span>
           </div>
-          
+
           <div style={{ marginBottom: '0.75rem' }}>
             <input
               type="text"
@@ -640,7 +640,7 @@ function CompanyBalances() {
               style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #ddd' }}
             />
           </div>
-          
+
           <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
             <table style={{ width: '100%', fontSize: '0.9rem' }}>
               <thead>
@@ -667,8 +667,8 @@ function CompanyBalances() {
                       <td style={{ padding: '10px 8px', textAlign: 'center', fontSize: '0.85rem', color: '#7f8c8d' }}>
                         {item.last_transaction_date || '-'}
                       </td>
-                      <td style={{ 
-                        padding: '10px 8px', 
+                      <td style={{
+                        padding: '10px 8px',
                         textAlign: 'right',
                         color: item.balance > 0 ? '#2c3e50' : '#7f8c8d',
                         fontWeight: item.balance > 0 ? '600' : '400'
@@ -678,7 +678,7 @@ function CompanyBalances() {
                       <td style={{ padding: '10px 8px', textAlign: 'center' }}>
                         <div style={{ display: 'flex', gap: '4px', justifyContent: 'center', flexWrap: 'nowrap' }}>
                           {item.balance > 0 && (
-                            <button 
+                            <button
                               className="btn btn-sm btn-primary"
                               onClick={() => openPaymentModal(item, 'RECEIPT')}
                               style={{ padding: '4px 8px', fontSize: '0.75rem', whiteSpace: 'nowrap' }}
@@ -686,7 +686,7 @@ function CompanyBalances() {
                               입금
                             </button>
                           )}
-                          <button 
+                          <button
                             className="btn btn-sm"
                             onClick={() => openHistoryModal(item, 'receivable')}
                             style={{ padding: '4px 8px', fontSize: '0.75rem', backgroundColor: '#7f8c8d', color: 'white', border: 'none', whiteSpace: 'nowrap' }}
@@ -701,11 +701,11 @@ function CompanyBalances() {
               </tbody>
             </table>
           </div>
-          
+
           {filteredReceivables.length > 0 && (
-            <div style={{ 
-              marginTop: '0.75rem', 
-              padding: '0.75rem', 
+            <div style={{
+              marginTop: '0.75rem',
+              padding: '0.75rem',
               backgroundColor: '#34495e',
               borderRadius: '6px',
               display: 'flex',
@@ -726,13 +726,13 @@ function CompanyBalances() {
       {/* 입금/출금 모달 */}
       {paymentModal.isOpen && (
         <div className="modal-overlay">
-          <div 
-            className="modal-container" 
-            style={{ maxWidth: '700px', maxHeight: '90vh', overflow: 'auto' }} 
+          <div
+            className="modal-container"
+            style={{ maxWidth: '700px', maxHeight: '90vh', overflow: 'auto' }}
             onClick={(e) => e.stopPropagation()}
           >
             {/* 거래처명 강조 헤더 */}
-            <div style={{ 
+            <div style={{
               backgroundColor: paymentModal.type === 'RECEIPT' ? '#27ae60' : '#3498db',
               color: 'white',
               padding: '1rem 1.5rem',
@@ -754,12 +754,12 @@ function CompanyBalances() {
                 </div>
               </div>
             </div>
-            
+
             {/* 현재 잔액 및 입금 후 잔액 표시 */}
-            <div style={{ 
-              marginBottom: '1rem', 
-              padding: '1rem', 
-              backgroundColor: '#f8f9fa', 
+            <div style={{
+              marginBottom: '1rem',
+              padding: '1rem',
+              backgroundColor: '#f8f9fa',
               borderRadius: '8px',
               display: 'grid',
               gridTemplateColumns: '1fr 1fr 1fr',
@@ -786,16 +786,16 @@ function CompanyBalances() {
                 <div style={{ color: '#7f8c8d', fontSize: '0.85rem', marginBottom: '4px' }}>
                   {paymentModal.type === 'RECEIPT' ? '입금' : '출금'} 후 잔액
                 </div>
-                <div style={{ 
-                  fontWeight: '700', 
-                  fontSize: '1.1rem', 
+                <div style={{
+                  fontWeight: '700',
+                  fontSize: '1.1rem',
                   color: fifoAllocation.balanceAfter <= 0 ? '#27ae60' : '#e74c3c'
                 }}>
                   {paymentForm.amount ? formatCurrency(Math.max(0, fifoAllocation.balanceAfter)) + '원' : '-'}
                 </div>
               </div>
             </div>
-            
+
             <div style={{ textAlign: 'left' }}>
               {/* 기본 정보 입력 */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
@@ -807,7 +807,7 @@ function CompanyBalances() {
                     onChange={(e) => setPaymentForm({ ...paymentForm, transaction_date: e.target.value })}
                   />
                 </div>
-                
+
                 <div className="form-group">
                   <label className="required">금액</label>
                   <div style={{ display: 'flex', gap: '8px' }}>
@@ -852,7 +852,7 @@ function CompanyBalances() {
                     <option value="기타">기타</option>
                   </select>
                 </div>
-                
+
                 <div className="form-group">
                   <label>비고</label>
                   <input
@@ -874,7 +874,7 @@ function CompanyBalances() {
                     </span>
                   )}
                 </h4>
-                
+
                 {loadingTrades ? (
                   <div style={{ padding: '1rem', textAlign: 'center', color: '#7f8c8d' }}>
                     불러오는 중...
@@ -898,12 +898,12 @@ function CompanyBalances() {
                         </thead>
                         <tbody>
                           {fifoAllocation.allocations.map((trade) => (
-                            <tr 
-                              key={trade.id} 
-                              style={{ 
+                            <tr
+                              key={trade.id}
+                              style={{
                                 borderBottom: '1px solid #eee',
-                                backgroundColor: trade.status === 'paid' ? '#e8f8f0' : 
-                                                trade.status === 'partial' ? '#fef9e7' : 'white'
+                                backgroundColor: trade.status === 'paid' ? '#e8f8f0' :
+                                  trade.status === 'partial' ? '#fef9e7' : 'white'
                               }}
                             >
                               <td style={{ padding: '8px' }}>{trade.trade_number}</td>
@@ -913,8 +913,8 @@ function CompanyBalances() {
                               <td style={{ padding: '8px', textAlign: 'right' }}>
                                 {formatCurrency(trade.unpaid_amount)}
                               </td>
-                              <td style={{ 
-                                padding: '8px', 
+                              <td style={{
+                                padding: '8px',
                                 textAlign: 'right',
                                 fontWeight: trade.allocatedAmount > 0 ? '600' : '400',
                                 color: trade.allocatedAmount > 0 ? '#27ae60' : '#bdc3c7'
@@ -923,28 +923,28 @@ function CompanyBalances() {
                               </td>
                               <td style={{ padding: '8px', textAlign: 'center' }}>
                                 {trade.status === 'paid' && (
-                                  <span style={{ 
-                                    backgroundColor: '#27ae60', 
-                                    color: 'white', 
-                                    padding: '2px 8px', 
+                                  <span style={{
+                                    backgroundColor: '#27ae60',
+                                    color: 'white',
+                                    padding: '2px 8px',
                                     borderRadius: '10px',
                                     fontSize: '0.75rem'
                                   }}>완납</span>
                                 )}
                                 {trade.status === 'partial' && (
-                                  <span style={{ 
-                                    backgroundColor: '#f39c12', 
-                                    color: 'white', 
-                                    padding: '2px 8px', 
+                                  <span style={{
+                                    backgroundColor: '#f39c12',
+                                    color: 'white',
+                                    padding: '2px 8px',
                                     borderRadius: '10px',
                                     fontSize: '0.75rem'
                                   }}>부분</span>
                                 )}
                                 {trade.status === 'pending' && (
-                                  <span style={{ 
-                                    backgroundColor: '#bdc3c7', 
-                                    color: 'white', 
-                                    padding: '2px 8px', 
+                                  <span style={{
+                                    backgroundColor: '#bdc3c7',
+                                    color: 'white',
+                                    padding: '2px 8px',
                                     borderRadius: '10px',
                                     fontSize: '0.75rem'
                                   }}>대기</span>
@@ -955,12 +955,12 @@ function CompanyBalances() {
                         </tbody>
                       </table>
                     </div>
-                    
+
                     {/* 합계 */}
-                    <div style={{ 
-                      marginTop: '0.5rem', 
-                      padding: '0.75rem', 
-                      backgroundColor: '#34495e', 
+                    <div style={{
+                      marginTop: '0.5rem',
+                      padding: '0.75rem',
+                      backgroundColor: '#34495e',
                       borderRadius: '6px',
                       display: 'flex',
                       justifyContent: 'space-between',
@@ -981,15 +981,15 @@ function CompanyBalances() {
                 )}
               </div>
             </div>
-            
+
             <div className="modal-buttons" style={{ marginTop: '1.5rem' }}>
-              <button 
+              <button
                 className="modal-btn modal-btn-cancel"
                 onClick={closePaymentModal}
               >
                 취소
               </button>
-              <button 
+              <button
                 className="modal-btn modal-btn-primary"
                 onClick={handlePaymentSubmit}
               >
@@ -1003,13 +1003,13 @@ function CompanyBalances() {
       {/* 입출금 내역 모달 */}
       {historyModal.isOpen && (
         <div className="modal-overlay">
-          <div 
-            className="modal-container" 
-            style={{ maxWidth: '800px', maxHeight: '90vh', overflow: 'auto' }} 
+          <div
+            className="modal-container"
+            style={{ maxWidth: '800px', maxHeight: '90vh', overflow: 'auto' }}
             onClick={(e) => e.stopPropagation()}
           >
             {/* 헤더 */}
-            <div style={{ 
+            <div style={{
               backgroundColor: '#34495e',
               color: 'white',
               padding: '1rem 1.5rem',
@@ -1104,12 +1104,12 @@ function CompanyBalances() {
                     ))}
                   </tbody>
                 </table>
-                
+
                 {/* 합계 */}
-                <div style={{ 
-                  marginTop: '1rem', 
-                  padding: '0.75rem', 
-                  backgroundColor: '#34495e', 
+                <div style={{
+                  marginTop: '1rem',
+                  padding: '0.75rem',
+                  backgroundColor: '#34495e',
                   borderRadius: '6px',
                   display: 'flex',
                   justifyContent: 'space-between',
@@ -1125,13 +1125,13 @@ function CompanyBalances() {
             )}
 
             <div className="modal-buttons" style={{ marginTop: '1.5rem' }}>
-              <button 
+              <button
                 className="modal-btn modal-btn-cancel"
                 onClick={closeHistoryModal}
               >
                 닫기
               </button>
-              <button 
+              <button
                 className="modal-btn modal-btn-primary"
                 onClick={() => {
                   closeHistoryModal();

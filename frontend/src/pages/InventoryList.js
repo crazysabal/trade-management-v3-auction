@@ -447,18 +447,9 @@ function InventoryList() {
       backgroundColor: '#f5f6fa'
     }}>
       {/* 헤더 */}
-      <div style={{
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        padding: '0.5rem 1rem',
-        backgroundColor: '#fff',
-        borderBottom: '1px solid #ddd',
-        boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
-        flexShrink: 0
-      }}>
+      <div className="page-header" style={{ display: 'flex', alignItems: 'center' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-          <h1 style={{ margin: 0, fontSize: '1.2rem', fontWeight: '700', color: '#2c3e50' }}>
+          <h1 className="page-title" style={{ margin: 0 }}>
             📊 재고 현황
           </h1>
           <button

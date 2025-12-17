@@ -672,9 +672,8 @@ function MatchingPage() {
   return (
     <div className="matching-page">
       {/* 페이지 헤더 */}
-      <div className="page-header">
-        <h1 className="page-title">마감 (매출-매입 매칭)</h1>
-        <Link to="/inventory" className="btn btn-secondary">재고 현황</Link>
+      <div className="page-header" style={{ display: 'flex', alignItems: 'center' }}>
+        <h1 className="page-title" style={{ margin: 0 }}>🔗 마감 (매출-매입 매칭)</h1>
       </div>
 
       {/* 검색 필터 */}

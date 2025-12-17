@@ -120,10 +120,10 @@ router.get('/transactions', async (req, res) => {
       params.push(end_date);
     }
 
-    // 입고 내역 (매입)
+    // 입고 내역 (매입 및 생산 입고)
     const inQuery = `
       SELECT 
-        'IN' as transaction_type,
+        CASE WHEN tm.trade_type = 'PRODUCTION' THEN 'PRODUCTION_IN' ELSE 'PURCHASE' END as transaction_type,
         pi.purchase_date as transaction_date,
         pi.id as reference_id,
         pi.product_id,
@@ -168,7 +168,7 @@ router.get('/transactions', async (req, res) => {
 
     const outQuery = `
       SELECT 
-        'OUT' as transaction_type,
+        'SALE' as transaction_type,
         DATE(spm.matched_at) as transaction_date,
         spm.id as reference_id,
         pi.product_id,
@@ -195,8 +195,55 @@ router.get('/transactions', async (req, res) => {
     const [inRows] = await db.query(inQuery, params);
     const [outRows] = await db.query(outQuery, outParams);
 
+    // [NEW] 생산 투입 내역 (Ingredients Usage)
+    let prodParams = [];
+    let prodProductFilter = '';
+    let prodDateFilter = '';
+
+    if (product_id) {
+      prodProductFilter = ' AND pi.product_id = ?';
+      prodParams.push(product_id);
+    }
+
+    if (start_date) {
+      prodDateFilter += ' AND ip.created_at >= ?';
+      prodParams.push(start_date);
+    }
+
+    if (end_date) {
+      prodDateFilter += ' AND ip.created_at <= ?';
+      prodParams.push(end_date);
+    }
+
+    const prodQuery = `
+      SELECT 
+        'PRODUCTION_OUT' as transaction_type,
+        DATE(ip.created_at) as transaction_date,
+        ipi.id as reference_id,
+        pi.product_id,
+        p.product_name,
+        p.grade,
+        ipi.used_quantity as quantity,
+        pi.unit_price,
+        pi.company_id,
+        c.company_name,
+        '생산투입' as shipper_location,
+        'SYSTEM' as sender,
+        CONCAT('PROD-', ip.id) as trade_number,
+        NULL as trade_master_id,
+        ip.created_at as detail_date
+      FROM inventory_production_ingredients ipi
+      JOIN inventory_productions ip ON ipi.production_id = ip.id
+      JOIN purchase_inventory pi ON ipi.used_inventory_id = pi.id
+      JOIN products p ON pi.product_id = p.id
+      JOIN companies c ON pi.company_id = c.id
+      WHERE 1=1 ${prodProductFilter} ${prodDateFilter}
+    `;
+
+    const [prodRows] = await db.query(prodQuery, prodParams);
+
     // 합치고 정렬
-    const allRows = [...inRows, ...outRows].sort((a, b) => {
+    const allRows = [...inRows, ...outRows, ...prodRows].sort((a, b) => {
       // 날짜 기준 정렬, 같으면 상세 시간 기준
       const dateA = new Date(a.transaction_date);
       const dateB = new Date(b.transaction_date);

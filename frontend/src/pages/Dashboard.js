@@ -33,20 +33,20 @@ function Dashboard() {
   const loadDashboardData = async () => {
     try {
       setLoading(true);
-      
+
       // 오늘 날짜
       const today = formatLocalDate(new Date());
-      
+
       // 이번 달 시작일
       const monthStart = new Date();
       monthStart.setDate(1);
       const monthStartStr = formatLocalDate(monthStart);
-      
+
       // 1달 전 날짜
       const oneMonthAgo = new Date();
       oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
       const oneMonthAgoStr = formatLocalDate(oneMonthAgo);
-      
+
       // 오늘 매입/매출
       const todayPurchaseRes = await tradeAPI.getAll({
         trade_type: 'PURCHASE',
@@ -54,14 +54,14 @@ function Dashboard() {
         end_date: today
       });
       const todayPurchase = todayPurchaseRes.data.data.reduce((sum, t) => sum + parseFloat(t.total_price || 0), 0);
-      
+
       const todaySaleRes = await tradeAPI.getAll({
         trade_type: 'SALE',
         start_date: today,
         end_date: today
       });
       const todaySale = todaySaleRes.data.data.reduce((sum, t) => sum + parseFloat(t.total_price || 0), 0);
-      
+
       // 이번 달 매입/매출
       const monthPurchaseRes = await tradeAPI.getAll({
         trade_type: 'PURCHASE',
@@ -69,20 +69,20 @@ function Dashboard() {
         end_date: today
       });
       const monthPurchase = monthPurchaseRes.data.data.reduce((sum, t) => sum + parseFloat(t.total_price || 0), 0);
-      
+
       const monthSaleRes = await tradeAPI.getAll({
         trade_type: 'SALE',
         start_date: monthStartStr,
         end_date: today
       });
       const monthSale = monthSaleRes.data.data.reduce((sum, t) => sum + parseFloat(t.total_price || 0), 0);
-      
+
       // 재고 금액
       const inventoryRes = await purchaseInventoryAPI.getAll();
       const inventoryValue = inventoryRes.data.data.reduce((sum, item) => {
         return sum + (parseFloat(item.remaining_quantity || 0) * parseFloat(item.unit_price || 0));
       }, 0);
-      
+
       // 최근 1달간 매입 내역
       const recentPurchaseRes = await tradeAPI.getAll({
         trade_type: 'PURCHASE',
@@ -90,7 +90,7 @@ function Dashboard() {
         end_date: today
       });
       setRecentPurchases(recentPurchaseRes.data.data.slice(0, 10));
-      
+
       // 최근 1달간 매출 내역
       const recentSaleRes = await tradeAPI.getAll({
         trade_type: 'SALE',
@@ -98,7 +98,7 @@ function Dashboard() {
         end_date: today
       });
       setRecentSales(recentSaleRes.data.data.slice(0, 10));
-      
+
       setStats({
         todayPurchase,
         todaySale,
@@ -106,7 +106,7 @@ function Dashboard() {
         monthSale,
         inventoryValue
       });
-      
+
     } catch (error) {
       console.error('대시보드 데이터 로딩 오류:', error);
     } finally {
@@ -125,39 +125,39 @@ function Dashboard() {
 
   return (
     <div className="dashboard">
-      <div className="page-header">
-        <h1 className="page-title">대시보드</h1>
+      <div className="page-header" style={{ display: 'flex', alignItems: 'center' }}>
+        <h1 className="page-title" style={{ margin: 0 }}>🏠 대시보드</h1>
       </div>
 
       {/* 통계 카드: 오늘 매출, 오늘 매입, 이번달 매출, 이번달 매입, 재고 금액 */}
       <div className="dashboard-stats-grid">
-        <div className="stat-card" style={{borderLeftColor: '#27ae60'}}>
+        <div className="stat-card" style={{ borderLeftColor: '#27ae60' }}>
           <h3>오늘 매출</h3>
-          <div className="stat-value">{formatCurrency(stats.todaySale)}<span style={{fontSize: '1rem', fontWeight: 'normal', marginLeft: '4px'}}>원</span></div>
+          <div className="stat-value">{formatCurrency(stats.todaySale)}<span style={{ fontSize: '1rem', fontWeight: 'normal', marginLeft: '4px' }}>원</span></div>
         </div>
-        
-        <div className="stat-card" style={{borderLeftColor: '#e74c3c'}}>
+
+        <div className="stat-card" style={{ borderLeftColor: '#e74c3c' }}>
           <h3>오늘 매입</h3>
-          <div className="stat-value">{formatCurrency(stats.todayPurchase)}<span style={{fontSize: '1rem', fontWeight: 'normal', marginLeft: '4px'}}>원</span></div>
+          <div className="stat-value">{formatCurrency(stats.todayPurchase)}<span style={{ fontSize: '1rem', fontWeight: 'normal', marginLeft: '4px' }}>원</span></div>
         </div>
-        
-        <div className="stat-card" style={{borderLeftColor: '#16a085'}}>
+
+        <div className="stat-card" style={{ borderLeftColor: '#16a085' }}>
           <h3>이번 달 매출</h3>
-          <div className="stat-value">{formatCurrency(stats.monthSale)}<span style={{fontSize: '1rem', fontWeight: 'normal', marginLeft: '4px'}}>원</span></div>
+          <div className="stat-value">{formatCurrency(stats.monthSale)}<span style={{ fontSize: '1rem', fontWeight: 'normal', marginLeft: '4px' }}>원</span></div>
         </div>
-        
-        <div className="stat-card" style={{borderLeftColor: '#e67e22'}}>
+
+        <div className="stat-card" style={{ borderLeftColor: '#e67e22' }}>
           <h3>이번 달 매입</h3>
-          <div className="stat-value">{formatCurrency(stats.monthPurchase)}<span style={{fontSize: '1rem', fontWeight: 'normal', marginLeft: '4px'}}>원</span></div>
+          <div className="stat-value">{formatCurrency(stats.monthPurchase)}<span style={{ fontSize: '1rem', fontWeight: 'normal', marginLeft: '4px' }}>원</span></div>
         </div>
-        
-        <div 
-          className="stat-card" 
-          style={{borderLeftColor: '#9b59b6', cursor: 'pointer'}}
+
+        <div
+          className="stat-card"
+          style={{ borderLeftColor: '#9b59b6', cursor: 'pointer' }}
           onClick={() => navigate('/inventory')}
         >
           <h3>재고 금액</h3>
-          <div className="stat-value">{formatCurrency(stats.inventoryValue)}<span style={{fontSize: '1rem', fontWeight: 'normal', marginLeft: '4px'}}>원</span></div>
+          <div className="stat-value">{formatCurrency(stats.inventoryValue)}<span style={{ fontSize: '1rem', fontWeight: 'normal', marginLeft: '4px' }}>원</span></div>
         </div>
       </div>
 
@@ -185,7 +185,7 @@ function Dashboard() {
                   recentPurchases.map(trade => (
                     <tr key={trade.id}>
                       <td>
-                        <span 
+                        <span
                           className="trade-number-link"
                           onClick={() => setTradeDetailModal({ isOpen: true, tradeId: trade.id })}
                         >
@@ -232,7 +232,7 @@ function Dashboard() {
                   recentSales.map(trade => (
                     <tr key={trade.id}>
                       <td>
-                        <span 
+                        <span
                           className="trade-number-link"
                           onClick={() => setTradeDetailModal({ isOpen: true, tradeId: trade.id })}
                         >

@@ -39,6 +39,8 @@ app.use('/api/payments', paymentsRouter);
 app.use('/api/settings', settingsRouter);
 app.use('/api/warehouses', warehousesRouter);
 app.use('/api/inventory/transfer', inventoryTransferRouter);
+app.use('/api/inventory-production', inventoryProductionRouter);
+app.use('/api/inventory-adjustment', inventoryAdjustmentRouter); // Fix missing mount
 
 // 헬스체크
 app.get('/api/health', (req, res) => {

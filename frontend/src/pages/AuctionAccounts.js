@@ -14,7 +14,7 @@ function AuctionAccounts() {
   });
   const [modal, setModal] = useState({
     isOpen: false, type: 'info', title: '', message: '',
-    onConfirm: () => {}, confirmText: '확인', showCancel: false
+    onConfirm: () => { }, confirmText: '확인', showCancel: false
   });
 
   useEffect(() => {
@@ -27,7 +27,7 @@ function AuctionAccounts() {
       setAccounts(response.data.data);
     } catch (error) {
       console.error('계정 조회 오류:', error);
-      setModal({ isOpen: true, type: 'warning', title: '로딩 실패', message: '계정 목록을 불러오는데 실패했습니다.', confirmText: '확인', showCancel: false, onConfirm: () => {} });
+      setModal({ isOpen: true, type: 'warning', title: '로딩 실패', message: '계정 목록을 불러오는데 실패했습니다.', confirmText: '확인', showCancel: false, onConfirm: () => { } });
     }
   };
 
@@ -37,18 +37,18 @@ function AuctionAccounts() {
     try {
       if (formData.id) {
         await auctionAPI.updateAccount(formData.id, formData);
-        setModal({ isOpen: true, type: 'success', title: '수정 완료', message: '계정이 수정되었습니다.', confirmText: '확인', showCancel: false, onConfirm: () => {} });
+        setModal({ isOpen: true, type: 'success', title: '수정 완료', message: '계정이 수정되었습니다.', confirmText: '확인', showCancel: false, onConfirm: () => { } });
       } else {
         await auctionAPI.saveAccount(formData);
-        setModal({ isOpen: true, type: 'success', title: '저장 완료', message: '계정이 저장되었습니다.', confirmText: '확인', showCancel: false, onConfirm: () => {} });
+        setModal({ isOpen: true, type: 'success', title: '저장 완료', message: '계정이 저장되었습니다.', confirmText: '확인', showCancel: false, onConfirm: () => { } });
       }
-      
+
       setShowForm(false);
       resetForm();
       loadAccounts();
     } catch (error) {
       console.error('계정 저장 오류:', error);
-      setModal({ isOpen: true, type: 'warning', title: '저장 실패', message: '계정 저장에 실패했습니다.', confirmText: '확인', showCancel: false, onConfirm: () => {} });
+      setModal({ isOpen: true, type: 'warning', title: '저장 실패', message: '계정 저장에 실패했습니다.', confirmText: '확인', showCancel: false, onConfirm: () => { } });
     }
   };
 
@@ -87,14 +87,14 @@ function AuctionAccounts() {
       loadAccounts();
     } catch (error) {
       console.error('상태 변경 오류:', error);
-      setModal({ isOpen: true, type: 'warning', title: '변경 실패', message: '상태 변경에 실패했습니다.', confirmText: '확인', showCancel: false, onConfirm: () => {} });
+      setModal({ isOpen: true, type: 'warning', title: '변경 실패', message: '상태 변경에 실패했습니다.', confirmText: '확인', showCancel: false, onConfirm: () => { } });
     }
   };
 
   return (
     <div className="auction-accounts">
-      <div className="page-header">
-        <h1 className="page-title">경매 사이트 계정 관리</h1>
+      <div className="page-header" style={{ display: 'flex', alignItems: 'center' }}>
+        <h1 className="page-title" style={{ margin: 0 }}>🔐 경매 사이트 계정 관리</h1>
         {!showForm && (
           <button onClick={() => setShowForm(true)} className="btn btn-primary">
             + 계정 추가
@@ -103,7 +103,7 @@ function AuctionAccounts() {
       </div>
 
       {showForm && (
-        <div className="card" style={{marginBottom: '2rem'}}>
+        <div className="card" style={{ marginBottom: '2rem' }}>
           <h2 className="card-title">{formData.id ? '계정 수정' : '계정 추가'}</h2>
           <form onSubmit={handleSubmit}>
             <div className="form-row">
@@ -112,7 +112,7 @@ function AuctionAccounts() {
                 <input
                   type="text"
                   value={formData.account_name}
-                  onChange={(e) => setFormData({...formData, account_name: e.target.value})}
+                  onChange={(e) => setFormData({ ...formData, account_name: e.target.value })}
                   placeholder="예: 대구중앙청과 계정"
                   required
                 />
@@ -122,7 +122,7 @@ function AuctionAccounts() {
                 <input
                   type="text"
                   value={formData.site_url}
-                  onChange={(e) => setFormData({...formData, site_url: e.target.value})}
+                  onChange={(e) => setFormData({ ...formData, site_url: e.target.value })}
                   required
                 />
               </div>
@@ -134,7 +134,7 @@ function AuctionAccounts() {
                 <input
                   type="text"
                   value={formData.username}
-                  onChange={(e) => setFormData({...formData, username: e.target.value})}
+                  onChange={(e) => setFormData({ ...formData, username: e.target.value })}
                   required
                 />
               </div>
@@ -143,7 +143,7 @@ function AuctionAccounts() {
                 <input
                   type="password"
                   value={formData.password}
-                  onChange={(e) => setFormData({...formData, password: e.target.value})}
+                  onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                   placeholder={formData.id ? '(변경하지 않으려면 비워두세요)' : ''}
                   required={!formData.id}
                 />
@@ -188,15 +188,15 @@ function AuctionAccounts() {
                     <td><small>{account.site_url}</small></td>
                     <td>{account.username}</td>
                     <td>
-                      {account.last_used 
+                      {account.last_used
                         ? new Date(account.last_used).toLocaleString('ko-KR')
                         : '-'}
                     </td>
                     <td className="text-center">
-                      <span 
+                      <span
                         className={`badge ${account.is_active ? 'badge-success' : 'badge-secondary'}`}
                         onClick={() => handleToggleActive(account)}
-                        style={{cursor: 'pointer'}}
+                        style={{ cursor: 'pointer' }}
                         title="클릭하여 상태 변경"
                       >
                         {account.is_active ? '사용중' : '중지'}

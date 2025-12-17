@@ -23,19 +23,19 @@ function ProductList() {
   const draggedIdRef = useRef(null);
   const [selectedIds, setSelectedIds] = useState([]);
   const [isSelectMode, setIsSelectMode] = useState(false);
-  
+
   // 그룹 드래그 관련 상태
   const [draggedGroupName, setDraggedGroupName] = useState(null);
   const [dragOverGroupName, setDragOverGroupName] = useState(null);
   const [groupOrder, setGroupOrder] = useState([]);
-  
+
   // 확인 모달 상태
   const [modal, setModal] = useState({
     isOpen: false,
     type: 'confirm',
     title: '',
     message: '',
-    onConfirm: () => {},
+    onConfirm: () => { },
     confirmText: '확인',
     showCancel: true
   });
@@ -71,7 +71,7 @@ function ProductList() {
         message: '품목 목록을 불러오는데 실패했습니다.',
         confirmText: '확인',
         showCancel: false,
-        onConfirm: () => {}
+        onConfirm: () => { }
       });
     } finally {
       setLoading(false);
@@ -100,7 +100,7 @@ function ProductList() {
             message: '품목이 삭제되었습니다.',
             confirmText: '확인',
             showCancel: false,
-            onConfirm: () => {}
+            onConfirm: () => { }
           });
           loadProducts();
         } catch (error) {
@@ -112,7 +112,7 @@ function ProductList() {
             message: error.response?.data?.message || '품목 삭제에 실패했습니다.',
             confirmText: '확인',
             showCancel: false,
-            onConfirm: () => {}
+            onConfirm: () => { }
           });
         }
       }
@@ -129,11 +129,11 @@ function ProductList() {
         message: '삭제할 품목을 선택하세요.',
         confirmText: '확인',
         showCancel: false,
-        onConfirm: () => {}
+        onConfirm: () => { }
       });
       return;
     }
-    
+
     setModal({
       isOpen: true,
       type: 'delete',
@@ -145,7 +145,7 @@ function ProductList() {
         try {
           let successCount = 0;
           let failCount = 0;
-          
+
           for (const id of selectedIds) {
             try {
               await productAPI.delete(id);
@@ -155,7 +155,7 @@ function ProductList() {
               console.error(`품목 ID ${id} 삭제 실패:`, error);
             }
           }
-          
+
           if (failCount > 0) {
             setModal({
               isOpen: true,
@@ -164,7 +164,7 @@ function ProductList() {
               message: `${successCount}개 삭제 성공, ${failCount}개 삭제 실패\n(거래 내역이 있는 품목은 삭제할 수 없습니다)`,
               confirmText: '확인',
               showCancel: false,
-              onConfirm: () => {}
+              onConfirm: () => { }
             });
           } else {
             setModal({
@@ -174,10 +174,10 @@ function ProductList() {
               message: `${successCount}개 품목이 삭제되었습니다.`,
               confirmText: '확인',
               showCancel: false,
-              onConfirm: () => {}
+              onConfirm: () => { }
             });
           }
-          
+
           setSelectedIds([]);
           setIsSelectMode(false);
           loadProducts();
@@ -190,7 +190,7 @@ function ProductList() {
             message: '삭제 중 오류가 발생했습니다.',
             confirmText: '확인',
             showCancel: false,
-            onConfirm: () => {}
+            onConfirm: () => { }
           });
         }
       }
@@ -199,8 +199,8 @@ function ProductList() {
 
   // 체크박스 토글
   const handleCheckboxToggle = (id) => {
-    setSelectedIds(prev => 
-      prev.includes(id) 
+    setSelectedIds(prev =>
+      prev.includes(id)
         ? prev.filter(i => i !== id)
         : [...prev, id]
     );
@@ -222,7 +222,7 @@ function ProductList() {
         is_active: !product.is_active
       });
       // 로컬 상태만 업데이트 (새로고침 없이)
-      setProducts(prev => prev.map(p => 
+      setProducts(prev => prev.map(p =>
         p.id === product.id ? { ...p, is_active: !p.is_active } : p
       ));
     } catch (error) {
@@ -234,7 +234,7 @@ function ProductList() {
         message: '상태 변경에 실패했습니다.',
         confirmText: '확인',
         showCancel: false,
-        onConfirm: () => {}
+        onConfirm: () => { }
       });
     }
   };
@@ -256,24 +256,24 @@ function ProductList() {
     // 같은 그룹 내에서만 이동 가능
     if (product.product_name !== currentDragGroup) return;
     if (product.id === draggedId) return;
-    
+
     setDragOverId(product.id);
-    
+
     // products 배열에서 직접 순서 변경
     setProducts(prevProducts => {
       const newProducts = [...prevProducts];
       const draggedIndex = newProducts.findIndex(p => p.id === draggedId);
       const targetIndex = newProducts.findIndex(p => p.id === product.id);
-      
+
       if (draggedIndex === -1 || targetIndex === -1) return prevProducts;
-      
+
       // 드래그한 항목을 제거하고 타겟 위치에 삽입
       const [draggedProduct] = newProducts.splice(draggedIndex, 1);
       newProducts.splice(targetIndex, 0, draggedProduct);
-      
+
       // ref도 업데이트
       productsRef.current = newProducts;
-      
+
       return newProducts;
     });
   };
@@ -284,14 +284,14 @@ function ProductList() {
       dragNode.current.removeEventListener('dragend', handleDragEnd);
       dragNode.current.style.opacity = '1';
     }
-    
+
     const hadDrag = draggedIdRef.current !== null;
     setDraggedId(null);
     setDragOverId(null);
     setCurrentDragGroup(null);
     draggedIdRef.current = null;
     dragNode.current = null;
-    
+
     // 드래그가 있었으면 자동 저장 (ref에서 최신 배열 사용)
     if (hadDrag && !pendingReorder.current) {
       pendingReorder.current = true;
@@ -332,20 +332,20 @@ function ProductList() {
   const handleGroupDragEnter = (e, groupName) => {
     e.stopPropagation();
     if (groupName === draggedGroupName) return;
-    
+
     setDragOverGroupName(groupName);
-    
+
     // 그룹 순서 변경
     setGroupOrder(prev => {
       const newOrder = [...prev];
       const draggedIndex = newOrder.indexOf(draggedGroupName);
       const targetIndex = newOrder.indexOf(groupName);
-      
+
       if (draggedIndex === -1 || targetIndex === -1) return prev;
-      
+
       newOrder.splice(draggedIndex, 1);
       newOrder.splice(targetIndex, 0, draggedGroupName);
-      
+
       return newOrder;
     });
   };
@@ -356,20 +356,20 @@ function ProductList() {
       const row = e.target.closest('tr');
       if (row) row.style.opacity = '1';
     }
-    
+
     const hadDrag = draggedGroupName !== null;
     const finalOrder = [...groupOrder];
-    
+
     setDraggedGroupName(null);
     setDragOverGroupName(null);
-    
+
     // 그룹 순서 저장
     if (hadDrag && finalOrder.length > 0) {
       try {
         // 각 그룹의 품목들에 새로운 sort_order 부여
         const items = [];
         let sortOrder = 1;
-        
+
         finalOrder.forEach(groupName => {
           const groupProducts = products.filter(p => p.product_name === groupName);
           // 그룹 내 기존 sort_order 순서 유지
@@ -381,23 +381,23 @@ function ProductList() {
             });
           });
         });
-        
+
         await productAPI.reorder({ items });
-        
+
         // 로컬 상태 업데이트
         const sortOrderMap = {};
         items.forEach(item => {
           sortOrderMap[item.id] = item.sort_order;
         });
-        
+
         const updatedProducts = products.map(product => ({
           ...product,
           sort_order: sortOrderMap[product.id] || product.sort_order
         }));
-        
+
         // sort_order 기준으로 정렬
         updatedProducts.sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
-        
+
         productsRef.current = updatedProducts;
         setProducts(updatedProducts);
         setGroupOrder([]);
@@ -440,14 +440,14 @@ function ProductList() {
   const buildCategoryOptions = () => {
     const options = [{ value: '', label: '전체' }];
     const mainCategories = categories.filter(c => !c.parent_id);
-    
+
     mainCategories.forEach(main => {
       // 대분류
       options.push({
         value: main.id,
         label: `📁 ${main.category_name}`
       });
-      
+
       // 하위 분류
       const children = categories.filter(c => c.parent_id === main.id);
       children.forEach(child => {
@@ -457,7 +457,7 @@ function ProductList() {
         });
       });
     });
-    
+
     return options;
   };
 
@@ -468,7 +468,7 @@ function ProductList() {
     // 품목명별로 그룹화 (배열 순서 유지)
     const groups = {};
     const groupOrder = []; // 그룹 순서 유지용
-    
+
     products.forEach((product, originalIndex) => {
       const name = product.product_name || '미분류';
       if (!groups[name]) {
@@ -504,11 +504,11 @@ function ProductList() {
       sortedGroups = groupOrder.map(name => groups[name]).filter(Boolean);
     } else {
       // 드래그 중이 아닐 때는 minSortOrder 기준 정렬
-      sortedGroups = Object.values(groups).sort((a, b) => 
+      sortedGroups = Object.values(groups).sort((a, b) =>
         (a.minSortOrder || 9999) - (b.minSortOrder || 9999)
       );
     }
-    
+
     // 그룹 인덱스 추가
     return sortedGroups.map((group, groupIndex) => ({
       ...group,
@@ -524,22 +524,22 @@ function ProductList() {
 
   return (
     <div className="product-list">
-      <div className="page-header">
-        <h1 className="page-title">품목 관리</h1>
-        <div style={{display: 'flex', gap: '0.5rem'}}>
+      <div className="page-header" style={{ display: 'flex', alignItems: 'center' }}>
+        <h1 className="page-title" style={{ margin: 0 }}>📦 품목 관리</h1>
+        <div style={{ display: 'flex', gap: '0.5rem' }}>
           {isSelectMode ? (
             <>
-              <button 
+              <button
                 onClick={() => {
                   setIsSelectMode(false);
                   setSelectedIds([]);
-                }} 
+                }}
                 className="btn btn-secondary"
               >
                 ✕ 취소
               </button>
-              <button 
-                onClick={handleMultiDelete} 
+              <button
+                onClick={handleMultiDelete}
                 className="btn btn-danger"
                 disabled={selectedIds.length === 0}
               >
@@ -548,8 +548,8 @@ function ProductList() {
             </>
           ) : (
             <>
-              <button 
-                onClick={() => setIsSelectMode(true)} 
+              <button
+                onClick={() => setIsSelectMode(true)}
                 className="btn btn-outline"
                 style={{
                   border: '1px solid #ef4444',
@@ -578,10 +578,10 @@ function ProductList() {
           justifyContent: 'space-between',
           alignItems: 'center'
         }}>
-          <p style={{margin: 0, color: '#991b1b', fontSize: '0.9rem'}}>
+          <p style={{ margin: 0, color: '#991b1b', fontSize: '0.9rem' }}>
             🗑 <strong>선택 삭제 모드</strong> - 삭제할 품목을 선택하세요.
           </p>
-          <button 
+          <button
             onClick={handleSelectAll}
             style={{
               padding: '0.4rem 0.8rem',
@@ -599,55 +599,55 @@ function ProductList() {
       )}
 
       <div className="search-filter-container">
-          <div className="filter-row">
-            <div className="filter-group">
-              <label>검색</label>
-              <input
-                type="text"
-                placeholder="품목명 또는 코드"
-                value={filters.search}
-                onChange={(e) => setFilters({...filters, search: e.target.value})}
-                onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
-              />
-            </div>
-            <div className="filter-group">
-              <label>품목분류</label>
-              <SearchableSelect
-                options={categoryOptions}
-                value={filters.category_id}
-                onChange={(option) => {
-                  setFilters({...filters, category_id: option ? option.value : ''});
-                }}
-                placeholder="전체"
-                isClearable={false}
-              />
-            </div>
-            <div className="filter-group">
-              <label>사용여부</label>
-              <select
-                value={filters.is_active}
-                onChange={(e) => setFilters({...filters, is_active: e.target.value})}
-              >
-                <option value="">전체</option>
-                <option value="true">사용</option>
-                <option value="false">미사용</option>
-              </select>
-            </div>
-            <div className="filter-group">
-              <label>&nbsp;</label>
-              <button onClick={handleSearch} className="btn btn-primary">
-                검색
-              </button>
-            </div>
+        <div className="filter-row">
+          <div className="filter-group">
+            <label>검색</label>
+            <input
+              type="text"
+              placeholder="품목명 또는 코드"
+              value={filters.search}
+              onChange={(e) => setFilters({ ...filters, search: e.target.value })}
+              onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
+            />
+          </div>
+          <div className="filter-group">
+            <label>품목분류</label>
+            <SearchableSelect
+              options={categoryOptions}
+              value={filters.category_id}
+              onChange={(option) => {
+                setFilters({ ...filters, category_id: option ? option.value : '' });
+              }}
+              placeholder="전체"
+              isClearable={false}
+            />
+          </div>
+          <div className="filter-group">
+            <label>사용여부</label>
+            <select
+              value={filters.is_active}
+              onChange={(e) => setFilters({ ...filters, is_active: e.target.value })}
+            >
+              <option value="">전체</option>
+              <option value="true">사용</option>
+              <option value="false">미사용</option>
+            </select>
+          </div>
+          <div className="filter-group">
+            <label>&nbsp;</label>
+            <button onClick={handleSearch} className="btn btn-primary">
+              검색
+            </button>
           </div>
         </div>
+      </div>
 
       <div className="table-container">
         <table>
           <thead>
             <tr>
-              {isSelectMode && <th style={{width: '40px'}}></th>}
-              <th style={{width: '60px', textAlign: 'center'}}>
+              {isSelectMode && <th style={{ width: '40px' }}></th>}
+              <th style={{ width: '60px', textAlign: 'center' }}>
                 <span
                   onClick={() => toggleAllGroups(!isAllExpanded())}
                   style={{
@@ -666,7 +666,7 @@ function ProductList() {
               <th className="text-right">중량(kg)</th>
               <th>품목분류</th>
               <th className="text-center">사용여부</th>
-              {!isSelectMode && <th className="text-center" style={{minWidth: '180px'}}>액션</th>}
+              {!isSelectMode && <th className="text-center" style={{ minWidth: '180px' }}>액션</th>}
             </tr>
           </thead>
           <tbody>
@@ -681,11 +681,11 @@ function ProductList() {
                     const isFirst = indexInGroup === 0;
                     const isExpanded = expandedGroups[group.name] !== false;
                     const showRow = isFirst || isExpanded;
-                    
+
                     if (!showRow) return null;
-                    
+
                     return (
-                      <tr 
+                      <tr
                         key={product.id}
                         draggable={!isSelectMode && !draggedGroupName}
                         onDragStart={!isSelectMode && !draggedGroupName ? (e) => handleDragStart(e, product) : undefined}
@@ -694,20 +694,20 @@ function ProductList() {
                         style={{
                           backgroundColor: dragOverGroupName === group.name
                             ? '#fef3c7'
-                            : dragOverId === product.id 
-                              ? '#e0f2fe' 
+                            : dragOverId === product.id
+                              ? '#e0f2fe'
                               : (group.groupIndex % 2 === 0 ? '#ffffff' : '#f8fafc'),
                           borderTop: isFirst ? '2px solid #e2e8f0' : 'none',
                           transition: 'background-color 0.2s'
                         }}
                       >
                         {isSelectMode && (
-                          <td style={{textAlign: 'center'}}>
+                          <td style={{ textAlign: 'center' }}>
                             <input
                               type="checkbox"
                               checked={selectedIds.includes(product.id)}
                               onChange={() => handleCheckboxToggle(product.id)}
-                              style={{width: '18px', height: '18px', cursor: 'pointer'}}
+                              style={{ width: '18px', height: '18px', cursor: 'pointer' }}
                             />
                           </td>
                         )}
@@ -720,9 +720,9 @@ function ProductList() {
                         }}>
                           {!isSelectMode && (
                             <div style={{
-                              display: 'flex', 
-                              alignItems: 'center', 
-                              justifyContent: 'center', 
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
                               gap: '10px',
                               width: '100%'
                             }}>
@@ -743,12 +743,12 @@ function ProductList() {
                               >
                                 ⋮⋮
                               </span>
-                              <span 
+                              <span
                                 style={{
                                   color: isExpanded ? '#94a3b8' : 'transparent',
                                   width: '16px',
                                   textAlign: 'center'
-                                }} 
+                                }}
                                 title={isExpanded ? "등급 순서 변경" : ""}
                               >
                                 ☰
@@ -758,12 +758,12 @@ function ProductList() {
                         </td>
                         <td>
                           {isFirst ? (
-                            <div 
-                              style={{display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: group.items.length > 1 ? 'pointer' : 'default'}}
+                            <div
+                              style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: group.items.length > 1 ? 'pointer' : 'default' }}
                               onClick={group.items.length > 1 ? () => toggleGroup(group.name) : undefined}
                             >
                               {group.items.length > 1 && (
-                                <span style={{color: '#64748b', fontSize: '0.8rem'}}>
+                                <span style={{ color: '#64748b', fontSize: '0.8rem' }}>
                                   {isExpanded ? '▼' : '▶'}
                                 </span>
                               )}
@@ -787,12 +787,12 @@ function ProductList() {
                               )}
                             </div>
                           ) : (
-                            <span style={{color: '#94a3b8', paddingLeft: '1.5rem'}}>└</span>
+                            <span style={{ color: '#94a3b8', paddingLeft: '1.5rem' }}>└</span>
                           )}
                         </td>
                         <td>
                           {product.grade ? (
-                            <span 
+                            <span
                               className="badge badge-info"
                               style={{
                                 backgroundColor: '#93c5fd',
@@ -803,24 +803,24 @@ function ProductList() {
                             </span>
                           ) : '-'}
                         </td>
-                        <td className="text-right" style={{color: '#64748b'}}>
+                        <td className="text-right" style={{ color: '#64748b' }}>
                           {product.weight ? `${Number(product.weight) % 1 === 0 ? Math.floor(product.weight) : Math.round(product.weight * 10) / 10}kg` : '-'}
                         </td>
-                        <td style={{color: '#64748b'}}>{product.category_name || '-'}</td>
+                        <td style={{ color: '#64748b' }}>{product.category_name || '-'}</td>
                         <td className="text-center">
-                          <span 
+                          <span
                             className={`badge ${product.is_active ? 'badge-success' : 'badge-secondary'}`}
                             onClick={() => handleToggleActive(product)}
-                            style={{cursor: 'pointer'}}
+                            style={{ cursor: 'pointer' }}
                             title="클릭하여 상태 변경"
                           >
                             {product.is_active ? '사용' : '미사용'}
                           </span>
                         </td>
                         {!isSelectMode && (
-                          <td className="text-center" style={{whiteSpace: 'nowrap'}}>
+                          <td className="text-center" style={{ whiteSpace: 'nowrap' }}>
                             {isFirst && group.items.length >= 1 && (
-                              <Link 
+                              <Link
                                 to={`/products/new?copyFrom=${product.id}`}
                                 className="btn btn-sm"
                                 style={{
@@ -834,10 +834,10 @@ function ProductList() {
                                 +등급
                               </Link>
                             )}
-                            <Link 
-                              to={`/products/edit/${product.id}`} 
+                            <Link
+                              to={`/products/edit/${product.id}`}
                               className="btn btn-sm btn-primary"
-                              style={{marginRight: '0.5rem'}}
+                              style={{ marginRight: '0.5rem' }}
                             >
                               수정
                             </Link>

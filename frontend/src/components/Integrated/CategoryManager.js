@@ -71,10 +71,7 @@ const CategoryItem = ({
                     </span>
                     <span style={{
                         whiteSpace: 'nowrap',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
                         flex: 1,
-                        minWidth: 0,
                         marginRight: '0.5rem'
                     }}>
                         {category.category_name}
@@ -197,11 +194,13 @@ function CategoryManager({ onSelectCategory, selectedCategoryId }) {
         },
         list: {
             flex: 1,
-            overflowY: 'auto',
+            overflow: 'auto', // Enable Both Scroll
             padding: '1rem'
         },
         itemContainer: {
-            marginBottom: '0.5rem'
+            marginBottom: '0.5rem',
+            width: 'fit-content', // Shrink/Grow to fit content
+            minWidth: '100%'      // But at least full panel width
         },
         item: (isSelected) => ({
             display: 'flex',
@@ -223,8 +222,7 @@ function CategoryManager({ onSelectCategory, selectedCategoryId }) {
             display: 'flex',
             alignItems: 'center',
             gap: '0.5rem',
-            flex: 1,
-            minWidth: 0
+            flex: 1
         },
         subList: {
             paddingLeft: '1.5rem',

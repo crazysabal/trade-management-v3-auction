@@ -7,6 +7,7 @@ import ConfirmModal from '../components/ConfirmModal';
 import TradePrintModal from '../components/TradePrintModal';
 import PaymentCard from '../components/PaymentCard';
 import TradeDeleteConfirmModal from '../components/TradeDeleteConfirmModal';
+import StockTransferModal from '../components/StockTransferModal';
 
 function SaleFromInventory() {
   const navigate = useNavigate();
@@ -69,6 +70,9 @@ function SaleFromInventory() {
 
   // 출력 모달
   const [printModal, setPrintModal] = useState({ isOpen: false, tradeId: null });
+
+  // ★ 재고 이동 모달 상태 (추가)
+  const [transferModal, setTransferModal] = useState({ isOpen: false, inventory: null });
 
   const [loading, setLoading] = useState(true);
 
@@ -779,10 +783,10 @@ function SaleFromInventory() {
   }
 
   return (
-    <div className="sale-from-inventory">
+    <div className="sale-from-inventory" style={{ maxWidth: '1400px', margin: '0 auto' }}>
       {/* 헤더 */}
-      <div className="page-header">
-        <h1 className="page-title" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+      <div className="page-header" style={{ display: 'flex', alignItems: 'center' }}>
+        <h1 className="page-title" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', margin: 0 }}>
           📦 전표 등록(재고 기반)
           {isEdit && (
             <span style={{
@@ -797,48 +801,6 @@ function SaleFromInventory() {
             </span>
           )}
         </h1>
-        <div style={{ display: 'flex', gap: '0.5rem' }}>
-          <button className="btn btn-secondary" onClick={() => {
-            // 변경사항이 있으면 확인 후 초기화
-            if (hasUnsavedChanges() || saleItems.length > 0) {
-              setModal({
-                isOpen: true,
-                type: 'warning',
-                title: '초기화 확인',
-                message: '현재 입력 중인 내용이 있습니다.\n초기화하시겠습니까?',
-                confirmText: '초기화',
-                showCancel: true,
-                onConfirm: () => {
-                  resetToNewMode(getDateString(0), '');
-                  setCompanySummary(null);
-                  // 재고 목록도 새로고침
-                  purchaseInventoryAPI.getAll({ has_remaining: 'true' })
-                    .then(res => setInventory(res.data.data || []))
-                    .catch(err => console.error('재고 목록 조회 오류:', err));
-                }
-              });
-            } else {
-              resetToNewMode(getDateString(0), '');
-              setCompanySummary(null);
-            }
-          }}>
-            초기화
-          </button>
-          {isEdit && (
-            <button
-              className="btn btn-danger"
-              onClick={() => setDeleteModal({ isOpen: true })}
-            >
-              삭제
-            </button>
-          )}
-          <button className="btn btn-primary" onClick={() => handleSave(false)}>
-            {isEdit ? '수정' : '저장'}
-          </button>
-          <button className="btn btn-success" onClick={() => handleSave(true)}>
-            {isEdit ? '수정 및 출력' : '저장 및 출력'}
-          </button>
-        </div>
       </div>
 
       {/* 기본 정보 */}
@@ -850,7 +812,7 @@ function SaleFromInventory() {
               type="date"
               value={tradeDate}
               onChange={(e) => handleDateChange(e.target.value)}
-              style={{ width: '100%', padding: '0.5rem' }}
+              style={{ width: '100%', padding: '0.5rem', fontSize: '0.9rem' }}
             />
           </div>
           <div style={{ flex: 1 }}>
@@ -861,6 +823,50 @@ function SaleFromInventory() {
               onChange={handleCompanyChange}
               placeholder="거래처 선택..."
             />
+          </div>
+
+          {/* 버튼 그룹 (헤더에서 이동) */}
+          <div style={{ display: 'flex', gap: '0.5rem', marginLeft: 'auto' }}>
+            <button className="btn btn-secondary" onClick={() => {
+              // 변경사항이 있으면 확인 후 초기화
+              if (hasUnsavedChanges() || saleItems.length > 0) {
+                setModal({
+                  isOpen: true,
+                  type: 'warning',
+                  title: '초기화 확인',
+                  message: '현재 입력 중인 내용이 있습니다.\n초기화하시겠습니까?',
+                  confirmText: '초기화',
+                  showCancel: true,
+                  onConfirm: () => {
+                    resetToNewMode(getDateString(0), '');
+                    setCompanySummary(null);
+                    // 재고 목록도 새로고침
+                    purchaseInventoryAPI.getAll({ has_remaining: 'true' })
+                      .then(res => setInventory(res.data.data || []))
+                      .catch(err => console.error('재고 목록 조회 오류:', err));
+                  }
+                });
+              } else {
+                resetToNewMode(getDateString(0), '');
+                setCompanySummary(null);
+              }
+            }}>
+              초기화
+            </button>
+            {isEdit && (
+              <button
+                className="btn btn-danger"
+                onClick={() => setDeleteModal({ isOpen: true })}
+              >
+                삭제
+              </button>
+            )}
+            <button className="btn btn-primary" onClick={() => handleSave(false)}>
+              {isEdit ? '수정' : '저장'}
+            </button>
+            <button className="btn btn-success" onClick={() => handleSave(true)}>
+              {isEdit ? '수정 및 출력' : '저장 및 출력'}
+            </button>
           </div>
         </div>
       </div>

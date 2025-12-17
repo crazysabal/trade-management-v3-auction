@@ -8,7 +8,7 @@ function InventoryTransactions() {
   const [transactions, setTransactions] = useState([]);
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [modal, setModal] = useState({ isOpen: false, type: 'info', title: '', message: '', onConfirm: () => {}, confirmText: '확인', showCancel: false });
+  const [modal, setModal] = useState({ isOpen: false, type: 'info', title: '', message: '', onConfirm: () => { }, confirmText: '확인', showCancel: false });
   const [tradeDetailModal, setTradeDetailModal] = useState({ isOpen: false, tradeId: null });
   const [filters, setFilters] = useState({
     start_date: new Date(new Date().setMonth(new Date().getMonth() - 1)).toISOString().split('T')[0],
@@ -38,7 +38,7 @@ function InventoryTransactions() {
       setTransactions(response.data.data || []);
     } catch (error) {
       console.error('재고 수불부 로딩 오류:', error);
-      setModal({ isOpen: true, type: 'warning', title: '로딩 실패', message: '재고 수불부를 불러오는데 실패했습니다.', confirmText: '확인', showCancel: false, onConfirm: () => {} });
+      setModal({ isOpen: true, type: 'warning', title: '로딩 실패', message: '재고 수불부를 불러오는데 실패했습니다.', confirmText: '확인', showCancel: false, onConfirm: () => { } });
     } finally {
       setLoading(false);
     }
@@ -70,8 +70,13 @@ function InventoryTransactions() {
 
   const getTransactionTypeBadge = (type) => {
     const badges = {
-      IN: <span className="badge badge-success">입고 (매입)</span>,
-      OUT: <span className="badge badge-info">출고 (매칭)</span>
+      PURCHASE: <span className="badge badge-success">입고 (매입)</span>,
+      PRODUCTION_IN: <span className="badge badge-purple" style={{ backgroundColor: '#6f42c1', color: 'white' }}>생산 입고</span>,
+      SALE: <span className="badge badge-info">출고 (매칭)</span>,
+      PRODUCTION_OUT: <span className="badge badge-warning" style={{ backgroundColor: '#ffc107', color: 'black' }}>생산 투입</span>,
+      // 호환성 유지
+      IN: <span className="badge badge-success">입고</span>,
+      OUT: <span className="badge badge-info">출고</span>
     };
     return badges[type] || type;
   };
@@ -97,17 +102,17 @@ function InventoryTransactions() {
 
   // 집계 계산
   const totalIn = transactions
-    .filter(t => t.transaction_type === 'IN')
+    .filter(t => ['IN', 'PURCHASE', 'PRODUCTION_IN'].includes(t.transaction_type))
     .reduce((sum, t) => sum + parseFloat(t.quantity || 0), 0);
-  
+
   const totalOut = transactions
-    .filter(t => t.transaction_type === 'OUT')
+    .filter(t => ['OUT', 'SALE', 'PRODUCTION_OUT'].includes(t.transaction_type))
     .reduce((sum, t) => sum + parseFloat(t.quantity || 0), 0);
 
   return (
     <div className="inventory-transactions">
-      <div className="page-header">
-        <h1 className="page-title">재고 수불부</h1>
+      <div className="page-header" style={{ display: 'flex', alignItems: 'center' }}>
+        <h1 className="page-title" style={{ margin: 0 }}>📒 재고 수불부</h1>
       </div>
 
       <div className="search-filter-container">
@@ -117,7 +122,7 @@ function InventoryTransactions() {
             <input
               type="date"
               value={filters.start_date}
-              onChange={(e) => setFilters({...filters, start_date: e.target.value})}
+              onChange={(e) => setFilters({ ...filters, start_date: e.target.value })}
             />
           </div>
           <div className="filter-group">
@@ -125,15 +130,15 @@ function InventoryTransactions() {
             <input
               type="date"
               value={filters.end_date}
-              onChange={(e) => setFilters({...filters, end_date: e.target.value})}
+              onChange={(e) => setFilters({ ...filters, end_date: e.target.value })}
             />
           </div>
-          <div className="filter-group" style={{minWidth: '280px'}}>
+          <div className="filter-group" style={{ minWidth: '280px' }}>
             <label>품목</label>
             <SearchableSelect
               options={productOptions}
               value={filters.product_id}
-              onChange={(option) => setFilters({...filters, product_id: option ? option.value : ''})}
+              onChange={(option) => setFilters({ ...filters, product_id: option ? option.value : '' })}
               placeholder="전체 품목"
               isClearable={false}
             />
@@ -148,23 +153,23 @@ function InventoryTransactions() {
       </div>
 
       {/* 집계 카드 */}
-      <div className="card" style={{marginBottom: '1.5rem'}}>
-        <div style={{display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem'}}>
-          <div style={{padding: '1rem', backgroundColor: '#d4edda', borderRadius: '4px'}}>
-            <h4 style={{margin: '0 0 0.5rem 0', color: '#155724'}}>총 입고 (매입)</h4>
-            <div style={{fontSize: '1.5rem', fontWeight: 'bold', color: '#155724'}}>
+      <div className="card" style={{ marginBottom: '1.5rem' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem' }}>
+          <div style={{ padding: '1rem', backgroundColor: '#d4edda', borderRadius: '4px' }}>
+            <h4 style={{ margin: '0 0 0.5rem 0', color: '#155724' }}>총 입고 (매입)</h4>
+            <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#155724' }}>
               +{formatNumber(totalIn)} 개
             </div>
           </div>
-          <div style={{padding: '1rem', backgroundColor: '#d1ecf1', borderRadius: '4px'}}>
-            <h4 style={{margin: '0 0 0.5rem 0', color: '#0c5460'}}>총 출고 (매칭)</h4>
-            <div style={{fontSize: '1.5rem', fontWeight: 'bold', color: '#0c5460'}}>
+          <div style={{ padding: '1rem', backgroundColor: '#d1ecf1', borderRadius: '4px' }}>
+            <h4 style={{ margin: '0 0 0.5rem 0', color: '#0c5460' }}>총 출고 (매칭)</h4>
+            <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#0c5460' }}>
               -{formatNumber(totalOut)} 개
             </div>
           </div>
-          <div style={{padding: '1rem', backgroundColor: '#e2e3e5', borderRadius: '4px'}}>
-            <h4 style={{margin: '0 0 0.5rem 0', color: '#383d41'}}>순증감</h4>
-            <div style={{fontSize: '1.5rem', fontWeight: 'bold', color: totalIn - totalOut >= 0 ? '#155724' : '#721c24'}}>
+          <div style={{ padding: '1rem', backgroundColor: '#e2e3e5', borderRadius: '4px' }}>
+            <h4 style={{ margin: '0 0 0.5rem 0', color: '#383d41' }}>순증감</h4>
+            <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: totalIn - totalOut >= 0 ? '#155724' : '#721c24' }}>
               {totalIn - totalOut >= 0 ? '+' : ''}{formatNumber(totalIn - totalOut)} 개
             </div>
           </div>
@@ -203,8 +208,8 @@ function InventoryTransactions() {
                   }
                   prevProductName = trans.product_name;
                   const bgColor = colorIndex % 2 === 0 ? '#ffffff' : '#f8fafc';
-                  const isIn = trans.transaction_type === 'IN';
-                  
+                  const isIn = ['IN', 'PURCHASE', 'PRODUCTION_IN'].includes(trans.transaction_type);
+
                   return (
                     <tr key={`${trans.transaction_type}-${trans.reference_id}-${index}`} style={{
                       backgroundColor: bgColor,
@@ -229,7 +234,7 @@ function InventoryTransactions() {
                       <td>{trans.sender || '-'}</td>
                       <td>
                         {trans.trade_master_id ? (
-                          <span 
+                          <span
                             className="trade-number-link"
                             onClick={() => setTradeDetailModal({ isOpen: true, tradeId: trans.trade_master_id })}
                           >
@@ -251,7 +256,7 @@ function InventoryTransactions() {
         </table>
       </div>
       <ConfirmModal isOpen={modal.isOpen} onClose={() => setModal(prev => ({ ...prev, isOpen: false }))} onConfirm={modal.onConfirm} title={modal.title} message={modal.message} type={modal.type} confirmText={modal.confirmText} showCancel={modal.showCancel} />
-      
+
       <TradeDetailModal
         isOpen={tradeDetailModal.isOpen}
         onClose={() => setTradeDetailModal({ isOpen: false, tradeId: null })}

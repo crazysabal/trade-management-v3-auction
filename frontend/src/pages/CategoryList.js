@@ -18,7 +18,7 @@ function CategoryList() {
     type: 'info',
     title: '',
     message: '',
-    onConfirm: () => {},
+    onConfirm: () => { },
     confirmText: '확인',
     showCancel: false
   });
@@ -64,7 +64,7 @@ function CategoryList() {
         message: '품목분류 목록을 불러오는데 실패했습니다.',
         confirmText: '확인',
         showCancel: false,
-        onConfirm: () => {}
+        onConfirm: () => { }
       });
     } finally {
       setLoading(false);
@@ -73,7 +73,7 @@ function CategoryList() {
 
   // 대분류만 필터링
   const mainCategories = categories.filter(c => c.level === 1 || !c.parent_id);
-  
+
   // 특정 부모의 자식 카테고리
   const getChildren = (parentId) => categories.filter(c => c.parent_id === parentId);
 
@@ -81,21 +81,21 @@ function CategoryList() {
     setIsAdding(true);
     setEditingId(null);
     setAddingParentId(parentId);
-    
-    const siblings = parentId 
+
+    const siblings = parentId
       ? getChildren(parentId)
       : mainCategories;
-    
-    setFormData({ 
-      category_name: '', 
+
+    setFormData({
+      category_name: '',
       parent_id: parentId,
-      sort_order: Math.max(1, siblings.length + 1) 
+      sort_order: Math.max(1, siblings.length + 1)
     });
   };
 
   const handleSortOrderChange = (value) => {
     const num = parseInt(value) || 1;
-    setFormData({...formData, sort_order: Math.max(1, num)});
+    setFormData({ ...formData, sort_order: Math.max(1, num) });
   };
 
   const handleEdit = (category) => {
@@ -125,7 +125,7 @@ function CategoryList() {
         message: '분류명을 입력하세요.',
         confirmText: '확인',
         showCancel: false,
-        onConfirm: () => {}
+        onConfirm: () => { }
       });
       return;
     }
@@ -140,7 +140,7 @@ function CategoryList() {
           message: '품목분류가 등록되었습니다.',
           confirmText: '확인',
           showCancel: false,
-          onConfirm: () => {}
+          onConfirm: () => { }
         });
       } else {
         await categoryAPI.update(editingId, formData);
@@ -151,7 +151,7 @@ function CategoryList() {
           message: '품목분류가 수정되었습니다.',
           confirmText: '확인',
           showCancel: false,
-          onConfirm: () => {}
+          onConfirm: () => { }
         });
       }
       handleCancel();
@@ -165,7 +165,7 @@ function CategoryList() {
         message: error.response?.data?.message || '품목분류 저장에 실패했습니다.',
         confirmText: '확인',
         showCancel: false,
-        onConfirm: () => {}
+        onConfirm: () => { }
       });
     }
   };
@@ -188,7 +188,7 @@ function CategoryList() {
             message: '품목분류가 삭제되었습니다.',
             confirmText: '확인',
             showCancel: false,
-            onConfirm: () => {}
+            onConfirm: () => { }
           });
           loadCategories();
         } catch (error) {
@@ -200,7 +200,7 @@ function CategoryList() {
             message: error.response?.data?.message || '품목분류 삭제에 실패했습니다.',
             confirmText: '확인',
             showCancel: false,
-            onConfirm: () => {}
+            onConfirm: () => { }
           });
         }
       }
@@ -238,7 +238,7 @@ function CategoryList() {
   const renderRow = (category, isChild = false) => {
     const children = getChildren(category.id);
     const isEditing = editingId === category.id;
-    
+
     return (
       <React.Fragment key={category.id}>
         <tr style={{
@@ -257,12 +257,12 @@ function CategoryList() {
                 />
               </td>
               <td>
-                <div style={{display: 'flex', alignItems: 'center', gap: '0.5rem'}}>
-                  {isChild && <span style={{color: '#6c757d', marginLeft: '1rem'}}>└</span>}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  {isChild && <span style={{ color: '#6c757d', marginLeft: '1rem' }}>└</span>}
                   <input
                     type="text"
                     value={formData.category_name}
-                    onChange={(e) => setFormData({...formData, category_name: e.target.value})}
+                    onChange={(e) => setFormData({ ...formData, category_name: e.target.value })}
                     onKeyDown={handleKeyPress}
                     autoFocus
                     style={textInputStyle}
@@ -271,22 +271,22 @@ function CategoryList() {
               </td>
               <td>
                 {isChild ? (
-                  <span style={{color: '#6c757d', fontSize: '0.9rem'}}>{category.parent_name}</span>
+                  <span style={{ color: '#6c757d', fontSize: '0.9rem' }}>{category.parent_name}</span>
                 ) : '-'}
               </td>
               <td className="text-center">
-                <label style={{cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem'}}>
+                <label style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
                   <input
                     type="checkbox"
                     checked={formData.is_active}
-                    onChange={(e) => setFormData({...formData, is_active: e.target.checked})}
-                    style={{width: '18px', height: '18px', cursor: 'pointer'}}
+                    onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })}
+                    style={{ width: '18px', height: '18px', cursor: 'pointer' }}
                   />
                   <span>{formData.is_active ? '사용' : '미사용'}</span>
                 </label>
               </td>
               <td className="text-center">
-                <button onClick={handleSave} className="btn btn-sm btn-success" style={{marginRight: '0.5rem'}}>
+                <button onClick={handleSave} className="btn btn-sm btn-success" style={{ marginRight: '0.5rem' }}>
                   ✓ 저장
                 </button>
                 <button onClick={handleCancel} className="btn btn-sm btn-secondary">
@@ -298,9 +298,9 @@ function CategoryList() {
             <>
               <td className="text-center">{category.sort_order}</td>
               <td>
-                <div style={{display: 'flex', alignItems: 'center', gap: '0.5rem'}}>
-                  {isChild && <span style={{color: '#6c757d', marginLeft: '1rem'}}>└</span>}
-                  <strong style={{color: isChild ? '#495057' : '#212529'}}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  {isChild && <span style={{ color: '#6c757d', marginLeft: '1rem' }}>└</span>}
+                  <strong style={{ color: isChild ? '#495057' : '#212529' }}>
                     {category.category_name}
                   </strong>
                   {!isChild && children.length > 0 && (
@@ -318,14 +318,14 @@ function CategoryList() {
               </td>
               <td>
                 {isChild ? (
-                  <span style={{color: '#6c757d', fontSize: '0.9rem'}}>{category.parent_name}</span>
+                  <span style={{ color: '#6c757d', fontSize: '0.9rem' }}>{category.parent_name}</span>
                 ) : '-'}
               </td>
               <td className="text-center">
-                <span 
+                <span
                   className={`badge ${category.is_active ? 'badge-success' : 'badge-secondary'}`}
                   onClick={() => handleToggleActive(category)}
-                  style={{cursor: 'pointer'}}
+                  style={{ cursor: 'pointer' }}
                   title="클릭하여 상태 변경"
                 >
                   {category.is_active ? '사용' : '미사용'}
@@ -336,7 +336,7 @@ function CategoryList() {
                   <button
                     onClick={() => handleAdd(category.id)}
                     className="btn btn-sm btn-info"
-                    style={{marginRight: '0.5rem'}}
+                    style={{ marginRight: '0.5rem' }}
                     title="하위 분류 추가"
                   >
                     + 하위
@@ -345,7 +345,7 @@ function CategoryList() {
                 <button
                   onClick={() => handleEdit(category)}
                   className="btn btn-sm btn-primary"
-                  style={{marginRight: '0.5rem'}}
+                  style={{ marginRight: '0.5rem' }}
                 >
                   수정
                 </button>
@@ -359,10 +359,10 @@ function CategoryList() {
             </>
           )}
         </tr>
-        
+
         {/* 하위 분류 추가 행 */}
         {isAdding && addingParentId === category.id && (
-          <tr style={{backgroundColor: '#e8f4fd'}}>
+          <tr style={{ backgroundColor: '#e8f4fd' }}>
             <td>
               <input
                 type="number"
@@ -374,12 +374,12 @@ function CategoryList() {
               />
             </td>
             <td>
-              <div style={{display: 'flex', alignItems: 'center', gap: '0.5rem'}}>
-                <span style={{color: '#6c757d', marginLeft: '1rem'}}>└</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <span style={{ color: '#6c757d', marginLeft: '1rem' }}>└</span>
                 <input
                   type="text"
                   value={formData.category_name}
-                  onChange={(e) => setFormData({...formData, category_name: e.target.value})}
+                  onChange={(e) => setFormData({ ...formData, category_name: e.target.value })}
                   onKeyDown={handleKeyPress}
                   placeholder="하위 분류명을 입력하세요"
                   autoFocus
@@ -388,13 +388,13 @@ function CategoryList() {
               </div>
             </td>
             <td>
-              <span style={{color: '#6c757d', fontSize: '0.9rem'}}>{category.category_name}</span>
+              <span style={{ color: '#6c757d', fontSize: '0.9rem' }}>{category.category_name}</span>
             </td>
             <td className="text-center">
               <span className="badge badge-success">사용</span>
             </td>
             <td className="text-center">
-              <button onClick={handleSave} className="btn btn-sm btn-success" style={{marginRight: '0.5rem'}}>
+              <button onClick={handleSave} className="btn btn-sm btn-success" style={{ marginRight: '0.5rem' }}>
                 ✓ 저장
               </button>
               <button onClick={handleCancel} className="btn btn-sm btn-secondary">
@@ -403,7 +403,7 @@ function CategoryList() {
             </td>
           </tr>
         )}
-        
+
         {/* 자식 분류 렌더링 */}
         {children.map(child => renderRow(child, true))}
       </React.Fragment>
@@ -417,7 +417,7 @@ function CategoryList() {
   return (
     <div className="category-list">
       <div className="page-header">
-        <h1 className="page-title">품목분류 관리</h1>
+        <h1 className="page-title">🏷️ 품목분류 관리</h1>
         <button onClick={() => handleAdd(null)} className="btn btn-primary" disabled={isAdding}>
           + 대분류 추가
         </button>
@@ -427,17 +427,17 @@ function CategoryList() {
         <table>
           <thead>
             <tr>
-              <th style={{width: '80px'}}>순서</th>
+              <th style={{ width: '80px' }}>순서</th>
               <th>분류명</th>
-              <th style={{width: '120px'}}>상위분류</th>
-              <th className="text-center" style={{width: '100px'}}>사용여부</th>
-              <th className="text-center" style={{width: '220px'}}>액션</th>
+              <th style={{ width: '120px' }}>상위분류</th>
+              <th className="text-center" style={{ width: '100px' }}>사용여부</th>
+              <th className="text-center" style={{ width: '220px' }}>액션</th>
             </tr>
           </thead>
           <tbody>
             {/* 대분류 추가 행 */}
             {isAdding && addingParentId === null && (
-              <tr style={{backgroundColor: '#e8f4fd'}}>
+              <tr style={{ backgroundColor: '#e8f4fd' }}>
                 <td>
                   <input
                     type="number"
@@ -452,7 +452,7 @@ function CategoryList() {
                   <input
                     type="text"
                     value={formData.category_name}
-                    onChange={(e) => setFormData({...formData, category_name: e.target.value})}
+                    onChange={(e) => setFormData({ ...formData, category_name: e.target.value })}
                     onKeyDown={handleKeyPress}
                     placeholder="대분류명을 입력하세요"
                     autoFocus
@@ -464,7 +464,7 @@ function CategoryList() {
                   <span className="badge badge-success">사용</span>
                 </td>
                 <td className="text-center">
-                  <button onClick={handleSave} className="btn btn-sm btn-success" style={{marginRight: '0.5rem'}}>
+                  <button onClick={handleSave} className="btn btn-sm btn-success" style={{ marginRight: '0.5rem' }}>
                     ✓ 저장
                   </button>
                   <button onClick={handleCancel} className="btn btn-sm btn-secondary">
@@ -473,7 +473,7 @@ function CategoryList() {
                 </td>
               </tr>
             )}
-            
+
             {mainCategories.length === 0 && !isAdding ? (
               <tr>
                 <td colSpan="5" className="text-center">등록된 품목분류가 없습니다.</td>
@@ -486,13 +486,13 @@ function CategoryList() {
       </div>
 
       <div style={{
-        marginTop: '1.5rem', 
-        padding: '1rem 1.25rem', 
-        backgroundColor: '#f0f7ff', 
+        marginTop: '1.5rem',
+        padding: '1rem 1.25rem',
+        backgroundColor: '#f0f7ff',
         borderRadius: '8px',
         border: '1px solid #d0e3f7'
       }}>
-        <p style={{margin: 0, color: '#4a6785', fontSize: '0.9rem'}}>
+        <p style={{ margin: 0, color: '#4a6785', fontSize: '0.9rem' }}>
           💡 <strong>TIP:</strong> 대분류(과일, 채소 등) 아래에 세부 분류(감귤류, 사과류 등)를 추가할 수 있습니다.
           품목 등록 시 세부 분류를 선택하면 됩니다.
         </p>

@@ -651,8 +651,8 @@ function CompanyList() {
 
   return (
     <div className="company-list" style={{ maxWidth: '1400px', margin: '0 auto' }}>
-      <div className="page-header">
-        <h1 className="page-title">거래처 관리</h1>
+      <div className="page-header" style={{ display: 'flex', alignItems: 'center' }}>
+        <h1 className="page-title" style={{ margin: 0 }}>🏢 거래처 관리</h1>
         <div style={{ display: 'flex', gap: '0.5rem' }}>
           {isSelectMode ? (
             <>

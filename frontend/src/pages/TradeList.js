@@ -31,11 +31,11 @@ const formatCurrency = (value) => {
 // 다중 필터링 함수 (AND 조건, 금액은 쉼표 유무 모두 지원) - 컴포넌트 외부
 const filterTrades = (trades, filterText) => {
   if (!filterText.trim()) return trades;
-  
+
   // 공백으로 키워드 분리 (다중 필터링)
   const keywords = filterText.toLowerCase().trim().split(/\s+/).filter(k => k);
   if (keywords.length === 0) return trades;
-  
+
   return trades.filter(trade => {
     const tradeDate = trade.trade_date ? trade.trade_date.substring(0, 10) : '';
     const amountFormatted = formatCurrency(trade.total_price); // "1,000,000"
@@ -47,7 +47,7 @@ const filterTrades = (trades, filterText) => {
       amountFormatted,
       amountRaw
     ].join(' ');
-    
+
     // 모든 키워드가 포함되어야 함 (AND 조건)
     return keywords.every(keyword => searchableText.includes(keyword));
   });
@@ -58,17 +58,17 @@ function TradeList() {
   const [purchaseTrades, setPurchaseTrades] = useState([]);
   const [saleTrades, setSaleTrades] = useState([]);
   const [loading, setLoading] = useState(true);
-  
+
   // 기간 필터
   const [dateRange, setDateRange] = useState({
     start_date: defaultDates.startDate,
     end_date: defaultDates.endDate
   });
-  
+
   // 개별 필터링 키워드
   const [purchaseFilter, setPurchaseFilter] = useState('');
   const [saleFilter, setSaleFilter] = useState('');
-  
+
   // 좌우 위치 설정 (localStorage에 저장)
   const [layoutOrder, setLayoutOrder] = useState(() => {
     const saved = localStorage.getItem('tradeListLayout');
@@ -109,12 +109,12 @@ function TradeList() {
 
   const handleMouseMove = useCallback((e) => {
     if (!isDragging || !containerRef.current) return;
-    
+
     const container = containerRef.current;
     const rect = container.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const newRatio = Math.min(Math.max(x / rect.width, 0.3), 0.7);
-    
+
     setSplitRatio(newRatio);
   }, [isDragging]);
 
@@ -145,13 +145,13 @@ function TradeList() {
       document.body.style.userSelect = '';
     };
   }, [isDragging, handleMouseMove, handleMouseUp]);
-  
+
   const [modal, setModal] = useState({
     isOpen: false,
     type: 'info',
     title: '',
     message: '',
-    onConfirm: () => {},
+    onConfirm: () => { },
     confirmText: '확인',
     showCancel: false
   });
@@ -178,18 +178,18 @@ function TradeList() {
       setLoading(true);
       const start = startDate || dateRange.start_date;
       const end = endDate || dateRange.end_date;
-      
+
       // 매입/매출 각각 조회
       const [purchaseRes, saleRes] = await Promise.all([
-        tradeAPI.getAll({ 
-          start_date: start, 
-          end_date: end, 
-          trade_type: 'PURCHASE' 
+        tradeAPI.getAll({
+          start_date: start,
+          end_date: end,
+          trade_type: 'PURCHASE'
         }),
-        tradeAPI.getAll({ 
-          start_date: start, 
-          end_date: end, 
-          trade_type: 'SALE' 
+        tradeAPI.getAll({
+          start_date: start,
+          end_date: end,
+          trade_type: 'SALE'
         })
       ]);
       setPurchaseTrades(purchaseRes.data.data);
@@ -203,7 +203,7 @@ function TradeList() {
         message: '거래전표 목록을 불러오는데 실패했습니다.',
         confirmText: '확인',
         showCancel: false,
-        onConfirm: () => {}
+        onConfirm: () => { }
       });
     } finally {
       setLoading(false);
@@ -234,13 +234,13 @@ function TradeList() {
             message: '거래전표가 삭제되었습니다.',
             confirmText: '확인',
             showCancel: false,
-            onConfirm: () => {}
+            onConfirm: () => { }
           });
           loadTrades();
         } catch (error) {
           console.error('거래전표 삭제 오류:', error);
           const errorData = error.response?.data;
-          
+
           // 매칭 에러인 경우 전용 모달 표시
           if (errorData?.errorType === 'MATCHING_EXISTS' && errorData?.matchingData) {
             setMatchingErrorModal({
@@ -256,7 +256,7 @@ function TradeList() {
               message: errorData?.message || '거래전표 삭제에 실패했습니다.',
               confirmText: '확인',
               showCancel: false,
-              onConfirm: () => {}
+              onConfirm: () => { }
             });
           }
         }
@@ -281,39 +281,39 @@ function TradeList() {
     const headerBgColor = isPurchase ? '#fdf2f2' : '#f0f7ff';
     const headerTextColor = isPurchase ? '#c0392b' : '#2980b9';
     const headerBorderColor = isPurchase ? '#c0392b' : '#2980b9';
-    
+
     // 잔고 가져오기 (매입: payable, 매출: receivable)
     const getBalance = (trade) => {
-      return isPurchase 
-        ? parseFloat(trade.payable || 0) 
+      return isPurchase
+        ? parseFloat(trade.payable || 0)
         : parseFloat(trade.receivable || 0);
     };
-    
+
     // 당일 입출금 금액 가져오기 (매입: 지급액, 매출: 입금액)
     const getPaymentAmount = (trade) => {
-      return isPurchase 
-        ? parseFloat(trade.daily_payment || 0) 
+      return isPurchase
+        ? parseFloat(trade.daily_payment || 0)
         : parseFloat(trade.daily_receipt || 0);
     };
-    
+
     return (
       <div style={{ width: '100%' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead style={{ position: 'sticky', top: 0, zIndex: 1 }}>
             <tr style={{ backgroundColor: headerBgColor, borderBottom: `2px solid ${headerBorderColor}` }}>
-              <th style={{ color: headerTextColor, fontWeight: '600', padding: '0.5rem 0.5rem', textAlign: 'left', fontSize: '0.8rem' }}>전표번호</th>
-              <th style={{ color: headerTextColor, fontWeight: '600', padding: '0.5rem 0.5rem', textAlign: 'left', fontSize: '0.8rem' }}>거래일자</th>
-              <th style={{ color: headerTextColor, fontWeight: '600', padding: '0.5rem 0.5rem', textAlign: 'left', fontSize: '0.8rem' }}>{isPurchase ? '매입처' : '매출처'}</th>
-              <th style={{ color: headerTextColor, fontWeight: '600', padding: '0.5rem 0.5rem', textAlign: 'right', fontSize: '0.8rem' }}>금액</th>
-              <th style={{ color: headerTextColor, fontWeight: '600', padding: '0.5rem 0.5rem', textAlign: 'right', fontSize: '0.8rem' }}>{isPurchase ? '지급액' : '입금액'}</th>
-              <th style={{ color: headerTextColor, fontWeight: '600', padding: '0.5rem 0.5rem', textAlign: 'right', fontSize: '0.8rem' }}>잔고</th>
-              <th style={{ color: headerTextColor, fontWeight: '600', padding: '0.5rem 0.5rem', textAlign: 'center', fontSize: '0.8rem', width: '100px' }}>액션</th>
+              <th style={{ color: headerTextColor, fontWeight: '600', padding: '0.5rem 0.5rem', textAlign: 'left', fontSize: '0.9rem' }}>전표번호</th>
+              <th style={{ color: headerTextColor, fontWeight: '600', padding: '0.5rem 0.5rem', textAlign: 'left', fontSize: '0.9rem' }}>거래일자</th>
+              <th style={{ color: headerTextColor, fontWeight: '600', padding: '0.5rem 0.5rem', textAlign: 'left', fontSize: '0.9rem' }}>{isPurchase ? '매입처' : '매출처'}</th>
+              <th style={{ color: headerTextColor, fontWeight: '600', padding: '0.5rem 0.5rem', textAlign: 'right', fontSize: '0.9rem' }}>금액</th>
+              <th style={{ color: headerTextColor, fontWeight: '600', padding: '0.5rem 0.5rem', textAlign: 'right', fontSize: '0.9rem' }}>{isPurchase ? '지급액' : '입금액'}</th>
+              <th style={{ color: headerTextColor, fontWeight: '600', padding: '0.5rem 0.5rem', textAlign: 'right', fontSize: '0.9rem' }}>잔고</th>
+              <th style={{ color: headerTextColor, fontWeight: '600', padding: '0.5rem 0.5rem', textAlign: 'center', fontSize: '0.9rem', width: '100px' }}>액션</th>
             </tr>
           </thead>
           <tbody>
             {trades.length === 0 ? (
               <tr>
-                <td colSpan="7" style={{ padding: '1.5rem', color: '#888', textAlign: 'center', fontSize: '0.85rem' }}>
+                <td colSpan="7" style={{ padding: '1.5rem', color: '#888', textAlign: 'center', fontSize: '0.9rem' }}>
                   {emptyMessage}
                 </td>
               </tr>
@@ -323,8 +323,8 @@ function TradeList() {
                 const paymentAmount = getPaymentAmount(trade);
                 return (
                   <tr key={trade.id} style={{ borderBottom: '1px solid #eee' }}>
-                    <td style={{ padding: '0.4rem 0.5rem', fontSize: '0.8rem' }}>
-                      <span 
+                    <td style={{ padding: '0.4rem 0.5rem', fontSize: '0.9rem' }}>
+                      <span
                         className="trade-number-link"
                         onClick={() => setDetailModal({ isOpen: true, tradeId: trade.id })}
                         style={{ cursor: 'pointer', color: '#2980b9' }}
@@ -332,25 +332,25 @@ function TradeList() {
                         {trade.trade_number}
                       </span>
                     </td>
-                    <td style={{ padding: '0.4rem 0.5rem', fontSize: '0.8rem' }}>{trade.trade_date ? trade.trade_date.substring(0, 10) : '-'}</td>
-                    <td style={{ padding: '0.4rem 0.5rem', fontSize: '0.8rem' }}>{trade.company_name}</td>
-                    <td style={{ padding: '0.4rem 0.5rem', fontSize: '0.8rem', textAlign: 'right', fontWeight: '600' }}>
+                    <td style={{ padding: '0.4rem 0.5rem', fontSize: '0.9rem' }}>{trade.trade_date ? trade.trade_date.substring(0, 10) : '-'}</td>
+                    <td style={{ padding: '0.4rem 0.5rem', fontSize: '0.9rem' }}>{trade.company_name}</td>
+                    <td style={{ padding: '0.4rem 0.5rem', fontSize: '0.9rem', textAlign: 'right', fontWeight: '600' }}>
                       {formatCurrency(trade.total_price)}
                     </td>
-                    <td style={{ 
-                      padding: '0.4rem 0.5rem', 
-                      fontSize: '0.8rem', 
+                    <td style={{
+                      padding: '0.4rem 0.5rem',
+                      fontSize: '0.9rem',
                       textAlign: 'right',
                       fontWeight: '500',
                       color: paymentAmount > 0 ? '#27ae60' : '#888'
                     }}>
                       {formatCurrency(paymentAmount)}
                     </td>
-                    <td style={{ 
-                      padding: '0.4rem 0.5rem', 
-                      fontSize: '0.8rem', 
+                    <td style={{
+                      padding: '0.4rem 0.5rem',
+                      fontSize: '0.9rem',
                       textAlign: 'right',
-                      fontWeight: '600', 
+                      fontWeight: '600',
                       color: balance > 0 ? '#c0392b' : '#27ae60'
                     }}>
                       {formatCurrency(balance)}
@@ -359,14 +359,14 @@ function TradeList() {
                       <div style={{ display: 'flex', gap: '4px', justifyContent: 'center', whiteSpace: 'nowrap' }}>
                         <button
                           onClick={() => setPrintModal({ isOpen: true, tradeId: trade.id })}
-                          style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem', backgroundColor: '#3498db', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+                          style={{ padding: '0.25rem 0.5rem', fontSize: '0.85rem', backgroundColor: '#3498db', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
                           title="출력"
                         >
                           출력
                         </button>
-                        <Link 
-                          to={`/trades/edit/${trade.id}`} 
-                          style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem', backgroundColor: '#95a5a6', color: 'white', textDecoration: 'none', borderRadius: '4px' }}
+                        <Link
+                          to={`/trades/edit/${trade.id}`}
+                          style={{ padding: '0.25rem 0.5rem', fontSize: '0.85rem', backgroundColor: '#95a5a6', color: 'white', textDecoration: 'none', borderRadius: '4px' }}
                         >
                           수정
                         </Link>
@@ -402,11 +402,11 @@ function TradeList() {
     const bgColor = isPurchase ? '#fdf2f2' : '#f0f7ff';  // 배경 색상
     const icon = isPurchase ? '📦' : '💰';
     const label = isPurchase ? '매입' : '매출';
-    
+
     return (
-      <div style={{ 
-        display: 'flex', 
-        flexDirection: 'column', 
+      <div style={{
+        display: 'flex',
+        flexDirection: 'column',
         height: '100%',
         width: '100%',
         backgroundColor: '#fff',
@@ -415,7 +415,7 @@ function TradeList() {
         boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
       }}>
         {/* 패널 헤더 */}
-        <div style={{ 
+        <div style={{
           padding: '0.6rem 0.75rem',
           backgroundColor: bgColor,
           borderBottom: `2px solid ${color}`,
@@ -426,8 +426,8 @@ function TradeList() {
         }}>
           <h2 style={{ margin: 0, fontSize: '0.95rem', color: color, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
             {icon} {label} 전표
-            <span style={{ 
-              fontSize: '0.75rem', 
+            <span style={{
+              fontSize: '0.75rem',
               backgroundColor: color,
               color: 'white',
               padding: '2px 8px',
@@ -437,8 +437,8 @@ function TradeList() {
               {filter && ` / ${allTrades.length}`}
             </span>
           </h2>
-          <Link 
-            to={`/trades/new?type=${type}`} 
+          <Link
+            to={`/trades/new?type=${type}`}
             style={{
               padding: '0.25rem 0.5rem',
               backgroundColor: color,
@@ -452,7 +452,7 @@ function TradeList() {
             + 등록
           </Link>
         </div>
-        
+
         {/* 필터 입력 */}
         <div style={{ padding: '0.4rem 0.5rem', borderBottom: '1px solid #eee', flexShrink: 0 }}>
           <input
@@ -470,13 +470,13 @@ function TradeList() {
             }}
           />
         </div>
-        
+
         {/* 테이블 + 합계 영역 (스크롤) */}
         <div style={{ flex: 1, overflow: 'auto', minHeight: 0 }}>
           <TradeTable trades={trades} type={type} />
-          
+
           {/* 합계 - 테이블 바로 밑에 붙음 */}
-          <div style={{ 
+          <div style={{
             padding: '0.5rem 0.75rem',
             backgroundColor: bgColor,
             borderTop: `2px solid ${color}`,
@@ -497,25 +497,19 @@ function TradeList() {
   };
 
   return (
-    <div style={{ 
-      display: 'flex', 
-      flexDirection: 'column', 
+    <div style={{
+      display: 'flex',
+      flexDirection: 'column',
       height: 'calc(100vh - 60px)',
-      backgroundColor: '#f5f6fa'
+      backgroundColor: '#f5f6fa',
+      maxWidth: '1400px',
+      margin: '0 auto',
+      width: '100%'
     }}>
       {/* 헤더 */}
-      <div style={{ 
-        display: 'flex', 
-        justifyContent: 'space-between', 
-        alignItems: 'center',
-        padding: '0.5rem 1rem',
-        backgroundColor: '#fff',
-        borderBottom: '1px solid #ddd',
-        boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
-        flexShrink: 0
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-          <h1 style={{ margin: 0, fontSize: '1.2rem', fontWeight: '700', color: '#2c3e50' }}>
+      <div className="page-header" style={{ display: 'flex', alignItems: 'center' }}>
+        <div className="page-header-actions-left" style={{ display: 'flex', alignItems: 'center' }}>
+          <h1 className="page-title" style={{ margin: 0 }}>
             📋 전표 목록
           </h1>
           <button
@@ -537,8 +531,8 @@ function TradeList() {
             title="좌우 위치 변경"
           >
             🔄 위치 변경
-            <span style={{ 
-              fontSize: '0.75rem', 
+            <span style={{
+              fontSize: '0.75rem',
               opacity: 0.9,
               backgroundColor: 'rgba(255,255,255,0.2)',
               padding: '0.15rem 0.4rem',
@@ -566,11 +560,11 @@ function TradeList() {
             </button>
           )}
         </div>
-        
+
         {/* 기간 조회 */}
-        <div style={{ 
-          display: 'flex', 
-          alignItems: 'center', 
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
           gap: '0.5rem'
         }}>
           <span style={{ fontSize: '0.85rem', color: '#666' }}>📅</span>
@@ -583,7 +577,7 @@ function TradeList() {
               padding: '0.35rem 0.5rem',
               border: '1px solid #ddd',
               borderRadius: '5px',
-              fontSize: '0.85rem'
+              fontSize: '0.9rem'
             }}
           />
           <span style={{ color: '#999' }}>~</span>
@@ -596,18 +590,18 @@ function TradeList() {
               padding: '0.35rem 0.5rem',
               border: '1px solid #ddd',
               borderRadius: '5px',
-              fontSize: '0.85rem'
+              fontSize: '0.9rem'
             }}
           />
         </div>
       </div>
 
       {/* 메인 컨텐츠 - 좌우 분할 */}
-      <div 
+      <div
         ref={containerRef}
-        style={{ 
-          flex: 1, 
-          display: 'flex', 
+        style={{
+          flex: 1,
+          display: 'flex',
           padding: '0.75rem',
           overflow: 'hidden',
           minHeight: 0,
@@ -615,7 +609,7 @@ function TradeList() {
         }}
       >
         {/* 왼쪽 패널 */}
-        <div style={{ 
+        <div style={{
           flex: `0 0 calc(${splitRatio * 100}% - 4px)`,
           display: 'flex',
           minWidth: '300px',
@@ -625,7 +619,7 @@ function TradeList() {
         </div>
 
         {/* 리사이즈 핸들 */}
-        <div 
+        <div
           onMouseDown={handleMouseDown}
           style={{
             width: '8px',
@@ -647,7 +641,7 @@ function TradeList() {
             flexDirection: 'column',
             gap: '2px'
           }}>
-            {[1,2,3].map(i => (
+            {[1, 2, 3].map(i => (
               <div key={i} style={{
                 width: '3px',
                 height: '3px',
@@ -659,7 +653,7 @@ function TradeList() {
         </div>
 
         {/* 오른쪽 패널 */}
-        <div style={{ 
+        <div style={{
           flex: 1,
           display: 'flex',
           minWidth: '300px',
@@ -725,10 +719,10 @@ function TradeList() {
             {/* 바디 */}
             <div className="matching-error-modal-body">
               <p className="matching-error-message">
-                이미 매출과 매칭된 내역이 있어 삭제할 수 없습니다.<br/>
+                이미 매출과 매칭된 내역이 있어 삭제할 수 없습니다.<br />
                 마감 화면에서 매칭을 먼저 취소하세요.
               </p>
-              
+
               {matchingErrorModal.matchingData && (
                 <div className="matching-error-table-container">
                   <table className="matching-error-table">

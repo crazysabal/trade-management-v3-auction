@@ -1,5 +1,8 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { openProductPopup } from '../utils/popup';
+import FloatingWindow from '../components/FloatingWindow';
+import InventoryQuickView from '../components/InventoryQuickView';
 import TradePanel from '../components/TradePanel';
 import TradePrintModal from '../components/TradePrintModal';
 import { tradeAPI } from '../services/api';
@@ -11,7 +14,7 @@ import { tradeAPI } from '../services/api';
 function DualTradeForm() {
   const navigate = useNavigate();
   const { id: urlTradeId } = useParams(); // URL에서 전표 ID 추출
-  
+
   // 좌우 위치 설정 (localStorage에 저장)
   const [layoutOrder, setLayoutOrder] = useState(() => {
     const saved = localStorage.getItem('dualTradeLayout');
@@ -45,6 +48,9 @@ function DualTradeForm() {
 
   // 확인 모달
   const [confirmModal, setConfirmModal] = useState({ isOpen: false, onConfirm: null });
+
+  // [플로팅] 재고 현황 윈도우 표시 여부
+  const [showInventoryWindow, setShowInventoryWindow] = useState(false);
 
   // URL로 전달된 전표 정보
   const [initialTrade, setInitialTrade] = useState({ id: null, type: null });
@@ -102,7 +108,7 @@ function DualTradeForm() {
   // 위치 변경
   const toggleLayout = () => {
     const hasAnyChanges = panelDirtyState.left || panelDirtyState.right;
-    
+
     if (hasAnyChanges) {
       setConfirmModal({
         isOpen: true,
@@ -135,12 +141,12 @@ function DualTradeForm() {
   // 드래그 중
   const handleMouseMove = useCallback((e) => {
     if (!isDragging || !containerRef.current) return;
-    
+
     const container = containerRef.current;
     const rect = container.getBoundingClientRect();
     const x = e.clientX - rect.left;
     let newRatio = x / rect.width;
-    
+
     // 최소/최대 비율 제한 (30% ~ 70%)
     newRatio = Math.max(0.3, Math.min(0.7, newRatio));
     setSplitRatio(newRatio);
@@ -162,7 +168,7 @@ function DualTradeForm() {
       document.body.style.cursor = 'col-resize';
       document.body.style.userSelect = 'none';
     }
-    
+
     return () => {
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
@@ -207,25 +213,16 @@ function DualTradeForm() {
   };
 
   return (
-    <div style={{ 
-      display: 'flex', 
-      flexDirection: 'column', 
+    <div style={{
+      display: 'flex',
+      flexDirection: 'column',
       height: 'calc(100vh - 60px)',
       backgroundColor: '#f5f6fa'
     }}>
       {/* 헤더 */}
-      <div style={{ 
-        display: 'flex', 
-        justifyContent: 'space-between', 
-        alignItems: 'center',
-        padding: '0.5rem 1rem',
-        backgroundColor: '#fff',
-        borderBottom: '1px solid #ddd',
-        boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
-        flexShrink: 0
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-          <h1 style={{ margin: 0, fontSize: '1.2rem', fontWeight: '700', color: '#2c3e50' }}>
+      <div className="page-header" style={{ display: 'flex', alignItems: 'center' }}>
+        <div className="page-header-actions-left" style={{ display: 'flex', alignItems: 'center' }}>
+          <h1 className="page-title" style={{ margin: 0 }}>
             📋 전표 등록
           </h1>
           <button
@@ -237,7 +234,7 @@ function DualTradeForm() {
               border: 'none',
               borderRadius: '6px',
               cursor: 'pointer',
-              fontSize: '0.85rem',
+              fontSize: '0.9rem',
               fontWeight: '600',
               display: 'flex',
               alignItems: 'center',
@@ -247,8 +244,8 @@ function DualTradeForm() {
             title="좌우 위치 변경"
           >
             🔄 위치 변경
-            <span style={{ 
-              fontSize: '0.75rem', 
+            <span style={{
+              fontSize: '0.75rem',
               opacity: 0.9,
               backgroundColor: 'rgba(255,255,255,0.2)',
               padding: '0.15rem 0.4rem',
@@ -275,7 +272,7 @@ function DualTradeForm() {
               ↔ 크기 초기화
             </button>
           )}
-          
+
           {/* 카드 색상 선택 */}
           <div style={{ position: 'relative' }}>
             <button
@@ -294,19 +291,19 @@ function DualTradeForm() {
               }}
               title="카드 배경색 선택"
             >
-              <span 
-                style={{ 
-                  width: '18px', 
-                  height: '18px', 
-                  backgroundColor: cardColor, 
+              <span
+                style={{
+                  width: '18px',
+                  height: '18px',
+                  backgroundColor: cardColor,
                   border: '1px solid #ccc',
                   borderRadius: '3px'
-                }} 
+                }}
               />
               <span>배경색</span>
               <span style={{ fontSize: '0.7rem' }}>▼</span>
             </button>
-            
+
             {showColorPicker && (
               <div style={{
                 position: 'absolute',
@@ -349,10 +346,10 @@ function DualTradeForm() {
                       type="color"
                       value={cardColor}
                       onChange={(e) => handleCardColorChange(e.target.value)}
-                      style={{ 
-                        width: '40px', 
-                        height: '28px', 
-                        border: '1px solid #ccc', 
+                      style={{
+                        width: '40px',
+                        height: '28px',
+                        border: '1px solid #ccc',
                         borderRadius: '4px',
                         cursor: 'pointer'
                       }}
@@ -364,37 +361,48 @@ function DualTradeForm() {
             )}
           </div>
         </div>
-        
-        <div style={{ display: 'flex', gap: '0.5rem' }}>
-          <button 
+
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <button
+            onClick={() => setShowInventoryWindow(!showInventoryWindow)}
             className="btn btn-secondary"
-            onClick={() => safeNavigate('/trades')}
-            style={{ padding: '0.4rem 0.8rem', fontSize: '0.9rem' }}
-          >
-            전표 목록
-          </button>
-          <button 
-            className="btn btn-secondary"
-            onClick={() => {
-              if (hasUnsavedChanges) {
-                setNavBlockModal({ isOpen: true, targetPath: -1 });
-              } else {
-                navigate(-1);
-              }
+            style={{
+              fontSize: '0.9rem',
+              padding: '6px 12px',
+              whiteSpace: 'nowrap',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.4rem',
+              backgroundColor: showInventoryWindow ? '#3498db' : undefined,
+              color: showInventoryWindow ? 'white' : undefined,
+              border: showInventoryWindow ? '1px solid #2980b9' : undefined
             }}
-            style={{ padding: '0.4rem 0.8rem', fontSize: '0.9rem' }}
           >
-            닫기
+            📦 재고 조회(플로팅)
+          </button>
+          <button
+            onClick={openProductPopup}
+            className="btn btn-secondary"
+            style={{
+              fontSize: '0.9rem',
+              padding: '6px 12px',
+              whiteSpace: 'nowrap',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.4rem'
+            }}
+          >
+            🛠️ 품목 관리 (팝업)
           </button>
         </div>
       </div>
 
       {/* 메인 컨텐츠 - 좌우 분할 */}
-      <div 
+      <div
         ref={containerRef}
-        style={{ 
-          flex: 1, 
-          display: 'flex', 
+        style={{
+          flex: 1,
+          display: 'flex',
           padding: '0.5rem',
           overflow: 'hidden',
           minHeight: 0,
@@ -402,7 +410,7 @@ function DualTradeForm() {
         }}
       >
         {/* 왼쪽 패널 */}
-        <div style={{ 
+        <div style={{
           flex: `0 0 calc(${splitRatio * 100}% - 4px)`,
           display: 'flex',
           minWidth: '300px',
@@ -425,7 +433,7 @@ function DualTradeForm() {
         </div>
 
         {/* 리사이즈 핸들 */}
-        <div 
+        <div
           onMouseDown={handleMouseDown}
           style={{
             width: '8px',
@@ -457,7 +465,7 @@ function DualTradeForm() {
         </div>
 
         {/* 오른쪽 패널 */}
-        <div style={{ 
+        <div style={{
           flex: 1,
           display: 'flex',
           minWidth: '300px',
@@ -500,6 +508,18 @@ function DualTradeForm() {
           onClose={() => setPrintModal({ isOpen: false, tradeId: null })}
           tradeId={printModal.tradeId}
         />
+      )}
+
+      {/* [플로팅] 재고 조회 윈도우 */}
+      {showInventoryWindow && (
+        <FloatingWindow
+          title="📦 재고 현황 조회"
+          onClose={() => setShowInventoryWindow(false)}
+          initialPosition="center"
+          size={{ width: 'auto', height: 600 }}
+        >
+          <InventoryQuickView />
+        </FloatingWindow>
       )}
 
       {/* 위치 변경 확인 모달 */}

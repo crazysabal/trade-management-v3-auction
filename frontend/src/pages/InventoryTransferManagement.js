@@ -171,11 +171,10 @@ const InventoryTransferManagement = () => {
     };
 
     return (
-        <div className="inventory-transfer-page fade-in" style={{ padding: '2rem', height: 'calc(100vh - 60px)', display: 'flex', flexDirection: 'column' }}>
-            <div style={{ marginBottom: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div className="inventory-transfer-page fade-in" style={{ padding: 0, height: 'calc(100vh - 60px)', display: 'flex', flexDirection: 'column' }}>
+            <div className="page-header" style={{ display: 'flex', alignItems: 'center' }}>
                 <div>
-                    <h1 style={{ margin: 0, color: '#2c3e50' }}>📦 재고 이동 (Kanban)</h1>
-                    <p style={{ margin: '0.5rem 0 0', color: '#7f8c8d' }}>카드를 드래그하여 창고 간 재고를 이동하세요.</p>
+                    <h1 className="page-title" style={{ margin: 0 }}>📦 재고 이동 (Kanban)</h1>
                 </div>
                 <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginRight: '1rem', backgroundColor: '#f1f2f6', padding: '0.2rem 0.8rem', borderRadius: '20px' }}>
@@ -192,7 +191,7 @@ const InventoryTransferManagement = () => {
                     </div>
                     <input
                         type="text"
-                        placeholder="품목, 출하주, 등급 등 검색 (띄어쓰기)..."
+                        placeholder="품목, 출하주, 매입처, 등급 검색 (띄어쓰기)..."
                         value={searchKeyword}
                         onChange={(e) => setSearchKeyword(e.target.value)}
                         style={{ padding: '0.5rem', border: '1px solid #ddd', borderRadius: '4px', width: '300px' }}
@@ -333,7 +332,8 @@ const InventoryTransferManagement = () => {
                                             }}>
                                                 <div style={{ display: 'flex', alignItems: 'center', gap: '4px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '60%' }}>
                                                     <span>👤</span>
-                                                    <span title={`${item.sender} (${item.company_name})`}>{item.sender}</span>
+                                                    <span title={item.sender}>{item.sender}</span>
+                                                    {item.company_name && <span style={{ color: '#9ca3af', fontSize: '0.75rem' }}>({item.company_name})</span>}
                                                 </div>
                                                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                                     <span>{item.purchase_date}</span>
