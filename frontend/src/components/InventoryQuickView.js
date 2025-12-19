@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { purchaseInventoryAPI } from '../services/api';
 
-const InventoryQuickView = () => {
+const InventoryQuickView = ({ inventoryAdjustments = {}, refreshKey, onInventoryLoaded }) => {
     const [inventory, setInventory] = useState([]);
     const [filteredInventory, setFilteredInventory] = useState([]);
     const [loading, setLoading] = useState(false);
@@ -9,7 +9,71 @@ const InventoryQuickView = () => {
 
     useEffect(() => {
         loadInventory();
-    }, []);
+    }, [refreshKey]);
+
+    // 조정 내역(inventoryAdjustments)에 있지만 목록에 없는(소진된) 재고 불러오기
+    useEffect(() => {
+        const fetchMissingItems = async () => {
+            const currentIds = new Set(inventory.map(item => String(item.id)));
+            const adjustedIds = Object.keys(inventoryAdjustments);
+            const missingIds = adjustedIds.filter(id => !currentIds.has(String(id)));
+
+            if (missingIds.length === 0) return;
+
+            try {
+                const promises = missingIds.map(id => purchaseInventoryAPI.getById(id));
+                const responses = await Promise.all(promises);
+                const newItems = responses
+                    .map(res => {
+                        const data = res.data?.data || res.data;
+                        // getById는 { inventory: {...}, matchings: [...] } 형태를 반환함
+                        if (data && data.inventory) {
+                            return data.inventory;
+                        }
+                        return data;
+                    })
+                    .filter(item => item && item.id);
+
+                if (newItems.length > 0) {
+                    setInventory(prev => {
+                        // 중복 방지 (비동기 처리 중 이미 추가되었을 수 있음)
+                        const existingIds = new Set(prev.map(p => String(p.id)));
+                        const uniqueNewItems = newItems.filter(item => !existingIds.has(String(item.id)));
+
+                        // 합치고 정렬 (품목명 > 출하주 > 등급(순번) > 매입일자 순)
+                        const merged = [...prev, ...uniqueNewItems];
+                        return merged.sort((a, b) => {
+                            // 1. 품목명
+                            const nameA = a.product_name || '';
+                            const nameB = b.product_name || '';
+                            const nameDiff = nameA.localeCompare(nameB, 'ko');
+                            if (nameDiff !== 0) return nameDiff;
+
+                            // 2. 출하주
+                            const senderA = a.sender || '';
+                            const senderB = b.sender || '';
+                            const senderDiff = senderA.localeCompare(senderB, 'ko');
+                            if (senderDiff !== 0) return senderDiff;
+
+                            // 3. 등급 순번 (sort_order)
+                            const orderA = a.sort_order || 9999;
+                            const orderB = b.sort_order || 9999;
+                            if (orderA !== orderB) return orderA - orderB;
+
+                            // 4. 매입일자
+                            const dateA = new Date(a.purchase_date || 0);
+                            const dateB = new Date(b.purchase_date || 0);
+                            return dateA - dateB;
+                        });
+                    });
+                }
+            } catch (err) {
+                console.error("누락된 재고 정보 조회 실패:", err);
+            }
+        };
+
+        fetchMissingItems();
+    }, [inventoryAdjustments, inventory]);
 
     const loadInventory = async () => {
         setLoading(true);
@@ -30,38 +94,53 @@ const InventoryQuickView = () => {
         }
     };
 
-    const handleSearch = (e) => {
-        const rawTerm = e.target.value;
-        setSearchTerm(rawTerm);
+    // 원본 데이터와 조정 데이터를 합쳐서 표시 데이터 계산
+    useEffect(() => {
+        if (!inventory.length) return;
 
-        // 검색어를 공백으로 분리하고 빈 문자열 제거
-        const terms = rawTerm.toLowerCase().split(/\s+/).filter(t => t.length > 0);
+        const applyAdjustments = (items) => {
+            return items.map(item => {
+                const delta = inventoryAdjustments[item.id] || 0;
+                if (delta === 0) return item;
+                return {
+                    ...item,
+                    remaining_quantity: (parseFloat(item.remaining_quantity) || 0) + delta
+                };
+            });
+        };
 
-        if (terms.length === 0) {
-            setFilteredInventory(inventory);
-            return;
+        const adjustedInventory = applyAdjustments(inventory);
+
+        // 부모 컴포넌트에 재고 목록 전달 (전표 수정 시 검증용)
+        // refreshKey가 바뀌거나 재고가 로드될 때마다 업데이트
+        if (onInventoryLoaded) {
+            onInventoryLoaded(adjustedInventory);
         }
 
-        const filtered = inventory.filter(item => {
-            // 중량 표시값 계산 (5.00 -> 5)
-            const weightRaw = item.weight || item.product_weight;
-            const weightStr = weightRaw ? `${parseFloat(weightRaw)}kg` : '';
+        // 검색어 필터링 적용
+        if (!searchTerm) {
+            setFilteredInventory(adjustedInventory);
+        } else {
+            // ... (rest of logic)
+            const terms = searchTerm.toLowerCase().split(/\s+/).filter(t => t.length > 0);
+            const filtered = adjustedInventory.filter(item => {
+                const searchTarget = `
+                    ${item.product_name || ''} 
+                    ${item.sender || ''} 
+                    ${item.shipper_location || ''} 
+                    ${item.grade || ''}
+                `.toLowerCase();
+                return terms.every(term => searchTarget.includes(term));
+            });
+            setFilteredInventory(filtered);
+        }
+    }, [inventory, inventoryAdjustments, searchTerm]);
 
-            // 검색 대상 필드들을 하나의 문자열로 결합
-            const searchableText = [
-                item.product_name,
-                item.company_name,
-                item.sender,
-                item.shipper_location,
-                weightStr,
-                item.grade
-            ].filter(Boolean).join(' ').toLowerCase();
-
-            // 모든 검색어가 포함되어야 함 (AND 조건)
-            return terms.every(term => searchableText.includes(term));
-        });
-        setFilteredInventory(filtered);
+    const handleSearch = (e) => {
+        setSearchTerm(e.target.value);
     };
+
+
 
     // 헬퍼 함수들 (SaleFromInventory.js와 동일)
     const formatNumber = (value) => new Intl.NumberFormat('ko-KR').format(value || 0);
@@ -118,7 +197,7 @@ const InventoryQuickView = () => {
                         {searchTerm ? '검색 결과가 없습니다.' : '재고 데이터가 없습니다.'}
                     </div>
                 ) : (
-                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
                         <thead style={{ position: 'sticky', top: 0, backgroundColor: '#f8f9fa', zIndex: 1 }}>
                             <tr style={{ backgroundColor: '#34495e', color: 'white' }}>
                                 <th style={{ padding: '0.6rem 0.5rem', textAlign: 'left', whiteSpace: 'nowrap' }}>품목</th>
@@ -150,7 +229,16 @@ const InventoryQuickView = () => {
                                         <td style={{ padding: '0.5rem', whiteSpace: 'nowrap', color: '#666' }}>
                                             {item.sender || '-'}
                                         </td>
-                                        <td style={{ padding: '0.5rem', textAlign: 'right', fontWeight: 'bold', color: item.remaining_quantity <= 0 ? '#e74c3c' : '#27ae60' }}>
+                                        <td style={{
+                                            padding: '0.5rem',
+                                            textAlign: 'right',
+                                            fontWeight: 'bold',
+                                            color: item.remaining_quantity <= 0
+                                                ? '#e74c3c' // 0 or less -> Red
+                                                : (inventoryAdjustments[item.id] !== undefined && inventoryAdjustments[item.id] !== 0)
+                                                    ? '#3498db' // Modified but positive -> Blue
+                                                    : '#27ae60' // Untouched -> Green
+                                        }}>
                                             {formatNumber(item.remaining_quantity)}
                                         </td>
                                         <td style={{ padding: '0.5rem', textAlign: 'right', whiteSpace: 'nowrap' }}>

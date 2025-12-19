@@ -9,6 +9,8 @@
     background-color: #fff;
     border-radius: 8px;
     overflow: hidden;
+    font-size: 0.9rem;
+    /* Global standard */
 }
 
 /* --- Header Section --- */
@@ -18,6 +20,7 @@
     background-color: #fff;
     border-bottom: 1px solid #eee;
     padding-bottom: 0.5rem;
+    font-size: 0.9rem;
 }
 
 .trade-toolbar {
@@ -49,8 +52,9 @@
 .trade-table {
     width: 100%;
     border-collapse: collapse;
-    table-layout: fixed;
-    /* Important for responsive columns to behave */
+    height: 100%;
+    font-size: 0.9rem;
+    /* Unified table font size */
 }
 
 .trade-table thead {
@@ -67,52 +71,57 @@
     border-bottom: 2px solid #ddd;
     white-space: nowrap;
     font-size: 0.9rem;
+    /* Match body */
     color: #555;
-    /* overflow: hidden; */
-    /* text-overflow: ellipsis; */
 }
 
 /* Table Column Widths - Responsive (Percentages) */
 .col-no {
-    width: 6%;
-    min-width: 40px;
+    width: 50px;
+    min-width: 50px;
 }
 
 .col-product {
-    width: 28%;
-    min-width: 150px;
+    min-width: 120px;
 }
 
 .col-qty {
-    width: 10%;
-    min-width: 60px;
+    width: 70px;
+    min-width: 70px;
 }
 
 .col-price {
-    width: 13%;
-    min-width: 80px;
+    width: 90px;
+    min-width: 90px;
 }
 
 .col-amount {
-    width: 15%;
+    width: 90px;
     min-width: 90px;
 }
 
 .col-location {
-    width: 13%;
-    min-width: 90px;
+    min-width: 80px;
 }
 
 .col-owner {
-    width: 15%;
-    min-width: 90px;
+    min-width: 80px;
+}
+
+.col-remarks {
+    min-width: 100px;
+}
+
+.col-action {
+    width: 50px;
+    min-width: 50px;
 }
 
 .trade-table td {
     padding: 2px 4px;
-    /* Reduced vertical padding */
     border-bottom: 1px solid #eee;
     vertical-align: middle;
+    font-size: 0.9rem;
 }
 
 .trade-table-row {
@@ -140,7 +149,6 @@
     border-radius: 4px;
     font-size: 0.9rem;
     box-sizing: border-box;
-    /* Ensure padding doesn't break width */
 }
 
 .trade-input-table:focus {
@@ -161,7 +169,8 @@
     cursor: grab;
     text-align: center;
     color: #aaa;
-    font-size: 1.2rem;
+    font-size: 1.1rem;
+    /* Slightly larger for icon consistency */
     line-height: 1;
 }
 
@@ -182,18 +191,25 @@
 .trade-table-footer {
     background-color: #f8f9fa;
     font-weight: bold;
+    position: sticky;
+    bottom: 0;
+    z-index: 20;
+    box-shadow: 0 -2px 5px rgba(0, 0, 0, 0.05);
+    /* Optional: visual separation */
 }
 
 .trade-total-label {
     padding: 8px;
     text-align: right;
+    font-size: 0.9rem;
 }
 
 .trade-total-value {
     padding: 8px;
     text-align: right;
     color: #c62828;
-    font-size: 1.1rem;
+    font-size: 1rem;
+    /* Slightly emphasized */
 }
 
 /* --- Form Elements --- */
@@ -216,20 +232,21 @@
     display: block;
     margin-bottom: 0.25rem;
     font-weight: 500;
-    font-size: 0.95rem;
+    font-size: 0.9rem;
+    /* Standardized label size */
 }
 
 .trade-table-row.selected {
     background-color: #e3f2fd;
 }
 
-
 .trade-label {
     display: block;
     margin-bottom: 0.25rem;
     font-weight: 500;
     color: #555;
-    font-size: 0.95rem;
+    font-size: 0.9rem;
+    /* Standardized label size */
 }
 
 .trade-label.required::after {
@@ -249,6 +266,9 @@
     font-size: 0.9rem;
     flex: 1;
     text-align: center;
+    height: 34px;
+    /* Unified height */
+    box-sizing: border-box;
 }
 
 .trade-input {
@@ -258,22 +278,14 @@
     font-size: 0.9rem;
     width: 100%;
     box-sizing: border-box;
+    height: 34px;
+    /* Unified height */
 }
 
 .trade-input:focus {
     outline: none;
     border-color: #3498db;
     box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.1);
-}
-
-.trade-date-input {
-    flex: 1;
-    padding: 0 0.5rem;
-    font-size: 0.9rem;
-    height: 36px;
-    box-sizing: border-box;
-    border: 1px solid #ddd;
-    border-radius: 4px;
 }
 
 .trade-select-container {
@@ -290,7 +302,8 @@
 .btn-icon {
     padding: 0 10px;
     min-width: auto;
-    height: 36px;
+    height: 34px;
+    /* Unified height */
     display: flex;
     align-items: center;
     justify-content: center;
@@ -298,7 +311,8 @@
 
 .btn-custom {
     padding: 0 0.75rem;
-    height: 36px;
+    height: 34px;
+    /* Unified height */
     font-size: 0.9rem;
     border: none;
     border-radius: 4px;
@@ -371,7 +385,6 @@
     padding: 0.75rem;
     display: flex;
     flex-direction: column;
-    /* background-color set via inline style for dynamic color */
     border-radius: 8px;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
@@ -386,7 +399,8 @@
 
 .trade-card-title {
     margin: 0;
-    font-size: 1.1rem;
+    font-size: 1rem;
+    /* Standardized card title */
     font-weight: 600;
     color: #2c3e50;
 }
@@ -409,7 +423,8 @@
 
 .balance-list {
     margin-bottom: 0.5rem;
-    font-size: 1rem;
+    font-size: 0.9rem;
+    /* Unified */
     flex-shrink: 0;
 }
 
@@ -451,12 +466,14 @@
 
 .balance-box-label {
     font-weight: 600;
-    font-size: 1rem;
+    font-size: 0.9rem;
+    /* Unified */
 }
 
 .balance-box-value {
     font-weight: 700;
-    font-size: 1rem;
+    font-size: 0.95rem;
+    /* Slightly reduced */
 }
 
 /* --- Payment History --- */
@@ -470,7 +487,8 @@
 
 .payment-add-btn {
     padding: 4px 10px;
-    font-size: 0.9rem;
+    font-size: 0.85rem;
+    /* Small button */
     border: none;
     border-radius: 4px;
     cursor: pointer;
@@ -518,7 +536,8 @@
     padding: 2px 6px;
     border-radius: 4px;
     color: white;
-    font-size: 0.8rem;
+    font-size: 0.75rem;
+    /* Unified small badge */
     margin-right: 6px;
 }
 
@@ -536,6 +555,7 @@
 
 .payment-amount {
     font-weight: 600;
+    font-size: 0.9rem;
 }
 
 .payment-actions {
@@ -586,10 +606,12 @@
 
 .balance-text-label {
     color: #666;
+    font-size: 0.9rem;
 }
 
 .balance-text-value {
     font-weight: 600;
+    font-size: 0.9rem;
 }
 
 .payment-section-wrapper {
@@ -606,6 +628,7 @@
     display: flex;
     align-items: center;
     gap: 0.4rem;
+    font-size: 0.9rem;
 }
 
 .payment-meta-row {
@@ -614,7 +637,7 @@
 }
 
 .tag-modified {
-    font-size: 0.7rem;
+    font-size: 0.75rem;
     background-color: #ffc107;
     color: #333;
     padding: 2px 5px;
@@ -622,11 +645,9 @@
 }
 
 .tag-pending-count {
-    font-size: 0.95rem;
+    font-size: 0.9rem;
     color: #ffc107;
 }
-
-/* Small Button Override */
 
 /* Modal Overlay - Center Alignment */
 .modal-overlay {
@@ -636,8 +657,17 @@
     width: 100%;
     height: 100%;
     background-color: rgba(0, 0, 0, 0.5);
-    display: flex;
-    justify-content: center;
     align-items: center;
     z-index: 9999;
+}
+
+.modal-input-highlight {
+    border: 1px solid #ddd !important;
+    transition: all 0.2s;
+}
+
+.modal-input-highlight:focus {
+    border-color: #3498db !important;
+    outline: none !important;
+    box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.1);
 }

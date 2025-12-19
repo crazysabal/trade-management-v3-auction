@@ -18,6 +18,10 @@ function TradePanel({
   onSaveSuccess,       // 저장 성공 콜백
   onPrint,             // 출력 콜백
   onDirtyChange,       // 변경사항 상태 변경 콜백
+
+  onInventoryUpdate,   // 재고 수량 업데이트 콜백
+  onTradeChange,       // 전표 변경(저장/삭제) 콜백 (재고 리프레시용)
+  inventoryMap = {},   // 검증용 재고 맵 (from DualTradeForm)
   // fontScale 제거됨 - 고정 폰트 크기 사용
   cardColor = '#ffffff', // 카드 배경색
 }) {
@@ -133,6 +137,7 @@ function TradePanel({
   const quantityRefs = useRef([]);
   const unitPriceRefs = useRef([]);
   const shipperLocationRefs = useRef([]);
+  const focusValueRef = useRef({}); // 입력 포커스 시 값 저장용
   const senderRefs = useRef([]);
   const notesRefs = useRef([]);
   const modalConfirmRef = useRef(null);
@@ -286,10 +291,19 @@ function TradePanel({
       setMaster(data.master);
 
       // details 로드
-      const loadedDetails = data.details.map((d, index) => ({
-        ...d,
-        rowIndex: index
-      }));
+      const loadedDetails = data.details.map((d, index) => {
+        // 저장된 전표의 경우, 현재 잔량 + 이미 매칭된 수량 = 수정 가능한 최대 수량
+        const availableMax = d.inventory_remaining !== undefined
+          ? (parseFloat(d.inventory_remaining) || 0) + (parseFloat(d.matched_quantity) || 0)
+          : undefined;
+
+        return {
+          ...d,
+          inventory_id: d.matched_inventory_id || d.inventory_id, // API 응답 필드 매핑
+          max_quantity: availableMax, // 유효성 검사를 위한 최대 수량 설정
+          rowIndex: index
+        };
+      });
       setDetails(loadedDetails);
 
       // 초기 데이터 저장
@@ -457,6 +471,11 @@ function TradePanel({
     } else {
       setCompanySummary(null);
     }
+
+    // 재고 목록 및 임시 차감 상태 초기화
+    if (onTradeChange) {
+      onTradeChange();
+    }
   };
 
   // 거래처 변경
@@ -525,6 +544,15 @@ function TradePanel({
       }
     } else {
       // 외부 드래그(재고 목록 등)인 경우
+      const inventoryJson = e.dataTransfer.getData('application/json'); // Note: getData not always available in dragover security model, but dropEffect works
+      // 외부 드래그 감지는 inventoryJson이 있거나(일부 브라우저), 내부가 아니면 외부로 간주
+
+      if (isPurchase) {
+        e.dataTransfer.dropEffect = 'none';
+        setDragOverIndex(null);
+        return;
+      }
+
       e.dataTransfer.dropEffect = 'copy';
       setDragOverIndex(index); // 드롭 위치 표시
     }
@@ -559,6 +587,13 @@ function TradePanel({
 
     // 1. 외부 재고 아이템 드래그 앤 드롭
     if (inventoryJson) {
+      // 매입 전표인 경우 차단
+      if (isPurchase) {
+        showModal('warning', '작업 불가', '매입 전표에는 재고를 추가할 수 없습니다.\n재고는 매출 전표에서만 사용할 수 있습니다.');
+        setDragOverIndex(null);
+        return;
+      }
+
       // 거래처 선택 확인
       if (!master.company_id) {
         showModal('warning', '거래처 미선택', '먼저 거래처를 선택해주세요.');
@@ -609,12 +644,23 @@ function TradePanel({
 
   // 재고 입력 모달 확인 핸들러
   const handleInventoryInputConfirm = () => {
-    const { inventory: item, quantity, unitPrice, dropIndex } = inventoryInputModal;
+    const { inventory: item, quantity, unitPrice, dropIndex, maxQuantity } = inventoryInputModal;
     const qty = parseFloat(quantity) || 0;
     const price = parseFloat(unitPrice) || 0;
 
+    // DEBUG: 값 확인
+    // showModal('info', 'DEBUG', `입력값: ${qty} (Type: ${typeof qty})\n최대값: ${maxQuantity} (Type: ${typeof maxQuantity})`);
+
+    // 만약 maxQuantity가 undefined면 0으로 취급하여 검증
+    const limit = maxQuantity ?? 0;
+
     if (qty <= 0) {
       showModal('warning', '입력 오류', '수량을 입력하세요.');
+      return;
+    }
+
+    if (qty > limit) {
+      showModal('warning', '수량 초과', `재고 잔량을 초과할 수 없습니다.\n(최대: ${limit})`);
       return;
     }
 
@@ -630,7 +676,8 @@ function TradePanel({
       shipper_location: item.shipper_location || '',
       sender_name: item.sender || '',
       notes: '',
-      inventory_id: item.id
+      inventory_id: item.id,
+      max_quantity: item.remaining_quantity || 0 // Validation limit
     };
 
     const newDetails = [...details];
@@ -655,10 +702,84 @@ function TradePanel({
 
     // 모달 닫기
     setInventoryInputModal({ isOpen: false, inventory: null, quantity: '', unitPrice: '', maxQuantity: 0, dropIndex: null });
+
+    // 재고 수량 임시 차감 알림
+    if (onInventoryUpdate && item.id) {
+      onInventoryUpdate(item.id, -qty);
+    }
   };
 
   const handleDetailChange = (index, field, value) => {
     const newDetails = [...details];
+
+    // 재고 수량 동기화 및 초과 검증
+    if (field === 'quantity' && newDetails[index].inventory_id && onInventoryUpdate) {
+      const oldQty = parseFloat(newDetails[index].quantity) || 0;
+      const newQty = value === '' ? 0 : (parseFloat(value) || 0);
+
+      // 초과 검증
+      const maxQty = newDetails[index].max_quantity;
+
+      // 1. 신규 드롭된 항목 (max_quantity 존재)
+      if (maxQty !== undefined) {
+        if (newQty > maxQty) {
+          showModal('warning', '수량 초과', `재고 잔량을 초과할 수 없습니다.\n(최대: ${maxQty})`);
+
+          // 값 복원 (포커스 시 저장된 원본 값으로)
+          const originalVal = focusValueRef.current[index] !== undefined ? parseFloat(focusValueRef.current[index]) : oldQty;
+
+          // 재고 상태 동기화:
+          // 입력 전(15) -> 입력 중(1) -> 입력 오류(18)
+          // 현재 시스템(InventoryMap)은 1만큼 차감된 상태 (1이 유효하게 입력되었으므로)
+          // 되돌리려면: 1 -> 15 (14 추가 사용)
+          // diff = 15 - 1 = 14.
+          // onInventoryUpdate(-14) 호출.
+          if (!isNaN(originalVal) && originalVal !== oldQty) {
+            const revertDiff = originalVal - oldQty;
+            if (revertDiff !== 0) {
+              onInventoryUpdate(newDetails[index].inventory_id, -revertDiff);
+            }
+          }
+
+          newDetails[index].quantity = originalVal;
+          setDetails(newDetails);
+          return;
+        }
+      }
+      // 2. 기존 저장된 항목 (max_quantity 없음) -> inventoryMap 참조 검증
+      else if (inventoryMap && inventoryMap[newDetails[index].inventory_id]) {
+        const available = parseFloat(inventoryMap[newDetails[index].inventory_id].remaining_quantity) || 0;
+        const additionalNeeded = newQty - oldQty;
+
+        // 추가로 필요한 양이 가용 재고보다 많으면 차단 (단, 수량이 줄어드는 경우는 항상 허용)
+        if (additionalNeeded > 0 && additionalNeeded > available) {
+          showModal('warning', '수량 초과', `가용 재고 부족\n(추가 필요: ${additionalNeeded}, 가용: ${available})`);
+
+          // 값 복원 (포커스 시 저장된 원본 값으로)
+          const originalVal = focusValueRef.current[index] !== undefined ? parseFloat(focusValueRef.current[index]) : oldQty;
+
+          if (!isNaN(originalVal) && originalVal !== oldQty) {
+            const revertDiff = originalVal - oldQty;
+            if (revertDiff !== 0) {
+              onInventoryUpdate(newDetails[index].inventory_id, -revertDiff);
+            }
+          }
+
+          newDetails[index].quantity = originalVal;
+          setDetails(newDetails);
+          return;
+        }
+      }
+
+      // 숫자로 변환 가능한 경우에만 차액 계산
+      if (!isNaN(newQty)) {
+        const diff = newQty - oldQty;
+        if (diff !== 0) {
+          onInventoryUpdate(newDetails[index].inventory_id, -diff);
+        }
+      }
+    }
+
     newDetails[index][field] = value;
 
     // 품목 선택 시 단위 자동 입력
@@ -691,14 +812,33 @@ function TradePanel({
     }
   };
 
+  const handleDeleteRow = (index) => {
+    if (index === null || index === undefined || index < 0 || index >= details.length) return;
+
+    const newDetails = details.filter((_, i) => i !== index);
+
+    // 삭제된 행에 재고 ID가 있으면 수량 복원 알림
+    const deletedRow = details[index];
+    if (onInventoryUpdate && deletedRow.inventory_id && deletedRow.quantity) {
+      onInventoryUpdate(deletedRow.inventory_id, parseFloat(deletedRow.quantity));
+    }
+
+    setDetails(newDetails);
+
+    // 선택된 행이 삭제된 행이면 선택 해제, 뒤쪽 행이면 인덱스 조정
+    if (selectedRowIndex === index) {
+      setSelectedRowIndex(null);
+    } else if (selectedRowIndex > index) {
+      setSelectedRowIndex(selectedRowIndex - 1);
+    }
+  };
+
   const removeSelectedRow = () => {
     if (selectedRowIndex === null) {
       showModal('warning', '선택 필요', '삭제할 행을 선택하세요.');
       return;
     }
-    const newDetails = details.filter((_, i) => i !== selectedRowIndex);
-    setDetails(newDetails);
-    setSelectedRowIndex(null);
+    handleDeleteRow(selectedRowIndex);
   };
 
   // 키보드 네비게이션
@@ -849,7 +989,8 @@ function TradePanel({
           tax_amount: 0,
           shipper_location: d.shipper_location || '',
           sender_name: d.sender_name || '',
-          notes: d.notes || ''
+          notes: d.notes || '',
+          inventory_id: d.inventory_id // 재고 매칭을 위해 ID 전달
         }))
       };
 
@@ -911,6 +1052,11 @@ function TradePanel({
       // 저장 후 전표 다시 로드
       await loadTrade(savedTradeId);
 
+      // 전표 변경 알림 (재고 목록 리프레시 등)
+      if (onTradeChange) {
+        onTradeChange();
+      }
+
       if (onSaveSuccess) {
         onSaveSuccess(savedTradeId);
       }
@@ -941,6 +1087,11 @@ function TradePanel({
       showModal('success', '삭제 완료', '전표가 삭제되었습니다.');
       // 삭제 후 같은 거래처 유지
       resetForm(master.trade_date, master.company_id);
+
+      // 전표 변경 알림 (재고 목록 리프레시 등)
+      if (onTradeChange) {
+        onTradeChange();
+      }
     } catch (error) {
       console.error('삭제 오류:', error);
       setDeleteConfirmModal({ isOpen: false, confirmText: '' });
@@ -1241,18 +1392,14 @@ function TradePanel({
                 >
                   + 추가
                 </button>
-                <button
-                  type="button"
-                  onClick={removeSelectedRow}
-                  disabled={!master.company_id}
-                  className="btn btn-custom btn-danger btn-sm"
-                >
-                  삭제
-                </button>
               </div>
             </div>
 
-            <div className="trade-table-container">
+            <div
+              className="trade-table-container"
+              onDragOver={(e) => handleDragOver(e, details.length)}
+              onDrop={(e) => handleDrop(e, details.length)}
+            >
               <table className="trade-table">
                 <thead>
                   <tr>
@@ -1261,9 +1408,10 @@ function TradePanel({
                     <th className="col-qty">수량</th>
                     <th className="col-price">단가</th>
                     <th className="col-amount">금액</th>
-                    {isPurchase && <th className="col-location">상차지</th>}
+                    {isPurchase && <th className="col-location">출하지</th>}
                     {isPurchase && <th className="col-owner">출하주</th>}
-                    <th>비고</th>
+                    <th className="col-remarks">비고</th>
+                    <th className="col-action"></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1272,8 +1420,14 @@ function TradePanel({
                       key={index}
                       draggable={!isMobile}
                       onDragStart={(e) => handleDragStart(e, index)}
-                      onDragOver={(e) => handleDragOver(e, index)}
-                      onDrop={(e) => handleDrop(e, index)}
+                      onDragOver={(e) => {
+                        e.stopPropagation();
+                        handleDragOver(e, index);
+                      }}
+                      onDrop={(e) => {
+                        e.stopPropagation();
+                        handleDrop(e, index);
+                      }}
                       onDragEnd={handleDragEnd}
                       onClick={() => setSelectedRowIndex(index)}
                       className={`trade-table-row ${selectedRowIndex === index ? 'selected' : ''} ${draggedIndex === index ? 'is-dragging' : ''} ${dragOverIndex === index ? 'is-over' : ''}`}
@@ -1293,6 +1447,7 @@ function TradePanel({
                           onChange={(option) => handleDetailSelectChange(index, option)}
                           placeholder="품목 검색..."
                           noOptionsMessage="품목 없음"
+                          menuPortalTarget={document.body}
                         />
                       </td>
                       <td>
@@ -1303,6 +1458,10 @@ function TradePanel({
                           onChange={(e) => {
                             const val = e.target.value.replace(/[^0-9]/g, '');
                             handleDetailChange(index, 'quantity', val);
+                          }}
+                          onFocus={(e) => {
+                            // 포커스 시점의 값을 저장 (입력 취소 시 복원용)
+                            focusValueRef.current[index] = detail.quantity;
                           }}
                           onKeyDown={(e) => handleQuantityKeyDown(e, index)}
                           className="trade-input-table trade-input-right"
@@ -1360,27 +1519,34 @@ function TradePanel({
                           className="trade-input-table"
                         />
                       </td>
+                      <td style={{ textAlign: 'center' }}>
+                        <button
+                          type="button"
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            color: '#e74c3c',
+                            cursor: 'pointer',
+                            fontSize: '1.2rem',
+                            lineHeight: '1',
+                            padding: '0 5px'
+                          }}
+                          onClick={(e) => {
+                            e.stopPropagation(); // 행 선택 방지
+                            handleDeleteRow(index);
+                          }}
+                          tabIndex="-1"
+                        >
+                          ✕
+                        </button>
+                      </td>
                     </tr>
                   ))}
-                  {/* 빈 행 추가 (최소 10행 표시) */}
-                  {Array.from({ length: Math.max(0, 10 - details.length) }).map((_, i) => (
-                    <tr
-                      key={`empty-${i}`}
-                      className="trade-table-row"
-                      style={{ height: '40px' }}
-                      onDragOver={(e) => handleDragOver(e, details.length)}
-                      onDrop={(e) => handleDrop(e, details.length)}
-                    >
-                      <td className="trade-index-cell" style={{ color: '#ccc' }}>{details.length + i + 1}</td>
-                      <td></td>
-                      <td></td>
-                      <td></td>
-                      <td></td>
-                      {isPurchase && <td></td>}
-                      {isPurchase && <td></td>}
-                      <td></td>
-                    </tr>
-                  ))}
+                  {/* 빈 행 표시 제거됨 */}
+                  {/* Spacer Row to push footer to bottom */}
+                  <tr style={{ height: '100%', background: 'transparent' }} onDragOver={(e) => handleDragOver(e, details.length)} onDrop={(e) => handleDrop(e, details.length)}>
+                    <td colSpan="10" style={{ border: 'none', padding: 0 }}></td>
+                  </tr>
                 </tbody>
                 <tfoot>
                   <tr className="trade-table-footer">
@@ -2292,21 +2458,25 @@ function TradePanel({
                     const val = e.target.value.replace(/[^0-9.]/g, '');
                     setInventoryInputModal(prev => ({ ...prev, quantity: val }));
                   }}
-                  className="form-control"
+                  className="form-control modal-input-highlight"
                   style={{
                     width: '100%',
                     padding: '0.8rem',
                     fontSize: '1.1rem',
                     textAlign: 'right',
-                    border: '2px solid #3498db',
                     borderRadius: '6px',
-                    outline: 'none',
                     boxSizing: 'border-box'
                   }}
                   autoFocus
                   onFocus={(e) => e.target.select()}
                   onKeyDown={(e) => {
-                    if (e.key === 'Enter') document.getElementById('modal-price-input')?.focus();
+                    if (e.key === 'Enter') {
+                      const priceInput = document.getElementById('modal-price-input');
+                      if (priceInput) {
+                        priceInput.focus();
+                        priceInput.select();
+                      }
+                    }
                   }}
                 />
               </div>
@@ -2320,16 +2490,16 @@ function TradePanel({
                     const val = e.target.value.replace(/[^0-9]/g, '');
                     setInventoryInputModal(prev => ({ ...prev, unitPrice: val }));
                   }}
-                  className="form-control"
+                  className="form-control modal-input-highlight"
                   style={{
                     width: '100%',
                     padding: '0.8rem',
                     fontSize: '1.1rem',
                     textAlign: 'right',
-                    border: '1px solid #ddd',
                     borderRadius: '6px',
                     boxSizing: 'border-box'
                   }}
+                  onFocus={(e) => e.target.select()}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') handleInventoryInputConfirm();
                   }}

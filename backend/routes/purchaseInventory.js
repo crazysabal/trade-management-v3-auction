@@ -29,6 +29,7 @@ router.get('/', async (req, res) => {
         pi.created_at,
         p.product_name,
         p.grade,
+        p.sort_order,
         p.weight as product_weight,
         c.company_name,
         tm.trade_number,
@@ -80,7 +81,7 @@ router.get('/', async (req, res) => {
       params.push(end_date);
     }
 
-    query += ' ORDER BY p.product_name ASC, p.sort_order ASC, pi.purchase_date ASC';
+    query += ' ORDER BY p.product_name ASC, pi.sender ASC, p.sort_order ASC, pi.purchase_date ASC';
 
     const [rows] = await db.query(query, params);
 
@@ -100,6 +101,7 @@ router.get('/', async (req, res) => {
 router.get('/transactions', async (req, res) => {
   try {
     const { product_id, start_date, end_date } = req.query;
+    console.log(`[DEBUG] GET /transactions params:`, { product_id, start_date, end_date });
 
     let params = [];
     let productFilter = '';
@@ -242,6 +244,8 @@ router.get('/transactions', async (req, res) => {
 
     const [prodRows] = await db.query(prodQuery, prodParams);
 
+    console.log(`[DEBUG] Transaction Counts: In=${inRows.length}, Out=${outRows.length}, Prod=${prodRows.length}`);
+
     // 합치고 정렬
     const allRows = [...inRows, ...outRows, ...prodRows].sort((a, b) => {
       // 날짜 기준 정렬, 같으면 상세 시간 기준
@@ -366,6 +370,7 @@ router.get('/:id', async (req, res) => {
         pi.*,
         p.product_name,
         p.grade,
+        p.sort_order,
         p.weight as product_weight,
         c.company_name,
         tm.trade_number,

@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import { companyAPI } from '../services/api';
 import SearchableSelect from '../components/SearchableSelect';
 import ConfirmModal from '../components/ConfirmModal';
+import CompanyForm from './CompanyForm';
 
 // 테이블 행 컴포넌트 - React.memo로 최적화
 const CompanyRow = memo(function CompanyRow({
@@ -19,6 +20,7 @@ const CompanyRow = memo(function CompanyRow({
   onToggleETaxInvoice,
   onToggleActive,
   onDelete,
+  onEdit,
   getTypeBadge
 }) {
   return (
@@ -27,9 +29,9 @@ const CompanyRow = memo(function CompanyRow({
       onDragStart={!isSelectMode ? onDragStart : undefined}
       onDragEnter={!isSelectMode ? onDragEnter : undefined}
       onDragOver={(e) => e.preventDefault()}
-      className={isDragOver ? 'drag-over' : ''}
+      className={`${isDragOver ? 'drag-over' : ''} ${!company.is_active ? 'inactive-row' : ''}`}
       style={{
-        backgroundColor: index % 2 === 0 ? '#ffffff' : '#f8fafc',
+        backgroundColor: !company.is_active ? '#f3f4f6' : (index % 2 === 0 ? '#ffffff' : '#f8fafc'),
         borderTop: index > 0 ? '2px solid #e2e8f0' : 'none'
       }}
     >
@@ -80,13 +82,13 @@ const CompanyRow = memo(function CompanyRow({
       </td>
       {!isSelectMode && (
         <td className="text-center" style={{ whiteSpace: 'nowrap' }}>
-          <Link
-            to={`/companies/edit/${company.id}`}
+          <button
+            onClick={() => onEdit(company)}
             className="btn btn-sm btn-primary"
             style={{ marginRight: '0.5rem' }}
           >
             수정
-          </Link>
+          </button>
           <button
             onClick={onDelete}
             className="btn btn-sm btn-danger"
@@ -136,6 +138,33 @@ function CompanyList() {
     confirmText: '확인',
     showCancel: true
   });
+
+  // 거래처 등록/수정 모달 상태
+  const [editModal, setEditModal] = useState({
+    isOpen: false,
+    companyId: null // null이면 등록, 값이 있으면 수정
+  });
+
+  // 모달 ESC 닫기 처리
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        if (editModal.isOpen) {
+          e.preventDefault();
+          e.stopPropagation();
+          setEditModal({ isOpen: false, companyId: null });
+        }
+      }
+    };
+
+    if (editModal.isOpen) {
+      window.addEventListener('keydown', handleKeyDown);
+    }
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [editModal.isOpen]);
 
   // 전체 데이터 원본 (클라이언트 필터링용)
   const [originalCompanies, setOriginalCompanies] = useState([]);
@@ -203,6 +232,40 @@ function CompanyList() {
       });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleEdit = (company) => {
+    setEditModal({
+      isOpen: true,
+      companyId: company.id
+    });
+  };
+
+  const handleCreate = () => {
+    setEditModal({
+      isOpen: true,
+      companyId: null
+    });
+  };
+
+  const closeEditModal = () => {
+    setEditModal({
+      isOpen: false,
+      companyId: null
+    });
+  };
+
+  const handleEditSuccess = (updatedCompany) => {
+    closeEditModal();
+    if (updatedCompany && updatedCompany.id) {
+      // 수정인 경우 로컬 상태만 업데이트 (스크롤 유지)
+      setCompanies(prev => prev.map(c => c.id === updatedCompany.id ? { ...c, ...updatedCompany } : c));
+      setOriginalCompanies(prev => prev.map(c => c.id === updatedCompany.id ? { ...c, ...updatedCompany } : c));
+      companiesRef.current = companiesRef.current.map(c => c.id === updatedCompany.id ? { ...c, ...updatedCompany } : c);
+    } else {
+      // 신규 등록인 경우 목록 갱신
+      loadCompanies();
     }
   };
 
@@ -697,9 +760,9 @@ function CompanyList() {
               >
                 📥 엑셀 일괄등록
               </button>
-              <Link to="/companies/new" className="btn btn-primary">
+              <button onClick={handleCreate} className="btn btn-primary">
                 + 거래처 등록
-              </Link>
+              </button>
             </>
           )}
         </div>
@@ -817,6 +880,7 @@ function CompanyList() {
                   onToggleETaxInvoice={() => handleToggleETaxInvoice(company)}
                   onToggleActive={() => handleToggleActive(company)}
                   onDelete={() => handleDelete(company.id, company.company_name)}
+                  onEdit={handleEdit}
                   getTypeBadge={getTypeBadge}
                 />
               ))
@@ -1052,6 +1116,24 @@ function CompanyList() {
         </div>,
         document.body
       )}
+
+      {/* 거래처 등록/수정 모달 */}
+      <ConfirmModal
+        isOpen={editModal.isOpen}
+        onClose={closeEditModal}
+        title={editModal.companyId ? "거래처 수정" : "거래처 등록"}
+        showConfirm={false}
+        showCancel={false}
+        maxWidth="1000px"
+      >
+        {editModal.isOpen && (
+          <CompanyForm
+            id={editModal.companyId}
+            onSuccess={handleEditSuccess}
+            onCancel={closeEditModal}
+          />
+        )}
+      </ConfirmModal>
 
       {/* 확인 모달 */}
       <ConfirmModal

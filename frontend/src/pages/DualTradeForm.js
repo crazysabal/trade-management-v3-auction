@@ -212,6 +212,36 @@ function DualTradeForm() {
     setPrintModal({ isOpen: true, tradeId });
   };
 
+  // 재고 수량 조정 상태 (id -> delta)
+  const [inventoryAdjustments, setInventoryAdjustments] = useState({});
+
+  // 재고 수량 업데이트 핸들러 (누적)
+  const handleInventoryUpdate = useCallback((id, delta) => {
+    setInventoryAdjustments(prev => {
+      const newAdjustments = { ...prev };
+      const currentDelta = newAdjustments[id] || 0;
+      const newDelta = currentDelta + delta;
+
+      if (newDelta === 0) {
+        delete newAdjustments[id];
+      } else {
+        newAdjustments[id] = newDelta;
+      }
+      return newAdjustments;
+    });
+  }, []);
+
+  // 재고 목록 새로고침 키 (저장/삭제 시 증가)
+  const [inventoryRefreshKey, setInventoryRefreshKey] = useState(0);
+
+  // 전표 변경(저장/삭제) 핸들러
+  const handleTradeChange = useCallback(() => {
+    // 1. 재고 목록 새로고침 트리거
+    setInventoryRefreshKey(prev => prev + 1);
+    // 2. 임시 차감 상태 초기화 (DB에 반영되었으므로)
+    setInventoryAdjustments({});
+  }, [inventoryRefreshKey]);
+
   return (
     <div style={{
       display: 'flex',
@@ -428,6 +458,8 @@ function DualTradeForm() {
             onSaveSuccess={(id) => handleSaveSuccess(id, layoutOrder.left)}
             onPrint={handlePrint}
             onDirtyChange={handleDirtyChange}
+            onInventoryUpdate={handleInventoryUpdate}
+            onTradeChange={handleTradeChange}
             cardColor={cardColor}
           />
         </div>
@@ -483,6 +515,8 @@ function DualTradeForm() {
             onSaveSuccess={(id) => handleSaveSuccess(id, layoutOrder.right)}
             onPrint={handlePrint}
             onDirtyChange={handleDirtyChange}
+            onInventoryUpdate={handleInventoryUpdate}
+            onTradeChange={handleTradeChange}
             cardColor={cardColor}
           />
         </div>
@@ -518,7 +552,10 @@ function DualTradeForm() {
           initialPosition="center"
           size={{ width: 'auto', height: 600 }}
         >
-          <InventoryQuickView />
+          <InventoryQuickView
+            inventoryAdjustments={inventoryAdjustments}
+            refreshKey={inventoryRefreshKey}
+          />
         </FloatingWindow>
       )}
 

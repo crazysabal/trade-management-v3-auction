@@ -24,7 +24,10 @@ function ConfirmModal({
   type = 'confirm',
   confirmText = '확인',
   cancelText = '취소',
-  showCancel = true
+  showCancel = true,
+  showConfirm = true,
+  children,
+  maxWidth
 }) {
   // ESC 키로 닫기
   useEffect(() => {
@@ -91,10 +94,11 @@ function ConfirmModal({
 
   // Portal을 사용하여 body에 직접 렌더링 (부모 CSS 영향 받지 않음)
   return createPortal(
-    <div className="modal-overlay">
+    <div className="modal-overlay" style={{ zIndex: 100002 }}>
 
       <div
         className="modal-container"
+        style={maxWidth ? { maxWidth } : undefined}
         onClick={(e) => e.stopPropagation()}
       >
         {/* 아이콘 */}
@@ -108,30 +112,38 @@ function ConfirmModal({
         {/* 제목 */}
         <h2 className="modal-title">{title}</h2>
 
-        {/* 메시지 */}
-        <p className="modal-message">{message}</p>
+        {/* 메시지 또는 자식 컴포넌트 */}
+        {children ? (
+          <div className="modal-custom-content">{children}</div>
+        ) : (
+          <p className="modal-message">{message}</p>
+        )}
 
         {/* 버튼 */}
-        <div className="modal-buttons">
-          {showCancel && (
-            <button
-              className="modal-btn modal-btn-cancel"
-              onClick={onClose}
-            >
-              {cancelText}
-            </button>
-          )}
-          <button
-            className={`modal-btn ${config.confirmBtnClass}`}
-            onClick={() => {
-              onConfirm();
-              onClose();
-            }}
-            autoFocus
-          >
-            {confirmText}
-          </button>
-        </div>
+        {(showConfirm || showCancel) && (
+          <div className="modal-buttons">
+            {showCancel && (
+              <button
+                className="modal-btn modal-btn-cancel"
+                onClick={onClose}
+              >
+                {cancelText}
+              </button>
+            )}
+            {showConfirm && (
+              <button
+                className={`modal-btn ${config.confirmBtnClass}`}
+                onClick={() => {
+                  onConfirm();
+                  onClose();
+                }}
+                autoFocus
+              >
+                {confirmText}
+              </button>
+            )}
+          </div>
+        )}
       </div>
     </div>,
     document.body  // body에 직접 렌더링

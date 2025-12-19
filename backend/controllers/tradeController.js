@@ -39,7 +39,7 @@ const TradeController = {
 
             if (existingTrade.length > 0) {
                 await connection.rollback();
-                const tradeTypeName = master.trade_type === 'PURCHASE' ? '매입' : '매출';
+                const tradeTypeName = master.trade_type === 'PURCHASE' ? '매입' : (master.trade_type === 'PRODUCTION' ? '생산' : '매출');
                 throw {
                     status: 400,
                     message: `해당 거래처에 동일 날짜의 ${tradeTypeName} 전표가 이미 존재합니다.\n\n기존 전표번호: ${existingTrade[0].trade_number}\n\n기존 전표를 수정하거나 다른 날짜를 선택해주세요.`,
@@ -51,7 +51,7 @@ const TradeController = {
             }
 
             // 2. 전표번호 생성
-            const prefix = master.trade_type === 'PURCHASE' ? 'PUR' : 'SAL';
+            const prefix = master.trade_type === 'PURCHASE' ? 'PUR' : (master.trade_type === 'PRODUCTION' ? 'PRO' : 'SAL');
             const today = new Date().toISOString().slice(0, 10).replace(/-/g, '');
 
             const [lastNumber] = await connection.query(
@@ -194,7 +194,7 @@ const TradeController = {
 
                 if (existingTrade.length > 0) {
                     await connection.rollback();
-                    const tradeTypeName = tradeType === 'PURCHASE' ? '매입' : '매출';
+                    const tradeTypeName = tradeType === 'PURCHASE' ? '매입' : (tradeType === 'PRODUCTION' ? '생산' : '매출');
                     throw {
                         status: 400,
                         message: `해당 거래처에 동일 날짜의 ${tradeTypeName} 전표가 이미 존재합니다.\n\n기존 전표번호: ${existingTrade[0].trade_number}\n\n기존 전표를 수정하거나 다른 날짜를 선택해주세요.`,
@@ -206,82 +206,69 @@ const TradeController = {
                 }
             }
 
-            // 3. 매입 전표인 경우: 매칭된 내역 확인
+            // 3. 매입 전표인 경우: 매칭된 내역 유효성 검사 (Upsert 전략 준비)
+            let existingInventoryMap = new Map(); // id -> { remaining, matched, ... }
+
             if (tradeType === 'PURCHASE') {
-                const matchedItems = await TradeController.checkPurchaseMatching(connection, tradeId);
-
-                if (matchedItems.length > 0) {
-                    await connection.rollback();
-                    const totalMatchedQty = matchedItems.reduce((sum, item) => sum + parseFloat(item.matched_quantity), 0);
-                    throw {
-                        status: 400,
-                        errorType: 'MATCHING_EXISTS',
-                        message: '이미 매출과 매칭된 내역이 있어 수정할 수 없습니다.',
-                        matchingData: {
-                            totalCount: matchedItems.length,
-                            totalQuantity: totalMatchedQty,
-                            items: matchedItems.map(item => {
-                                let weightStr = '';
-                                if (item.product_weight) {
-                                    const weight = parseFloat(item.product_weight);
-                                    weightStr = ` ${Number.isInteger(weight) ? Math.floor(weight) : weight}kg`;
-                                }
-                                return {
-                                    productName: `${item.product_name}${weightStr}${item.grade ? ` (${item.grade})` : ''}`,
-                                    saleTradeNumber: item.sale_trade_number,
-                                    saleDate: item.sale_date ? item.sale_date.toString().split('T')[0] : '-',
-                                    customerName: item.customer_name,
-                                    matchedQuantity: parseFloat(item.matched_quantity)
-                                };
-                            })
-                        }
-                    };
-                }
-
-                // 매칭되지 않은 경우: 기존 purchase_inventory 삭제
-                await connection.query(
-                    `DELETE FROM purchase_inventory 
-           WHERE trade_detail_id IN (SELECT id FROM trade_details WHERE trade_master_id = ?)`,
+                // 기존 상세 및 재고/매칭 정보 조회
+                const [existingRows] = await connection.query(
+                    `SELECT td.id as detail_id, td.product_id, pi.id as inventory_id, 
+                     pi.original_quantity, pi.remaining_quantity,
+                     COALESCE(SUM(spm.matched_quantity), 0) as matched_quantity
+                     FROM trade_details td
+                     JOIN purchase_inventory pi ON td.id = pi.trade_detail_id
+                     LEFT JOIN sale_purchase_matching spm ON pi.id = spm.purchase_inventory_id
+                     WHERE td.trade_master_id = ?
+                     GROUP BY td.id, td.product_id, pi.id`,
                     [tradeId]
                 );
-            }
 
-            // 4. 매출 전표인 경우: 매칭 확인 (수정 허용을 위해 제한 해제)
-            // 기존에는 매칭된 내역이 있으면 수정을 막았으나, 
-            // 아래 로직에서 재고 복원 및 재매칭을 처리하므로 이 제한을 제거함.
-            /*
-            if (tradeType === 'SALE') {
-                const matchedItems = await TradeController.checkSaleMatching(connection, tradeId);
+                existingRows.forEach(row => existingInventoryMap.set(row.detail_id, row));
 
-                if (matchedItems.length > 0) {
-                    await connection.rollback();
-                    const totalMatchedQty = matchedItems.reduce((sum, item) => sum + parseFloat(item.matched_quantity), 0);
-                    throw {
-                        status: 400,
-                        errorType: 'MATCHING_EXISTS',
-                        message: '이미 매입과 매칭된 내역이 있어 수정할 수 없습니다.',
-                        matchingData: {
-                            totalCount: matchedItems.length,
-                            totalQuantity: totalMatchedQty,
-                            items: matchedItems.map(item => {
-                                let weightStr = '';
-                                if (item.product_weight) {
-                                    const weight = parseFloat(item.product_weight);
-                                    weightStr = ` ${Number.isInteger(weight) ? Math.floor(weight) : weight}kg`;
-                                }
-                                return {
-                                    productName: `${item.product_name}${weightStr}${item.grade ? ` (${item.grade})` : ''}`,
-                                    supplierName: item.supplier_name,
-                                    matchedQuantity: parseFloat(item.matched_quantity)
-                                };
-                            })
+                // A. 유효성 검사 루프
+                // A-1. 삭제된 항목 검사 (입력에 없는 기존 항목)
+                const inputIds = new Set(details.filter(d => d.id).map(d => d.id));
+                for (const [detailId, row] of existingInventoryMap) {
+                    if (!inputIds.has(detailId)) {
+                        if (parseFloat(row.matched_quantity) > 0) {
+                            await connection.rollback();
+                            throw {
+                                status: 400,
+                                message: `이미 매칭된 내역이 있는 품목은 삭제할 수 없습니다.`,
+                                data: { matched_quantity: row.matched_quantity }
+                            };
                         }
-                    };
+                    }
+                }
+
+                // A-2. 수정된 항목 검사
+                for (const newDetail of details) {
+                    if (newDetail.id) {
+                        const existing = existingInventoryMap.get(newDetail.id);
+                        if (existing) {
+                            // 품목 변경 불가 (매칭된 경우)
+                            if (String(existing.product_id) !== String(newDetail.product_id) && parseFloat(existing.matched_quantity) > 0) {
+                                await connection.rollback();
+                                throw { status: 400, message: '이미 매칭된 내역이 있는 품목은 다른 품목으로 변경할 수 없습니다.' };
+                            }
+
+                            // 수량 감소 제한
+                            if (parseFloat(newDetail.quantity) < parseFloat(existing.matched_quantity)) {
+                                await connection.rollback();
+                                throw {
+                                    status: 400,
+                                    message: `수량을 이미 매칭된 수량(${existing.matched_quantity})보다 적게 수정할 수 없습니다.`
+                                };
+                            }
+                        }
+                    }
                 }
             }
-            */
 
-            // 5. 매출 전표 로직 (매칭 없는 경우만 실행)
+            // 4. 매출 전표인 경우: 매칭 확인 (수정 허용을 위해 제한 해제 - 기존 로직 유지)
+            // ... (생략: 기존 코드에서 이미 주석 처리됨)
+
+            // 5. 매출 전표 로직 (매칭 없는 경우만 실행 - 기존 로직 유지)
             let unmatchedItems = [];
             let existingMap = new Map();
 
@@ -347,12 +334,12 @@ const TradeController = {
                 ]
             );
 
-            // 7. 매칭 정보 보존 로직
+            // 7. 매칭 정보 보존 로직 (SALE 전표용)
             const preservedMatchings = new Map();
             let matchingsToRestore = [];
 
             if (tradeType === 'SALE') {
-                // ... (보존 로직 간소화) ...
+                // ... (보존 로직 유지) ...
                 for (const [productId, existing] of existingMap) {
                     const newDetail = details.find(d =>
                         String(d.product_id) === String(productId) &&
@@ -379,85 +366,186 @@ const TradeController = {
                 }
             }
 
-            // 8. 기존 상세 삭제 및 새 상세 등록
-            await connection.query('DELETE FROM trade_details WHERE trade_master_id = ?', [tradeId]);
+            // 8. 상세 내역 업데이트 (Upsert 전략)
+            if (tradeType === 'PURCHASE') {
+                // 8-A. PURCHASE 전표: in-place 업데이트
 
-            if (details && details.length > 0) {
+                // 삭제 대상 처리 (Delete missing items)
+                const inputIds = new Set(details.filter(d => d.id).map(d => d.id));
+                for (const [detailId, row] of existingInventoryMap) {
+                    if (!inputIds.has(detailId)) {
+                        // 이미 3번 단계에서 매칭 여부 검증함. 
+                        // purchase_inventory 삭제 (CASCADE로 삭제될 수 있지만 명시적 삭제 권장)
+                        await connection.query('DELETE FROM purchase_inventory WHERE id = ?', [row.inventory_id]);
+                        await connection.query('DELETE FROM trade_details WHERE id = ?', [detailId]);
+                    }
+                }
+
+                // Upsert 루프
                 for (let i = 0; i < details.length; i++) {
                     const detail = details[i];
-                    const [detailResult] = await connection.query(
-                        `INSERT INTO trade_details (
-              trade_master_id, seq_no, product_id, quantity, total_weight, 
-              unit_price, supply_amount, tax_amount, total_amount, 
-              auction_price, notes, shipper_location, sender, purchase_price
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-                        [
-                            tradeId, i + 1, detail.product_id, detail.quantity, detail.total_weight || 0,
-                            detail.unit_price, detail.supply_amount || 0, detail.tax_amount || 0,
-                            detail.total_amount || detail.supply_amount || 0,
-                            detail.auction_price || detail.unit_price || 0,
-                            detail.notes || '', detail.shipper_location || null,
-                            detail.sender_name || detail.sender || null, detail.purchase_price || null
-                        ]
-                    );
 
-                    const trade_detail_id = detailResult.insertId;
+                    if (detail.id && existingInventoryMap.has(detail.id)) {
+                        // UPDATE
+                        const existing = existingInventoryMap.get(detail.id);
+                        const matchedQty = parseFloat(existing.matched_quantity) || 0;
+                        const newQty = parseFloat(detail.quantity);
 
-                    // 매출 전표 매칭 처리
-                    if (tradeType === 'SALE') {
-                        const restoredMatchings = matchingsToRestore.filter(m => String(m.product_id) === String(detail.product_id));
+                        await connection.query(
+                            `UPDATE trade_details SET
+                              seq_no = ?, product_id = ?, quantity = ?, total_weight = ?,
+                              unit_price = ?, supply_amount = ?, tax_amount = ?, total_amount = ?,
+                              auction_price = ?, notes = ?, shipper_location = ?, sender = ?, purchase_price = ?
+                              WHERE id = ?`,
+                            [
+                                i + 1, detail.product_id, detail.quantity, detail.total_weight || 0,
+                                detail.unit_price, detail.supply_amount || 0, detail.tax_amount || 0,
+                                detail.total_amount || detail.supply_amount || 0,
+                                detail.auction_price || detail.unit_price || 0,
+                                detail.notes || '', detail.shipper_location || null,
+                                detail.sender_name || detail.sender || null, detail.purchase_price || null,
+                                detail.id
+                            ]
+                        );
 
-                        if (restoredMatchings.length > 0) {
-                            // 매칭 복원
-                            let totalMatched = 0;
-                            for (const restored of restoredMatchings) {
+                        // Purchase Inventory 업데이트
+                        // 남은 수량 재계산 = (새 수량 - 이미 매칭된 수량)
+                        const newRemaining = newQty - matchedQty;
+                        const newUniqueStatus = newRemaining <= 0 ? 'DEPLETED' : 'AVAILABLE';
+
+                        await connection.query(
+                            `UPDATE purchase_inventory SET
+                              product_id = ?, 
+                              original_quantity = ?, remaining_quantity = ?, 
+                              unit_price = ?, status = ?
+                              WHERE id = ?`,
+                            [
+                                detail.product_id,
+                                newQty, newRemaining,
+                                detail.unit_price, newUniqueStatus,
+                                existing.inventory_id
+                            ]
+                        );
+
+                    } else {
+                        // INSERT (New Item)
+                        const [detailResult] = await connection.query(
+                            `INSERT INTO trade_details (
+                               trade_master_id, seq_no, product_id, quantity, total_weight, 
+                               unit_price, supply_amount, tax_amount, total_amount, 
+                               auction_price, notes, shipper_location, sender, purchase_price
+                             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                            [
+                                tradeId, i + 1, detail.product_id, detail.quantity, detail.total_weight || 0,
+                                detail.unit_price, detail.supply_amount || 0, detail.tax_amount || 0,
+                                detail.total_amount || detail.supply_amount || 0,
+                                detail.auction_price || detail.unit_price || 0,
+                                detail.notes || '', detail.shipper_location || null,
+                                detail.sender_name || detail.sender || null, detail.purchase_price || null
+                            ]
+                        );
+                        const newDetailId = detailResult.insertId;
+
+                        // Create Purchase Inventory
+                        await connection.query(
+                            `INSERT INTO purchase_inventory 
+                            (trade_detail_id, product_id, company_id, warehouse_id, 
+                             purchase_date, original_quantity, remaining_quantity, 
+                             unit_price, status, created_at) 
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'AVAILABLE', NOW())`,
+                            [
+                                newDetailId, detail.product_id, master.company_id, master.warehouse_id || null,
+                                master.trade_date, detail.quantity, detail.quantity,
+                                detail.unit_price
+                            ]
+                        );
+                    }
+                }
+
+            } else {
+                // 8-B. SALE / PRODUCTION 등: 기존 방식 (Delete All & Insert) 유지
+                // Why? SALE is complicated with re-matching logic implemented in Step 5/7/8.
+                // Keeping it as-is to avoid regression on SALE logic which is not the target of this fix.
+
+                await connection.query('DELETE FROM trade_details WHERE trade_master_id = ?', [tradeId]);
+
+                if (details && details.length > 0) {
+                    for (let i = 0; i < details.length; i++) {
+                        const detail = details[i];
+                        const [detailResult] = await connection.query(
+                            `INSERT INTO trade_details (
+                  trade_master_id, seq_no, product_id, quantity, total_weight, 
+                  unit_price, supply_amount, tax_amount, total_amount, 
+                  auction_price, notes, shipper_location, sender, purchase_price
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                            [
+                                tradeId, i + 1, detail.product_id, detail.quantity, detail.total_weight || 0,
+                                detail.unit_price, detail.supply_amount || 0, detail.tax_amount || 0,
+                                detail.total_amount || detail.supply_amount || 0,
+                                detail.auction_price || detail.unit_price || 0,
+                                detail.notes || '', detail.shipper_location || null,
+                                detail.sender_name || detail.sender || null, detail.purchase_price || null
+                            ]
+                        );
+
+                        const trade_detail_id = detailResult.insertId;
+
+                        // 매출 전표 매칭 처리
+                        if (tradeType === 'SALE') {
+                            const restoredMatchings = matchingsToRestore.filter(m => String(m.product_id) === String(detail.product_id));
+
+                            if (restoredMatchings.length > 0) {
+                                // 매칭 복원
+                                let totalMatched = 0;
+                                for (const restored of restoredMatchings) {
+                                    await connection.query(
+                                        `INSERT INTO sale_purchase_matching (sale_detail_id, purchase_inventory_id, matched_quantity) VALUES (?, ?, ?)`,
+                                        [trade_detail_id, restored.purchase_inventory_id, restored.matched_quantity]
+                                    );
+
+                                    // 재고 차감 (트리거가 복원한 것을 다시 차감)
+                                    await connection.query(
+                                        `UPDATE purchase_inventory SET remaining_quantity = remaining_quantity - ? WHERE id = ?`,
+                                        [restored.matched_quantity, restored.purchase_inventory_id]
+                                    );
+
+                                    // 상태 업데이트
+                                    await connection.query(
+                                        `UPDATE purchase_inventory SET status = CASE WHEN remaining_quantity <= 0 THEN 'DEPLETED' ELSE 'AVAILABLE' END WHERE id = ?`,
+                                        [restored.purchase_inventory_id]
+                                    );
+
+                                    totalMatched += parseFloat(restored.matched_quantity);
+
+                                    // 중복 방지를 위해 리스트에서 제거
+                                    const idx = matchingsToRestore.findIndex(m => m.id === restored.id);
+                                    if (idx > -1) matchingsToRestore.splice(idx, 1);
+                                }
+
+                                if (totalMatched >= parseFloat(detail.quantity)) {
+                                    await connection.query(`UPDATE trade_details SET matching_status = 'MATCHED' WHERE id = ?`, [trade_detail_id]);
+                                } else {
+                                    await connection.query(`UPDATE trade_details SET matching_status = 'PARTIAL' WHERE id = ?`, [trade_detail_id]);
+                                }
+                            } else if (detail.inventory_id) {
+                                // 신규 매칭 (inventory_id가 요청에 포함된 경우)
                                 await connection.query(
                                     `INSERT INTO sale_purchase_matching (sale_detail_id, purchase_inventory_id, matched_quantity) VALUES (?, ?, ?)`,
-                                    [trade_detail_id, restored.purchase_inventory_id, restored.matched_quantity]
+                                    [trade_detail_id, detail.inventory_id, detail.quantity]
                                 );
 
-                                // 재고 차감 (트리거가 복원한 것을 다시 차감)
                                 await connection.query(
                                     `UPDATE purchase_inventory SET remaining_quantity = remaining_quantity - ? WHERE id = ?`,
-                                    [restored.matched_quantity, restored.purchase_inventory_id]
+                                    [detail.quantity, detail.inventory_id]
                                 );
 
-                                // 상태 업데이트
                                 await connection.query(
                                     `UPDATE purchase_inventory SET status = CASE WHEN remaining_quantity <= 0 THEN 'DEPLETED' ELSE 'AVAILABLE' END WHERE id = ?`,
-                                    [restored.purchase_inventory_id]
+                                    [detail.inventory_id]
                                 );
 
-                                totalMatched += parseFloat(restored.matched_quantity);
-
-                                // 중복 방지를 위해 리스트에서 제거
-                                const idx = matchingsToRestore.findIndex(m => m.id === restored.id);
-                                if (idx > -1) matchingsToRestore.splice(idx, 1);
-                            }
-
-                            if (totalMatched >= parseFloat(detail.quantity)) {
                                 await connection.query(`UPDATE trade_details SET matching_status = 'MATCHED' WHERE id = ?`, [trade_detail_id]);
-                            } else {
-                                await connection.query(`UPDATE trade_details SET matching_status = 'PARTIAL' WHERE id = ?`, [trade_detail_id]);
                             }
-                        } else if (detail.inventory_id) {
-                            // 신규 매칭 (inventory_id가 요청에 포함된 경우)
-                            await connection.query(
-                                `INSERT INTO sale_purchase_matching (sale_detail_id, purchase_inventory_id, matched_quantity) VALUES (?, ?, ?)`,
-                                [trade_detail_id, detail.inventory_id, detail.quantity]
-                            );
-
-                            await connection.query(
-                                `UPDATE purchase_inventory SET remaining_quantity = remaining_quantity - ? WHERE id = ?`,
-                                [detail.quantity, detail.inventory_id]
-                            );
-
-                            await connection.query(
-                                `UPDATE purchase_inventory SET status = CASE WHEN remaining_quantity <= 0 THEN 'DEPLETED' ELSE 'AVAILABLE' END WHERE id = ?`,
-                                [detail.inventory_id]
-                            );
-
-                            await connection.query(`UPDATE trade_details SET matching_status = 'MATCHED' WHERE id = ?`, [trade_detail_id]);
                         }
                     }
                 }

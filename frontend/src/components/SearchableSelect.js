@@ -35,10 +35,10 @@ const customStyles = {
   }),
   option: (base, state) => ({
     ...base,
-    backgroundColor: state.isSelected 
-      ? '#4a90d9' 
-      : state.isFocused 
-        ? '#e8f4fd' 
+    backgroundColor: state.isSelected
+      ? '#4a90d9'
+      : state.isFocused
+        ? '#e8f4fd'
         : 'white',
     color: state.isSelected ? 'white' : '#333',
     padding: '8px 12px',
@@ -57,6 +57,10 @@ const customStyles = {
     ...base,
     maxHeight: '200px',
     padding: '4px'
+  }),
+  menuPortal: (base) => ({
+    ...base,
+    zIndex: 9999
   }),
   dropdownIndicator: (base) => ({
     ...base,
@@ -107,10 +111,10 @@ const smallStyles = {
  */
 const multiKeywordFilter = (option, inputValue) => {
   if (!inputValue) return true;
-  
+
   const label = (option.label || '').toLowerCase();
   const keywords = inputValue.toLowerCase().trim().split(/\s+/);
-  
+
   // 모든 키워드가 label에 포함되어 있어야 함
   return keywords.every(keyword => label.includes(keyword));
 };
@@ -136,6 +140,7 @@ const SearchableSelect = forwardRef(({
   isDisabled = false,
   size = 'normal',
   noOptionsMessage = '검색 결과 없음',
+
   ...rest
 }, ref) => {
   // value를 option 객체로 변환
@@ -145,6 +150,11 @@ const SearchableSelect = forwardRef(({
   const handleChange = (option) => {
     onChange(option);
   };
+
+  // 스타일 계산
+  const computedStyles = React.useMemo(() => {
+    return size === 'small' ? smallStyles : customStyles;
+  }, [size]);
 
   return (
     <Select
@@ -158,7 +168,7 @@ const SearchableSelect = forwardRef(({
       isSearchable
       filterOption={multiKeywordFilter}
       noOptionsMessage={() => noOptionsMessage}
-      styles={size === 'small' ? smallStyles : customStyles}
+      styles={computedStyles}
       {...rest}
     />
   );

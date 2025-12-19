@@ -343,7 +343,19 @@ router.get('/', async (req, res) => {
 
         query += ' ORDER BY ip.created_at DESC';
 
-        const [rows] = await db.query(query, params);
+        console.log('[DEBUG] Query:', query);
+        console.log('[DEBUG] Params:', params);
+
+        let rows = [];
+        try {
+            const [result] = await db.query(query, params);
+            rows = result;
+            console.log(`[DEBUG] Production History Rows: ${rows.length}`);
+        } catch (sqlErr) {
+            console.error('[DEBUG] SQL Error:', sqlErr);
+            throw sqlErr;
+        }
+
         res.json({ success: true, data: rows });
     } catch (error) {
         console.error('Production History Load Error:', error);

@@ -30,6 +30,7 @@ import MessageTestPage from './pages/MessageTestPage';
 import InventoryTransferManagement from './pages/InventoryTransferManagement';
 import InventoryProductionManagement from './pages/InventoryProductionManagement';
 import InventoryProductionHistory from './pages/InventoryProductionHistory';
+import FloatingTradeLauncher from './pages/FloatingTradeLauncher';
 
 function AppContent() {
   const location = useLocation();
@@ -83,7 +84,7 @@ function AppContent() {
                 <ul className="sidebar-submenu">
                   <li><Link to="/trades">전표 목록</Link></li>
                   <li><Link to="/trades/new">전표 등록</Link></li>
-                  <li><Link to="/trades/sale-from-inventory">전표 등록(재고 기반)</Link></li>
+                  <li><Link to="/trades/floating">전표 등록(플로팅 멀티창)</Link></li>
                 </ul>
               </li>
               <li className={`sidebar-item sidebar-dropdown ${openMenus.auction ? 'open' : ''}`}>
@@ -162,7 +163,7 @@ function AppContent() {
                 <ul className="sidebar-submenu">
                   <li><Link to="/products/legacy">구) 품목 목록</Link></li>
                   <li><Link to="/categories/legacy">구) 품목분류 관리</Link></li>
-
+                  <li><Link to="/trades/sale-from-inventory">구) 전표 등록(재고 기반)</Link></li>
                 </ul>
               </li>
             </ul>
@@ -212,6 +213,7 @@ function AppContent() {
           <Route path="/settings/warehouses" element={<WarehouseManagement />} />
           <Route path="/settings/company-info" element={<CompanyInfo />} />
           <Route path="/message-test" element={<MessageTestPage />} />
+          <Route path="/trades/floating" element={<FloatingTradeLauncher />} />
         </Routes>
       </main>
     </div>

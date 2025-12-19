@@ -74,7 +74,8 @@ const StockTransferModal = ({ isOpen, onClose, inventory, onSuccess, defaultToWa
             backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1100
         }}>
             <div className="modal-container" onClick={e => e.stopPropagation()} style={{
-                backgroundColor: 'white', borderRadius: '8px', padding: '1.5rem', width: '400px', maxWidth: '90%'
+                backgroundColor: 'white', borderRadius: '8px', padding: '1.5rem', width: '400px', maxWidth: '90%',
+                position: 'relative', top: 'auto', left: 'auto', transform: 'none'
             }}>
                 <h3 style={{ marginTop: 0, color: '#2c3e50' }}>📦 재고 이동</h3>
 

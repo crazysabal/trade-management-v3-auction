@@ -286,7 +286,13 @@ function AuctionImportV2() {
             setModal({ isOpen: true, type: 'success', title: '완료', message: response.data.message, showCancel: false });
 
             const rawDataRes = await auctionAPI.getRawData({ auction_date: crawlData.crawl_date, status: 'PENDING' });
-            setRawData(rawDataRes.data.data);
+            // Sort by arrive_no (Entry Number) ascending
+            const sortedData = (rawDataRes.data.data || []).sort((a, b) => {
+                const numA = parseInt(a.arrive_no, 10) || 0;
+                const numB = parseInt(b.arrive_no, 10) || 0;
+                return numA - numB;
+            });
+            setRawData(sortedData);
 
             // Reload mappings (in case backend updated anything or just to be safe)
             const mappingsRes = await auctionAPI.getMappings();
@@ -621,31 +627,37 @@ function AuctionImportV2() {
 
                         <div style={{ marginTop: '2rem', padding: '1rem', backgroundColor: '#f8f9fa' }}>
                             <h3>전표 생성 설정</h3>
-                            <div className="form-row" style={{ display: 'flex', alignItems: 'flex-end', gap: '1rem' }}>
-                                <div className="form-group" style={{ flex: 1 }}>
-                                    <label>매입처</label>
-                                    <SearchableSelect
-                                        options={companies.map(c => ({ value: c.id, label: c.company_name }))}
-                                        value={importConfig.supplier_id}
-                                        onChange={o => setImportConfig({ ...importConfig, supplier_id: o ? o.value : '' })}
-                                    />
+                            <div className="form-row" style={{ display: 'flex', alignItems: 'center', gap: '1.5rem', flexWrap: 'wrap' }}>
+                                <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                    <label style={{ fontWeight: 'bold', whiteSpace: 'nowrap' }}>매입처</label>
+                                    <div style={{ width: '250px' }}>
+                                        <SearchableSelect
+                                            options={companies.map(c => ({ value: c.id, label: c.company_name }))}
+                                            value={importConfig.supplier_id}
+                                            onChange={o => setImportConfig({ ...importConfig, supplier_id: o ? o.value : '' })}
+                                            menuPortalTarget={document.body}
+                                        />
+                                    </div>
                                 </div>
-                                <div className="form-group" style={{ flex: 1 }}>
-                                    <label>입고 창고</label>
-                                    <SearchableSelect
-                                        options={warehouses.map(w => ({ value: w.id, label: w.name }))}
-                                        value={importConfig.warehouse_id}
-                                        onChange={o => setImportConfig({ ...importConfig, warehouse_id: o ? o.value : '' })}
-                                        placeholder="창고 선택 (기본값 사용)"
-                                    />
+                                <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                    <label style={{ fontWeight: 'bold', whiteSpace: 'nowrap' }}>입고 창고</label>
+                                    <div style={{ width: '250px' }}>
+                                        <SearchableSelect
+                                            options={warehouses.map(w => ({ value: w.id, label: w.name }))}
+                                            value={importConfig.warehouse_id}
+                                            onChange={o => setImportConfig({ ...importConfig, warehouse_id: o ? o.value : '' })}
+                                            placeholder="창고 선택 (기본값 사용)"
+                                            menuPortalTarget={document.body}
+                                        />
+                                    </div>
                                 </div>
-                                <div className="form-group" style={{ flex: 1 }}>
-                                    <label>거래일자</label>
+                                <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                    <label style={{ fontWeight: 'bold', whiteSpace: 'nowrap' }}>거래일자</label>
                                     <input
                                         type="date"
                                         value={importConfig.trade_date}
                                         onChange={e => setImportConfig({ ...importConfig, trade_date: e.target.value })}
-                                        style={{ fontSize: '0.9rem', height: '38px', boxSizing: 'border-box' }}
+                                        style={{ padding: '4px 8px', borderRadius: '4px', border: '1px solid #ddd', height: '38px', boxSizing: 'border-box' }}
                                     />
                                 </div>
                                 <button
@@ -654,11 +666,12 @@ function AuctionImportV2() {
                                     disabled={mappedCount === 0 || !importConfig.supplier_id}
                                     style={{
                                         height: '38px',
-                                        minWidth: '120px',
                                         display: 'flex',
                                         alignItems: 'center',
                                         justifyContent: 'center',
-                                        whiteSpace: 'nowrap'
+                                        whiteSpace: 'nowrap',
+                                        fontWeight: 'bold',
+                                        padding: '0 1.5rem'
                                     }}
                                 >
                                     매입 전표 생성

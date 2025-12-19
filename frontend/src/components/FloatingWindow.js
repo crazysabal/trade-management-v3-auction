@@ -4,7 +4,7 @@ import ReactDOM from 'react-dom';
 /**
  * FloatingWindow - 드래그 및 크기 조절 가능한 플로팅 윈도우
  */
-const FloatingWindow = ({ title, onClose, initialPosition = { x: 100, y: 100 }, size = { width: 400, height: 500 }, children }) => {
+const FloatingWindow = ({ title, onClose, initialPosition = { x: 100, y: 100 }, size = { width: 400, height: 500 }, children, zIndex = 9999, onMouseDown, onResizeStop }) => {
     const windowRef = useRef(null);
 
     // 이동 관련 Refs
@@ -169,12 +169,21 @@ const FloatingWindow = ({ title, onClose, initialPosition = { x: 100, y: 100 }, 
 
         document.removeEventListener('mousemove', handleResizeMouseMove);
         document.removeEventListener('mouseup', handleResizeMouseUp);
+
+        // 부모에게 최종 크기 전달
+        if (onResizeStop && windowRef.current) {
+            const rect = windowRef.current.getBoundingClientRect();
+            onResizeStop({ width: rect.width, height: rect.height });
+        }
     };
 
     // Portal을 사용하여 document.body에 렌더링
     return ReactDOM.createPortal(
         <div
             ref={windowRef}
+            onMouseDown={(e) => {
+                if (onMouseDown) onMouseDown(e);
+            }}
             style={{
                 position: 'fixed',
                 // left, top, width, height는 ref로 제어
@@ -182,7 +191,7 @@ const FloatingWindow = ({ title, onClose, initialPosition = { x: 100, y: 100 }, 
                 boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
                 borderRadius: '8px',
                 border: '1px solid #ddd',
-                zIndex: 9999,
+                zIndex: zIndex,
                 display: 'flex',
                 flexDirection: 'column',
                 overflow: 'hidden'
@@ -200,7 +209,9 @@ const FloatingWindow = ({ title, onClose, initialPosition = { x: 100, y: 100 }, 
                     justifyContent: 'space-between',
                     alignItems: 'center',
                     userSelect: 'none',
-                    flexShrink: 0 // 헤더 크기 고정
+                    flexShrink: 0, // 헤더 크기 고정
+                    position: 'relative', // 컨텐츠보다 위에 표시되도록 설정
+                    zIndex: 100
                 }}
             >
                 <div style={{ fontWeight: 'bold', fontSize: '0.95rem' }}>{title}</div>
@@ -221,7 +232,7 @@ const FloatingWindow = ({ title, onClose, initialPosition = { x: 100, y: 100 }, 
             </div>
 
             {/* 컨텐츠 영역 */}
-            <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column', padding: '15px' }}>
+            <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column', padding: '8px' }}>
                 {children}
             </div>
 

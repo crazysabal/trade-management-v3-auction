@@ -167,6 +167,7 @@ router.get('/:id', async (req, res) => {
         p.unit,
         spm.purchase_inventory_id as matched_inventory_id,
         spm.matched_quantity,
+        pi.remaining_quantity as inventory_remaining, -- 현재 재고 잔량 (검증용)
         COALESCE(td.purchase_price, pi.unit_price) as purchase_price
       FROM trade_details td
       LEFT JOIN products p ON td.product_id = p.id
