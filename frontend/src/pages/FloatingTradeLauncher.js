@@ -2,6 +2,7 @@ import React, { useState, useCallback, useRef } from 'react';
 import FloatingWindow from '../components/FloatingWindow';
 import TradePanel from '../components/TradePanel';
 import InventoryQuickView from '../components/InventoryQuickView';
+import TradePrintModal from '../components/TradePrintModal';
 
 /**
  * FloatingTradeLauncher

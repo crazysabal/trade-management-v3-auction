@@ -8,7 +8,7 @@ const InventoryTransferManagement = () => {
     const [warehouses, setWarehouses] = useState([]);
     const [loading, setLoading] = useState(false);
     const [reorderMode, setReorderMode] = useState(false); // 창고 순서 변경 모드
-    const [columnWidth, setColumnWidth] = useState(320); // Default width
+    const [columnWidth, setColumnWidth] = useState(350); // Default width
 
     // Drag & Drop State
     const [draggedItem, setDraggedItem] = useState(null); // 드래그 중인 재고

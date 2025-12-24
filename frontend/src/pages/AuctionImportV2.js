@@ -134,20 +134,14 @@ const AuctionItemRow = React.memo(({
             <td className="text-right">{totalWeight > 0 ? `${totalWeight}kg` : '-'}</td>
             <td className="text-right">{formattedPrice}원</td>
             <td>
-                <Select
-                    value={selectedOption}
+                <SearchableSelect
+                    value={mappedProductId}
                     onChange={handleChange}
                     options={sortedOptions}
                     placeholder="품목 검색..."
                     isClearable
-                    isSearchable
-                    filterOption={(option, inputValue) => {
-                        if (!inputValue) return true;
-                        const label = option.label.toLowerCase();
-                        const keywords = inputValue.toLowerCase().trim().split(/\s+/);
-                        return keywords.every(keyword => label.includes(keyword));
-                    }}
-                    noOptionsMessage={() => "품목 없음"}
+                    size="small"
+                    noOptionsMessage="품목 없음"
                     formatOptionLabel={formatOptionLabel}
                     styles={selectStyles}
                 />
@@ -202,10 +196,12 @@ function AuctionImportV2() {
             return {
                 value: product.id,
                 label: `${pureName}${weightStr ? ` ${weightStr}` : ''}${productGrade ? ` (${productGrade})` : ''}`,
+                subLabel: product.product_code || '', // 추가 정보 표시용
                 weight: productWeight,
                 grade: productGrade,
                 sortOrder: product.sort_order || 0,
-                productName: product.product_name || ''
+                productName: product.product_name || '',
+                data: { code: product.product_code || '' } // 필터링용 데이터 확장
             };
         }).sort((a, b) => (a.sortOrder - b.sortOrder) || a.productName.localeCompare(b.productName, 'ko'));
     }, [products]);
@@ -283,7 +279,15 @@ function AuctionImportV2() {
         setLoadingMessage('낙찰 내역을 가져오는 중입니다... (30초~1분 소요)');
         try {
             const response = await auctionAPI.crawl(crawlData);
-            setModal({ isOpen: true, type: 'success', title: '완료', message: response.data.message, showCancel: false });
+            setModal({
+                isOpen: true,
+                type: 'success',
+                title: '완료',
+                message: response.data.message,
+                showCancel: false,
+                confirmText: '확인',
+                onConfirm: () => setModal(prev => ({ ...prev, isOpen: false }))
+            });
 
             const rawDataRes = await auctionAPI.getRawData({ auction_date: crawlData.crawl_date, status: 'PENDING' });
             // Sort by arrive_no (Entry Number) ascending
@@ -307,7 +311,15 @@ function AuctionImportV2() {
 
             setStep(2);
         } catch (error) {
-            setModal({ isOpen: true, type: 'warning', title: '실패', message: error.response?.data?.message || '크롤링 실패', showCancel: false });
+            setModal({
+                isOpen: true,
+                type: 'warning',
+                title: '실패',
+                message: error.response?.data?.message || '크롤링 실패',
+                showCancel: false,
+                confirmText: '확인',
+                onConfirm: () => setModal(prev => ({ ...prev, isOpen: false }))
+            });
         } finally {
             setLoading(false);
         }
@@ -336,7 +348,15 @@ function AuctionImportV2() {
                 delete next[key];
                 return next;
             });
-            setModal({ isOpen: true, type: 'warning', title: '실패', message: '매칭 저장 실패', showCancel: false });
+            setModal({
+                isOpen: true,
+                type: 'warning',
+                title: '실패',
+                message: '매칭 저장 실패',
+                showCancel: false,
+                confirmText: '확인',
+                onConfirm: () => setModal(prev => ({ ...prev, isOpen: false }))
+            });
         }
     }, [getMappingKey]);
 
@@ -368,9 +388,16 @@ function AuctionImportV2() {
                     await auctionAPI.deleteRawDataBulk(Array.from(selectedItems));
                     setRawData(prev => prev.filter(item => !selectedItems.has(item.id)));
                     setSelectedItems(new Set());
+                    setModal(prev => ({ ...prev, isOpen: false }));
                 } catch (e) {
                     console.error(e);
-                    alert('삭제 실패');
+                    setModal({
+                        isOpen: true,
+                        type: 'warning',
+                        title: '실패',
+                        message: '삭제에 실패했습니다.',
+                        showCancel: false
+                    });
                 }
             }
         });
@@ -459,7 +486,9 @@ function AuctionImportV2() {
                 type: 'warning',
                 title: '실패',
                 message: '품목 목록을 가져오는데 실패했습니다.',
-                showCancel: false
+                showCancel: false,
+                confirmText: '확인',
+                onConfirm: () => setModal(prev => ({ ...prev, isOpen: false }))
             });
         }
     };
@@ -501,14 +530,14 @@ function AuctionImportV2() {
         return map;
     }, [rawData]);
 
-    if (loading) return (
-        <div className="loading-overlay">
-            <div className="loading-content"><div className="spinner"></div><p>{loadingMessage}</p></div>
-        </div>
-    );
-
     return (
-        <div className="auction-import" style={{ maxWidth: '1400px', margin: '0 auto' }}>
+        <div className="auction-import" style={{ maxWidth: '1400px', margin: '0 auto', position: 'relative' }}>
+            {loading && (
+                <div className="loading-overlay">
+                    <div className="loading-content"><div className="spinner"></div><p>{loadingMessage}</p></div>
+                </div>
+            )}
+
             <div className="page-header" style={{ display: 'flex', alignItems: 'center' }}>
                 <h1 className="page-title" style={{ margin: 0 }}>📥 경매 낙찰 데이터 가져오기</h1>
             </div>
@@ -663,7 +692,7 @@ function AuctionImportV2() {
                                 <button
                                     onClick={handleImport}
                                     className="btn btn-primary"
-                                    disabled={mappedCount === 0 || !importConfig.supplier_id}
+                                    disabled={mappedCount === 0}
                                     style={{
                                         height: '38px',
                                         display: 'flex',

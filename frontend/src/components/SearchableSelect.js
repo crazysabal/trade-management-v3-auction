@@ -7,13 +7,14 @@ const customStyles = {
     ...base,
     minHeight: '36px',
     height: '36px',
-    backgroundColor: '#fff',
+    backgroundColor: state.isDisabled ? '#f1f5f9' : '#fff', // Disabled Background
     borderColor: state.isFocused ? '#4a90d9' : '#ddd',
     borderRadius: '4px',
     boxShadow: state.isFocused ? '0 0 0 2px rgba(74, 144, 217, 0.2)' : 'none',
     '&:hover': {
       borderColor: '#4a90d9'
-    }
+    },
+    opacity: state.isDisabled ? 0.7 : 1 // Optional: reduce opacity
   }),
   valueContainer: (base) => ({
     ...base,
@@ -60,7 +61,7 @@ const customStyles = {
   }),
   menuPortal: (base) => ({
     ...base,
-    zIndex: 9999
+    zIndex: 100005
   }),
   dropdownIndicator: (base) => ({
     ...base,
@@ -105,18 +106,37 @@ const smallStyles = {
 
 /**
  * 멀티 키워드 검색 필터
- * 공백으로 구분된 모든 키워드가 label에 포함되어 있는지 확인
- * 예: "샤인 4" → "샤인머스캣 4kg (5수)" 검색 가능
- * 예: "상주" → "리치마트 (상주 리치 1호점)" 검색 가능
+ * 공백으로 구분된 모든 키워드가 label 또는 subLabel에 포함되어 있는지 확인
  */
 const multiKeywordFilter = (option, inputValue) => {
   if (!inputValue) return true;
 
   const label = (option.label || '').toLowerCase();
+  const subLabel = (option.data?.subLabel || '').toLowerCase();
+  const code = (option.data?.code || '').toLowerCase();
+
+  const searchString = `${label} ${subLabel} ${code}`;
   const keywords = inputValue.toLowerCase().trim().split(/\s+/);
 
-  // 모든 키워드가 label에 포함되어 있어야 함
-  return keywords.every(keyword => label.includes(keyword));
+  // 모든 키워드가 검색 스트링에 포함되어 있어야 함
+  return keywords.every(keyword => searchString.includes(keyword));
+};
+
+/**
+ * 기본 옵션 라벨 렌더러
+ * subLabel이 있는 경우 작게 표시해줌
+ */
+const defaultFormatOptionLabel = (option) => {
+  return (
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+      <span style={{ fontWeight: '500' }}>{option.label}</span>
+      {option.subLabel && (
+        <span style={{ fontSize: '0.75rem', color: '#6b7280', marginLeft: '10px', backgroundColor: '#f3f4f6', padding: '1px 5px', borderRadius: '3px' }}>
+          {option.subLabel}
+        </span>
+      )}
+    </div>
+  );
 };
 
 /**
@@ -167,8 +187,10 @@ const SearchableSelect = forwardRef(({
       isDisabled={isDisabled}
       isSearchable
       filterOption={multiKeywordFilter}
+      formatOptionLabel={rest.formatOptionLabel || defaultFormatOptionLabel}
       noOptionsMessage={() => noOptionsMessage}
       styles={computedStyles}
+      menuPortalTarget={document.body} // Portal for escaping modals
       {...rest}
     />
   );

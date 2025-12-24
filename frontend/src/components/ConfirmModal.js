@@ -116,7 +116,7 @@ function ConfirmModal({
         {children ? (
           <div className="modal-custom-content">{children}</div>
         ) : (
-          <p className="modal-message">{message}</p>
+          <p className="modal-message" style={{ whiteSpace: 'pre-wrap', wordBreak: 'keep-all', lineHeight: '1.6' }}>{message}</p>
         )}
 
         {/* 버튼 */}

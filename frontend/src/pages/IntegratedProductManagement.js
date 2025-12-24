@@ -109,7 +109,7 @@ function IntegratedProductManagement() {
         <div style={{ display: 'flex', flexDirection: 'column', height: isPopup ? '100vh' : 'calc(100vh - 60px)' }}>
             {!isPopup && (
                 <div className="page-header" style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
-                    <h1 className="page-title" style={{ margin: 0 }}>🧩 통합 품목 관리</h1>
+                    <h1 className="page-title" style={{ margin: 0 }}>📦 품목 관리</h1>
                 </div>
             )}
             <div className="integrated-product-management" style={containerStyle}>

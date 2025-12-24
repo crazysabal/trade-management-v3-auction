@@ -331,7 +331,7 @@ const InventoryProductionManagement = () => {
     };
 
     return (
-        <div className="fade-in" style={{ height: 'calc(100vh - 60px)', display: 'flex', flexDirection: 'column', boxSizing: 'border-box' }}>
+        <div className="fade-in" style={{ height: 'calc(100vh - 60px)', display: 'flex', flexDirection: 'column', boxSizing: 'border-box', maxWidth: '1400px', margin: '0 auto', width: '100%' }}>
             <div className="page-header" style={{ display: 'flex', alignItems: 'center' }}>
                 <h1 className="page-title" style={{ margin: 0 }}>
                     🔨 재고 작업 (Repacking)
@@ -799,8 +799,9 @@ const InventoryProductionManagement = () => {
                     </div>,
                     document.body
                 )
-
             }
+
+            {/* Confirm Modal */}
             <ConfirmModal
                 isOpen={confirmModal.isOpen}
                 onClose={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}

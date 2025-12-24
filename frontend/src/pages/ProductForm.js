@@ -24,6 +24,7 @@ function ProductForm() {
     is_active: true
   });
   const [isMultiGrade, setIsMultiGrade] = useState(false);
+  const [isMultiWeight, setIsMultiWeight] = useState(false);
   const [isAddingGrade, setIsAddingGrade] = useState(false);
   const [originalProductName, setOriginalProductName] = useState('');
   const [originalWeight, setOriginalWeight] = useState('');
@@ -209,38 +210,82 @@ function ProductForm() {
         let submitData = { ...formData };
 
         if (isMultiGrade && formData.grades) {
-          const gradeList = formData.grades
-            .split(',')
-            .map(g => g.trim())
-            .filter(g => g);
-
-          if (gradeList.length === 0) {
-            setModal({
-              isOpen: true,
-              type: 'warning',
-              title: '입력 오류',
-              message: '등급을 입력하세요.',
-              confirmText: '확인',
-              showCancel: false,
-              onConfirm: () => { }
-            });
+          const list = formData.grades.split(/[\s,]+/).map(g => g.trim()).filter(g => g);
+          if (list.length === 0) {
+            setModal({ isOpen: true, type: 'warning', title: '입력 오류', message: '등록할 등급을 입력하세요.', confirmText: '확인', showCancel: false, onConfirm: () => setModal(prev => ({ ...prev, isOpen: false })) });
             return;
           }
-
-          submitData.grades = gradeList;
+          submitData.grades = list;
           delete submitData.grade;
         }
 
-        const response = await productAPI.create(submitData);
-        setModal({
-          isOpen: true,
-          type: 'success',
-          title: '저장 완료',
-          message: response.data.message,
-          confirmText: '확인',
-          showCancel: false,
-          onConfirm: () => navigate('/products')
-        });
+        // [수정] 백엔드 핫리로드 문제 회피 및 PK 충돌 방지를 위해 클라이언트에서 순차 호출
+        if (isMultiWeight && formData.weights) {
+          const weightList = formData.weights
+            .split(/[\s,]+/)
+            .map(w => w.trim())
+            .filter(w => w && !isNaN(parseFloat(w)))
+            .map(w => parseFloat(w));
+
+          if (weightList.length === 0) {
+            setModal({ isOpen: true, type: 'warning', title: '입력 오류', message: '유효한 중량을 입력하세요.', confirmText: '확인', showCancel: false, onConfirm: () => setModal(prev => ({ ...prev, isOpen: false })) });
+            return;
+          }
+
+          let successCount = 0;
+          try {
+            // 순차 호출
+            for (const w of weightList) {
+              const singleData = { ...submitData, weight: w };
+              delete singleData.weights;
+              await productAPI.create(singleData);
+              successCount++;
+            }
+
+            setModal({
+              isOpen: true,
+              type: 'success',
+              title: '성공',
+              message: `${successCount}개의 품목이 성공적으로 등록되었습니다.`,
+              confirmText: '확인',
+              showCancel: false,
+              onConfirm: () => {
+                setModal(prev => ({ ...prev, isOpen: false }));
+                navigate('/products');
+              }
+            });
+          } catch (err) {
+            console.error(err);
+            setModal({
+              isOpen: true,
+              type: 'warning',
+              title: '일부 오류',
+              message: `등록 중 오류가 발생했습니다. (${successCount}/${weightList.length} 성공)`,
+              confirmText: '확인',
+              showCancel: false,
+              onConfirm: () => {
+                setModal(prev => ({ ...prev, isOpen: false }));
+                // 성공한 게 있으면 이동, 아니면 대기? 보통 목록으로 이동
+                navigate('/products');
+              }
+            });
+          }
+        } else {
+          // 단일 등록 (기존)
+          const response = await productAPI.create(submitData);
+          setModal({
+            isOpen: true,
+            type: 'success',
+            title: '성공',
+            message: '품목이 성공적으로 등록되었습니다.',
+            confirmText: '확인',
+            showCancel: false,
+            onConfirm: () => {
+              setModal(prev => ({ ...prev, isOpen: false }));
+              navigate('/products');
+            }
+          });
+        }
       }
     } catch (error) {
       console.error('품목 저장 오류:', error);
@@ -519,17 +564,52 @@ function ProductForm() {
             />
           </div>
           <div className="form-group">
-            <label>중량 (kg)</label>
-            <input
-              type="number"
-              name="weight"
-              value={formData.weight || ''}
-              onChange={handleChange}
-              placeholder="예: 5, 10, 15"
-              step="0.1"
-              min="0"
-              style={inputStyle}
-            />
+            <div style={{ display: 'flex', alignItems: 'center', marginBottom: '0.5rem' }}>
+              <label style={{ marginRight: '1rem', marginBottom: 0 }}>중량 (kg)</label>
+              {!isEdit && (
+                <label style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  cursor: 'pointer',
+                  fontSize: '0.9rem',
+                  color: '#4a5568'
+                }}>
+                  <input
+                    type="checkbox"
+                    checked={isMultiWeight}
+                    onChange={(e) => setIsMultiWeight(e.target.checked)}
+                    style={{ width: '18px', height: '18px', marginRight: '0.5rem', cursor: 'pointer' }}
+                  />
+                  여러 중량 한번에 등록
+                </label>
+              )}
+            </div>
+            {(isMultiWeight && !isEdit) ? (
+              <div>
+                <input
+                  type="text"
+                  name="weights"
+                  value={formData.weights || ''}
+                  onChange={handleChange}
+                  placeholder="예: 5, 10, 15 (쉼표로 구분)"
+                  style={inputStyle}
+                />
+                <p style={{ margin: '0.5rem 0 0', fontSize: '0.85rem', color: '#6b7280' }}>
+                  💡 쉼표로 구분하여 입력하면 각 중량별로 품목이 자동 생성됩니다.
+                </p>
+              </div>
+            ) : (
+              <input
+                type="number"
+                name="weight"
+                value={formData.weight || ''}
+                onChange={handleChange}
+                placeholder="예: 5, 10, 15"
+                step="0.1"
+                min="0"
+                style={inputStyle}
+              />
+            )}
             <p style={{ margin: '0.25rem 0 0', fontSize: '0.8rem', color: '#6b7280' }}>
               박스당 중량을 입력하세요
             </p>
@@ -598,7 +678,7 @@ function ProductForm() {
             취소
           </button>
           <button type="submit" className="btn btn-primary">
-            {isEdit ? '수정' : (isMultiGrade ? '일괄 등록' : '등록')}
+            {isEdit ? '수정' : ((isMultiGrade || isMultiWeight) ? '일괄 등록' : '등록')}
           </button>
         </div>
       </form>

@@ -6,31 +6,35 @@ import './App.css';
 import Dashboard from './pages/Dashboard';
 import CompanyList from './pages/CompanyList';
 import CompanyForm from './pages/CompanyForm';
-import ProductList from './pages/ProductList';
+// import ProductList from './pages/ProductList'; // Removed
 import IntegratedProductManagement from './pages/IntegratedProductManagement';
 import ProductForm from './pages/ProductForm';
-import CategoryList from './pages/CategoryList';
+// import CategoryList from './pages/CategoryList'; // Removed
 import TradeList from './pages/TradeList';
 import DualTradeForm from './pages/DualTradeForm';
 import TradeView from './pages/TradeView';
+
 import Statistics from './pages/Statistics';
 import InventoryList from './pages/InventoryList';
 import InventoryTransactions from './pages/InventoryTransactions';
-import InventoryAdjust from './pages/InventoryAdjust';
+
 import AuctionAccounts from './pages/AuctionAccounts';
 
 import AuctionImportV2 from './pages/AuctionImportV2';
 import CompanyInfo from './pages/CompanyInfo';
 import MatchingPage from './pages/MatchingPage';
 import CompanyBalances from './pages/CompanyBalances';
-import SaleFromInventory from './pages/SaleFromInventory';
+
 import Settings from './pages/Settings';
 import WarehouseManagement from './pages/WarehouseManagement';
 import MessageTestPage from './pages/MessageTestPage';
 import InventoryTransferManagement from './pages/InventoryTransferManagement';
 import InventoryProductionManagement from './pages/InventoryProductionManagement';
 import InventoryProductionHistory from './pages/InventoryProductionHistory';
+
 import FloatingTradeLauncher from './pages/FloatingTradeLauncher';
+import ExpenseList from './pages/ExpenseList';
+import ExpenseCategoryManagement from './pages/ExpenseCategoryManagement';
 
 function AppContent() {
   const location = useLocation();
@@ -111,7 +115,7 @@ function AppContent() {
                   <li><Link to="/inventory-production/history">재고 작업 이력</Link></li>
                   <li><Link to="/matching">마감 (매칭)</Link></li>
                   <li><Link to="/inventory/transactions">재고 수불부</Link></li>
-                  <li><Link to="/inventory/adjust">재고 조정</Link></li>
+
                 </ul>
               </li>
               <li className={`sidebar-item sidebar-dropdown ${openMenus.payment ? 'open' : ''}`}>
@@ -122,6 +126,7 @@ function AppContent() {
                 </span>
                 <ul className="sidebar-submenu">
                   <li><Link to="/payments/balances">거래처 잔고</Link></li>
+                  <li><Link to="/expenses">지출 내역</Link></li>
                 </ul>
               </li>
               <li className="sidebar-item">
@@ -149,23 +154,12 @@ function AppContent() {
                 <ul className="sidebar-submenu">
                   <li><Link to="/settings">시스템 설정</Link></li>
                   <li><Link to="/settings/warehouses">창고 관리</Link></li>
+                  <li><Link to="/settings/expense-categories">지출 항목 관리</Link></li>
                   <li><Link to="/settings/company-info">본사 정보</Link></li>
                 </ul>
               </li>
 
-              {/* 보관함 (Legacy) */}
-              <li className={`sidebar-item sidebar-dropdown ${openMenus.archive ? 'open' : ''}`}>
-                <span className="sidebar-link sidebar-dropdown-toggle" onClick={() => toggleMenu('archive')}>
-                  <span className="sidebar-icon">🗄️</span>
-                  <span>보관함</span>
-                  <span className="sidebar-arrow">▼</span>
-                </span>
-                <ul className="sidebar-submenu">
-                  <li><Link to="/products/legacy">구) 품목 목록</Link></li>
-                  <li><Link to="/categories/legacy">구) 품목분류 관리</Link></li>
-                  <li><Link to="/trades/sale-from-inventory">구) 전표 등록(재고 기반)</Link></li>
-                </ul>
-              </li>
+
             </ul>
           </nav>
         </aside>
@@ -185,9 +179,7 @@ function AppContent() {
           {/* Popup Routes */}
           <Route path="/popup/product-management" element={<IntegratedProductManagement />} />
 
-          {/* Legacy Routes */}
-          <Route path="/products/legacy" element={<ProductList />} />
-          <Route path="/categories/legacy" element={<CategoryList />} />
+
 
           <Route path="/products/new" element={<ProductForm />} />
           <Route path="/products/edit/:id" element={<ProductForm />} />
@@ -195,7 +187,7 @@ function AppContent() {
           <Route path="/trades/new" element={<DualTradeForm />} />
           <Route path="/trades/edit/:id" element={<DualTradeForm />} />
           <Route path="/trades/view/:id" element={<TradeView />} />
-          <Route path="/trades/sale-from-inventory" element={<SaleFromInventory />} />
+
           <Route path="/inventory" element={<InventoryList />} />
           <Route path="/inventory/transfer" element={<InventoryTransferManagement />} />
           <Route path="/inventory/transfer" element={<InventoryTransferManagement />} />
@@ -203,7 +195,7 @@ function AppContent() {
           <Route path="/inventory-production/history" element={<InventoryProductionHistory />} />
           <Route path="/matching" element={<MatchingPage />} />
           <Route path="/inventory/transactions" element={<InventoryTransactions />} />
-          <Route path="/inventory/adjust" element={<InventoryAdjust />} />
+
           <Route path="/auction/accounts" element={<AuctionAccounts />} />
 
           <Route path="/auction/import-v2" element={<AuctionImportV2 />} />
@@ -214,6 +206,8 @@ function AppContent() {
           <Route path="/settings/company-info" element={<CompanyInfo />} />
           <Route path="/message-test" element={<MessageTestPage />} />
           <Route path="/trades/floating" element={<FloatingTradeLauncher />} />
+          <Route path="/expenses" element={<ExpenseList />} />
+          <Route path="/settings/expense-categories" element={<ExpenseCategoryManagement />} />
         </Routes>
       </main>
     </div>

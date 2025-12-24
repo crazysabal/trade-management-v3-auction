@@ -59,6 +59,7 @@ export const productAPI = {
   create: (data) => api.post('/products', data),
   update: (id, data) => api.put(`/products/${id}`, data),
   delete: (id) => api.delete(`/products/${id}`),
+  deleteGroup: (productName) => api.delete('/products/group', { params: { product_name: productName } }),
   reorder: (data) => api.put('/products/reorder', data),
 };
 
@@ -193,6 +194,7 @@ export const warehousesAPI = {
   create: (data) => api.post('/warehouses', data),
   update: (id, data) => api.put(`/warehouses/${id}`, data),
   reorder: (orderedIds) => api.put('/warehouses/reorder', { orderedIds }),
+  delete: (id) => api.delete(`/warehouses/${id}`),
 };
 
 // 재고 이동 API

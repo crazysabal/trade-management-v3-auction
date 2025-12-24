@@ -188,7 +188,7 @@ router.post('/crawl', async (req, res) => {
     const account = accounts[0];
     const password = decrypt(account.password);
 
-    console.log('🚀 크롤링 시작 - 브라우저를 실행합니다...');
+    // console.log('🚀 크롤링 시작 - 브라우저를 실행합니다...');
 
     // Puppeteer로 크롤링 시작 (Stealth 모드 + headless)
     browser = await puppeteer.launch({
@@ -216,7 +216,7 @@ router.post('/crawl', async (req, res) => {
     const hasCookies = await loadCookies(page, account_id);
 
     // 낙찰 내역 페이지로 바로 이동 시도
-    console.log('📋 낙찰 내역 페이지 접속 시도...');
+    // console.log('📋 낙찰 내역 페이지 접속 시도...');
     await page.goto('http://tgjungang.co.kr/app/sub/nak_live_list.html', {
       waitUntil: 'domcontentloaded',  // networkidle2보다 빠름
       timeout: 15000
@@ -228,9 +228,9 @@ router.post('/crawl', async (req, res) => {
     // 로그인이 안 되어 있으면 로그인 진행
     if (!isLoggedIn) {
       if (hasCookies) {
-        console.log('⚠️  저장된 쿠키가 만료되었습니다. 다시 로그인합니다...');
+        // console.log('⚠️  저장된 쿠키가 만료되었습니다. 다시 로그인합니다...');
       } else {
-        console.log('📝 로그인이 필요합니다. 로그인 페이지로 이동합니다...');
+        // console.log('📝 로그인이 필요합니다. 로그인 페이지로 이동합니다...');
       }
 
       await page.goto('http://tgjungang.co.kr/app/sub/login.html?call=nak', {
@@ -246,12 +246,12 @@ router.post('/crawl', async (req, res) => {
       let pwInput = await page.$('input[name="passwd"], input[id="var_passwd"], input[type="password"], input[name="user_pw"]');
 
       if (idInput && pwInput) {
-        console.log('✓ 로그인 폼 발견! 바로 로그인을 진행합니다.');
+        // console.log('✓ 로그인 폼 발견! 바로 로그인을 진행합니다.');
       } else {
         // 이미 로그인된 상태이거나 다른 페이지
         const currentUrl = page.url();
         if (currentUrl.includes('nak_live_list') || !currentUrl.includes('login')) {
-          console.log('✓ 이미 로그인된 상태입니다.');
+          // console.log('✓ 이미 로그인된 상태입니다.');
           isLoggedIn = true;
         } else {
           // 잠시 대기 후 다시 시도
@@ -294,7 +294,8 @@ router.post('/crawl', async (req, res) => {
           // 디버깅용: 현재 페이지 정보 출력
           const debugUrl = page.url();
           console.log('현재 URL:', debugUrl);
-          console.log('페이지에서 찾은 input 요소들:');
+          // console.log('페이지에서 찾은 input 요소들:');
+          /*
           const inputs = await page.$$eval('input', els => els.map(el => ({
             name: el.name,
             id: el.id,
@@ -302,6 +303,7 @@ router.post('/crawl', async (req, res) => {
             class: el.className
           })));
           console.log(inputs);
+          */
 
           throw new Error('로그인 폼을 찾을 수 없습니다. 브라우저 창을 확인해주세요.');
         }
@@ -329,7 +331,7 @@ router.post('/crawl', async (req, res) => {
           try {
             submitBtn = await page.$(selector);
             if (submitBtn) {
-              console.log(`   로그인 버튼 발견: ${selector}`);
+              // console.log(`   로그인 버튼 발견: ${selector}`);
               break;
             }
           } catch (e) {
@@ -344,7 +346,7 @@ router.post('/crawl', async (req, res) => {
             const text = await btn.evaluate(el => el.textContent || el.value || '');
             if (text.includes('로그인') && !text.includes('취소')) {
               submitBtn = btn;
-              console.log('   로그인 버튼 발견 (텍스트 검색)');
+              // console.log('   로그인 버튼 발견 (텍스트 검색)');
               break;
             }
           }
@@ -352,10 +354,10 @@ router.post('/crawl', async (req, res) => {
 
         if (submitBtn) {
           await submitBtn.click();
-          console.log('   로그인 버튼 클릭 완료');
+          // console.log('   로그인 버튼 클릭 완료');
         } else {
           // 버튼을 못 찾으면 Enter 키로 시도
-          console.log('   로그인 버튼을 찾지 못해 Enter 키로 시도...');
+          // console.log('   로그인 버튼을 찾지 못해 Enter 키로 시도...');
           await page.keyboard.press('Enter');
         }
 
@@ -364,7 +366,7 @@ router.post('/crawl', async (req, res) => {
           await page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 5000 });
         } catch (e) {
           // Navigation 타임아웃은 무시하고 URL 변경 확인
-          console.log('   페이지 이동 대기 중...');
+          // console.log('   페이지 이동 대기 중...');
           await page.waitForTimeout(1000);
         }
 
@@ -379,10 +381,10 @@ router.post('/crawl', async (req, res) => {
         // 쿠키 저장 (다음번 로그인 생략용)
         await saveCookies(page, account_id);
 
-        console.log('✓ 로그인 성공!');
+        // console.log('✓ 로그인 성공!');
       }
     } else {
-      console.log('✓ 저장된 쿠키로 로그인 상태 유지 중');
+      // console.log('✓ 저장된 쿠키로 로그인 상태 유지 중');
     }
 
     // 낙찰 내역 페이지 이동 (날짜 파라미터 포함)
@@ -401,7 +403,7 @@ router.post('/crawl', async (req, res) => {
     await page.waitForTimeout(300);
 
     // 날짜 설정 - 년/월/일 select 박스로 구성
-    console.log(`📅 날짜 설정: ${targetDate}`);
+    // console.log(`📅 날짜 설정: ${targetDate}`);
 
     // 날짜 파싱 (2025-12-03 -> year: 2025, month: 12, day: 3)
     const [year, month, day] = targetDate.split('-');
@@ -409,14 +411,14 @@ router.post('/crawl', async (req, res) => {
     const monthNum = parseInt(month);
     const dayNum = parseInt(day);
 
-    console.log(`   년: ${yearNum}, 월: ${monthNum}, 일: ${dayNum}`);
+    // console.log(`   년: ${yearNum}, 월: ${monthNum}, 일: ${dayNum}`);
 
     try {
       // 년도 select 박스 찾기 및 선택
       const yearSelects = await page.$$('select');
       if (yearSelects.length >= 3) {
         // 첫 번째 select가 년도, 두 번째가 월, 세 번째가 일
-        console.log('   날짜 선택 중...');
+        // console.log('   날짜 선택 중...');
         await yearSelects[0].select(year);
         await yearSelects[1].select(String(monthNum));
         await yearSelects[2].select(String(dayNum));
@@ -427,7 +429,7 @@ router.post('/crawl', async (req, res) => {
         for (const link of searchLinks) {
           const text = await link.evaluate(el => el.textContent);
           if (text && text.includes('검색')) {
-            console.log('   검색 버튼 클릭...');
+            // console.log('   검색 버튼 클릭...');
             await link.click();
             // 검색 결과 로딩 대기
             await page.waitForTimeout(800);
@@ -435,7 +437,7 @@ router.post('/crawl', async (req, res) => {
           }
         }
 
-        console.log('✓ 날짜 설정 완료');
+        // console.log('✓ 날짜 설정 완료');
       } else {
         console.log('   ⚠️ select 박스를 충분히 찾지 못했습니다.');
 
@@ -468,7 +470,7 @@ router.post('/crawl', async (req, res) => {
       console.log('   ⚠️ 날짜 설정 중 오류:', dateError.message);
     }
 
-    console.log('🔍 데이터를 파싱합니다...');
+    // console.log('🔍 데이터를 파싱합니다...');
 
     // 데이터 파싱 (대구중앙청과 낙찰 리스트 구조에 맞춤)
     const auctionData = await page.evaluate(() => {
@@ -605,7 +607,7 @@ router.post('/crawl', async (req, res) => {
     let failedCount = 0;
     let skippedCount = 0;
 
-    console.log('💾 데이터베이스에 저장 중...');
+    // console.log('💾 데이터베이스에 저장 중...');
 
     // 기존 데이터 한 번에 조회 (중복 체크용)
     const [existingData] = await db.query(

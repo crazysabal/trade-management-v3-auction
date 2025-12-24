@@ -61,7 +61,8 @@ function ProductInputModal({ isOpen, onClose, onSuccess, initialData = null, isE
     // Logic adapted from ProductForm.js
     const [categories, setCategories] = useState([]);
     const [existingProducts, setExistingProducts] = useState([]);
-    const [formData, setFormData] = useState({
+    const [allProducts, setAllProducts] = useState([]); // 중복 체크용 전체 데이터
+    const initialForm = {
         product_code: '',
         product_name: '',
         grade: '',
@@ -69,9 +70,12 @@ function ProductInputModal({ isOpen, onClose, onSuccess, initialData = null, isE
         unit: 'Box',
         category_id: '',
         weight: '',
+        weights: '',
         notes: '',
         is_active: true
-    });
+    };
+
+    const [formData, setFormData] = useState(initialForm);
 
     // States
     const [isMultiGrade, setIsMultiGrade] = useState(false);
@@ -79,8 +83,9 @@ function ProductInputModal({ isOpen, onClose, onSuccess, initialData = null, isE
     const [originalProductName, setOriginalProductName] = useState('');
     const [originalWeight, setOriginalWeight] = useState('');
     const [sameNameCount, setSameNameCount] = useState(0);
-    const [updateAllGrades, setUpdateAllGrades] = useState(true);
+    // const [updateAllGrades, setUpdateAllGrades] = useState(true); // Removed: Handled by Group Rename Feature
     const [updateAllWeights, setUpdateAllWeights] = useState(true);
+    const [isMultiWeight, setIsMultiWeight] = useState(false);
 
     // Internal Modal (Confirmations)
     const [confirmModal, setConfirmModal] = useState({
@@ -99,11 +104,20 @@ function ProductInputModal({ isOpen, onClose, onSuccess, initialData = null, isE
 
             if (isEdit && initialData) {
                 // Load for Edit
-                const data = { ...initialData };
-                if (data.weight) data.weight = parseFloat(data.weight);
+                const data = {
+                    ...initialData,
+                    product_name: initialData.product_name || '',
+                    grade: initialData.grade || '',
+                    unit: initialData.unit || 'Box',
+                    category_id: initialData.category_id || '',
+                    weight: initialData.weight !== null ? parseFloat(initialData.weight) : '',
+                    notes: initialData.notes || '',
+                    weights: '', // Edit mode doesn't support bulk weights currently
+                    grades: ''
+                };
                 setFormData(data);
                 setOriginalProductName(data.product_name);
-                setOriginalWeight(data.weight !== null && data.weight !== undefined ? data.weight : '');
+                setOriginalWeight(data.weight);
                 checkSameNameProducts(data.product_name, data.id);
             } else if (copyFromId) {
                 // Load for Copy (Add Grade)
@@ -114,10 +128,19 @@ function ProductInputModal({ isOpen, onClose, onSuccess, initialData = null, isE
 
     const resetForm = () => {
         setFormData({
-            product_code: '', product_name: '', grade: '', grades: '',
-            unit: 'Box', category_id: '', weight: '', notes: '', is_active: true
+            product_code: '',
+            product_name: '',
+            grade: '',
+            grades: '',
+            unit: 'Box',
+            category_id: '',
+            weight: '',
+            weights: '',
+            notes: '',
+            is_active: true
         });
         setIsMultiGrade(false);
+        setIsMultiWeight(false);
         setIsAddingGrade(false);
         setSameNameCount(0);
     };
@@ -132,6 +155,8 @@ function ProductInputModal({ isOpen, onClose, onSuccess, initialData = null, isE
     const loadExistingProducts = async () => {
         try {
             const res = await productAPI.getAll({});
+            setAllProducts(res.data.data); // 중복 체크를 위해 원본 저장
+
             const unique = [];
             const seen = new Set();
             res.data.data.forEach(p => {
@@ -150,10 +175,12 @@ function ProductInputModal({ isOpen, onClose, onSuccess, initialData = null, isE
             const p = res.data.data;
             setFormData(prev => ({
                 ...prev,
-                product_name: p.product_name,
-                unit: p.unit,
-                category_id: p.category_id,
+                product_name: p.product_name || '',
+                unit: p.unit || 'Box',
+                category_id: p.category_id || '',
                 weight: p.weight ? parseFloat(p.weight) : '',
+                weights: '',
+                grades: '',
                 notes: ''
             }));
             setIsAddingGrade(true);
@@ -168,39 +195,190 @@ function ProductInputModal({ isOpen, onClose, onSuccess, initialData = null, isE
         } catch (e) { }
     };
 
+    const handleChange = (e) => {
+        const { name, value } = e.target;
+        setFormData(prev => ({
+            ...prev,
+            [name]: value
+        }));
+    };
+
     const handleSubmit = async (e) => {
         e.preventDefault();
 
         if (!formData.product_name) {
-            alert('품목명은 필수입니다.'); return;
+            setConfirmModal({
+                isOpen: true,
+                type: 'warning',
+                title: '입력 확인',
+                message: '품목명은 필수입니다.',
+                onConfirm: () => setConfirmModal(prev => ({ ...prev, isOpen: false })),
+                showCancel: false
+            });
+            return;
         }
 
         try {
             if (isEdit) {
-                const isNameChanged = formData.product_name !== originalProductName;
+                // const isNameChanged = formData.product_name !== originalProductName; // Removed
                 const isWeightChanged = String(formData.weight || '') !== String(originalWeight || '');
                 const submitData = {
                     ...formData,
-                    updateAllGrades: updateAllGrades && sameNameCount > 0 && isNameChanged,
+                    // updateAllGrades: updateAllGrades && sameNameCount > 0 && isNameChanged, // Removed
                     updateAllWeights: updateAllWeights && sameNameCount > 0 && isWeightChanged,
                     originalProductName
                 };
                 await productAPI.update(initialData.id, submitData);
+
+                setConfirmModal({
+                    isOpen: true,
+                    type: 'success',
+                    title: '수정 완료',
+                    message: '품목이 성공적으로 수정되었습니다.',
+                    onConfirm: () => {
+                        setConfirmModal(prev => ({ ...prev, isOpen: false }));
+                        onSuccess();
+                        onClose();
+                    },
+                    showCancel: false
+                });
             } else {
+                // [중복 체크 및 파싱]
+                let targetGrades = isMultiGrade && formData.grades
+                    ? formData.grades.split(/[\s,]+/).map(g => g.trim()).filter(g => g)
+                    : [formData.grade || '']; // null handling
+
+                let targetWeights = isMultiWeight && formData.weights
+                    ? formData.weights.split(/[\s,]+/).map(w => w.trim()).filter(w => w && !isNaN(parseFloat(w))).map(w => parseFloat(w))
+                    : [formData.weight ? parseFloat(formData.weight) : null];
+
+                // Check basics
+                if (isMultiGrade && targetGrades.length === 0) {
+                    setConfirmModal({
+                        isOpen: true,
+                        type: 'warning',
+                        title: '입력 확인',
+                        message: '등급을 입력하세요.',
+                        onConfirm: () => setConfirmModal(prev => ({ ...prev, isOpen: false })),
+                        showCancel: false
+                    });
+                    return;
+                }
+                if (isMultiWeight && targetWeights.length === 0) {
+                    setConfirmModal({
+                        isOpen: true,
+                        type: 'warning',
+                        title: '입력 확인',
+                        message: '유효한 중량을 입력하세요.',
+                        onConfirm: () => setConfirmModal(prev => ({ ...prev, isOpen: false })),
+                        showCancel: false
+                    });
+                    return;
+                }
+
+                // Check Duplicates against allProducts
+                for (const g of targetGrades) {
+                    for (const w of targetWeights) {
+                        const exists = allProducts.some(p =>
+                            p.product_name === formData.product_name &&
+                            (p.grade || '') === (g || '') &&
+                            // Weight comparison needs care (null vs value)
+                            (p.weight === null && w === null || parseFloat(p.weight) === w)
+                        );
+                        if (exists) {
+                            setConfirmModal({
+                                isOpen: true,
+                                type: 'warning',
+                                title: '중복 등록 감지',
+                                message: `이미 존재하는 품목입니다.\n[${formData.product_name}] 등급:${g || '-'} / 중량:${w || '-'}kg\n\n등록이 취소되었습니다.`,
+                                onConfirm: () => setConfirmModal(prev => ({ ...prev, isOpen: false })),
+                                showCancel: false
+                            });
+                            return;
+                        }
+                    }
+                }
+
                 let submitData = { ...formData };
-                if (isMultiGrade && formData.grades) {
-                    const list = formData.grades.split(',').map(g => g.trim()).filter(g => g);
-                    if (list.length === 0) { alert('등급을 입력하세요.'); return; }
-                    submitData.grades = list;
+                if (isMultiGrade) {
+                    submitData.grades = targetGrades;
                     delete submitData.grade;
                 }
-                await productAPI.create(submitData);
+
+                if (isMultiWeight) {
+                    // Check is done above
+                }
+
+                let successCount = 0;
+                try {
+                    // Flatten combinations for client-side sequential calls
+                    // This handles Multi-Weight AND Multi-Grade by iterating weights
+                    // Note: Backend currently handles 'grades' array in a single call BUT frontend loop here is just for weights?
+                    // Re-reading backend logic: Backend takes 'grades' array AND 'weight' (single).
+                    // So we only loop weights here. Backend expands grades.
+
+                    // However, we verified duplicates for ALL combinations.
+
+                    for (const w of targetWeights) {
+                        const singleData = { ...submitData, weight: w };
+                        delete singleData.weights; // remove metadata
+
+                        // If it's single grade, ensure it's set
+                        if (!isMultiGrade) {
+                            singleData.grade = targetGrades[0] || '';
+                            delete singleData.grades;
+                        } else {
+                            // If multi-grade, 'grades' is already in submitData (from above block)
+                            singleData.grades = targetGrades;
+                            // backend will iterate grades
+                        }
+
+                        // NOTE: If we utilize backend's grade iteration, it's efficient.
+                        // But wait. If we have multiple weights, we call create multiple times.
+                        await productAPI.create(singleData);
+                        successCount++;
+                    }
+
+                    setConfirmModal({
+                        isOpen: true,
+                        type: 'success',
+                        title: '등록 완료',
+                        message: `${successCount}건의 번들(중량별) 등록이 완료되었습니다.`,
+                        onConfirm: () => {
+                            setConfirmModal(prev => ({ ...prev, isOpen: false }));
+                            onSuccess(); // Refresh list
+                            onClose();   // Close main modal
+                        },
+                        showCancel: false
+                    });
+                } catch (err) {
+                    console.error(err);
+                    setConfirmModal({
+                        isOpen: true,
+                        type: 'warning',
+                        title: '등록 중 오류',
+                        message: `등록 중 오류가 발생했습니다. (${successCount}/${targetWeights.length} 성공)`,
+                        onConfirm: () => {
+                            setConfirmModal(prev => ({ ...prev, isOpen: false }));
+                            if (successCount > 0) {
+                                onSuccess(); // Partial success refresh
+                                onClose();
+                            }
+                        },
+                        showCancel: false
+                    });
+                }
             }
-            onSuccess();
-            onClose();
         } catch (error) {
             console.error(error);
-            alert(error.response?.data?.message || '저장 실패');
+            setConfirmModal({
+                isOpen: true,
+                type: 'warning',
+                title: '저장 실패',
+                message: error.response?.data?.message || '품목 저장 중 오류가 발생했습니다.',
+                onConfirm: () => setConfirmModal(prev => ({ ...prev, isOpen: false })),
+                showCancel: false
+            });
         }
     };
 
@@ -246,7 +424,15 @@ function ProductInputModal({ isOpen, onClose, onSuccess, initialData = null, isE
                                     if (opt) {
                                         const p = existingProducts.find(x => x.product_name === opt.value);
                                         if (p) {
-                                            setFormData({ ...formData, product_name: p.product_name, unit: p.unit, category_id: p.category_id, weight: p.weight || '' });
+                                            setFormData({
+                                                ...formData,
+                                                product_name: p.product_name,
+                                                unit: p.unit,
+                                                category_id: p.category_id,
+                                                weight: p.weight || '',
+                                                weights: '',
+                                                grades: ''
+                                            });
                                             setIsAddingGrade(true);
                                         }
                                     }
@@ -262,27 +448,27 @@ function ProductInputModal({ isOpen, onClose, onSuccess, initialData = null, isE
                             <label style={labelStyle}>품목명</label>
                             <input
                                 type="text"
-                                value={formData.product_name}
-                                onChange={e => setFormData({ ...formData, product_name: e.target.value })}
-                                style={{ ...inputStyle, backgroundColor: isAddingGrade ? '#f1f5f9' : 'white' }}
-                                disabled={isAddingGrade} // Locked in add grade mode
+                                name="product_name"
+                                value={formData.product_name || ''}
+                                onChange={handleChange}
+                                style={{ ...inputStyle, backgroundColor: (isAddingGrade || isEdit) ? '#f1f5f9' : 'white', cursor: (isAddingGrade || isEdit) ? 'not-allowed' : 'text' }}
+                                disabled={isAddingGrade || isEdit} // Locked in edit mode too now
                                 placeholder="예: 사과"
                             />
-                            {isEdit && sameNameCount > 0 && formData.product_name !== originalProductName && (
-                                <label style={{ fontSize: '0.8rem', color: '#b45309', display: 'block' }}>
-                                    <input type="checkbox" checked={updateAllGrades} onChange={e => setUpdateAllGrades(e.target.checked)} />
-                                    같은 이름의 다른 등급({sameNameCount}개)도 품목명 변경
-                                </label>
+                            {isEdit && (
+                                <p style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '-0.25rem', marginBottom: '0.5rem' }}>
+                                    💡 품목명 수정은 목록 상단의 ✏️ 아이콘을 이용해주세요.
+                                </p>
                             )}
                         </div>
                         <div>
                             <label style={labelStyle}>분류</label>
                             <SearchableSelect
                                 options={categoryOptions}
-                                value={formData.category_id}
+                                value={formData.category_id || ''}
                                 onChange={opt => setFormData({ ...formData, category_id: opt?.value || '' })}
                                 placeholder="분류 선택"
-                                isDisabled={isAddingGrade}
+                                isDisabled={isAddingGrade || isEdit} // Lock category in edit mode
                             />
                         </div>
                     </div>
@@ -297,16 +483,18 @@ function ProductInputModal({ isOpen, onClose, onSuccess, initialData = null, isE
                         {isMultiGrade && !isEdit ? (
                             <input
                                 type="text"
-                                value={formData.grades}
-                                onChange={e => setFormData({ ...formData, grades: e.target.value })}
+                                name="grades"
+                                value={formData.grades || ''}
+                                onChange={handleChange}
                                 placeholder="예: 특, 상, 중 (쉼표로 구분)"
                                 style={inputStyle}
                             />
                         ) : (
                             <input
                                 type="text"
-                                value={formData.grade}
-                                onChange={e => setFormData({ ...formData, grade: e.target.value })}
+                                name="grade"
+                                value={formData.grade || ''}
+                                onChange={handleChange}
                                 placeholder="예: 특"
                                 style={inputStyle}
                             />
@@ -316,15 +504,56 @@ function ProductInputModal({ isOpen, onClose, onSuccess, initialData = null, isE
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                         <div>
                             <label style={labelStyle}>단위</label>
-                            <input type="text" value={formData.unit} onChange={e => setFormData({ ...formData, unit: e.target.value })} style={inputStyle} />
+                            <input
+                                type="text"
+                                name="unit"
+                                value={formData.unit || ''}
+                                onChange={handleChange}
+                                style={inputStyle}
+                            />
                         </div>
                         <div>
-                            <label style={labelStyle}>중량 (kg)</label>
-                            <input type="number" step="0.1" value={formData.weight} onChange={e => setFormData({ ...formData, weight: e.target.value })} style={inputStyle} />
-                            {isEdit && sameNameCount > 0 && String(formData.weight) !== String(originalWeight) && (
-                                <label style={{ fontSize: '0.8rem', color: '#1d4ed8', display: 'block' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', marginBottom: '0.2rem' }}>
+                                <label style={{ ...labelStyle, marginBottom: 0, marginRight: '0.5rem' }}>중량 (kg)</label>
+                                {!isEdit && (
+                                    <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer', fontSize: '0.8rem', color: '#64748b', fontWeight: 'normal' }}>
+                                        <input
+                                            type="checkbox"
+                                            checked={isMultiWeight}
+                                            onChange={(e) => setIsMultiWeight(e.target.checked)}
+                                            style={{ marginRight: '4px' }}
+                                        />
+                                        여러 중량
+                                    </label>
+                                )}
+                            </div>
+
+                            {isMultiWeight && !isEdit ? (
+                                <div>
+                                    <input
+                                        type="text"
+                                        name="weights"
+                                        value={formData.weights || ''}
+                                        onChange={handleChange}
+                                        placeholder="예: 5, 10"
+                                        style={inputStyle}
+                                    />
+                                </div>
+                            ) : (
+                                <input
+                                    type="number"
+                                    step="0.1"
+                                    name="weight"
+                                    value={formData.weight || ''}
+                                    onChange={handleChange}
+                                    style={inputStyle}
+                                />
+                            )}
+
+                            {isEdit && sameNameCount > 0 && String(formData.weight || '') !== String(originalWeight || '') && (
+                                <label style={{ fontSize: '0.8rem', color: '#1d4ed8', display: 'flex', alignItems: 'center', gap: '0.25rem', marginTop: '0.25rem', cursor: 'pointer' }}>
                                     <input type="checkbox" checked={updateAllWeights} onChange={e => setUpdateAllWeights(e.target.checked)} />
-                                    같은 이름의 다른 등급({sameNameCount}개)도 중량 변경
+                                    <span>같은 이름의 다른 등급({sameNameCount}개)도 중량 변경</span>
                                 </label>
                             )}
                         </div>
@@ -338,6 +567,16 @@ function ProductInputModal({ isOpen, onClose, onSuccess, initialData = null, isE
                     </div>
                 </form>
             </ModalShell>
+
+            <ConfirmModal
+                isOpen={confirmModal.isOpen}
+                onClose={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+                onConfirm={confirmModal.onConfirm}
+                title={confirmModal.title}
+                message={confirmModal.message}
+                type={confirmModal.type}
+                showCancel={confirmModal.showCancel ?? true}
+            />
         </>
     );
 }

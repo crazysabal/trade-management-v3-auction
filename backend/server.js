@@ -4,8 +4,10 @@ require('dotenv').config();
 
 const app = express();
 
+// CORS 설정
 // 미들웨어
-app.use(cors());
+app.use(cors({
+}));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -25,6 +27,8 @@ const warehousesRouter = require('./routes/warehouses');
 const inventoryTransferRouter = require('./routes/inventoryTransfer');
 const inventoryAdjustmentRouter = require('./routes/inventoryAdjustment');
 const inventoryProductionRouter = require('./routes/inventoryProduction'); // 신규 추가
+const expenseRouter = require('./routes/expenses');
+const expenseCategoryRouter = require('./routes/expenseCategories');
 
 app.use('/api/companies', companiesRouter);
 app.use('/api/products', productsRouter);
@@ -41,6 +45,8 @@ app.use('/api/warehouses', warehousesRouter);
 app.use('/api/inventory/transfer', inventoryTransferRouter);
 app.use('/api/inventory-production', inventoryProductionRouter);
 app.use('/api/inventory-adjustment', inventoryAdjustmentRouter); // Fix missing mount
+app.use('/api/expenses', expenseRouter);
+app.use('/api/expense-categories', expenseCategoryRouter);
 
 // 헬스체크
 app.get('/api/health', (req, res) => {

@@ -6,13 +6,58 @@ const db = require('../config/database');
 router.get('/', async (req, res) => {
     try {
         const [rows] = await db.query(`
-      SELECT * FROM warehouses 
-      ORDER BY display_order ASC, id ASC
-    `);
+            SELECT 
+                w.*,
+                (
+                    SELECT COUNT(*) 
+                    FROM purchase_inventory pi 
+                    WHERE pi.warehouse_id = w.id 
+                    AND pi.remaining_quantity > 0 
+                    AND pi.status = 'AVAILABLE'
+                ) as stock_count
+            FROM warehouses w
+            ORDER BY w.display_order ASC, w.id ASC
+        `);
         res.json({ success: true, data: rows });
     } catch (error) {
         console.error('창고 목록 조회 오류:', error);
         res.status(500).json({ success: false, message: '서버 오류가 발생했습니다.' });
+    }
+});
+
+// 창고 삭제
+router.delete('/:id', async (req, res) => {
+    const connection = await db.getConnection();
+    try {
+        await connection.beginTransaction();
+        const { id } = req.params;
+
+        // 1. 재고 확인
+        const [stockCheck] = await connection.query(`
+            SELECT COUNT(*) as count 
+            FROM purchase_inventory 
+            WHERE warehouse_id = ? 
+            AND remaining_quantity > 0 
+            AND status = 'AVAILABLE'
+        `, [id]);
+
+        if (stockCheck[0].count > 0) {
+            throw new Error('재고가 남아있는 창고는 삭제할 수 없습니다.');
+        }
+
+        // 2. 사용 이력 확인 (선택적: 이력이 있으면 비활성화를 권장하지만, 삭제를 막을지 여부는 정책 결정)
+        // 일단 재고만 없으면 삭제 가능하도록 처리 (FK 제약조건이 있다면 DB 에러 발생함)
+
+        await connection.query('DELETE FROM warehouses WHERE id = ?', [id]);
+
+        await connection.commit();
+        res.json({ success: true });
+    } catch (error) {
+        await connection.rollback();
+        console.error('창고 삭제 오류:', error);
+        res.status(400).json({ success: false, message: error.message || '삭제 실패' });
+    } finally {
+        connection.release();
     }
 });
 
