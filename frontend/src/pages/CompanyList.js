@@ -101,13 +101,39 @@ const CompanyRow = memo(function CompanyRow({
   );
 });
 
-function CompanyList() {
+// 다중 필터링 함수 (AND 조건) - 컴포넌트 외부
+// 다중 필터링 함수 (AND 조건) - 컴포넌트 외부
+const filterCompanies = (companies, filterText) => {
+  if (!filterText.trim()) return companies;
+
+  const keywords = filterText.toLowerCase().trim().split(/\s+/).filter(k => k);
+  return companies.filter(company => {
+    const typeText = company.company_type_flag === 'CUSTOMER' ? '매출처' :
+      company.company_type_flag === 'SUPPLIER' ? '매입처' : '매입/매출';
+    const activeText = company.is_active ? '사용' : '미사용';
+
+    const searchableText = [
+      company.company_name?.toLowerCase() || '',
+      company.company_code?.toLowerCase() || '',
+      company.alias?.toLowerCase() || '',
+      company.ceo_name?.toLowerCase() || '',
+      company.business_number || '',
+      typeText,
+      activeText,
+      company.phone || '',
+      company.email || ''
+    ].join(' ');
+
+    // 모든 키워드가 포함되어야 함
+    return keywords.every(keyword => searchableText.includes(keyword));
+  });
+};
+
+function CompanyList({ isWindow }) {
   const [companies, setCompanies] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState({
-    search: '',
-    type: '',
-    is_active: ''  // 전체
+    search: ''
   });
   const [draggedId, setDraggedId] = useState(null);
   const [dragOverId, setDragOverId] = useState(null);
@@ -173,32 +199,8 @@ function CompanyList() {
   useEffect(() => {
     if (originalCompanies.length === 0) return;
 
-    let result = [...originalCompanies];
-
-    // 1. 검색어 필터링
-    if (filters.search) {
-      const lowerSearch = filters.search.toLowerCase();
-      result = result.filter(company =>
-        (company.company_name && company.company_name.toLowerCase().includes(lowerSearch)) ||
-        (company.company_code && company.company_code.toLowerCase().includes(lowerSearch)) ||
-        (company.alias && company.alias.toLowerCase().includes(lowerSearch)) ||
-        (company.ceo_name && company.ceo_name.toLowerCase().includes(lowerSearch)) ||
-        (company.business_number && company.business_number.includes(lowerSearch))
-      );
-    }
-
-    // 2. 거래처 구분 필터링
-    if (filters.type) {
-      result = result.filter(company => company.company_type_flag === filters.type);
-    }
-
-    // 3. 사용여부 필터링
-    if (filters.is_active !== '') {
-      // filters.is_active가 문자열 'true'/'false'로 올 수 있으므로 변환 비교
-      const isActiveBool = filters.is_active === 'true';
-      result = result.filter(company => company.is_active === isActiveBool);
-    }
-
+    // 필터링 로직 개선 (단일 함수 사용)
+    const result = filterCompanies(originalCompanies, filters.search);
     setCompanies(result);
   }, [filters, originalCompanies]);
 
@@ -698,74 +700,12 @@ function CompanyList() {
     return <div className="loading">데이터를 불러오는 중...</div>;
   }
 
-  // 필터 옵션
-  const companyTypeOptions = [
-    { value: '', label: '전체' },
-    { value: 'CUSTOMER', label: '매출처' },
-    { value: 'SUPPLIER', label: '매입처' },
-    { value: 'BOTH', label: '매입/매출' }
-  ];
 
-  const activeOptions = [
-    { value: '', label: '전체' },
-    { value: 'true', label: '사용' },
-    { value: 'false', label: '미사용' }
-  ];
 
   return (
-    <div className="company-list" style={{ maxWidth: '1400px', margin: '0 auto' }}>
-      <div className="page-header" style={{ display: 'flex', alignItems: 'center' }}>
-        <h1 className="page-title" style={{ margin: 0 }}>🏢 거래처 관리</h1>
-        <div style={{ display: 'flex', gap: '0.5rem' }}>
-          {isSelectMode ? (
-            <>
-              <button
-                onClick={() => {
-                  setIsSelectMode(false);
-                  setSelectedIds([]);
-                }}
-                className="btn btn-secondary"
-              >
-                ✕ 취소
-              </button>
-              <button
-                onClick={handleMultiDelete}
-                className="btn btn-danger"
-                disabled={selectedIds.length === 0}
-              >
-                🗑 선택 삭제 ({selectedIds.length})
-              </button>
-            </>
-          ) : (
-            <>
-              <button
-                onClick={() => setIsSelectMode(true)}
-                className="btn btn-outline"
-                style={{
-                  border: '1px solid #ef4444',
-                  backgroundColor: 'white',
-                  color: '#ef4444'
-                }}
-              >
-                ☑ 선택 삭제
-              </button>
-              <button
-                onClick={() => setShowUploadModal(true)}
-                className="btn btn-outline"
-                style={{
-                  border: '1px solid #10b981',
-                  backgroundColor: 'white',
-                  color: '#10b981'
-                }}
-              >
-                📥 엑셀 일괄등록
-              </button>
-              <button onClick={handleCreate} className="btn btn-primary">
-                + 거래처 등록
-              </button>
-            </>
-          )}
-        </div>
+    <div className="company-list" style={{ maxWidth: isWindow ? '100%' : '1400px', margin: '0 auto', padding: isWindow ? '0 10px' : '0' }}>
+      <div className="page-header" style={{ display: isWindow ? 'none' : 'flex', alignItems: 'center' }}>
+        {!isWindow && <h1 className="page-title" style={{ margin: 0 }}>🏢 거래처 관리</h1>}
       </div>
 
       {isSelectMode && (
@@ -796,49 +736,142 @@ function CompanyList() {
       )}
 
       <div className="search-filter-container">
-        <div className="filter-row">
-          <div className="filter-group" style={{ flex: 1 }}>
-            <label>검색</label>
+        <div className="filter-row" style={{ gap: '8px' }}>
+          <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <label style={{ whiteSpace: 'nowrap', margin: 0 }}>검색</label>
             <input
               type="text"
-              placeholder="거래처명 또는 코드"
+              placeholder="🔍 거래처명, 대표자, 사업자번호, 구분... (띄어쓰기로 다중 검색)"
               value={filters.search}
               onChange={(e) => setFilters({ ...filters, search: e.target.value })}
               style={{
-                width: '100%',
-                padding: '0.6rem 1rem',
-                fontSize: '1rem',
-                border: '2px solid #1e293b',
-                borderRadius: '8px',
-                backgroundColor: '#ffffff'
+                flex: 1,
+                flex: 1,
+                padding: '0 0.75rem',
+                height: '38px',
+                border: '1px solid #ddd',
+                borderRadius: '4px',
+                fontSize: '0.9rem'
               }}
             />
           </div>
-          <div className="filter-group">
-            <label>거래처 구분</label>
-            <SearchableSelect
-              options={companyTypeOptions}
-              value={filters.type}
-              onChange={(option) => setFilters({ ...filters, type: option ? option.value : '' })}
-              placeholder="전체"
-              isClearable={false}
-            />
-          </div>
-          <div className="filter-group">
-            <label>사용여부</label>
-            <SearchableSelect
-              options={activeOptions}
-              value={filters.is_active}
-              onChange={(option) => setFilters({ ...filters, is_active: option ? option.value : '' })}
-              placeholder="전체"
-              isClearable={false}
-            />
-          </div>
-          <div className="filter-group">
-            <label>&nbsp;</label>
-            <button onClick={() => loadCompanies()} className="btn btn-primary">
-              검색
-            </button>
+
+          <button
+            onClick={() => {
+              setFilters({ ...filters, search: '' });
+              loadCompanies();
+            }}
+            className="btn btn-secondary"
+            disabled={!filters.search}
+            style={{
+              padding: '0 0.5rem',
+              height: '38px',
+              fontSize: '0.9rem',
+              whiteSpace: 'nowrap',
+              width: '80px',
+              flex: 'none',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}
+          >
+            초기화
+          </button>
+
+          <div style={{ display: 'flex', gap: '8px' }}>
+            {isSelectMode ? (
+              <>
+                <button
+                  onClick={() => {
+                    setIsSelectMode(false);
+                    setSelectedIds([]);
+                  }}
+                  className="btn btn-secondary"
+                  style={{
+                    padding: '0 0.75rem',
+                    height: '38px',
+                    fontSize: '0.9rem',
+                    whiteSpace: 'nowrap',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                  }}
+                >
+                  ✕ 취소
+                </button>
+                <button
+                  onClick={handleMultiDelete}
+                  className="btn btn-danger"
+                  disabled={selectedIds.length === 0}
+                  style={{
+                    padding: '0 0.75rem',
+                    height: '38px',
+                    fontSize: '0.9rem',
+                    whiteSpace: 'nowrap',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                  }}
+                >
+                  🗑 선택 삭제 ({selectedIds.length})
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  onClick={() => setIsSelectMode(true)}
+                  className="btn btn-outline"
+                  style={{
+                    border: '1px solid #ef4444',
+                    backgroundColor: 'white',
+                    color: '#ef4444',
+                    whiteSpace: 'nowrap',
+                    padding: '0 0.75rem',
+                    height: '38px',
+                    fontSize: '0.9rem',
+                    display: 'flex',
+                    alignItems: 'center'
+                  }}
+                >
+                  ☑ 선택 삭제
+                </button>
+                <button
+                  onClick={() => setShowUploadModal(true)}
+                  className="btn btn-outline"
+                  style={{
+                    border: '1px solid #10b981',
+                    backgroundColor: 'white',
+                    color: '#10b981',
+                    whiteSpace: 'nowrap',
+                    padding: '0 0.75rem',
+                    height: '38px',
+                    fontSize: '0.9rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                  }}
+                >
+                  📥 엑셀 불러오기
+                </button>
+                <button
+                  onClick={handleCreate}
+                  className="btn btn-primary"
+                  style={{
+                    whiteSpace: 'nowrap',
+                    padding: '0 0.75rem',
+                    height: '38px',
+                    fontSize: '0.9rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    width: '80px',
+                    flex: 'none'
+                  }}
+                >
+                  + 등록
+                </button>
+              </>
+            )}
           </div>
         </div>
       </div>
@@ -1146,7 +1179,8 @@ function CompanyList() {
         confirmText={modal.confirmText}
         showCancel={modal.showCancel}
       />
-    </div>
+
+    </div >
   );
 }
 

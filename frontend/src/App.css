@@ -14,139 +14,25 @@ body {
 .App {
   min-height: 100vh;
   display: flex;
-}
-
-/* ==================== 사이드바 ==================== */
-.sidebar {
-  width: 240px;
-  min-width: 240px;
-  background-color: #1e293b;
-  color: white;
-  display: flex;
   flex-direction: column;
-  position: fixed;
-  top: 0;
-  left: 0;
-  height: 100vh;
-  z-index: 1000;
-  box-shadow: 2px 0 10px rgba(0, 0, 0, 0.1);
+  /* 세로 배치 (Navbar + Content) */
 }
 
-.sidebar-header {
-  padding: 1.25rem 1rem;
-  border-bottom: 1px solid #334155;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.sidebar-logo {
-  font-size: 1.1rem;
-  font-weight: 700;
-  color: white;
-  text-decoration: none;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.sidebar-logo:hover {
-  color: #60a5fa;
-}
-
-.sidebar-nav {
-  flex: 1;
-  overflow-y: auto;
-  padding: 0.5rem 0;
-}
-
-.sidebar-menu {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-}
-
-.sidebar-item {
-  margin: 0;
-}
-
-.sidebar-link {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  padding: 0.75rem 1rem;
-  color: #cbd5e1;
-  text-decoration: none;
-  font-size: 0.9rem;
-  transition: all 0.15s ease;
-  cursor: pointer;
-}
-
-.sidebar-link:hover {
-  background-color: #334155;
-  color: white;
-}
-
-.sidebar-icon {
-  font-size: 1rem;
-  width: 1.25rem;
-  text-align: center;
-}
-
-.sidebar-arrow {
-  margin-left: auto;
-  font-size: 0.7rem;
-  transition: transform 0.2s ease;
-}
-
-/* 사이드바 드롭다운 */
-.sidebar-dropdown .sidebar-submenu {
-  max-height: 0;
-  overflow: hidden;
-  list-style: none;
-  padding: 0;
-  margin: 0;
-  background-color: #0f172a;
-  transition: max-height 0.25s ease-out;
-}
-
-.sidebar-dropdown.open .sidebar-submenu {
-  max-height: 500px;
-  transition: max-height 0.3s ease-in;
-}
-
-.sidebar-dropdown.open .sidebar-arrow {
-  transform: rotate(180deg);
-}
-
-.sidebar-dropdown-toggle {
-  user-select: none;
-}
-
-.sidebar-submenu li a {
-  display: block;
-  padding: 0.6rem 1rem 0.6rem 2.75rem;
-  color: #94a3b8;
-  text-decoration: none;
-  font-size: 0.85rem;
-  transition: all 0.15s ease;
-}
-
-.sidebar-submenu li a:hover {
-  background-color: #1e293b;
-  color: #60a5fa;
-}
+/* ==================== 사이드바 제거됨 ==================== */
+/* Navbar로 대체됨 */
 
 /* 메인 콘텐츠 */
 .main-content {
   flex: 1;
-  margin-left: 240px;
+  margin-left: 0;
+  /* 사이드바 공간 제거 */
   padding: 1.5rem 2rem;
-  min-height: 100vh;
   background-color: #f5f5f5;
+  width: 100%;
+  max-width: 1600px;
+  /* 너무 넓어지지 않게 제한 */
+  margin: 0 auto;
+  /* 중앙 정렬 */
   contain: layout style;
 }
 

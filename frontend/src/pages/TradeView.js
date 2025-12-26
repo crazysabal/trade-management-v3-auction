@@ -184,7 +184,7 @@ function TradeView() {
               <th style={{ padding: '0.75rem', border: '1px solid #ddd', width: '5%' }}>순번</th>
               <th style={{ padding: '0.75rem', border: '1px solid #ddd', width: '25%' }}>품목명</th>
               <th style={{ padding: '0.75rem', border: '1px solid #ddd', width: '15%' }}>규격</th>
-              <th style={{ padding: '0.75rem', border: '1px solid #ddd', width: '8%' }}>단위</th>
+
               <th style={{ padding: '0.75rem', border: '1px solid #ddd', width: '10%', textAlign: 'right' }}>수량</th>
               <th style={{ padding: '0.75rem', border: '1px solid #ddd', width: '12%', textAlign: 'right' }}>단가</th>
               <th style={{ padding: '0.75rem', border: '1px solid #ddd', width: '13%', textAlign: 'right' }}>공급가액</th>
@@ -203,9 +203,7 @@ function TradeView() {
                 <td style={{ padding: '0.75rem', border: '1px solid #ddd' }}>
                   {detail.specification || '-'}
                 </td>
-                <td style={{ padding: '0.75rem', border: '1px solid #ddd', textAlign: 'center' }}>
-                  {detail.unit}
-                </td>
+
                 <td style={{ padding: '0.75rem', border: '1px solid #ddd', textAlign: 'right' }}>
                   {formatCurrency(detail.quantity)}
                 </td>

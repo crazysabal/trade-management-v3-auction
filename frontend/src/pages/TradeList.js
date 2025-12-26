@@ -53,7 +53,7 @@ const filterTrades = (trades, filterText) => {
   });
 };
 
-function TradeList() {
+function TradeList({ isWindow, onOpenTradeEdit }) {
   const defaultDates = getDefaultDates();
   const [purchaseTrades, setPurchaseTrades] = useState([]);
   const [saleTrades, setSaleTrades] = useState([]);
@@ -364,12 +364,21 @@ function TradeList() {
                         >
                           출력
                         </button>
-                        <Link
-                          to={`/trades/edit/${trade.id}`}
-                          style={{ padding: '0.25rem 0.5rem', fontSize: '0.85rem', backgroundColor: '#95a5a6', color: 'white', textDecoration: 'none', borderRadius: '4px' }}
-                        >
-                          수정
-                        </Link>
+                        {isWindow && onOpenTradeEdit ? (
+                          <button
+                            onClick={() => onOpenTradeEdit(type, trade.id)}
+                            style={{ padding: '0.25rem 0.5rem', fontSize: '0.85rem', backgroundColor: '#95a5a6', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+                          >
+                            수정
+                          </button>
+                        ) : (
+                          <Link
+                            to={`/trades/edit/${trade.id}`}
+                            style={{ padding: '0.25rem 0.5rem', fontSize: '0.85rem', backgroundColor: '#95a5a6', color: 'white', textDecoration: 'none', borderRadius: '4px' }}
+                          >
+                            수정
+                          </Link>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -502,8 +511,8 @@ function TradeList() {
       flexDirection: 'column',
       height: 'calc(100vh - 60px)',
       backgroundColor: '#f5f6fa',
-      maxWidth: '1400px',
-      margin: '0 auto',
+      maxWidth: isWindow ? '100%' : '1400px',
+      margin: isWindow ? '0' : '0 auto',
       width: '100%'
     }}>
       {/* 헤더 */}

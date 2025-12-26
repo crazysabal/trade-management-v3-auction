@@ -670,7 +670,7 @@ function MatchingPage() {
   }
 
   return (
-    <div className="matching-page">
+    <div className="matching-page" style={{ maxWidth: '1600px', margin: '0 auto', padding: '0 1rem' }}>
       {/* 페이지 헤더 */}
       <div className="page-header" style={{ display: 'flex', alignItems: 'center' }}>
         <h1 className="page-title" style={{ margin: 0 }}>🔗 마감 (매출-매입 매칭)</h1>
@@ -1324,6 +1324,10 @@ function MatchingPage() {
                       <div className="matching-card-row">
                         <span className="matching-card-label">수량</span>
                         <span className="matching-card-value highlight">{formatNumber(m.matched_quantity)}</span>
+                      </div>
+                      <div className="matching-card-row">
+                        <span className="matching-card-label">단가</span>
+                        <span className="matching-card-value">{formatCurrency(m.purchase_unit_price)}</span>
                       </div>
                       <div className="matching-card-row">
                         <span className="matching-card-label">매입일</span>

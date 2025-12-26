@@ -112,6 +112,7 @@ const AuctionItemRow = React.memo(({
         indicatorSeparator: () => ({ display: 'none' }),
         dropdownIndicator: (base) => ({ ...base, padding: '4px' }),
         menu: (base) => ({ ...base, zIndex: 9999 }),
+        menuPortal: (base) => ({ ...base, zIndex: 99999 }), // Fix z-index issue
         menuList: (base) => ({ ...base, maxHeight: '400px' })
     }), [isMapped]);
 
@@ -151,7 +152,7 @@ const AuctionItemRow = React.memo(({
 });
 
 // --- Main Component ---
-function AuctionImportV2() {
+function AuctionImportV2({ isWindow }) {
     const navigate = useNavigate();
     const [accounts, setAccounts] = useState([]);
     const [rawData, setRawData] = useState([]);
@@ -531,22 +532,24 @@ function AuctionImportV2() {
     }, [rawData]);
 
     return (
-        <div className="auction-import" style={{ maxWidth: '1400px', margin: '0 auto', position: 'relative' }}>
+        <div className="auction-import" style={{ maxWidth: isWindow ? '100%' : '1400px', margin: isWindow ? '0' : '0 auto', position: 'relative' }}>
             {loading && (
                 <div className="loading-overlay">
                     <div className="loading-content"><div className="spinner"></div><p>{loadingMessage}</p></div>
                 </div>
             )}
 
-            <div className="page-header" style={{ display: 'flex', alignItems: 'center' }}>
-                <h1 className="page-title" style={{ margin: 0 }}>📥 경매 낙찰 데이터 가져오기</h1>
-            </div>
+            {!isWindow && (
+                <div className="page-header" style={{ display: 'flex', alignItems: 'center' }}>
+                    <h1 className="page-title" style={{ margin: 0 }}>📥 경매 낙찰 데이터 가져오기</h1>
+                </div>
+            )}
 
             {step === 1 && (
                 <div className="card">
                     <h2 className="card-title">낙찰 내역 크롤링</h2>
                     <div className="form-row" style={{ display: 'flex', alignItems: 'flex-end', gap: '1rem' }}>
-                        <div className="form-group" style={{ flex: 1 }}>
+                        <div className="form-group" style={{ width: '350px', flex: 'none', textAlign: 'left' }}>
                             <label className="required">경매 계정</label>
                             <SearchableSelect
                                 options={accounts.map(a => ({ value: a.id, label: `${a.account_name} (${a.username})` }))}
@@ -554,21 +557,28 @@ function AuctionImportV2() {
                                 onChange={o => setCrawlData({ ...crawlData, account_id: o ? o.value : '' })}
                             />
                         </div>
-                        <div className="form-group" style={{ flex: 1 }}>
+                        <div className="form-group" style={{ width: '180px', flex: 'none', textAlign: 'left' }}>
                             <label className="required">경매일자</label>
                             <input
                                 type="date"
                                 value={crawlData.crawl_date}
                                 onChange={e => setCrawlData({ ...crawlData, crawl_date: e.target.value })}
-                                style={{ fontSize: '0.9rem', height: '38px', boxSizing: 'border-box' }}
+                                style={{ fontSize: '0.9rem', height: '38px', boxSizing: 'border-box', textAlign: 'center' }}
                             />
                         </div>
+
+                        {/* 빈 공간 (Spacer) */}
+                        <div style={{ flex: 1 }}></div>
+
                         <button
                             onClick={handleCrawl}
                             className="btn btn-primary"
                             style={{
                                 height: '38px',
-                                minWidth: '100px',
+                                width: 'auto',
+                                minWidth: 'auto',
+                                flex: 'none',
+                                padding: '0 12px',
                                 display: 'flex',
                                 alignItems: 'center',
                                 justifyContent: 'center'
@@ -594,13 +604,7 @@ function AuctionImportV2() {
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
                             <h2 style={{ margin: 0 }}>품목 매칭</h2>
                             <div style={{ display: 'flex', gap: '8px' }}>
-                                <button
-                                    onClick={openProductPopup}
-                                    className="btn btn-secondary"
-                                    style={{ fontSize: '0.9rem', padding: '6px 12px', whiteSpace: 'nowrap' }}
-                                >
-                                    🛠️ 품목 관리 (팝업)
-                                </button>
+
                                 <button
                                     onClick={handleRefreshProducts}
                                     className="btn btn-secondary"
@@ -654,47 +658,17 @@ function AuctionImportV2() {
                             </table>
                         </div>
 
-                        <div style={{ marginTop: '2rem', padding: '1rem', backgroundColor: '#f8f9fa' }}>
-                            <h3>전표 생성 설정</h3>
-                            <div className="form-row" style={{ display: 'flex', alignItems: 'center', gap: '1.5rem', flexWrap: 'wrap' }}>
-                                <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                    <label style={{ fontWeight: 'bold', whiteSpace: 'nowrap' }}>매입처</label>
-                                    <div style={{ width: '250px' }}>
-                                        <SearchableSelect
-                                            options={companies.map(c => ({ value: c.id, label: c.company_name }))}
-                                            value={importConfig.supplier_id}
-                                            onChange={o => setImportConfig({ ...importConfig, supplier_id: o ? o.value : '' })}
-                                            menuPortalTarget={document.body}
-                                        />
-                                    </div>
-                                </div>
-                                <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                    <label style={{ fontWeight: 'bold', whiteSpace: 'nowrap' }}>입고 창고</label>
-                                    <div style={{ width: '250px' }}>
-                                        <SearchableSelect
-                                            options={warehouses.map(w => ({ value: w.id, label: w.name }))}
-                                            value={importConfig.warehouse_id}
-                                            onChange={o => setImportConfig({ ...importConfig, warehouse_id: o ? o.value : '' })}
-                                            placeholder="창고 선택 (기본값 사용)"
-                                            menuPortalTarget={document.body}
-                                        />
-                                    </div>
-                                </div>
-                                <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                    <label style={{ fontWeight: 'bold', whiteSpace: 'nowrap' }}>거래일자</label>
-                                    <input
-                                        type="date"
-                                        value={importConfig.trade_date}
-                                        onChange={e => setImportConfig({ ...importConfig, trade_date: e.target.value })}
-                                        style={{ padding: '4px 8px', borderRadius: '4px', border: '1px solid #ddd', height: '38px', boxSizing: 'border-box' }}
-                                    />
-                                </div>
+                        <div className="card" style={{ marginTop: '2rem' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                                <h2 className="card-title" style={{ margin: 0 }}>전표 생성 설정</h2>
                                 <button
                                     onClick={handleImport}
                                     className="btn btn-primary"
                                     disabled={mappedCount === 0}
                                     style={{
                                         height: '38px',
+                                        width: 'auto',
+                                        flex: 'none',
                                         display: 'flex',
                                         alignItems: 'center',
                                         justifyContent: 'center',
@@ -705,6 +679,41 @@ function AuctionImportV2() {
                                 >
                                     매입 전표 생성
                                 </button>
+                            </div>
+
+                            <div className="form-row" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'nowrap' }}>
+                                <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: '4px', flex: 1, minWidth: 0 }}>
+                                    <label style={{ fontWeight: 'bold', whiteSpace: 'nowrap' }}>매입처</label>
+                                    <div style={{ flex: 1, minWidth: 0 }}>
+                                        <SearchableSelect
+                                            options={companies.map(c => ({ value: c.id, label: c.company_name }))}
+                                            value={importConfig.supplier_id}
+                                            onChange={o => setImportConfig({ ...importConfig, supplier_id: o ? o.value : '' })}
+                                            menuPortalTarget={document.body}
+                                        />
+                                    </div>
+                                </div>
+                                <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: '4px', flex: 1, minWidth: 0 }}>
+                                    <label style={{ fontWeight: 'bold', whiteSpace: 'nowrap' }}>입고 창고</label>
+                                    <div style={{ flex: 1, minWidth: 0 }}>
+                                        <SearchableSelect
+                                            options={warehouses.map(w => ({ value: w.id, label: w.name }))}
+                                            value={importConfig.warehouse_id}
+                                            onChange={o => setImportConfig({ ...importConfig, warehouse_id: o ? o.value : '' })}
+                                            placeholder="창고 선택 (기본값 사용)"
+                                            menuPortalTarget={document.body}
+                                        />
+                                    </div>
+                                </div>
+                                <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: '4px', flex: 1, minWidth: 0 }}>
+                                    <label style={{ fontWeight: 'bold', whiteSpace: 'nowrap' }}>거래일자</label>
+                                    <input
+                                        type="date"
+                                        value={importConfig.trade_date}
+                                        onChange={e => setImportConfig({ ...importConfig, trade_date: e.target.value })}
+                                        style={{ padding: '4px 8px', borderRadius: '4px', border: '1px solid #ddd', height: '38px', boxSizing: 'border-box', flex: 1, minWidth: 0, textAlign: 'center' }}
+                                    />
+                                </div>
                             </div>
                         </div>
                     </div>

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { auctionAPI } from '../services/api';
 import ConfirmModal from '../components/ConfirmModal';
 
-function AuctionAccounts() {
+function AuctionAccounts({ isWindow }) {
   const [accounts, setAccounts] = useState([]);
   const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState({
@@ -92,78 +92,113 @@ function AuctionAccounts() {
   };
 
   return (
-    <div className="auction-accounts">
-      <div className="page-header" style={{ display: 'flex', alignItems: 'center' }}>
-        <h1 className="page-title" style={{ margin: 0 }}>🔐 경매 사이트 계정 관리</h1>
-        {!showForm && (
-          <button onClick={() => setShowForm(true)} className="btn btn-primary">
-            + 계정 추가
-          </button>
-        )}
-      </div>
+    <div className="auction-accounts" style={{ padding: isWindow ? '1rem' : undefined }}>
+      {!isWindow && (
+        <div className="page-header" style={{ display: 'flex', alignItems: 'center' }}>
+          <h1 className="page-title" style={{ margin: 0 }}>🔐 경매 사이트 계정 관리</h1>
+          {!showForm && (
+            <button onClick={() => setShowForm(true)} className="btn btn-primary">
+              + 계정 추가
+            </button>
+          )}
+        </div>
+      )}
 
       {showForm && (
-        <div className="card" style={{ marginBottom: '2rem' }}>
-          <h2 className="card-title">{formData.id ? '계정 수정' : '계정 추가'}</h2>
-          <form onSubmit={handleSubmit}>
-            <div className="form-row">
-              <div className="form-group">
-                <label className="required">계정명</label>
-                <input
-                  type="text"
-                  value={formData.account_name}
-                  onChange={(e) => setFormData({ ...formData, account_name: e.target.value })}
-                  placeholder="예: 대구중앙청과 계정"
-                  required
-                />
+        <div className="modal-overlay" onClick={handleCancel} style={{ zIndex: 1100 }}> {/* Ensure it's above other things */}
+          <div
+            className="modal-container"
+            onClick={e => e.stopPropagation()}
+            style={{ maxWidth: '600px', width: '90%', textAlign: 'left' }} // Override center alignment
+          >
+            <h2 className="modal-title" style={{ borderBottom: 'none', marginBottom: '1.5rem', textAlign: 'center' }}>
+              {formData.id ? '계정 수정' : '계정 추가'}
+            </h2>
+            <form onSubmit={handleSubmit}>
+              <div className="form-row">
+                <div className="form-group">
+                  <label className="required" style={{ textAlign: 'left' }}>계정명</label>
+                  <input
+                    type="text"
+                    value={formData.account_name}
+                    onChange={(e) => setFormData({ ...formData, account_name: e.target.value })}
+                    placeholder="예: 대구중앙청과 계정"
+                    required
+                    style={{ textAlign: 'left' }}
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="required" style={{ textAlign: 'left' }}>사이트 URL</label>
+                  <input
+                    type="text"
+                    value={formData.site_url}
+                    onChange={(e) => setFormData({ ...formData, site_url: e.target.value })}
+                    required
+                    style={{ textAlign: 'left' }}
+                  />
+                </div>
               </div>
-              <div className="form-group">
-                <label className="required">사이트 URL</label>
-                <input
-                  type="text"
-                  value={formData.site_url}
-                  onChange={(e) => setFormData({ ...formData, site_url: e.target.value })}
-                  required
-                />
-              </div>
-            </div>
 
-            <div className="form-row">
-              <div className="form-group">
-                <label className="required">아이디</label>
-                <input
-                  type="text"
-                  value={formData.username}
-                  onChange={(e) => setFormData({ ...formData, username: e.target.value })}
-                  required
-                />
+              <div className="form-row">
+                <div className="form-group">
+                  <label className="required" style={{ textAlign: 'left' }}>아이디</label>
+                  <input
+                    type="text"
+                    value={formData.username}
+                    onChange={(e) => setFormData({ ...formData, username: e.target.value })}
+                    required
+                    style={{ textAlign: 'left' }}
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="required" style={{ textAlign: 'left' }}>비밀번호</label>
+                  <input
+                    type="password"
+                    value={formData.password}
+                    onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                    placeholder={formData.id ? '(변경하지 않으려면 비워두세요)' : ''}
+                    required={!formData.id}
+                    style={{ textAlign: 'left' }}
+                  />
+                </div>
               </div>
-              <div className="form-group">
-                <label className="required">비밀번호</label>
-                <input
-                  type="password"
-                  value={formData.password}
-                  onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                  placeholder={formData.id ? '(변경하지 않으려면 비워두세요)' : ''}
-                  required={!formData.id}
-                />
-              </div>
-            </div>
 
-            <div className="form-actions">
-              <button type="button" onClick={handleCancel} className="btn btn-secondary">
-                취소
-              </button>
-              <button type="submit" className="btn btn-primary">
-                {formData.id ? '수정' : '저장'}
-              </button>
-            </div>
-          </form>
+              <div className="form-actions" style={{ justifyContent: 'center', borderTop: 'none', paddingTop: 0, marginTop: '2rem' }}>
+                <button type="button" onClick={handleCancel} className="btn btn-secondary" style={{ minWidth: '100px' }}>
+                  취소
+                </button>
+                <button type="submit" className="btn btn-primary" style={{ minWidth: '100px' }}>
+                  {formData.id ? '수정' : '저장'}
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
 
       <div className="card">
-        <h2 className="card-title">저장된 계정</h2>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+          <h2 className="card-title" style={{ marginBottom: 0 }}>저장된 계정</h2>
+          {isWindow && !showForm && (
+            <button
+              onClick={() => setShowForm(true)}
+              className="btn btn-primary"
+              style={{
+                height: '38px',
+                padding: '0 8px',
+                fontSize: '0.85rem',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                minWidth: 'auto',
+                width: 'auto',
+                flex: 'none'
+              }}
+            >
+              + 계정 추가
+            </button>
+          )}
+        </div>
         <div className="table-container">
           <table>
             <thead>

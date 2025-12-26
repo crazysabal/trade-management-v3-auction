@@ -130,7 +130,7 @@ const ProductionDetailModal = ({ isOpen, onClose, productionId }) => {
                                 <div className="trade-detail-info-item">
                                     <label>생산 수량</label>
                                     <div className="trade-detail-info-value">
-                                        {formatNumber(data.output_quantity)} {data.unit}
+                                        {formatNumber(data.output_quantity)}
                                     </div>
                                 </div>
                                 <div className="trade-detail-info-item">

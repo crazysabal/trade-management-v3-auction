@@ -4,7 +4,7 @@ async function updateTrigger() {
   try {
     await db.query('DROP TRIGGER IF EXISTS after_trade_detail_insert');
     console.log('기존 트리거 삭제');
-    
+
     await db.query(`
       CREATE TRIGGER after_trade_detail_insert
       AFTER INSERT ON trade_details
@@ -15,8 +15,10 @@ async function updateTrigger() {
           DECLARE v_after_qty DECIMAL(15,2) DEFAULT 0;
           DECLARE v_trade_date DATE;
           DECLARE v_count INT DEFAULT 0;
+          DECLARE v_company_id INT;
+          DECLARE v_warehouse_id INT;
 
-          SELECT trade_type, trade_date INTO v_trade_type, v_trade_date
+          SELECT trade_type, trade_date, company_id, warehouse_id INTO v_trade_type, v_trade_date, v_company_id, v_warehouse_id
           FROM trade_masters WHERE id = NEW.trade_master_id;
 
           SELECT COUNT(*) INTO v_count FROM inventory WHERE product_id = NEW.product_id;
@@ -31,6 +33,7 @@ async function updateTrigger() {
           IF v_trade_type = 'PURCHASE' THEN
               SET v_after_qty = v_before_qty + NEW.quantity;
 
+              -- 1. Updates Legacy/Aggregate Inventory
               INSERT INTO inventory (product_id, quantity, weight, purchase_price)
               VALUES (NEW.product_id, NEW.quantity, NEW.total_weight, NEW.unit_price)
               ON DUPLICATE KEY UPDATE
@@ -38,6 +41,18 @@ async function updateTrigger() {
                   weight = weight + IFNULL(NEW.total_weight, 0),
                   purchase_price = NEW.unit_price;
 
+              -- 2. Insert into purchase_inventory (For Matching)
+              INSERT INTO purchase_inventory (
+                  trade_detail_id, product_id, company_id, warehouse_id, purchase_date,
+                  original_quantity, remaining_quantity, unit_price, total_weight,
+                  shipper_location, sender, status
+              ) VALUES (
+                  NEW.id, NEW.product_id, v_company_id, IFNULL(v_warehouse_id, 1), v_trade_date,
+                  NEW.quantity, NEW.quantity, NEW.unit_price, IFNULL(NEW.total_weight, 0),
+                  IFNULL(NEW.shipper_location, ''), IFNULL(NEW.sender, ''), 'AVAILABLE'
+              );
+
+              -- 3. Insert into inventory_transactions (For History)
               INSERT INTO inventory_transactions
               (transaction_date, transaction_type, product_id, quantity, weight, unit_price,
                before_quantity, after_quantity, trade_detail_id, reference_number, created_by)
@@ -66,7 +81,7 @@ async function updateTrigger() {
     `);
     console.log('트리거 업데이트 완료');
     process.exit(0);
-  } catch(e) {
+  } catch (e) {
     console.error(e);
     process.exit(1);
   }

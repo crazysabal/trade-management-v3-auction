@@ -223,19 +223,21 @@ const TradeController = {
                     [tradeId]
                 );
 
-                existingRows.forEach(row => existingInventoryMap.set(row.detail_id, row));
+                existingRows.forEach(row => existingInventoryMap.set(String(row.detail_id), row));
 
                 // A. 유효성 검사 루프
                 // A-1. 삭제된 항목 검사 (입력에 없는 기존 항목)
-                const inputIds = new Set(details.filter(d => d.id).map(d => d.id));
+                const inputIds = new Set(details.filter(d => d.id).map(d => String(d.id)));
                 for (const [detailId, row] of existingInventoryMap) {
                     if (!inputIds.has(detailId)) {
                         if (parseFloat(row.matched_quantity) > 0) {
                             await connection.rollback();
+                            // 추가 정보 조회를 위해 product_id로 이름 찾기 (existingRows에는 product_name이 없음)
+                            // 하지만 에러 메시지 퀄리티를 위해... 일단 ID와 수량이라도 표시
                             throw {
                                 status: 400,
-                                message: `이미 매칭된 내역이 있는 품목은 삭제할 수 없습니다.`,
-                                data: { matched_quantity: row.matched_quantity }
+                                message: `이미 출고(매칭)된 내역이 있는 품목은 삭제할 수 없습니다.\n(Item ID: ${detailId}, Matched: ${row.matched_quantity})`,
+                                data: { matched_quantity: row.matched_quantity, detailId }
                             };
                         }
                     }
@@ -244,7 +246,7 @@ const TradeController = {
                 // A-2. 수정된 항목 검사
                 for (const newDetail of details) {
                     if (newDetail.id) {
-                        const existing = existingInventoryMap.get(newDetail.id);
+                        const existing = existingInventoryMap.get(String(newDetail.id));
                         if (existing) {
                             // 품목 변경 불가 (매칭된 경우)
                             if (String(existing.product_id) !== String(newDetail.product_id) && parseFloat(existing.matched_quantity) > 0) {
@@ -274,7 +276,7 @@ const TradeController = {
 
             if (tradeType === 'SALE') {
                 const [existingDetails] = await connection.query(
-                    `SELECT td.id, td.product_id, td.quantity, td.unit_price,
+                    `SELECT td.id, td.product_id, td.quantity, td.unit_price, td.purchase_price,
                   COALESCE(SUM(spm.matched_quantity), 0) as matched_quantity,
                   GROUP_CONCAT(spm.id) as matching_ids,
                   GROUP_CONCAT(spm.purchase_inventory_id) as inventory_ids,
@@ -282,9 +284,10 @@ const TradeController = {
            FROM trade_details td
            LEFT JOIN sale_purchase_matching spm ON td.id = spm.sale_detail_id
            WHERE td.trade_master_id = ?
-           GROUP BY td.id, td.product_id, td.quantity, td.unit_price`,
+           GROUP BY td.id, td.product_id, td.quantity, td.unit_price, td.purchase_price`,
                     [tradeId]
                 );
+
 
                 existingDetails.forEach(d => existingMap.set(d.product_id, d));
 
@@ -371,9 +374,9 @@ const TradeController = {
                 // 8-A. PURCHASE 전표: in-place 업데이트
 
                 // 삭제 대상 처리 (Delete missing items)
-                const inputIds = new Set(details.filter(d => d.id).map(d => d.id));
+                const inputIdsStep8 = new Set(details.filter(d => d.id).map(d => String(d.id)));
                 for (const [detailId, row] of existingInventoryMap) {
-                    if (!inputIds.has(detailId)) {
+                    if (!inputIdsStep8.has(detailId)) {
                         // 이미 3번 단계에서 매칭 여부 검증함. 
                         // purchase_inventory 삭제 (CASCADE로 삭제될 수 있지만 명시적 삭제 권장)
                         await connection.query('DELETE FROM purchase_inventory WHERE id = ?', [row.inventory_id]);
@@ -381,13 +384,15 @@ const TradeController = {
                     }
                 }
 
-                // Upsert 루프
+                // Upsert 루프 (Debug Log Added)
+                // console.log('Existing Keys:', Array.from(existingInventoryMap.keys())); 
                 for (let i = 0; i < details.length; i++) {
                     const detail = details[i];
+                    // console.log(`Step 8 Item ${i}: ID=${detail.id}, Type=${typeof detail.id}, InMap=${existingInventoryMap.has(String(detail.id))}`);
 
-                    if (detail.id && existingInventoryMap.has(detail.id)) {
+                    if (detail.id && existingInventoryMap.has(String(detail.id))) {
                         // UPDATE
-                        const existing = existingInventoryMap.get(detail.id);
+                        const existing = existingInventoryMap.get(String(detail.id));
                         const matchedQty = parseFloat(existing.matched_quantity) || 0;
                         const newQty = parseFloat(detail.quantity);
 
@@ -403,7 +408,8 @@ const TradeController = {
                                 detail.total_amount || detail.supply_amount || 0,
                                 detail.auction_price || detail.unit_price || 0,
                                 detail.notes || '', detail.shipper_location || null,
-                                detail.sender_name || detail.sender || null, detail.purchase_price || null,
+                                detail.sender_name || detail.sender || null,
+                                detail.purchase_price !== undefined ? detail.purchase_price : (existing.purchase_price || null),
                                 detail.id
                             ]
                         );
@@ -472,6 +478,7 @@ const TradeController = {
                 if (details && details.length > 0) {
                     for (let i = 0; i < details.length; i++) {
                         const detail = details[i];
+                        const existing = existingMap.get(detail.product_id);
                         const [detailResult] = await connection.query(
                             `INSERT INTO trade_details (
                   trade_master_id, seq_no, product_id, quantity, total_weight, 
@@ -484,7 +491,8 @@ const TradeController = {
                                 detail.total_amount || detail.supply_amount || 0,
                                 detail.auction_price || detail.unit_price || 0,
                                 detail.notes || '', detail.shipper_location || null,
-                                detail.sender_name || detail.sender || null, detail.purchase_price || null
+                                detail.sender_name || detail.sender || null,
+                                detail.purchase_price !== undefined ? detail.purchase_price : (existing ? existing.purchase_price : null)
                             ]
                         );
 

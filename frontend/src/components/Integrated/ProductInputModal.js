@@ -67,7 +67,7 @@ function ProductInputModal({ isOpen, onClose, onSuccess, initialData = null, isE
         product_name: '',
         grade: '',
         grades: '',
-        unit: 'Box',
+
         category_id: '',
         weight: '',
         weights: '',
@@ -108,7 +108,7 @@ function ProductInputModal({ isOpen, onClose, onSuccess, initialData = null, isE
                     ...initialData,
                     product_name: initialData.product_name || '',
                     grade: initialData.grade || '',
-                    unit: initialData.unit || 'Box',
+
                     category_id: initialData.category_id || '',
                     weight: initialData.weight !== null ? parseFloat(initialData.weight) : '',
                     notes: initialData.notes || '',
@@ -132,7 +132,7 @@ function ProductInputModal({ isOpen, onClose, onSuccess, initialData = null, isE
             product_name: '',
             grade: '',
             grades: '',
-            unit: 'Box',
+
             category_id: '',
             weight: '',
             weights: '',
@@ -176,7 +176,7 @@ function ProductInputModal({ isOpen, onClose, onSuccess, initialData = null, isE
             setFormData(prev => ({
                 ...prev,
                 product_name: p.product_name || '',
-                unit: p.unit || 'Box',
+
                 category_id: p.category_id || '',
                 weight: p.weight ? parseFloat(p.weight) : '',
                 weights: '',
@@ -427,7 +427,6 @@ function ProductInputModal({ isOpen, onClose, onSuccess, initialData = null, isE
                                             setFormData({
                                                 ...formData,
                                                 product_name: p.product_name,
-                                                unit: p.unit,
                                                 category_id: p.category_id,
                                                 weight: p.weight || '',
                                                 weights: '',
@@ -501,63 +500,51 @@ function ProductInputModal({ isOpen, onClose, onSuccess, initialData = null, isE
                         )}
                     </div>
 
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+
+                    <div style={{ display: 'flex', alignItems: 'center', marginBottom: '0.2rem' }}>
+                        <label style={{ ...labelStyle, marginBottom: 0, marginRight: '0.5rem' }}>중량 (kg)</label>
+                        {!isEdit && (
+                            <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer', fontSize: '0.8rem', color: '#64748b', fontWeight: 'normal' }}>
+                                <input
+                                    type="checkbox"
+                                    checked={isMultiWeight}
+                                    onChange={(e) => setIsMultiWeight(e.target.checked)}
+                                    style={{ marginRight: '4px' }}
+                                />
+                                여러 중량
+                            </label>
+                        )}
+                    </div>
+
+                    {isMultiWeight && !isEdit ? (
                         <div>
-                            <label style={labelStyle}>단위</label>
                             <input
                                 type="text"
-                                name="unit"
-                                value={formData.unit || ''}
+                                name="weights"
+                                value={formData.weights || ''}
                                 onChange={handleChange}
+                                placeholder="예: 5, 10"
                                 style={inputStyle}
                             />
                         </div>
-                        <div>
-                            <div style={{ display: 'flex', alignItems: 'center', marginBottom: '0.2rem' }}>
-                                <label style={{ ...labelStyle, marginBottom: 0, marginRight: '0.5rem' }}>중량 (kg)</label>
-                                {!isEdit && (
-                                    <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer', fontSize: '0.8rem', color: '#64748b', fontWeight: 'normal' }}>
-                                        <input
-                                            type="checkbox"
-                                            checked={isMultiWeight}
-                                            onChange={(e) => setIsMultiWeight(e.target.checked)}
-                                            style={{ marginRight: '4px' }}
-                                        />
-                                        여러 중량
-                                    </label>
-                                )}
-                            </div>
+                    ) : (
+                        <input
+                            type="number"
+                            step="0.1"
+                            name="weight"
+                            value={formData.weight || ''}
+                            onChange={handleChange}
+                            style={inputStyle}
+                        />
+                    )}
 
-                            {isMultiWeight && !isEdit ? (
-                                <div>
-                                    <input
-                                        type="text"
-                                        name="weights"
-                                        value={formData.weights || ''}
-                                        onChange={handleChange}
-                                        placeholder="예: 5, 10"
-                                        style={inputStyle}
-                                    />
-                                </div>
-                            ) : (
-                                <input
-                                    type="number"
-                                    step="0.1"
-                                    name="weight"
-                                    value={formData.weight || ''}
-                                    onChange={handleChange}
-                                    style={inputStyle}
-                                />
-                            )}
+                    {isEdit && sameNameCount > 0 && String(formData.weight || '') !== String(originalWeight || '') && (
+                        <label style={{ fontSize: '0.8rem', color: '#1d4ed8', display: 'flex', alignItems: 'center', gap: '0.25rem', marginTop: '0.25rem', cursor: 'pointer' }}>
+                            <input type="checkbox" checked={updateAllWeights} onChange={e => setUpdateAllWeights(e.target.checked)} />
+                            <span>같은 이름의 다른 등급({sameNameCount}개)도 중량 변경</span>
+                        </label>
+                    )}
 
-                            {isEdit && sameNameCount > 0 && String(formData.weight || '') !== String(originalWeight || '') && (
-                                <label style={{ fontSize: '0.8rem', color: '#1d4ed8', display: 'flex', alignItems: 'center', gap: '0.25rem', marginTop: '0.25rem', cursor: 'pointer' }}>
-                                    <input type="checkbox" checked={updateAllWeights} onChange={e => setUpdateAllWeights(e.target.checked)} />
-                                    <span>같은 이름의 다른 등급({sameNameCount}개)도 중량 변경</span>
-                                </label>
-                            )}
-                        </div>
-                    </div>
 
                     <div style={{ marginTop: '1rem', display: 'flex', justifyContent: 'flex-end', gap: '0.5rem' }}>
                         <button type="button" onClick={onClose} style={{ padding: '0.5rem 1rem', borderRadius: '6px', border: '1px solid #cbd5e1', backgroundColor: 'white', cursor: 'pointer' }}>취소</button>

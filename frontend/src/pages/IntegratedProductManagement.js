@@ -3,7 +3,7 @@ import { useLocation } from 'react-router-dom';
 import CategoryManager from '../components/Integrated/CategoryManager';
 import ProductManager from '../components/Integrated/ProductManager';
 
-function IntegratedProductManagement() {
+function IntegratedProductManagement({ isWindow }) {
     const location = useLocation();
     const isPopup = location.pathname.startsWith('/popup');
 
@@ -106,8 +106,8 @@ function IntegratedProductManagement() {
     };
 
     return (
-        <div style={{ display: 'flex', flexDirection: 'column', height: isPopup ? '100vh' : 'calc(100vh - 60px)' }}>
-            {!isPopup && (
+        <div style={{ display: 'flex', flexDirection: 'column', height: (isPopup || isWindow) ? '100%' : 'calc(100vh - 60px)' }}>
+            {!isPopup && !isWindow && (
                 <div className="page-header" style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
                     <h1 className="page-title" style={{ margin: 0 }}>📦 품목 관리</h1>
                 </div>

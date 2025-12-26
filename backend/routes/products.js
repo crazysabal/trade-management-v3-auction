@@ -126,7 +126,7 @@ router.get('/:id', async (req, res) => {
 // 품목 등록 (다중 등급 지원)
 router.post('/', async (req, res) => {
   try {
-    const { product_name, grades, unit, category_id, weight, notes } = req.body;
+    const { product_name, grades, category_id, weight, notes } = req.body;
 
     // grades 파싱 (배열 또는 콤마 구분 문자열 지원)
     let gradeList = [req.body.grade || null];
@@ -182,9 +182,9 @@ router.post('/', async (req, res) => {
           const finalWeight = (w !== null && w !== undefined && w !== '') ? parseFloat(w) : null;
 
           const [result] = await db.query(
-            `INSERT INTO products (product_code, product_name, grade, unit, category_id, weight, notes)
-             VALUES (?, ?, ?, ?, ?, ?, ?)`,
-            [nextCode, product_name, grade || null, unit || 'Box', category_id || null, finalWeight, notes]
+            `INSERT INTO products (product_code, product_name, grade, category_id, weight, notes)
+             VALUES (?, ?, ?, ?, ?, ?)`,
+            [nextCode, product_name, grade || null, category_id || null, finalWeight, notes]
           );
 
           createdProducts.push({
@@ -222,7 +222,7 @@ router.post('/', async (req, res) => {
 // 품목 수정
 router.put('/:id', async (req, res) => {
   try {
-    const { product_code, product_name, grade, unit, category_id, weight, notes, is_active, updateAllGrades, updateAllWeights, originalProductName } = req.body;
+    const { product_code, product_name, grade, category_id, weight, notes, is_active, updateAllGrades, updateAllWeights, originalProductName } = req.body;
 
     // 품목코드 중복 체크 (자기 자신 제외)
     const [existing] = await db.query(
@@ -237,9 +237,9 @@ router.put('/:id', async (req, res) => {
     const [result] = await db.query(
       `UPDATE products SET
         product_code = ?, product_name = ?, grade = ?,
-        unit = ?, category_id = ?, weight = ?, notes = ?, is_active = ?
+        category_id = ?, weight = ?, notes = ?, is_active = ?
       WHERE id = ?`,
-      [product_code, product_name, grade || null, unit, category_id || null, weight || null, notes, is_active, req.params.id]
+      [product_code, product_name, grade || null, category_id || null, weight || null, notes, is_active, req.params.id]
     );
 
     if (result.affectedRows === 0) {

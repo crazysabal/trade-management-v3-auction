@@ -152,3 +152,47 @@ function ConfirmModal({
 
 export default ConfirmModal;
 
+/**
+ * 모달 사용을 위한 커스텀 훅
+ * 페이지에서 모달 상태와 내용을 쉽게 관리하도록 도움
+ */
+export const useConfirmModal = () => {
+  const [modalState, setModalState] = React.useState({
+    isOpen: false,
+    title: '',
+    message: '',
+    type: 'confirm',
+    onConfirm: () => { },
+    showCancel: true
+  });
+
+  const openModal = ({ type = 'confirm', title, message, onConfirm, showCancel = true }) => {
+    setModalState({
+      isOpen: true,
+      title,
+      message,
+      type,
+      onConfirm: onConfirm || (() => { }),
+      showCancel
+    });
+  };
+
+  const closeModal = () => {
+    setModalState(prev => ({ ...prev, isOpen: false }));
+  };
+
+  // JSX 컴포넌트를 반환하여 페이지에서 쉽게 렌더링하도록 함
+  const ConfirmModalComponent = (
+    <ConfirmModal
+      {...modalState}
+      onClose={closeModal}
+    />
+  );
+
+  return {
+    openModal,
+    closeModal,
+    ConfirmModalComponent
+  };
+};
+

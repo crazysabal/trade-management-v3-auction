@@ -81,13 +81,13 @@ const smallStyles = {
   ...customStyles,
   control: (base, state) => ({
     ...customStyles.control(base, state),
-    minHeight: '32px',
-    height: '32px'
+    minHeight: '30px',
+    height: '30px'
   }),
   valueContainer: (base) => ({
     ...base,
     padding: '0 8px',
-    height: '30px'
+    height: '28px'
   }),
   option: (base, state) => ({
     ...customStyles.option(base, state),

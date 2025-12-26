@@ -81,7 +81,7 @@ router.get('/', async (req, res) => {
       params.push(end_date);
     }
 
-    query += ' ORDER BY p.product_name ASC, pi.sender ASC, p.sort_order ASC, pi.purchase_date ASC';
+    query += ' ORDER BY pi.display_order ASC, p.product_name ASC, pi.purchase_date ASC';
 
     const [rows] = await db.query(query, params);
 
@@ -93,6 +93,32 @@ router.get('/', async (req, res) => {
 });
 
 /**
+ * 재고 순서 변경
+ * PUT /api/purchase-inventory/reorder
+ */
+router.put('/reorder', async (req, res) => {
+  const connection = await db.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    const { orderedIds } = req.body; // [id1, id2, id3, ...]
+
+    for (let i = 0; i < orderedIds.length; i++) {
+      await connection.query('UPDATE purchase_inventory SET display_order = ? WHERE id = ?', [i, orderedIds[i]]);
+    }
+
+    await connection.commit();
+    res.json({ success: true });
+  } catch (error) {
+    await connection.rollback();
+    console.error('재고 순서 변경 오류:', error);
+    res.status(500).json({ success: false, message: '서버 오류가 발생했습니다.' });
+  } finally {
+    connection.release();
+  }
+});
+
+/**
  * 재고 수불부 (입출고 이력)
  * GET /api/purchase-inventory/transactions
  * 
@@ -100,8 +126,83 @@ router.get('/', async (req, res) => {
  */
 router.get('/transactions', async (req, res) => {
   try {
-    const { product_id, start_date, end_date } = req.query;
-    console.log(`[DEBUG] GET /transactions params:`, { product_id, start_date, end_date });
+    const { product_id, start_date, end_date, warehouse_id, transaction_type } = req.query;
+    console.log(`[DEBUG] GET /transactions params:`, { product_id, start_date, end_date, warehouse_id, transaction_type });
+
+    // [NEW] 초기 이월 재고 계산 (start_date 이전의 모든 입출고 합산)
+    const initialStocks = {};
+    if (start_date) {
+      // 1. 이전 입고 합계
+      let prevInQuery = `
+        SELECT pi.product_id, SUM(pi.original_quantity) as total_in
+        FROM purchase_inventory pi
+        WHERE pi.purchase_date < ?
+      `;
+      const prevInParams = [start_date];
+      if (product_id) {
+        prevInQuery += ' AND pi.product_id = ?';
+        prevInParams.push(product_id);
+      }
+      if (warehouse_id) {
+        prevInQuery += ' AND pi.warehouse_id = ?';
+        prevInParams.push(warehouse_id);
+      }
+      prevInQuery += ' GROUP BY pi.product_id';
+      const [prevInRows] = await db.query(prevInQuery, prevInParams);
+
+      // 2. 이전 출고(매칭) 합계
+      let prevOutQuery = `
+        SELECT pi.product_id, SUM(spm.matched_quantity) as total_out
+        FROM sale_purchase_matching spm
+        JOIN purchase_inventory pi ON spm.purchase_inventory_id = pi.id
+        WHERE DATE(spm.matched_at) < ?
+      `;
+      const prevOutParams = [start_date];
+      if (product_id) {
+        prevOutQuery += ' AND pi.product_id = ?';
+        prevOutParams.push(product_id);
+      }
+      if (warehouse_id) {
+        prevOutQuery += ' AND pi.warehouse_id = ?';
+        prevOutParams.push(warehouse_id);
+      }
+      prevOutQuery += ' GROUP BY pi.product_id';
+      const [prevOutRows] = await db.query(prevOutQuery, prevOutParams);
+
+      // 3. 이전 생산투입 합계
+      let prevProdQuery = `
+        SELECT pi.product_id, SUM(ipi.used_quantity) as total_used
+        FROM inventory_production_ingredients ipi
+        JOIN purchase_inventory pi ON ipi.used_inventory_id = pi.id
+        JOIN inventory_productions ip ON ipi.production_id = ip.id
+        WHERE DATE(ip.created_at) < ?
+      `;
+      const prevProdParams = [start_date];
+      if (product_id) {
+        prevProdQuery += ' AND pi.product_id = ?';
+        prevProdParams.push(product_id);
+      }
+      if (warehouse_id) {
+        prevProdQuery += ' AND pi.warehouse_id = ?';
+        prevProdParams.push(warehouse_id);
+      }
+      prevProdQuery += ' GROUP BY pi.product_id';
+      const [prevProdRows] = await db.query(prevProdQuery, prevProdParams);
+
+      // 합산
+      prevInRows.forEach(row => {
+        if (!initialStocks[row.product_id]) initialStocks[row.product_id] = 0;
+        initialStocks[row.product_id] += parseFloat(row.total_in || 0);
+      });
+      prevOutRows.forEach(row => {
+        if (!initialStocks[row.product_id]) initialStocks[row.product_id] = 0;
+        initialStocks[row.product_id] -= parseFloat(row.total_out || 0);
+      });
+      prevProdRows.forEach(row => {
+        if (!initialStocks[row.product_id]) initialStocks[row.product_id] = 0;
+        initialStocks[row.product_id] -= parseFloat(row.total_used || 0);
+      });
+    }
 
     let params = [];
     let productFilter = '';
@@ -122,6 +223,11 @@ router.get('/transactions', async (req, res) => {
       params.push(end_date);
     }
 
+    if (warehouse_id) {
+      dateFilter += ' AND pi.warehouse_id = ?';
+      params.push(warehouse_id);
+    }
+
     // 입고 내역 (매입 및 생산 입고)
     const inQuery = `
       SELECT 
@@ -130,6 +236,7 @@ router.get('/transactions', async (req, res) => {
         pi.id as reference_id,
         pi.product_id,
         p.product_name,
+        p.weight as product_weight,
         p.grade,
         pi.original_quantity as quantity,
         pi.unit_price,
@@ -139,12 +246,16 @@ router.get('/transactions', async (req, res) => {
         pi.sender,
         tm.trade_number,
         tm.id as trade_master_id,
-        pi.created_at as detail_date
+        tm.trade_number,
+        tm.id as trade_master_id,
+        pi.created_at as detail_date,
+        w.name as warehouse_name
       FROM purchase_inventory pi
       JOIN products p ON pi.product_id = p.id
       JOIN companies c ON pi.company_id = c.id
       JOIN trade_details td ON pi.trade_detail_id = td.id
       JOIN trade_masters tm ON td.trade_master_id = tm.id
+      LEFT JOIN warehouses w ON pi.warehouse_id = w.id
       WHERE 1=1 ${productFilter} ${dateFilter}
     `;
 
@@ -168,6 +279,11 @@ router.get('/transactions', async (req, res) => {
       outParams.push(end_date);
     }
 
+    if (warehouse_id) {
+      outDateFilter += ' AND pi.warehouse_id = ?';
+      outParams.push(warehouse_id);
+    }
+
     const outQuery = `
       SELECT 
         'SALE' as transaction_type,
@@ -175,6 +291,7 @@ router.get('/transactions', async (req, res) => {
         spm.id as reference_id,
         pi.product_id,
         p.product_name,
+        p.weight as product_weight,
         p.grade,
         spm.matched_quantity as quantity,
         td_sale.unit_price,
@@ -184,13 +301,17 @@ router.get('/transactions', async (req, res) => {
         '' as sender,
         tm_sale.trade_number,
         tm_sale.id as trade_master_id,
-        spm.matched_at as detail_date
+        tm_sale.trade_number,
+        tm_sale.id as trade_master_id,
+        spm.matched_at as detail_date,
+        w.name as warehouse_name
       FROM sale_purchase_matching spm
       JOIN purchase_inventory pi ON spm.purchase_inventory_id = pi.id
       JOIN products p ON pi.product_id = p.id
       JOIN trade_details td_sale ON spm.sale_detail_id = td_sale.id
       JOIN trade_masters tm_sale ON td_sale.trade_master_id = tm_sale.id
       JOIN companies c ON tm_sale.company_id = c.id
+      LEFT JOIN warehouses w ON pi.warehouse_id = w.id
       WHERE 1=1 ${outProductFilter} ${outDateFilter}
     `;
 
@@ -217,6 +338,11 @@ router.get('/transactions', async (req, res) => {
       prodParams.push(end_date);
     }
 
+    if (warehouse_id) {
+      prodDateFilter += ' AND pi.warehouse_id = ?';
+      prodParams.push(warehouse_id);
+    }
+
     const prodQuery = `
       SELECT 
         'PRODUCTION_OUT' as transaction_type,
@@ -224,6 +350,7 @@ router.get('/transactions', async (req, res) => {
         ipi.id as reference_id,
         pi.product_id,
         p.product_name,
+        p.weight as product_weight,
         p.grade,
         ipi.used_quantity as quantity,
         pi.unit_price,
@@ -233,12 +360,16 @@ router.get('/transactions', async (req, res) => {
         'SYSTEM' as sender,
         CONCAT('PROD-', ip.id) as trade_number,
         NULL as trade_master_id,
-        ip.created_at as detail_date
+        CONCAT('PROD-', ip.id) as trade_number,
+        NULL as trade_master_id,
+        ip.created_at as detail_date,
+        w.name as warehouse_name
       FROM inventory_production_ingredients ipi
       JOIN inventory_productions ip ON ipi.production_id = ip.id
       JOIN purchase_inventory pi ON ipi.used_inventory_id = pi.id
       JOIN products p ON pi.product_id = p.id
       JOIN companies c ON pi.company_id = c.id
+      LEFT JOIN warehouses w ON pi.warehouse_id = w.id
       WHERE 1=1 ${prodProductFilter} ${prodDateFilter}
     `;
 
@@ -254,19 +385,35 @@ router.get('/transactions', async (req, res) => {
       if (dateA.getTime() !== dateB.getTime()) {
         return dateA - dateB;
       }
-      return new Date(a.detail_date) - new Date(b.detail_date);
+      const timeDiff = new Date(a.detail_date) - new Date(b.detail_date);
+      if (timeDiff !== 0) return timeDiff;
+
+      return (a.trade_number || '').localeCompare(b.trade_number || '');
     });
 
+    // transaction_type 필터링 (메모리 상에서 처리 - 간편함)
+    // SQL에서 처리하려면 각 쿼리마다 조건 넣어야 하는데 복잡함
+    let filteredRows = allRows;
+    if (transaction_type) {
+      if (transaction_type === 'IN') {
+        filteredRows = allRows.filter(r => ['IN', 'PURCHASE', 'PRODUCTION_IN'].includes(r.transaction_type));
+      } else if (transaction_type === 'OUT') {
+        filteredRows = allRows.filter(r => ['OUT', 'SALE', 'PRODUCTION_OUT'].includes(r.transaction_type));
+      } else {
+        filteredRows = allRows.filter(r => r.transaction_type === transaction_type);
+      }
+    }
+
     // 누적 재고 계산 (품목별)
-    const stockByProduct = {};
-    const result = allRows.map(row => {
+    const stockByProduct = { ...initialStocks };
+    const result = filteredRows.map(row => {
       const key = row.product_id;
-      if (!stockByProduct[key]) {
+      if (stockByProduct[key] === undefined) {
         stockByProduct[key] = 0;
       }
 
       const qty = parseFloat(row.quantity);
-      if (row.transaction_type === 'IN') {
+      if (['IN', 'PURCHASE', 'PRODUCTION_IN'].includes(row.transaction_type)) {
         stockByProduct[key] += qty;
       } else {
         stockByProduct[key] -= qty;

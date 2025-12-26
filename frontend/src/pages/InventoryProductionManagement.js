@@ -629,7 +629,7 @@ const InventoryProductionManagement = () => {
                                         <td style={{ padding: '10px' }}>{new Date(item.created_at).toLocaleString()}</td>
                                         <td style={{ padding: '10px', fontWeight: 'bold', color: '#333' }}>{item.output_product_name}</td>
                                         <td style={{ padding: '10px', textAlign: 'right', color: '#2980b9' }}>
-                                            {Number(item.output_quantity).toLocaleString()}{item.unit}
+                                            {Number(item.output_quantity).toLocaleString()}
                                         </td>
                                         <td style={{ padding: '10px', color: '#777' }}>{item.memo}</td>
                                         <td style={{ padding: '10px', textAlign: 'center' }}>

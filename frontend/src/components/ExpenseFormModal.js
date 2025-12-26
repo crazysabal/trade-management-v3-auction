@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import { expenseAPI, expenseCategoryAPI, settingsAPI } from '../services/api';
 import ConfirmModal from '../components/ConfirmModal'; // ConfirmModal 추가
 import '../components/TradePanel.css'; // Modal styles recycled
 
@@ -49,7 +49,7 @@ export default function ExpenseFormModalComponent({ isOpen, onClose, initialData
 
     const fetchCategories = async () => {
         try {
-            const res = await axios.get('http://localhost:5000/api/expense-categories/active');
+            const res = await expenseCategoryAPI.getAll({ is_active: true });
             if (Array.isArray(res.data)) {
                 setCategories(res.data);
             } else {
@@ -63,7 +63,7 @@ export default function ExpenseFormModalComponent({ isOpen, onClose, initialData
 
     const fetchPaymentMethods = async () => {
         try {
-            const res = await axios.get('http://localhost:5000/api/settings/payment-methods?is_active=true');
+            const res = await settingsAPI.getPaymentMethods({ is_active: true });
             if (res.data.success && Array.isArray(res.data.data)) {
                 setPaymentMethods(res.data.data);
             } else {
@@ -78,12 +78,11 @@ export default function ExpenseFormModalComponent({ isOpen, onClose, initialData
     const handleSubmit = async (e) => {
         e.preventDefault();
         try {
-            const url = initialData
-                ? `http://localhost:5000/api/expenses/${initialData.id}`
-                : 'http://localhost:5000/api/expenses';
-            const method = initialData ? 'put' : 'post';
-
-            await axios[method](url, formData);
+            if (initialData) {
+                await expenseAPI.update(initialData.id, formData);
+            } else {
+                await expenseAPI.create(formData);
+            }
             onSuccess();
             onClose();
         } catch (err) {

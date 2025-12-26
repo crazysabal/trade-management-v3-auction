@@ -284,7 +284,7 @@ router.get('/recent', async (req, res) => {
                 p.product_name AS output_product_name,
                 p.grade AS output_product_grade,
                 pi.original_quantity AS output_quantity,
-                p.unit AS unit,
+
                 pi.unit_price AS unit_cost
             FROM inventory_productions ip
             LEFT JOIN purchase_inventory pi ON ip.output_inventory_id = pi.id
@@ -317,7 +317,7 @@ router.get('/', async (req, res) => {
                 p.product_name AS output_product_name,
                 p.grade AS output_product_grade,
                 pi.original_quantity AS output_quantity,
-                p.unit AS unit,
+
                 pi.unit_price AS unit_cost
             FROM inventory_productions ip
             LEFT JOIN purchase_inventory pi ON ip.output_inventory_id = pi.id
@@ -381,7 +381,7 @@ router.get('/:id', async (req, res) => {
                 p.product_name AS output_product_name,
                 p.grade AS output_product_grade,
                 pi.original_quantity AS output_quantity,
-                p.unit AS unit,
+
                 pi.unit_price AS unit_cost,
                 pi.id as output_inventory_id
             FROM inventory_productions ip

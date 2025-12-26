@@ -138,6 +138,8 @@ function TradePanel({
   const unitPriceRefs = useRef([]);
   const shipperLocationRefs = useRef([]);
   const focusValueRef = useRef({}); // 입력 포커스 시 값 저장용
+  const dragHandleRef = useRef(false); // 드래그 핸들 클릭 상태 추적
+  const lastReportedDirty = useRef(null); // 마지막으로 보고된 수정 상태 (무한 루프 방지)
   const senderRefs = useRef([]);
   const notesRefs = useRef([]);
   const modalConfirmRef = useRef(null);
@@ -174,10 +176,20 @@ function TradePanel({
   // 변경사항 감지
   const checkDirty = useCallback(() => {
     if (!initialData) return false;
-    if (master.trade_date !== initialData.master.trade_date) return true;
-    if (String(master.company_id || '') !== String(initialData.master.company_id || '')) return true;
-    if (String(master.warehouse_id || '') !== String(initialData.master.warehouse_id || '')) return true;
-    if ((master.notes || '') !== (initialData.master.notes || '')) return true;
+
+    // 상세 비교 및 원인 로깅
+    if (String(master.trade_date) !== String(initialData.master.trade_date)) {
+      return true;
+    }
+    if (String(master.company_id || '') !== String(initialData.master.company_id || '')) {
+      return true;
+    }
+    if (String(master.warehouse_id || '') !== String(initialData.master.warehouse_id || '')) {
+      return true;
+    }
+    if ((master.notes || '') !== (initialData.master.notes || '')) {
+      return true;
+    }
 
     const currentDetails = details.filter(d => d.product_id && d.quantity);
     const initialDetails = initialData.details.filter(d => d.product_id && d.quantity);
@@ -190,10 +202,29 @@ function TradePanel({
       if (String(current.product_id || '') !== String(initial.product_id || '')) return true;
       if (Number(current.quantity || 0) !== Number(initial.quantity || 0)) return true;
       if (Number(current.unit_price || 0) !== Number(initial.unit_price || 0)) return true;
+      if ((current.notes || '') !== (initial.notes || '')) return true;
+
     }
 
+    // 입금/출금 변경사항 확인
+    if (pendingPayments.length > 0) return true;
+    if (deletedPaymentIds.length > 0) return true;
+    if (Object.keys(modifiedPayments).length > 0) return true;
+
     return false;
-  }, [initialData, master, details]);
+  }, [initialData, master, details, pendingPayments, deletedPaymentIds, modifiedPayments]);
+
+  // 변경사항 상태 동기화
+  useEffect(() => {
+    const isDirty = checkDirty();
+    // 무한 루프 방지: 값이 실제로 변경되었을 때만 부모에게 알림
+    if (lastReportedDirty.current !== isDirty) {
+      lastReportedDirty.current = isDirty;
+      if (onDirtyChange) {
+        onDirtyChange(isDirty);
+      }
+    }
+  }, [checkDirty, onDirtyChange]);
 
   // 초기 데이터 로드
   useEffect(() => {
@@ -203,11 +234,12 @@ function TradePanel({
   // initialTradeId가 있으면 해당 전표 로드 (최초 1회만)
   const initialLoadDone = useRef(false);
   useEffect(() => {
-    if (initialTradeId && !loading && companies.length > 0 && !initialLoadDone.current) {
+    // 로딩 상태와 무관하게 데이터가 준비되면 전표 로드 시작 (연속 로딩 UX)
+    if (initialTradeId && companies.length > 0 && !initialLoadDone.current) {
       initialLoadDone.current = true;
       loadTrade(initialTradeId);
     }
-  }, [initialTradeId, loading, companies.length]);
+  }, [initialTradeId, companies.length]);
 
   const loadInitialData = async () => {
     try {
@@ -240,8 +272,12 @@ function TradePanel({
     } catch (error) {
       console.error('초기 데이터 로딩 오류:', error);
       showModal('warning', '로딩 실패', '데이터를 불러오는데 실패했습니다.');
+      setLoading(false); // 에러 시에는 로딩 해제
     } finally {
-      setLoading(false);
+      // 전표를 이어서 로드해야 하는 경우 로딩 상태 유지 (깜빡임 방지)
+      if (!initialTradeId) {
+        setLoading(false);
+      }
     }
   };
 
@@ -429,13 +465,17 @@ function TradePanel({
   };
 
   // 폼 초기화
+  // 폼 초기화
   const resetForm = (date, companyId = '') => {
+    // 날짜 기본값 로직 일원화
+    const effectiveDate = date || formatLocalDate(new Date());
+
     // 빈 행 생성
     const emptyRow = {
       rowIndex: 0,
       product_id: '',
       product_name: '',
-      unit: '',
+
       quantity: '',
       unit_price: '',
       supply_amount: 0,
@@ -446,7 +486,7 @@ function TradePanel({
 
     setMaster({
       trade_type: tradeType,
-      trade_date: date || formatLocalDate(new Date()),
+      trade_date: effectiveDate,
       company_id: companyId,
       warehouse_id: '',
       notes: '',
@@ -462,7 +502,7 @@ function TradePanel({
     setDeletedPaymentIds([]);
     setModifiedPayments({});
     setInitialData({
-      master: { trade_type: tradeType, trade_date: date, company_id: companyId, warehouse_id: '', notes: '' },
+      master: { trade_type: tradeType, trade_date: effectiveDate, company_id: companyId, warehouse_id: '', notes: '' },
       details: []
     });
 
@@ -499,7 +539,7 @@ function TradePanel({
       rowIndex: details.length,
       product_id: '',
       product_name: '',
-      unit: '',
+
       quantity: '',
       unit_price: '',
       supply_amount: 0,
@@ -669,7 +709,7 @@ function TradePanel({
       rowIndex: 0,
       product_id: item.product_id,
       product_name: item.product_name,
-      unit: '',
+
       quantity: qty,
       unit_price: price,
       supply_amount: qty * price,
@@ -711,6 +751,23 @@ function TradePanel({
 
   const handleDetailChange = (index, field, value) => {
     const newDetails = [...details];
+
+    // 품목 변경 시 재고 연결 해제 (데이터 불일치 방지)
+    if (field === 'product_id' && newDetails[index].inventory_id) {
+      const currentDetail = newDetails[index];
+      // 이미 점유된 재고 수량이 있다면 반환
+      if (onInventoryUpdate && currentDetail.quantity) {
+        const qtyToRestore = parseFloat(currentDetail.quantity) || 0;
+        if (qtyToRestore > 0) {
+          onInventoryUpdate(currentDetail.inventory_id, qtyToRestore);
+        }
+      }
+      // 재고 관련 필드 초기화 (일반 입력 모드로 전환)
+      delete newDetails[index].inventory_id;
+      delete newDetails[index].inventory_remaining; // 잔량 정보 제거
+      delete newDetails[index].max_quantity; // 최대 수량 제약 해제
+      delete newDetails[index].matched_inventory_id;
+    }
 
     // 재고 수량 동기화 및 초과 검증
     if (field === 'quantity' && newDetails[index].inventory_id && onInventoryUpdate) {
@@ -782,13 +839,7 @@ function TradePanel({
 
     newDetails[index][field] = value;
 
-    // 품목 선택 시 단위 자동 입력
-    if (field === 'product_id') {
-      const product = products.find(p => p.id == value);
-      if (product) {
-        newDetails[index].unit = product.unit || '';
-      }
-    }
+
 
     // 금액 계산
     if (field === 'quantity' || field === 'unit_price') {
@@ -982,6 +1033,7 @@ function TradePanel({
           total_price: totalAmount
         },
         details: validDetails.map(d => ({
+          id: d.id, // ID 포함 (수정 시 필수)
           product_id: d.product_id,
           quantity: parseFloat(d.quantity) || 0,
           unit_price: parseFloat(d.unit_price) || 0,
@@ -1203,19 +1255,10 @@ function TradePanel({
   // 최종 잔고 (전잔고 + 금일 - 입금)
   const displayBalance = currentSubtotal - displayPayment;
 
-  // 변경사항 여부 계산 (hooks 전에 계산)
-  const isDirty = checkDirty();
-  const hasModifiedPaymentsCalc = Object.keys(modifiedPayments).length > 0;
-  const hasDeletedPaymentsCalc = deletedPaymentIds.length > 0;
-  const hasPendingPaymentsCalc = pendingPayments.length > 0;
-  const hasChanges = isDirty || hasPendingPaymentsCalc || hasModifiedPaymentsCalc || hasDeletedPaymentsCalc;
+  // 변경사항 여부 (UI 버튼 스타일링용)
+  const hasChanges = checkDirty();
 
-  // 변경사항 상태를 부모에게 알림 (조건부 return 전에 hooks 호출)
-  useEffect(() => {
-    if (onDirtyChange) {
-      onDirtyChange(panelId, hasChanges);
-    }
-  }, [hasChanges, panelId, onDirtyChange]);
+
 
   if (loading) {
     return <div className="loading" style={{ padding: '2rem', textAlign: 'center' }}>로딩 중...</div>;
@@ -1235,63 +1278,20 @@ function TradePanel({
       overflow: 'hidden',
       fontSize: fs(1)
     }}>
-      {/* 페이지 헤더 */}
-      <div className="page-header" style={{
-        marginBottom: 0,
-        display: 'flex',
-        justifyContent: 'center',
-        alignItems: 'center',
-        gap: '0.5rem',
-        padding: '0.5rem 0.75rem',
-        backgroundColor: isPurchase ? '#fdf2f2' : '#f0f7ff',
-        borderBottom: '2px solid',
-        borderColor: isPurchase ? '#c0392b' : '#2980b9',
-        flexShrink: 0
-      }}>
-        <h1 style={{
-          margin: 0,
-          fontSize: fs(1),
-          fontWeight: '700',
-          color: isPurchase ? '#c0392b' : '#2980b9'
-        }}>
-          {isPurchase ? '📦 매입 전표' : '💰 매출 전표'} {isEdit ? '수정' : '등록'}
-        </h1>
-        {hasChanges && (
-          <span style={{
-            fontSize: fs(0.75),
-            backgroundColor: '#e74c3c',
-            color: 'white',
-            padding: '2px 8px',
-            borderRadius: '10px',
-            fontWeight: '600',
-            animation: 'pulse 1.5s ease-in-out infinite'
-          }}>
-            수정됨
-          </span>
-        )}
-        <style>{`
-          @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.6; }
-          }
-          @keyframes buttonPulse {
-            0%, 100% { box-shadow: 0 0 0 0 rgba(46, 204, 113, 0.7); }
-            50% { box-shadow: 0 0 0 8px rgba(46, 204, 113, 0); }
-          }
-        `}</style>
-      </div>
+      {/* 페이지 헤더 제거됨 (Floating Window 타이틀바로 통합) */}
 
       {/* 메인 콘텐츠 영역 */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: '0.5rem', minHeight: 0, overflow: 'hidden' }}>
         {/* 기본 정보 카드 */}
-        <div className="card" style={{ marginBottom: '0.5rem', padding: '0.75rem', flexShrink: 0, backgroundColor: cardColor }}>
+        <div className="card" style={{ marginBottom: '0.5rem', padding: '9px', flexShrink: 0, backgroundColor: cardColor }}>
           <div className="trade-form-row">
-            <div className="trade-form-group trade-date-group">
-              <label className="trade-label required">거래일자</label>
-              <div className="trade-input-wrapper">
+            <div className="trade-form-group trade-date-group" style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '8px', height: '32px' }}>
+              {/* <label className="trade-label required" style={{ marginBottom: 0, whiteSpace: 'nowrap' }}>거래일자</label> */}
+              <div className="trade-input-wrapper" style={{ flex: 1, height: '100%' }}>
                 <button
                   type="button"
                   className="btn btn-sm btn-icon"
+                  style={{ height: '100%' }}
                   onClick={() => handleDateChange(-1)}
                 >◀</button>
                 <input
@@ -1300,34 +1300,54 @@ function TradePanel({
                   onChange={(e) => handleDateInputChange(e.target.value)}
                   className="trade-date-input"
                   required
+                  style={{ flex: 1, height: '100%' }}
                 />
                 <button
                   type="button"
                   className="btn btn-sm btn-icon"
+                  style={{ height: '100%' }}
                   onClick={() => handleDateChange(1)}
                 >▶</button>
               </div>
             </div>
-            <div className="trade-form-group" style={{ flex: 1 }}>
-              <label className="trade-label required">거래처</label>
-              <SearchableSelect
-                ref={companyRef}
-                options={companyOptions}
-                value={master.company_id}
-                onChange={handleCompanyChange}
-                placeholder="거래처 선택..."
-                noOptionsMessage="거래처 없음"
-              />
+            <div className="trade-form-group" style={{ flex: 1, display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '8px', height: '32px' }}>
+              {/* <label className="trade-label required" style={{ marginBottom: 0, whiteSpace: 'nowrap' }}>거래처</label> */}
+              <div style={{ flex: 1, height: '100%' }}>
+                <SearchableSelect
+                  ref={companyRef}
+                  options={companyOptions}
+                  value={master.company_id}
+                  onChange={handleCompanyChange}
+                  placeholder="거래처 선택..."
+                  noOptionsMessage="거래처 없음"
+                  styles={{
+                    control: (base) => ({ ...base, minHeight: '32px', height: '32px' }),
+                    valueContainer: (base) => ({ ...base, height: '30px', padding: '0 8px' }),
+                    indicatorsContainer: (base) => ({ ...base, height: '30px' }),
+                    menuPortal: (base) => ({ ...base, zIndex: 99999 })
+                  }}
+                  menuPortalTarget={document.body}
+                />
+              </div>
             </div>
             {isPurchase && (
-              <div className="trade-form-group" style={{ width: '180px' }}>
-                <label className="trade-label">입고 창고</label>
-                <SearchableSelect
-                  options={warehouses.map(w => ({ value: w.id, label: w.name }))}
-                  value={master.warehouse_id}
-                  onChange={(o) => setMaster({ ...master, warehouse_id: o ? o.value : '' })}
-                  placeholder="기본 창고"
-                />
+              <div className="trade-form-group" style={{ width: '250px', display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '8px', height: '32px' }}>
+                {/* <label className="trade-label" style={{ marginBottom: 0, whiteSpace: 'nowrap' }}>입고 창고</label> */}
+                <div style={{ flex: 1, height: '100%' }}>
+                  <SearchableSelect
+                    options={warehouses.map(w => ({ value: w.id, label: w.name }))}
+                    value={master.warehouse_id}
+                    onChange={(o) => setMaster({ ...master, warehouse_id: o ? o.value : '' })}
+                    placeholder="기본 창고"
+                    styles={{
+                      control: (base) => ({ ...base, minHeight: '32px', height: '32px' }),
+                      valueContainer: (base) => ({ ...base, height: '30px', padding: '0 8px' }),
+                      indicatorsContainer: (base) => ({ ...base, height: '30px' }),
+                      menuPortal: (base) => ({ ...base, zIndex: 99999 })
+                    }}
+                    menuPortalTarget={document.body}
+                  />
+                </div>
               </div>
             )}
             {/* 버튼 영역 */}
@@ -1370,7 +1390,8 @@ function TradePanel({
         </div>
 
         {/* 메인 콘텐츠 영역 (품목 상세 + 잔고) */}
-        <div className="trade-content-area">
+        {/* 메인 콘텐츠 영역 (품목 상세 + 잔고) */}
+        <div className="trade-content-area" style={{ flexDirection: 'column' }}>
 
           {/* 왼쪽: 품목 상세 카드 */}
           <div className="trade-detail-card" style={{ backgroundColor: cardColor }}>
@@ -1419,7 +1440,14 @@ function TradePanel({
                     <tr
                       key={index}
                       draggable={!isMobile}
-                      onDragStart={(e) => handleDragStart(e, index)}
+                      onDragStart={(e) => {
+                        // 핸들(삼선)을 잡았을 때만 드래그 시작 (Ref 체크)
+                        if (!dragHandleRef.current) {
+                          e.preventDefault();
+                          return;
+                        }
+                        handleDragStart(e, index);
+                      }}
                       onDragOver={(e) => {
                         e.stopPropagation();
                         handleDragOver(e, index);
@@ -1435,7 +1463,12 @@ function TradePanel({
                     >
                       <td>
                         <span className="trade-index-cell">
-                          <span className="trade-drag-handle">☰</span>
+                          <span
+                            className="trade-drag-handle"
+                            onMouseDown={() => { dragHandleRef.current = true; }}
+                            onMouseUp={() => { dragHandleRef.current = false; }}
+                            onMouseLeave={() => { dragHandleRef.current = false; }}
+                          >☰</span>
                           {index + 1}
                         </span>
                       </td>
@@ -1448,6 +1481,8 @@ function TradePanel({
                           placeholder="품목 검색..."
                           noOptionsMessage="품목 없음"
                           menuPortalTarget={document.body}
+                          size="small"
+                          isDisabled={!!detail.inventory_id} // 재고 드롭 항목은 품목 변경 불가
                         />
                       </td>
                       <td>
@@ -1562,236 +1597,259 @@ function TradePanel({
               </table>
             </div>
 
-            {/* 비고 */}
-            <div className="note-section">
-              <label className="trade-section-label">비고</label>
-              <textarea
-                value={master.notes}
-                onChange={(e) => setMaster({ ...master, notes: e.target.value })}
-                rows="4"
-                className="trade-textarea"
-                placeholder="메모 입력..."
-              />
-            </div>
           </div>
 
-          {/* 오른쪽: 잔고 정보 카드 */}
-          <div className="trade-balance-card" style={{ backgroundColor: cardColor }}>
-            <h2 className="card-title trade-card-title">
-              💰 {isPurchase ? '매입처 잔고' : '매출처 잔고'}
-            </h2>
+          {/* 하단 영역: 비고 및 잔고 */}
+          <div style={{ display: 'flex', gap: '0.5rem', flexShrink: 0, alignItems: 'stretch' }}>
 
-            {/* 잔고 정보 리스트 */}
-            <div className="balance-list">
-              <div className="balance-item header">
-                <span className="font-medium text-blue">금일 합계</span>
-                <span className={`font-bold ${isPurchase ? 'text-red' : 'text-blue'}`}>
-                  {formatCurrency(currentTodayTotal)}원
-                </span>
-              </div>
-              <div className="balance-item">
-                <span className="balance-text-label">전잔고</span>
-                <span className="balance-text-value">{formatCurrency(summary.previous_balance)}원</span>
-              </div>
-              <div className="balance-item">
-                <span className="balance-text-label">전잔고 + 금일</span>
-                <span className="balance-text-value">{formatCurrency(currentSubtotal)}원</span>
-              </div>
-              <div className="balance-item">
-                <span className="balance-text-label">
-                  {isPurchase ? '출금' : '입금'}
-                  {pendingTotal > 0 && <span className="tag-pending-count"> ({pendingPayments.length}건)</span>}
-                </span>
-                <span className="balance-text-value text-green">
-                  {formatCurrency(displayPayment)}원
-                </span>
+            {/* 왼쪽: 비고 카드 (새로 생성) */}
+            <div className="card" style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: '9px', backgroundColor: cardColor }}>
+              <h2 className="card-title trade-card-title" style={{ marginBottom: '0.5rem' }}>비고</h2>
+              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+                <textarea
+                  value={master.notes}
+                  onChange={(e) => setMaster({ ...master, notes: e.target.value })}
+                  className="trade-textarea"
+                  placeholder="메모 입력..."
+                  style={{ flex: 1, resize: 'none', width: '100%' }}
+                  disabled={!master.company_id}
+                />
               </div>
             </div>
 
-            {/* 잔고 */}
-            {/* 잔고 */}
-            {(() => {
-              // 잔고 상태별 색상 클래스
-              const balanceClass = displayBalance > 0 ? 'positive' : displayBalance < 0 ? 'negative' : 'zero';
+            {/* 오른쪽: 잔고 정보 카드 */}
+            <div className="trade-balance-card" style={{ backgroundColor: cardColor }}>
 
-              return (
-                <div className={`balance-box ${balanceClass}`}>
-                  <span className="balance-box-label">
-                    잔고{pendingTotal > 0 ? ' (예정)' : ''}
-                  </span>
-                  <span className="balance-box-value">
-                    {displayBalance < 0 ? '-' : ''}{formatCurrency(Math.abs(displayBalance))}원
+
+              {/* 잔고 정보 리스트 */}
+              <div className="balance-list">
+                <div className="balance-item header">
+                  <span className="font-medium text-blue">금일 합계</span>
+                  <span className={`font-bold ${isPurchase ? 'text-red' : 'text-blue'}`}>
+                    {formatCurrency(currentTodayTotal)}원
                   </span>
                 </div>
-              );
-            })()}
-
-            {/* 입출금 내역 섹션 */}
-            <div className="payment-section-wrapper">
-              <div className="payment-section-header">
-                <h3 className="trade-section-label m-0">
-                  📋 {isPurchase ? '출금' : '입금'} 내역
-                </h3>
-                <button
-                  type="button"
-                  onClick={handleOpenAddPayment}
-                  disabled={!master.company_id}
-                  className="payment-add-btn"
-                  style={{
-                    backgroundColor: master.company_id ? (isPurchase ? '#3498db' : '#27ae60') : '#ccc',
-                  }}
-                >
-                  + {isPurchase ? '출금' : '입금'} 추가
-                </button>
+                <div className="balance-item">
+                  <span className="balance-text-label">전잔고</span>
+                  <span className="balance-text-value">{formatCurrency(summary.previous_balance)}원</span>
+                </div>
+                <div className="balance-item">
+                  <span className="balance-text-label">전잔고 + 금일</span>
+                  <span className="balance-text-value">{formatCurrency(currentSubtotal)}원</span>
+                </div>
+                <div className="balance-item">
+                  <span className="balance-text-label">
+                    {isPurchase ? '출금' : '입금'}
+                    {pendingTotal > 0 && <span className="tag-pending-count"> ({pendingPayments.length}건)</span>}
+                  </span>
+                  <span className="balance-text-value text-green">
+                    {formatCurrency(displayPayment)}원
+                  </span>
+                </div>
               </div>
 
-              {/* 입출금 내역 리스트 제거됨 (기존 방식 복귀) */}
+              {/* 잔고 */}
+              {/* 잔고 */}
+              {(() => {
+                // 잔고 상태별 색상 클래스
+                const balanceClass = displayBalance > 0 ? 'positive' : displayBalance < 0 ? 'negative' : 'zero';
 
-              {/* 연결된 입금 내역 */}
-              {(linkedPayments.length > 0 || pendingPayments.length > 0) ? (
-                <div className="payment-list-container">
-                  {linkedPayments.map(payment => {
-                    const linkType = payment.link_type;
-                    const displayAmount = linkType === 'allocated' ? payment.allocated_amount : payment.amount;
-                    // 직접 연결 또는 수금/지급에서 등록한 것은 삭제 가능 (배분된 것은 불가)
-                    const canDelete = linkType === 'direct' || linkType === 'general';
-                    const isModified = modifiedPayments[payment.id]; // 수정 대기 중인지 확인
+                return (
+                  <div className={`balance-box ${balanceClass}`}>
+                    <span className="balance-box-label">
+                      잔고{pendingTotal > 0 ? ' (예정)' : ''}
+                    </span>
+                    <span className="balance-box-value">
+                      {displayBalance < 0 ? '-' : ''}{formatCurrency(Math.abs(displayBalance))}원
+                    </span>
+                  </div>
+                );
+              })()}
 
-                    // 유형별 스타일
-                    return (
-                      <div key={`${payment.id}-${linkType}`} className={`payment-item ${linkType}`}>
-                        <div className="flex-1">
-                          <div className="payment-detail-row">
-                            {formatCurrency(displayAmount)}원
-                            <span className={`payment-badge ${linkType}`}>
-                              {linkType === 'direct' ? '직접' : linkType === 'allocated' ? '배분' : '수금/지급'}
-                            </span>
-                            {isModified && (
-                              <span className="tag-modified">
-                                수정됨
+              {/* 입출금 내역 섹션 */}
+              <div className="payment-section-wrapper">
+                <div className="payment-section-header">
+                  <h3 className="trade-section-label m-0">
+                    📋 {isPurchase ? '출금' : '입금'} 내역
+                  </h3>
+                  <button
+                    type="button"
+                    onClick={handleOpenAddPayment}
+                    disabled={!master.company_id}
+                    className="payment-add-btn"
+                    style={{
+                      backgroundColor: master.company_id ? (isPurchase ? '#3498db' : '#27ae60') : '#ccc',
+                    }}
+                  >
+                    + {isPurchase ? '출금' : '입금'} 추가
+                  </button>
+                </div>
+
+                {/* 입출금 내역 리스트 제거됨 (기존 방식 복귀) */}
+
+                {/* 연결된 입금 내역 */}
+                {(linkedPayments.length > 0 || pendingPayments.length > 0) ? (
+                  <div className="payment-list-container">
+                    {linkedPayments.map(payment => {
+                      const linkType = payment.link_type;
+                      const displayAmount = linkType === 'allocated' ? payment.allocated_amount : payment.amount;
+                      // 직접 연결 또는 수금/지급에서 등록한 것은 삭제 가능 (배분된 것은 불가)
+                      const canDelete = linkType === 'direct' || linkType === 'general';
+                      const isModified = modifiedPayments[payment.id]; // 수정 대기 중인지 확인
+
+                      // 유형별 스타일
+                      return (
+                        <div key={`${payment.id}-${linkType}`} className={`payment-item ${linkType}`}>
+                          <div className="flex-1">
+                            <div className="payment-detail-row">
+                              {formatCurrency(displayAmount)}원
+                              <span className={`payment-badge ${linkType}`}>
+                                {linkType === 'direct' ? '직접' : linkType === 'allocated' ? '배분' : '수금/지급'}
                               </span>
-                            )}
+                              <span style={{
+                                fontSize: '0.75rem',
+                                padding: '1px 6px',
+                                borderRadius: '4px',
+                                backgroundColor: '#f1f5f9',
+                                color: '#475569',
+                                border: '1px solid #e2e8f0'
+                              }}>
+                                {payment.payment_method || '미지정'}
+                              </span>
+                              {isModified && (
+                                <span className="tag-modified">
+                                  수정됨
+                                </span>
+                              )}
+                            </div>
+                            <div className="payment-meta-row">
+                              {/* 날짜 제거됨 */}
+                              {linkType === 'allocated' && payment.amount !== displayAmount && (
+                                <span>(총 {formatCurrency(payment.amount)}원 중)</span>
+                              )}
+                            </div>
                           </div>
-                          <div className="payment-meta-row">
-                            {payment.transaction_date?.substring(0, 10)} | {payment.payment_method || '미지정'}
-                            {linkType === 'allocated' && payment.amount !== displayAmount && (
-                              <span> (총 {formatCurrency(payment.amount)}원 중)</span>
-                            )}
+                          {canDelete && (
+                            <div className="payment-actions">
+                              <button
+                                type="button"
+                                onClick={() => setEditingPayment(payment)}
+                                className="btn btn-custom btn-primary btn-xs"
+                              >
+                                수정
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setDeletedPaymentIds(prev => [...prev, payment.id]);
+                                  setLinkedPayments(prev => prev.filter(p => p.id !== payment.id));
+                                }}
+                                className="btn btn-custom btn-danger btn-xs"
+                              >
+                                삭제
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                    {/* 저장 대기 중인 입금 내역 */}
+                    {pendingPayments.map(payment => (
+                      <div key={payment.tempId} style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        padding: '0.5rem',
+                        backgroundColor: '#fff3cd',
+                        borderRadius: '4px',
+                        marginBottom: '0.4rem',
+                        fontSize: fs(0.95),
+                        borderLeft: '3px solid #ffc107',
+                        border: '1px dashed #ffc107'
+                      }}>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontWeight: '500', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                            {formatCurrency(payment.amount)}원
+                            <span style={{
+                              fontSize: fs(0.8),
+                              backgroundColor: '#ffc107',
+                              color: '#333',
+                              padding: '1px 4px',
+                              borderRadius: '3px'
+                            }}>
+                              저장 대기
+                            </span>
+                            <span style={{
+                              fontSize: '0.75rem',
+                              padding: '1px 6px',
+                              borderRadius: '4px',
+                              backgroundColor: '#fff',
+                              color: '#666',
+                              border: '1px solid #ddd'
+                            }}>
+                              {payment.payment_method || '미지정'}
+                            </span>
+                          </div>
+                          <div style={{ fontSize: fs(0.85), color: '#888' }}>
+                            {payment.notes}
                           </div>
                         </div>
-                        {canDelete && (
-                          <div className="payment-actions">
-                            <button
-                              type="button"
-                              onClick={() => setEditingPayment(payment)}
-                              className="btn btn-custom btn-primary btn-xs"
-                            >
-                              수정
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setDeletedPaymentIds(prev => [...prev, payment.id]);
-                                setLinkedPayments(prev => prev.filter(p => p.id !== payment.id));
-                              }}
-                              className="btn btn-custom btn-danger btn-xs"
-                            >
-                              삭제
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                  {/* 저장 대기 중인 입금 내역 */}
-                  {pendingPayments.map(payment => (
-                    <div key={payment.tempId} style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                      padding: '0.5rem',
-                      backgroundColor: '#fff3cd',
-                      borderRadius: '4px',
-                      marginBottom: '0.4rem',
-                      fontSize: fs(0.95),
-                      borderLeft: '3px solid #ffc107',
-                      border: '1px dashed #ffc107'
-                    }}>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontWeight: '500', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                          {formatCurrency(payment.amount)}원
-                          <span style={{
-                            fontSize: fs(0.8),
-                            backgroundColor: '#ffc107',
-                            color: '#333',
-                            padding: '1px 4px',
-                            borderRadius: '3px'
-                          }}>
-                            저장 대기
-                          </span>
-                        </div>
-                        <div style={{ fontSize: fs(0.85), color: '#888' }}>
-                          {payment.payment_method || '미지정'}
-                          {payment.notes && ` | ${payment.notes}`}
+                        <div style={{ display: 'flex', gap: '0.25rem' }}>
+                          <button
+                            type="button"
+                            onClick={() => setEditingPendingPayment({
+                              ...payment,
+                              displayAmount: new Intl.NumberFormat('ko-KR').format(Math.abs(payment.amount))
+                            })}
+                            style={{
+                              padding: '3px 8px',
+                              fontSize: fs(0.85),
+                              backgroundColor: '#3498db',
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: '3px',
+                              cursor: 'pointer'
+                            }}
+                          >
+                            수정
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleRemovePendingPayment(payment.tempId)}
+                            style={{
+                              padding: '3px 8px',
+                              fontSize: fs(0.85),
+                              backgroundColor: '#e74c3c',
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: '3px',
+                              cursor: 'pointer'
+                            }}
+                          >
+                            취소
+                          </button>
                         </div>
                       </div>
-                      <div style={{ display: 'flex', gap: '0.25rem' }}>
-                        <button
-                          type="button"
-                          onClick={() => setEditingPendingPayment({
-                            ...payment,
-                            displayAmount: new Intl.NumberFormat('ko-KR').format(Math.abs(payment.amount))
-                          })}
-                          style={{
-                            padding: '3px 8px',
-                            fontSize: fs(0.85),
-                            backgroundColor: '#3498db',
-                            color: 'white',
-                            border: 'none',
-                            borderRadius: '3px',
-                            cursor: 'pointer'
-                          }}
-                        >
-                          수정
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleRemovePendingPayment(payment.tempId)}
-                          style={{
-                            padding: '3px 8px',
-                            fontSize: fs(0.85),
-                            backgroundColor: '#e74c3c',
-                            color: 'white',
-                            border: 'none',
-                            borderRadius: '3px',
-                            cursor: 'pointer'
-                          }}
-                        >
-                          취소
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div style={{
-                  padding: '0.75rem',
-                  textAlign: 'center',
-                  color: '#999',
-                  backgroundColor: '#f8f9fa',
-                  borderRadius: '6px',
-                  fontSize: fs(1),
-                  flex: 1,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center'
-                }}>
-                  {isPurchase ? '출금' : '입금'} 내역이 없습니다
-                </div>
-              )}
+                    ))}
+                  </div>
+                ) : (
+                  <div style={{
+                    padding: '0.75rem',
+                    textAlign: 'center',
+                    color: '#999',
+                    backgroundColor: '#f8f9fa',
+                    borderRadius: '6px',
+                    fontSize: fs(1),
+                    flex: 1,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                  }}>
+                    {isPurchase ? '출금' : '입금'} 내역이 없습니다
+                  </div>
+                )}
 
-              <div style={{ fontSize: fs(0.95), color: '#888', marginTop: '0.4rem', textAlign: 'center', flexShrink: 0 }}>
-                * {isPurchase ? '출금' : '입금'}은 전표 저장 시 함께 처리됩니다
+
               </div>
             </div>
           </div>
@@ -1811,232 +1869,270 @@ function TradePanel({
       />
 
       {/* 입금/출금 추가 모달 */}
-      {addPaymentModal.isOpen && (
-        <div
-          className="modal-overlay"
-          style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: 'rgba(0,0,0,0.5)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 1000
-          }}
-          onKeyDown={(e) => {
-            if (e.key === 'Escape') {
-              setAddPaymentModal({ ...addPaymentModal, isOpen: false });
-            }
-          }}
-        >
+      {
+        addPaymentModal.isOpen && (
           <div
-            className="modal-container"
-            tabIndex={-1}
+            className="modal-overlay"
             style={{
-              maxWidth: '400px',
-              padding: '1.5rem',
-              backgroundColor: '#fff',
-              borderRadius: '12px',
-              boxShadow: '0 10px 40px rgba(0,0,0,0.2)',
-              outline: 'none'
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              backgroundColor: 'rgba(0,0,0,0.5)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 1000
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') {
+                setAddPaymentModal({ ...addPaymentModal, isOpen: false });
+              }
             }}
           >
-            <h3 style={{ margin: '0 0 1rem 0', color: '#2c3e50' }}>
-              {isPurchase ? '💸 출금' : '💰 입금'} 추가
-            </h3>
+            <div
+              className="modal-container"
+              tabIndex={-1}
+              style={{
+                maxWidth: '400px',
+                padding: '1.5rem',
+                backgroundColor: '#fff',
+                borderRadius: '12px',
+                boxShadow: '0 10px 40px rgba(0,0,0,0.2)',
+                outline: 'none'
+              }}
+            >
+              <h3 style={{ margin: '0 0 1rem 0', color: '#2c3e50' }}>
+                {isPurchase ? '💸 출금' : '💰 입금'} 추가
+              </h3>
 
-            <div className="form-group" style={{ marginBottom: '1rem' }}>
-              <label style={{ display: 'block', marginBottom: '0.25rem', fontWeight: '500' }}>금액 *</label>
-              <input
-                type="text"
-                className="payment-amount-input"
-                value={addPaymentModal.displayAmount}
-                onChange={(e) => {
-                  // 마이너스 기호와 숫자만 허용
-                  const inputValue = e.target.value;
-                  const isNegative = inputValue.startsWith('-');
-                  const numericPart = inputValue.replace(/[^0-9]/g, '');
-                  const rawValue = isNegative && numericPart ? `-${numericPart}` : numericPart;
-                  const displayValue = numericPart
-                    ? (isNegative ? '-' : '') + new Intl.NumberFormat('ko-KR').format(parseInt(numericPart))
-                    : (isNegative ? '-' : '');
-                  setAddPaymentModal(prev => ({
-                    ...prev,
-                    amount: rawValue,
-                    displayAmount: displayValue
-                  }));
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    const amount = parseFloat(addPaymentModal.amount) || 0;
-                    if (amount === 0) {
-                      // 금액이 0원이면 다음으로 넘어가지 않음
-                      return;
+              <div className="form-group" style={{ marginBottom: '1rem' }}>
+                <label style={{ display: 'block', marginBottom: '0.25rem', fontWeight: '500' }}>금액 *</label>
+                <input
+                  type="text"
+                  className="payment-amount-input"
+                  value={addPaymentModal.displayAmount}
+                  onChange={(e) => {
+                    // 마이너스 기호와 숫자만 허용
+                    const inputValue = e.target.value;
+                    const isNegative = inputValue.startsWith('-');
+                    const numericPart = inputValue.replace(/[^0-9]/g, '');
+                    const rawValue = isNegative && numericPart ? `-${numericPart}` : numericPart;
+                    const displayValue = numericPart
+                      ? (isNegative ? '-' : '') + new Intl.NumberFormat('ko-KR').format(parseInt(numericPart))
+                      : (isNegative ? '-' : '');
+                    setAddPaymentModal(prev => ({
+                      ...prev,
+                      amount: rawValue,
+                      displayAmount: displayValue
+                    }));
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      const amount = parseFloat(addPaymentModal.amount) || 0;
+                      if (amount === 0) {
+                        // 금액이 0원이면 다음으로 넘어가지 않음
+                        return;
+                      }
+                      e.target.closest('.modal-container').querySelector('select')?.focus();
                     }
-                    e.target.closest('.modal-container').querySelector('select')?.focus();
-                  }
-                }}
-                placeholder="0"
-                style={{ width: '100%', padding: '0.5rem', textAlign: 'right', border: '1px solid #ddd', borderRadius: '4px' }}
-                autoFocus
-              />
-            </div>
+                  }}
+                  placeholder="0"
+                  style={{ width: '100%', padding: '0.5rem', textAlign: 'right', border: '1px solid #ddd', borderRadius: '4px' }}
+                  autoFocus
+                />
+              </div>
 
-            <div className="form-group" style={{ marginBottom: '1rem' }}>
-              <label style={{ display: 'block', marginBottom: '0.25rem', fontWeight: '500' }}>결제방법</label>
-              <select
-                value={addPaymentModal.payment_method}
-                onChange={(e) => setAddPaymentModal(prev => ({ ...prev, payment_method: e.target.value }))}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    e.target.closest('.modal-container').querySelector('input[placeholder="메모"]')?.focus();
-                  }
-                }}
-                style={{ width: '100%', padding: '0.5rem', border: '1px solid #ddd', borderRadius: '4px' }}
-              >
-                {paymentMethods.map(method => (
-                  <option key={method.id} value={method.name}>{method.name}</option>
-                ))}
-              </select>
-            </div>
+              <div className="form-group" style={{ marginBottom: '1rem' }}>
+                <label style={{ display: 'block', marginBottom: '0.25rem', fontWeight: '500' }}>결제방법</label>
+                <select
+                  value={addPaymentModal.payment_method}
+                  onChange={(e) => setAddPaymentModal(prev => ({ ...prev, payment_method: e.target.value }))}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      e.target.closest('.modal-container').querySelector('input[placeholder="메모"]')?.focus();
+                    }
+                  }}
+                  style={{ width: '100%', padding: '0.5rem', border: '1px solid #ddd', borderRadius: '4px' }}
+                >
+                  {paymentMethods.map(method => (
+                    <option key={method.id} value={method.name}>{method.name}</option>
+                  ))}
+                </select>
+              </div>
 
-            <div className="form-group" style={{ marginBottom: '1rem' }}>
-              <label style={{ display: 'block', marginBottom: '0.25rem', fontWeight: '500' }}>비고</label>
-              <input
-                type="text"
-                value={addPaymentModal.notes}
-                onChange={(e) => setAddPaymentModal(prev => ({ ...prev, notes: e.target.value }))}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    handleSaveNewPayment();
-                  }
-                }}
-                placeholder="메모"
-                style={{ width: '100%', padding: '0.5rem', border: '1px solid #ddd', borderRadius: '4px' }}
-              />
-            </div>
+              <div className="form-group" style={{ marginBottom: '1rem' }}>
+                <label style={{ display: 'block', marginBottom: '0.25rem', fontWeight: '500' }}>비고</label>
+                <input
+                  type="text"
+                  value={addPaymentModal.notes}
+                  onChange={(e) => setAddPaymentModal(prev => ({ ...prev, notes: e.target.value }))}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleSaveNewPayment();
+                    }
+                  }}
+                  placeholder="메모"
+                  style={{ width: '100%', padding: '0.5rem', border: '1px solid #ddd', borderRadius: '4px' }}
+                />
+              </div>
 
-            <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
-              <button
-                type="button"
-                className="btn btn-secondary"
-                onClick={() => setAddPaymentModal({ ...addPaymentModal, isOpen: false })}
-                style={{ padding: '0.5rem 1rem' }}
-              >
-                취소
-              </button>
-              <button
-                type="button"
-                className="btn btn-primary"
-                onClick={handleSaveNewPayment}
-                style={{ padding: '0.5rem 1rem' }}
-              >
-                추가
-              </button>
+              <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => setAddPaymentModal({ ...addPaymentModal, isOpen: false })}
+                  style={{ padding: '0.5rem 1rem' }}
+                >
+                  취소
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={handleSaveNewPayment}
+                  style={{ padding: '0.5rem 1rem' }}
+                >
+                  추가
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )
+      }
 
       {/* 입출금 수정 모달 */}
-      {editingPayment && (
-        <div
-          className="modal-overlay"
-          style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: 'rgba(0,0,0,0.5)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 1000
-          }}
-          onKeyDown={(e) => {
-            if (e.key === 'Escape') {
-              setEditingPayment(null);
-            }
-          }}
-        >
+      {
+        editingPayment && (
           <div
-            className="modal-container"
-            tabIndex={-1}
+            className="modal-overlay"
             style={{
-              backgroundColor: 'white',
-              borderRadius: '8px',
-              maxWidth: '400px',
-              width: '90%',
-              padding: '1.5rem',
-              outline: 'none'
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              backgroundColor: 'rgba(0,0,0,0.5)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 1000
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') {
+                setEditingPayment(null);
+              }
             }}
           >
-            <h3 style={{ margin: '0 0 1rem 0', color: '#2c3e50' }}>
-              {isPurchase ? '💸 출금' : '💰 입금'} 수정
-            </h3>
+            <div
+              className="modal-container"
+              tabIndex={-1}
+              style={{
+                backgroundColor: 'white',
+                borderRadius: '8px',
+                maxWidth: '400px',
+                width: '90%',
+                padding: '1.5rem',
+                outline: 'none'
+              }}
+            >
+              <h3 style={{ margin: '0 0 1rem 0', color: '#2c3e50' }}>
+                {isPurchase ? '💸 출금' : '💰 입금'} 수정
+              </h3>
 
-            <div className="form-group" style={{ marginBottom: '1rem' }}>
-              <label style={{ display: 'block', marginBottom: '0.25rem', fontWeight: '500' }}>금액 *</label>
-              <input
-                type="text"
-                value={editingPayment.displayAmount || new Intl.NumberFormat('ko-KR').format(editingPayment.amount || 0)}
-                onChange={(e) => {
-                  const numericValue = e.target.value.replace(/[^0-9]/g, '');
-                  const amount = parseInt(numericValue) || 0;
-                  setEditingPayment(prev => ({
-                    ...prev,
-                    amount: amount,
-                    displayAmount: numericValue ? new Intl.NumberFormat('ko-KR').format(amount) : ''
-                  }));
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    e.target.closest('.modal-container').querySelector('select')?.focus();
-                  }
-                }}
-                placeholder="0"
-                style={{ width: '100%', padding: '0.5rem', textAlign: 'right', border: '1px solid #ddd', borderRadius: '4px' }}
-                autoFocus
-              />
-            </div>
+              <div className="form-group" style={{ marginBottom: '1rem' }}>
+                <label style={{ display: 'block', marginBottom: '0.25rem', fontWeight: '500' }}>금액 *</label>
+                <input
+                  type="text"
+                  value={editingPayment.displayAmount || new Intl.NumberFormat('ko-KR').format(editingPayment.amount || 0)}
+                  onChange={(e) => {
+                    const numericValue = e.target.value.replace(/[^0-9]/g, '');
+                    const amount = parseInt(numericValue) || 0;
+                    setEditingPayment(prev => ({
+                      ...prev,
+                      amount: amount,
+                      displayAmount: numericValue ? new Intl.NumberFormat('ko-KR').format(amount) : ''
+                    }));
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      e.target.closest('.modal-container').querySelector('select')?.focus();
+                    }
+                  }}
+                  placeholder="0"
+                  style={{ width: '100%', padding: '0.5rem', textAlign: 'right', border: '1px solid #ddd', borderRadius: '4px' }}
+                  autoFocus
+                />
+              </div>
 
-            <div className="form-group" style={{ marginBottom: '1rem' }}>
-              <label style={{ display: 'block', marginBottom: '0.25rem', fontWeight: '500' }}>결제방법</label>
-              <select
-                value={editingPayment.payment_method || (paymentMethods.length > 0 ? paymentMethods[0].name : '')}
-                onChange={(e) => setEditingPayment(prev => ({ ...prev, payment_method: e.target.value }))}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    e.target.closest('.modal-container').querySelector('input[placeholder="메모"]')?.focus();
-                  }
-                }}
-                style={{ width: '100%', padding: '0.5rem', border: '1px solid #ddd', borderRadius: '4px' }}
-              >
-                {paymentMethods.map(method => (
-                  <option key={method.id} value={method.name}>{method.name}</option>
-                ))}
-              </select>
-            </div>
+              <div className="form-group" style={{ marginBottom: '1rem' }}>
+                <label style={{ display: 'block', marginBottom: '0.25rem', fontWeight: '500' }}>결제방법</label>
+                <select
+                  value={editingPayment.payment_method || (paymentMethods.length > 0 ? paymentMethods[0].name : '')}
+                  onChange={(e) => setEditingPayment(prev => ({ ...prev, payment_method: e.target.value }))}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      e.target.closest('.modal-container').querySelector('input[placeholder="메모"]')?.focus();
+                    }
+                  }}
+                  style={{ width: '100%', padding: '0.5rem', border: '1px solid #ddd', borderRadius: '4px' }}
+                >
+                  {paymentMethods.map(method => (
+                    <option key={method.id} value={method.name}>{method.name}</option>
+                  ))}
+                </select>
+              </div>
 
-            <div className="form-group" style={{ marginBottom: '1rem' }}>
-              <label style={{ display: 'block', marginBottom: '0.25rem', fontWeight: '500' }}>비고</label>
-              <input
-                type="text"
-                value={editingPayment.notes || ''}
-                onChange={(e) => setEditingPayment(prev => ({ ...prev, notes: e.target.value }))}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    // 수정 대기 목록에 추가하고 모달 닫기
+              <div className="form-group" style={{ marginBottom: '1rem' }}>
+                <label style={{ display: 'block', marginBottom: '0.25rem', fontWeight: '500' }}>비고</label>
+                <input
+                  type="text"
+                  value={editingPayment.notes || ''}
+                  onChange={(e) => setEditingPayment(prev => ({ ...prev, notes: e.target.value }))}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      // 수정 대기 목록에 추가하고 모달 닫기
+                      setModifiedPayments(prev => ({
+                        ...prev,
+                        [editingPayment.id]: {
+                          amount: editingPayment.amount,
+                          payment_method: editingPayment.payment_method,
+                          notes: editingPayment.notes
+                        }
+                      }));
+                      setLinkedPayments(prev => prev.map(p =>
+                        p.id === editingPayment.id
+                          ? { ...p, amount: editingPayment.amount, allocated_amount: editingPayment.amount, payment_method: editingPayment.payment_method, notes: editingPayment.notes }
+                          : p
+                      ));
+                      setEditingPayment(null);
+                    }
+                  }}
+                  placeholder="메모"
+                  style={{ width: '100%', padding: '0.5rem', border: '1px solid #ddd', borderRadius: '4px' }}
+                />
+              </div>
+
+              <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => setEditingPayment(null)}
+                  style={{ padding: '0.5rem 1rem' }}
+                >
+                  취소
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={() => {
+                    // 수정 대기 목록에 추가
                     setModifiedPayments(prev => ({
                       ...prev,
                       [editingPayment.id]: {
@@ -2045,172 +2141,140 @@ function TradePanel({
                         notes: editingPayment.notes
                       }
                     }));
+                    // linkedPayments 화면 표시용 업데이트
                     setLinkedPayments(prev => prev.map(p =>
                       p.id === editingPayment.id
                         ? { ...p, amount: editingPayment.amount, allocated_amount: editingPayment.amount, payment_method: editingPayment.payment_method, notes: editingPayment.notes }
                         : p
                     ));
                     setEditingPayment(null);
-                  }
-                }}
-                placeholder="메모"
-                style={{ width: '100%', padding: '0.5rem', border: '1px solid #ddd', borderRadius: '4px' }}
-              />
-            </div>
-
-            <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
-              <button
-                type="button"
-                className="btn btn-secondary"
-                onClick={() => setEditingPayment(null)}
-                style={{ padding: '0.5rem 1rem' }}
-              >
-                취소
-              </button>
-              <button
-                type="button"
-                className="btn btn-primary"
-                onClick={() => {
-                  // 수정 대기 목록에 추가
-                  setModifiedPayments(prev => ({
-                    ...prev,
-                    [editingPayment.id]: {
-                      amount: editingPayment.amount,
-                      payment_method: editingPayment.payment_method,
-                      notes: editingPayment.notes
-                    }
-                  }));
-                  // linkedPayments 화면 표시용 업데이트
-                  setLinkedPayments(prev => prev.map(p =>
-                    p.id === editingPayment.id
-                      ? { ...p, amount: editingPayment.amount, allocated_amount: editingPayment.amount, payment_method: editingPayment.payment_method, notes: editingPayment.notes }
-                      : p
-                  ));
-                  setEditingPayment(null);
-                }}
-                style={{ padding: '0.5rem 1rem' }}
-              >
-                확인
-              </button>
+                  }}
+                  style={{ padding: '0.5rem 1rem' }}
+                >
+                  확인
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )
+      }
 
       {/* 매칭 정보 모달 (삭제 불가 안내) */}
-      {matchingInfoModal.isOpen && matchingInfoModal.data && (
-        <div
-          style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: 'rgba(0,0,0,0.6)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 2000
-          }}
-        >
-          <div style={{
-            backgroundColor: 'white',
-            borderRadius: '12px',
-            maxWidth: '500px',
-            width: '90%',
-            maxHeight: '80vh',
-            overflow: 'hidden',
-            display: 'flex',
-            flexDirection: 'column',
-            boxShadow: '0 10px 40px rgba(0,0,0,0.3)'
-          }}>
-            {/* 헤더 */}
+      {
+        matchingInfoModal.isOpen && matchingInfoModal.data && (
+          <div
+            style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              backgroundColor: 'rgba(0,0,0,0.6)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 2000
+            }}
+          >
             <div style={{
-              padding: '1rem 1.5rem',
-              backgroundColor: '#e74c3c',
-              color: 'white'
+              backgroundColor: 'white',
+              borderRadius: '12px',
+              maxWidth: '500px',
+              width: '90%',
+              maxHeight: '80vh',
+              overflow: 'hidden',
+              display: 'flex',
+              flexDirection: 'column',
+              boxShadow: '0 10px 40px rgba(0,0,0,0.3)'
             }}>
-              <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                ⚠️ 삭제할 수 없습니다
-              </h3>
-            </div>
-
-            {/* 내용 */}
-            <div style={{ padding: '1.5rem', flex: 1, overflowY: 'auto' }}>
-              <p style={{ margin: '0 0 1rem 0', color: '#555', lineHeight: '1.6' }}>
-                이 매입 전표는 다음 <strong>{matchingInfoModal.data.totalCount}건</strong>의 매출과 매칭되어 있습니다:
-              </p>
-
-              {/* 매칭 목록 */}
+              {/* 헤더 */}
               <div style={{
-                backgroundColor: '#f8f9fa',
-                borderRadius: '8px',
-                padding: '0.75rem',
-                maxHeight: '250px',
-                overflowY: 'auto'
+                padding: '1rem 1.5rem',
+                backgroundColor: '#e74c3c',
+                color: 'white'
               }}>
-                {matchingInfoModal.data.items.map((item, idx) => (
-                  <div
-                    key={idx}
-                    style={{
-                      padding: '0.75rem',
-                      backgroundColor: 'white',
-                      borderRadius: '6px',
-                      marginBottom: idx < matchingInfoModal.data.items.length - 1 ? '0.5rem' : 0,
-                      borderLeft: '3px solid #3498db'
-                    }}
-                  >
-                    <div style={{ fontWeight: '600', color: '#2c3e50', marginBottom: '0.25rem' }}>
-                      📦 {item.productName} - {item.matchedQuantity}개
-                    </div>
-                    <div style={{ fontSize: '0.85rem', color: '#666' }}>
-                      → {item.saleDate} / {item.saleTradeNumber}
-                    </div>
-                    <div style={{ fontSize: '0.85rem', color: '#666' }}>
-                      → 거래처: {item.customerName}
-                    </div>
-                  </div>
-                ))}
+                <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  ⚠️ 삭제할 수 없습니다
+                </h3>
               </div>
 
-              <p style={{
-                margin: '1rem 0 0 0',
-                padding: '0.75rem',
-                backgroundColor: '#fff3cd',
-                borderRadius: '6px',
-                color: '#856404',
-                fontSize: '0.9rem'
-              }}>
-                💡 삭제하려면 먼저 <strong>재고 관리 → 매칭 관리</strong>에서 매칭을 해제해주세요.
-              </p>
-            </div>
+              {/* 내용 */}
+              <div style={{ padding: '1.5rem', flex: 1, overflowY: 'auto' }}>
+                <p style={{ margin: '0 0 1rem 0', color: '#555', lineHeight: '1.6' }}>
+                  이 매입 전표는 다음 <strong>{matchingInfoModal.data.totalCount}건</strong>의 매출과 매칭되어 있습니다:
+                </p>
 
-            {/* 버튼 */}
-            <div style={{
-              padding: '1rem 1.5rem',
-              borderTop: '1px solid #eee',
-              display: 'flex',
-              justifyContent: 'flex-end',
-              gap: '0.5rem'
-            }}>
-              <button
-                onClick={() => setMatchingInfoModal({ isOpen: false, data: null })}
-                style={{
-                  padding: '0.5rem 1.5rem',
-                  backgroundColor: '#6c757d',
-                  color: 'white',
-                  border: 'none',
+                {/* 매칭 목록 */}
+                <div style={{
+                  backgroundColor: '#f8f9fa',
+                  borderRadius: '8px',
+                  padding: '0.75rem',
+                  maxHeight: '250px',
+                  overflowY: 'auto'
+                }}>
+                  {matchingInfoModal.data.items.map((item, idx) => (
+                    <div
+                      key={idx}
+                      style={{
+                        padding: '0.75rem',
+                        backgroundColor: 'white',
+                        borderRadius: '6px',
+                        marginBottom: idx < matchingInfoModal.data.items.length - 1 ? '0.5rem' : 0,
+                        borderLeft: '3px solid #3498db'
+                      }}
+                    >
+                      <div style={{ fontWeight: '600', color: '#2c3e50', marginBottom: '0.25rem' }}>
+                        📦 {item.productName} - {item.matchedQuantity}개
+                      </div>
+                      <div style={{ fontSize: '0.85rem', color: '#666' }}>
+                        → {item.saleDate} / {item.saleTradeNumber}
+                      </div>
+                      <div style={{ fontSize: '0.85rem', color: '#666' }}>
+                        → 거래처: {item.customerName}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <p style={{
+                  margin: '1rem 0 0 0',
+                  padding: '0.75rem',
+                  backgroundColor: '#fff3cd',
                   borderRadius: '6px',
-                  cursor: 'pointer',
-                  fontWeight: '500'
-                }}
-              >
-                확인
-              </button>
+                  color: '#856404',
+                  fontSize: '0.9rem'
+                }}>
+                  💡 삭제하려면 먼저 <strong>재고 관리 → 매칭 관리</strong>에서 매칭을 해제해주세요.
+                </p>
+              </div>
+
+              {/* 버튼 */}
+              <div style={{
+                padding: '1rem 1.5rem',
+                borderTop: '1px solid #eee',
+                display: 'flex',
+                justifyContent: 'flex-end',
+                gap: '0.5rem'
+              }}>
+                <button
+                  onClick={() => setMatchingInfoModal({ isOpen: false, data: null })}
+                  style={{
+                    padding: '0.5rem 1.5rem',
+                    backgroundColor: '#6c757d',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    fontWeight: '500'
+                  }}
+                >
+                  확인
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )
+      }
 
       <TradeDeleteConfirmModal
         isOpen={deleteConfirmModal.isOpen}
@@ -2228,307 +2292,311 @@ function TradePanel({
       />
 
       {/* 대기 중 입출금 수정 모달 */}
-      {editingPendingPayment && (
-        <div
-          className="modal-overlay"
-          style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: 'rgba(0,0,0,0.5)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 1000
-          }}
-          onKeyDown={(e) => {
-            if (e.key === 'Escape') {
-              setEditingPendingPayment(null);
-            }
-          }}
-        >
+      {
+        editingPendingPayment && (
           <div
-            className="modal-container"
-            tabIndex={-1}
+            className="modal-overlay"
             style={{
-              backgroundColor: 'white',
-              borderRadius: '8px',
-              maxWidth: '400px',
-              width: '90%',
-              padding: '1.5rem',
-              outline: 'none'
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              backgroundColor: 'rgba(0,0,0,0.5)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 1000
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') {
+                setEditingPendingPayment(null);
+              }
             }}
           >
-            <h3 style={{ margin: '0 0 1rem 0', color: '#2c3e50' }}>
-              {isPurchase ? '💸 출금' : '💰 입금'} 수정 (대기)
-            </h3>
+            <div
+              className="modal-container"
+              tabIndex={-1}
+              style={{
+                backgroundColor: 'white',
+                borderRadius: '8px',
+                maxWidth: '400px',
+                width: '90%',
+                padding: '1.5rem',
+                outline: 'none'
+              }}
+            >
+              <h3 style={{ margin: '0 0 1rem 0', color: '#2c3e50' }}>
+                {isPurchase ? '💸 출금' : '💰 입금'} 수정 (대기)
+              </h3>
 
-            <div className="form-group" style={{ marginBottom: '1rem' }}>
-              <label style={{ display: 'block', marginBottom: '0.25rem', fontWeight: '500' }}>금액 *</label>
-              <input
-                type="text"
-                value={editingPendingPayment.displayAmount || ''}
-                onChange={(e) => {
-                  const inputValue = e.target.value;
-                  const isNegative = inputValue.startsWith('-');
-                  const numericPart = inputValue.replace(/[^0-9]/g, '');
-                  const amount = numericPart ? (isNegative ? -parseInt(numericPart) : parseInt(numericPart)) : 0;
-                  setEditingPendingPayment(prev => ({
-                    ...prev,
-                    amount: amount,
-                    displayAmount: numericPart
-                      ? (isNegative ? '-' : '') + new Intl.NumberFormat('ko-KR').format(parseInt(numericPart))
-                      : (isNegative ? '-' : '')
-                  }));
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    e.target.closest('.modal-container').querySelector('select')?.focus();
-                  }
-                }}
-                placeholder="0"
-                style={{ width: '100%', padding: '0.5rem', textAlign: 'right', border: '1px solid #ddd', borderRadius: '4px' }}
-                autoFocus
-              />
-            </div>
+              <div className="form-group" style={{ marginBottom: '1rem' }}>
+                <label style={{ display: 'block', marginBottom: '0.25rem', fontWeight: '500' }}>금액 *</label>
+                <input
+                  type="text"
+                  value={editingPendingPayment.displayAmount || ''}
+                  onChange={(e) => {
+                    const inputValue = e.target.value;
+                    const isNegative = inputValue.startsWith('-');
+                    const numericPart = inputValue.replace(/[^0-9]/g, '');
+                    const amount = numericPart ? (isNegative ? -parseInt(numericPart) : parseInt(numericPart)) : 0;
+                    setEditingPendingPayment(prev => ({
+                      ...prev,
+                      amount: amount,
+                      displayAmount: numericPart
+                        ? (isNegative ? '-' : '') + new Intl.NumberFormat('ko-KR').format(parseInt(numericPart))
+                        : (isNegative ? '-' : '')
+                    }));
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      e.target.closest('.modal-container').querySelector('select')?.focus();
+                    }
+                  }}
+                  placeholder="0"
+                  style={{ width: '100%', padding: '0.5rem', textAlign: 'right', border: '1px solid #ddd', borderRadius: '4px' }}
+                  autoFocus
+                />
+              </div>
 
-            <div className="form-group" style={{ marginBottom: '1rem' }}>
-              <label style={{ display: 'block', marginBottom: '0.25rem', fontWeight: '500' }}>결제방법</label>
-              <select
-                value={editingPendingPayment.payment_method || (paymentMethods.length > 0 ? paymentMethods[0].name : '')}
-                onChange={(e) => setEditingPendingPayment(prev => ({ ...prev, payment_method: e.target.value }))}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    e.target.closest('.modal-container').querySelector('input[placeholder="메모"]')?.focus();
-                  }
-                }}
-                style={{ width: '100%', padding: '0.5rem', border: '1px solid #ddd', borderRadius: '4px' }}
-              >
-                {paymentMethods.map(method => (
-                  <option key={method.id} value={method.name}>{method.name}</option>
-                ))}
-              </select>
-            </div>
+              <div className="form-group" style={{ marginBottom: '1rem' }}>
+                <label style={{ display: 'block', marginBottom: '0.25rem', fontWeight: '500' }}>결제방법</label>
+                <select
+                  value={editingPendingPayment.payment_method || (paymentMethods.length > 0 ? paymentMethods[0].name : '')}
+                  onChange={(e) => setEditingPendingPayment(prev => ({ ...prev, payment_method: e.target.value }))}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      e.target.closest('.modal-container').querySelector('input[placeholder="메모"]')?.focus();
+                    }
+                  }}
+                  style={{ width: '100%', padding: '0.5rem', border: '1px solid #ddd', borderRadius: '4px' }}
+                >
+                  {paymentMethods.map(method => (
+                    <option key={method.id} value={method.name}>{method.name}</option>
+                  ))}
+                </select>
+              </div>
 
-            <div className="form-group" style={{ marginBottom: '1rem' }}>
-              <label style={{ display: 'block', marginBottom: '0.25rem', fontWeight: '500' }}>비고</label>
-              <input
-                type="text"
-                value={editingPendingPayment.notes || ''}
-                onChange={(e) => setEditingPendingPayment(prev => ({ ...prev, notes: e.target.value }))}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    // pendingPayments 업데이트
+              <div className="form-group" style={{ marginBottom: '1rem' }}>
+                <label style={{ display: 'block', marginBottom: '0.25rem', fontWeight: '500' }}>비고</label>
+                <input
+                  type="text"
+                  value={editingPendingPayment.notes || ''}
+                  onChange={(e) => setEditingPendingPayment(prev => ({ ...prev, notes: e.target.value }))}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      // pendingPayments 업데이트
+                      if (editingPendingPayment.amount === 0) {
+                        showModal('warning', '입력 오류', `0원은 ${isPurchase ? '출금' : '입금'}할 수 없습니다.`);
+                        return;
+                      }
+                      setPendingPayments(prev => prev.map(p =>
+                        p.tempId === editingPendingPayment.tempId
+                          ? { ...p, amount: editingPendingPayment.amount, payment_method: editingPendingPayment.payment_method, notes: editingPendingPayment.notes }
+                          : p
+                      ));
+                      setEditingPendingPayment(null);
+                    }
+                  }}
+                  placeholder="메모"
+                  style={{ width: '100%', padding: '0.5rem', border: '1px solid #ddd', borderRadius: '4px' }}
+                />
+              </div>
+
+              <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => setEditingPendingPayment(null)}
+                  style={{ padding: '0.5rem 1rem' }}
+                >
+                  취소
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={() => {
+                    // 유효성 검사
                     if (editingPendingPayment.amount === 0) {
                       showModal('warning', '입력 오류', `0원은 ${isPurchase ? '출금' : '입금'}할 수 없습니다.`);
                       return;
                     }
+                    // pendingPayments 업데이트
                     setPendingPayments(prev => prev.map(p =>
                       p.tempId === editingPendingPayment.tempId
                         ? { ...p, amount: editingPendingPayment.amount, payment_method: editingPendingPayment.payment_method, notes: editingPendingPayment.notes }
                         : p
                     ));
                     setEditingPendingPayment(null);
-                  }
-                }}
-                placeholder="메모"
-                style={{ width: '100%', padding: '0.5rem', border: '1px solid #ddd', borderRadius: '4px' }}
-              />
-            </div>
-
-            <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
-              <button
-                type="button"
-                className="btn btn-secondary"
-                onClick={() => setEditingPendingPayment(null)}
-                style={{ padding: '0.5rem 1rem' }}
-              >
-                취소
-              </button>
-              <button
-                type="button"
-                className="btn btn-primary"
-                onClick={() => {
-                  // 유효성 검사
-                  if (editingPendingPayment.amount === 0) {
-                    showModal('warning', '입력 오류', `0원은 ${isPurchase ? '출금' : '입금'}할 수 없습니다.`);
-                    return;
-                  }
-                  // pendingPayments 업데이트
-                  setPendingPayments(prev => prev.map(p =>
-                    p.tempId === editingPendingPayment.tempId
-                      ? { ...p, amount: editingPendingPayment.amount, payment_method: editingPendingPayment.payment_method, notes: editingPendingPayment.notes }
-                      : p
-                  ));
-                  setEditingPendingPayment(null);
-                }}
-                style={{ padding: '0.5rem 1rem' }}
-              >
-                확인
-              </button>
+                  }}
+                  style={{ padding: '0.5rem 1rem' }}
+                >
+                  확인
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )
+      }
       {/* 네비게이션 차단 모달 */}
       {/* ... (생략) ... */}
 
       {/* [재고 드롭] 수량/단가 입력 모달 */}
-      {inventoryInputModal.isOpen && createPortal(
-        <div
-          className="modal-overlay"
-          style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            width: '100vw',
-            height: '100vh',
-            backgroundColor: 'rgba(0, 0, 0, 0.5)',
-            display: 'flex',
-            justifyContent: 'center',
-            alignItems: 'center',
-            zIndex: 99999
-          }}
-        >
+      {
+        inventoryInputModal.isOpen && createPortal(
           <div
-            className="modal-container"
+            className="modal-overlay"
             style={{
-              width: '450px',
-              maxWidth: '90%',
-              padding: '1.5rem',
-              textAlign: 'left' // modal-container 기본이 center일 수 있으므로
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* 헤더 */}
-            <div style={{
-              textAlign: 'center',
-              marginBottom: '1.5rem'
-            }}>
-              <h3 style={{ margin: '0 0 0.5rem 0', color: '#2c3e50', fontSize: '1.4rem' }}>재고 품목 추가</h3>
-              <div style={{
-                fontSize: '1.1rem',
-                fontWeight: '700',
-                color: '#3498db'
-              }}>
-                {inventoryInputModal.inventory?.product_name || '품목명'}
-                <span style={{ fontSize: '0.9rem', color: '#7f8c8d', marginLeft: '0.5rem', fontWeight: 'normal' }}>
-                  {inventoryInputModal.inventory?.sender ? `(${inventoryInputModal.inventory.sender})` : ''}
-                </span>
-              </div>
-            </div>
-
-            {/* 정보 */}
-            <div style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              width: '100vw',
+              height: '100vh',
+              backgroundColor: 'rgba(0, 0, 0, 0.5)',
               display: 'flex',
-              justifyContent: 'space-between',
-              marginBottom: '1.5rem',
-              backgroundColor: '#f8f9fa',
-              padding: '1rem',
-              borderRadius: '8px'
-            }}>
-              <div style={{ textAlign: 'center', flex: 1 }}>
-                <div style={{ fontSize: '0.85rem', color: '#7f8c8d', marginBottom: '0.25rem' }}>재고 잔량</div>
-                <div style={{ fontWeight: '700', color: '#27ae60' }}>
-                  {inventoryInputModal.maxQuantity}
+              justifyContent: 'center',
+              alignItems: 'center',
+              zIndex: 99999
+            }}
+          >
+            <div
+              className="modal-container"
+              style={{
+                width: '450px',
+                maxWidth: '90%',
+                padding: '1.5rem',
+                textAlign: 'left' // modal-container 기본이 center일 수 있으므로
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* 헤더 */}
+              <div style={{
+                textAlign: 'center',
+                marginBottom: '1.5rem'
+              }}>
+                <h3 style={{ margin: '0 0 0.5rem 0', color: '#2c3e50', fontSize: '1.4rem' }}>재고 품목 추가</h3>
+                <div style={{
+                  fontSize: '1.1rem',
+                  fontWeight: '700',
+                  color: '#3498db'
+                }}>
+                  {inventoryInputModal.inventory?.product_name || '품목명'}
+                  <span style={{ fontSize: '0.9rem', color: '#7f8c8d', marginLeft: '0.5rem', fontWeight: 'normal' }}>
+                    {inventoryInputModal.inventory?.sender ? `(${inventoryInputModal.inventory.sender})` : ''}
+                  </span>
                 </div>
               </div>
-              <div style={{ width: '1px', backgroundColor: '#e0e0e0' }}></div>
-              <div style={{ textAlign: 'center', flex: 1 }}>
-                <div style={{ fontSize: '0.85rem', color: '#7f8c8d', marginBottom: '0.25rem' }}>기준 단가</div>
-                <div style={{ fontWeight: '700' }}>
-                  {formatCurrency(inventoryInputModal.inventory?.unit_price || 0)}원
-                </div>
-              </div>
-            </div>
 
-            {/* 입력 폼 */}
-            <div style={{ display: 'flex', gap: '1rem', marginBottom: '1.5rem' }}>
-              <div style={{ flex: 1 }}>
-                <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.5rem', fontWeight: '600' }}>수량</label>
-                <input
-                  type="text"
-                  value={inventoryInputModal.quantity ? formatCurrency(parseFloat(inventoryInputModal.quantity)) : ''}
-                  onChange={(e) => {
-                    const val = e.target.value.replace(/[^0-9.]/g, '');
-                    setInventoryInputModal(prev => ({ ...prev, quantity: val }));
-                  }}
-                  className="form-control modal-input-highlight"
-                  style={{
-                    width: '100%',
-                    padding: '0.8rem',
-                    fontSize: '1.1rem',
-                    textAlign: 'right',
-                    borderRadius: '6px',
-                    boxSizing: 'border-box'
-                  }}
-                  autoFocus
-                  onFocus={(e) => e.target.select()}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      const priceInput = document.getElementById('modal-price-input');
-                      if (priceInput) {
-                        priceInput.focus();
-                        priceInput.select();
+              {/* 정보 */}
+              <div style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                marginBottom: '1.5rem',
+                backgroundColor: '#f8f9fa',
+                padding: '1rem',
+                borderRadius: '8px'
+              }}>
+                <div style={{ textAlign: 'center', flex: 1 }}>
+                  <div style={{ fontSize: '0.85rem', color: '#7f8c8d', marginBottom: '0.25rem' }}>재고 잔량</div>
+                  <div style={{ fontWeight: '700', color: '#27ae60' }}>
+                    {inventoryInputModal.maxQuantity}
+                  </div>
+                </div>
+                <div style={{ width: '1px', backgroundColor: '#e0e0e0' }}></div>
+                <div style={{ textAlign: 'center', flex: 1 }}>
+                  <div style={{ fontSize: '0.85rem', color: '#7f8c8d', marginBottom: '0.25rem' }}>기준 단가</div>
+                  <div style={{ fontWeight: '700' }}>
+                    {formatCurrency(inventoryInputModal.inventory?.unit_price || 0)}원
+                  </div>
+                </div>
+              </div>
+
+              {/* 입력 폼 */}
+              <div style={{ display: 'flex', gap: '1rem', marginBottom: '1.5rem' }}>
+                <div style={{ flex: 1 }}>
+                  <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.5rem', fontWeight: '600' }}>수량</label>
+                  <input
+                    type="text"
+                    value={inventoryInputModal.quantity ? formatCurrency(parseFloat(inventoryInputModal.quantity)) : ''}
+                    onChange={(e) => {
+                      const val = e.target.value.replace(/[^0-9.]/g, '');
+                      setInventoryInputModal(prev => ({ ...prev, quantity: val }));
+                    }}
+                    className="form-control modal-input-highlight"
+                    style={{
+                      width: '100%',
+                      padding: '0.8rem',
+                      fontSize: '1.1rem',
+                      textAlign: 'right',
+                      borderRadius: '6px',
+                      boxSizing: 'border-box'
+                    }}
+                    autoFocus
+                    onFocus={(e) => e.target.select()}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        const priceInput = document.getElementById('modal-price-input');
+                        if (priceInput) {
+                          priceInput.focus();
+                          priceInput.select();
+                        }
                       }
-                    }
-                  }}
-                />
+                    }}
+                  />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.5rem', fontWeight: '600' }}>단가</label>
+                  <input
+                    id="modal-price-input"
+                    type="text"
+                    value={inventoryInputModal.unitPrice ? formatCurrency(parseFloat(inventoryInputModal.unitPrice)) : ''}
+                    onChange={(e) => {
+                      const val = e.target.value.replace(/[^0-9]/g, '');
+                      setInventoryInputModal(prev => ({ ...prev, unitPrice: val }));
+                    }}
+                    className="form-control modal-input-highlight"
+                    style={{
+                      width: '100%',
+                      padding: '0.8rem',
+                      fontSize: '1.1rem',
+                      textAlign: 'right',
+                      borderRadius: '6px',
+                      boxSizing: 'border-box'
+                    }}
+                    onFocus={(e) => e.target.select()}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') handleInventoryInputConfirm();
+                    }}
+                  />
+                </div>
               </div>
-              <div style={{ flex: 1 }}>
-                <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.5rem', fontWeight: '600' }}>단가</label>
-                <input
-                  id="modal-price-input"
-                  type="text"
-                  value={inventoryInputModal.unitPrice ? formatCurrency(parseFloat(inventoryInputModal.unitPrice)) : ''}
-                  onChange={(e) => {
-                    const val = e.target.value.replace(/[^0-9]/g, '');
-                    setInventoryInputModal(prev => ({ ...prev, unitPrice: val }));
-                  }}
-                  className="form-control modal-input-highlight"
-                  style={{
-                    width: '100%',
-                    padding: '0.8rem',
-                    fontSize: '1.1rem',
-                    textAlign: 'right',
-                    borderRadius: '6px',
-                    boxSizing: 'border-box'
-                  }}
-                  onFocus={(e) => e.target.select()}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') handleInventoryInputConfirm();
-                  }}
-                />
-              </div>
-            </div>
 
-            {/* 버튼 */}
-            <div style={{ display: 'flex', gap: '0.5rem' }}>
-              <button
-                onClick={() => setInventoryInputModal(prev => ({ ...prev, isOpen: false }))}
-                className="modal-btn modal-btn-cancel"
-                style={{ flex: 1 }}
-              >
-                취소
-              </button>
-              <button
-                onClick={handleInventoryInputConfirm}
-                className="modal-btn modal-btn-primary"
-                style={{ flex: 2 }}
-              >
-                추가하기
-              </button>
+              {/* 버튼 */}
+              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                <button
+                  onClick={() => setInventoryInputModal(prev => ({ ...prev, isOpen: false }))}
+                  className="modal-btn modal-btn-cancel"
+                  style={{ flex: 1 }}
+                >
+                  취소
+                </button>
+                <button
+                  onClick={handleInventoryInputConfirm}
+                  className="modal-btn modal-btn-primary"
+                  style={{ flex: 2 }}
+                >
+                  추가하기
+                </button>
+              </div>
             </div>
-          </div>
-        </div>,
-        document.body
-      )}
-    </div>
+          </div>,
+          document.body
+        )
+      }
+    </div >
   );
 }
 

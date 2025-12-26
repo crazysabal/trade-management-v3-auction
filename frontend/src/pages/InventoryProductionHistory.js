@@ -169,7 +169,7 @@ function InventoryProductionHistory() {
                                         {item.output_product_grade && <span className="text-gray-500 text-sm ml-1">({item.output_product_grade})</span>}
                                     </td>
                                     <td className="font-bold text-primary">
-                                        {Number(item.output_quantity).toLocaleString()} {item.unit}
+                                        {Number(item.output_quantity).toLocaleString()}
                                     </td>
                                     <td>{Math.round(item.unit_cost).toLocaleString()} 원</td>
                                     <td className="text-gray-600">{item.memo || '-'}</td>

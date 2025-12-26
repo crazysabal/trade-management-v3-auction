@@ -4,7 +4,7 @@ import ReactDOM from 'react-dom';
 /**
  * FloatingWindow - 드래그 및 크기 조절 가능한 플로팅 윈도우
  */
-const FloatingWindow = ({ title, onClose, initialPosition = { x: 100, y: 100 }, size = { width: 400, height: 500 }, children, zIndex = 9999, onMouseDown, onResizeStop }) => {
+const FloatingWindow = ({ title, icon, onClose, initialPosition = { x: 100, y: 100 }, size = { width: 400, height: 500 }, children, zIndex = 9999, onMouseDown, onResizeStop, onDragStop, isActive, contentPadding = '8px', headerPadding = '10px 15px', ...rest }) => {
     const windowRef = useRef(null);
 
     // 이동 관련 Refs
@@ -55,14 +55,21 @@ const FloatingWindow = ({ title, onClose, initialPosition = { x: 100, y: 100 }, 
                         const x = (winW - rect.width) / 2;
                         const y = (winH - rect.height) / 2;
 
+                        // 초기 위치도 Navbar(50px) 고려
+                        const safeY = Math.max(50, y);
+
                         windowRef.current.style.left = `${Math.max(0, x)}px`;
-                        windowRef.current.style.top = `${Math.max(0, y)}px`;
-                        // 초기화 후 보여주기 위해 opacity 등을 쓸 수도 있으나, 일단 위치 설정
+                        windowRef.current.style.top = `${safeY}px`;
                     }
                 }, 0);
             } else {
+                // 초기 위치도 상단 경계만 체크
+                const safeTop = 50;
+                let finalY = initialPosition.y;
+                if (finalY < safeTop) finalY = safeTop;
+
                 windowRef.current.style.left = `${initialPosition.x}px`;
-                windowRef.current.style.top = `${initialPosition.y}px`;
+                windowRef.current.style.top = `${finalY}px`;
             }
         }
     }, [initialPosition]);
@@ -98,10 +105,20 @@ const FloatingWindow = ({ title, onClose, initialPosition = { x: 100, y: 100 }, 
             const deltaX = e.clientX - dragStartPos.current.x;
             const deltaY = e.clientY - dragStartPos.current.y;
 
-            const newX = windowStartPos.current.x + deltaX;
-            const newY = windowStartPos.current.y + deltaY;
+            let newX = windowStartPos.current.x + deltaX;
+            let newY = windowStartPos.current.y + deltaY;
 
             if (windowRef.current) {
+                // 화면 경계 제한
+                // 상단(Navbar)만 제한하고, 좌우/하단은 자유롭게 이동 가능하도록 변경 (사용자 요청)
+                const safeTop = 50; // Navbar height
+
+                // X축 제한 해제 (자유롭게 이동)
+                // newX = Math.max(0, Math.min(newX, safeRight - width));
+
+                // Y축 제한 (상단 Navbar만 침범 금지, 하단은 자유)
+                newY = Math.max(safeTop, newY);
+
                 windowRef.current.style.left = `${newX}px`;
                 windowRef.current.style.top = `${newY}px`;
             }
@@ -113,7 +130,7 @@ const FloatingWindow = ({ title, onClose, initialPosition = { x: 100, y: 100 }, 
 
         isDragging.current = false;
         if (windowRef.current) {
-            windowRef.current.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
+            windowRef.current.style.boxShadow = isActive ? '0 8px 30px rgba(0,0,0,0.3)' : '0 4px 12px rgba(0,0,0,0.15)';
         }
 
         document.body.style.userSelect = '';
@@ -121,6 +138,12 @@ const FloatingWindow = ({ title, onClose, initialPosition = { x: 100, y: 100 }, 
 
         document.removeEventListener('mousemove', handleMouseMove);
         document.removeEventListener('mouseup', handleMouseUp);
+
+        // 위치 저장 콜백 호출
+        if (onDragStop && windowRef.current) {
+            const rect = windowRef.current.getBoundingClientRect();
+            onDragStop({ x: rect.left, y: rect.top });
+        }
     };
 
     // --- 리사이즈 핸들러 ---
@@ -188,21 +211,22 @@ const FloatingWindow = ({ title, onClose, initialPosition = { x: 100, y: 100 }, 
                 position: 'fixed',
                 // left, top, width, height는 ref로 제어
                 backgroundColor: 'white',
-                boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                boxShadow: isActive ? '0 8px 30px rgba(0,0,0,0.3)' : '0 4px 12px rgba(0,0,0,0.15)',
                 borderRadius: '8px',
-                border: '1px solid #ddd',
+                border: isActive ? '2px solid #3498db' : '1px solid #ddd',
                 zIndex: zIndex,
-                display: 'flex',
+                display: rest.isMinimized ? 'none' : 'flex', // 최소화 시 숨김
                 flexDirection: 'column',
-                overflow: 'hidden'
+                overflow: 'hidden',
+                transition: 'box-shadow 0.2s, border 0.2s', // 부드러운 전환
             }}
         >
             {/* 헤더 (드래그 핸들) */}
             <div
                 onMouseDown={handleMouseDown}
                 style={{
-                    padding: '10px 15px',
-                    backgroundColor: '#34495e',
+                    padding: headerPadding,
+                    backgroundColor: isActive ? '#2980b9' : '#34495e', // 활성: 밝은 파랑, 비활성: 짙은 회색
                     color: 'white',
                     cursor: 'grab',
                     display: 'flex',
@@ -214,25 +238,73 @@ const FloatingWindow = ({ title, onClose, initialPosition = { x: 100, y: 100 }, 
                     zIndex: 100
                 }}
             >
-                <div style={{ fontWeight: 'bold', fontSize: '0.95rem' }}>{title}</div>
-                <button
-                    onClick={onClose}
-                    style={{
-                        background: 'none',
-                        border: 'none',
-                        color: 'white',
-                        fontSize: '1.2rem',
-                        cursor: 'pointer',
-                        padding: '0 5px',
-                        lineHeight: 1
-                    }}
-                >
-                    &times;
-                </button>
+                <div style={{ fontWeight: 'bold', fontSize: '0.95rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    {icon && <span>{icon}</span>}
+                    {title}
+                    {/* 수정 상태 뱃지 */}
+                    {rest.isDirty && (
+                        <span style={{
+                            backgroundColor: '#e74c3c',
+                            color: 'white',
+                            fontSize: '0.7rem',
+                            padding: '2px 6px',
+                            borderRadius: '10px',
+                            fontWeight: 'normal',
+                            boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
+                            animation: 'pulse 2s infinite'
+                        }}>
+                            수정중
+                        </span>
+                    )}
+                </div>
+                <style>{`
+                    @keyframes pulse {
+                        0% { opacity: 1; transform: scale(1); }
+                        50% { opacity: 0.8; transform: scale(0.95); }
+                        100% { opacity: 1; transform: scale(1); }
+                    }
+                `}</style>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                    {rest.onMinimize && (
+                        <button
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                rest.onMinimize();
+                            }}
+                            title="최소화"
+                            style={{
+                                background: 'none',
+                                border: 'none',
+                                color: 'white',
+                                fontSize: '1rem',
+                                cursor: 'pointer',
+                                padding: '0 5px',
+                                lineHeight: 1
+                            }}
+                        >
+                            ─
+                        </button>
+                    )}
+                    <button
+                        onClick={onClose}
+                        title="닫기"
+                        style={{
+                            background: 'none',
+                            border: 'none',
+                            color: 'white',
+                            fontSize: '1.2rem',
+                            cursor: 'pointer',
+                            padding: '0 5px',
+                            lineHeight: 1
+                        }}
+                    >
+                        &times;
+                    </button>
+                </div>
             </div>
 
             {/* 컨텐츠 영역 */}
-            <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column', padding: '8px' }}>
+            <div style={{ flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column', padding: contentPadding }}>
                 {children}
             </div>
 

@@ -15,7 +15,10 @@ const pool = mysql.createPool({
   // DATE/DATETIME 타입을 문자열로 반환 (UTC 변환 문제 해결)
   dateStrings: true,
   // 타임존 설정
-  timezone: '+09:00'
+  timezone: '+09:00',
+  // BigInt 안전 처리
+  supportBigNumbers: true,
+  bigNumberStrings: true
 });
 
 // Promise 기반 풀 생성
@@ -27,7 +30,7 @@ pool.getConnection((err, connection) => {
     console.error('데이터베이스 연결 실패:', err.message);
     return;
   }
-  console.log('✓ MySQL 데이터베이스 연결 성공');
+  console.log('MySQL Database Connected Successfully');
   connection.release();
 });
 

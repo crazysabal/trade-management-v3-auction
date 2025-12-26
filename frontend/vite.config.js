@@ -14,6 +14,7 @@ export default defineConfig({
         },
     },
     server: {
+        host: true, // Listen on all network interfaces
         port: 3000,
         open: false, // Launcher handles browser opening via BROWSER=none but better to be explicit
         proxy: {

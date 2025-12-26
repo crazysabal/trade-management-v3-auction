@@ -17,7 +17,7 @@ function ProductForm() {
     product_name: '',
     grade: '',
     grades: '',
-    unit: 'Box',
+
     category_id: '',
     weight: '',
     notes: '',
@@ -90,7 +90,7 @@ function ProductForm() {
       setFormData({
         ...formData,
         product_name: product.product_name,
-        unit: product.unit,
+
         category_id: product.category_id,
         weight: product.weight ? Math.round(product.weight * 10) / 10 : '',
         notes: ''
@@ -157,7 +157,7 @@ function ProductForm() {
         setFormData({
           ...formData,
           product_name: product.product_name,
-          unit: product.unit,
+
           category_id: product.category_id,
           weight: product.weight ? Math.round(product.weight * 10) / 10 : ''
         });
@@ -409,7 +409,7 @@ function ProductForm() {
               type="button"
               onClick={() => {
                 setIsAddingGrade(false);
-                setFormData({ ...formData, product_name: '', unit: 'Box', category_id: '', weight: '' });
+                setFormData({ ...formData, product_name: '', category_id: '', weight: '' });
               }}
               style={{
                 padding: '0.5rem 1rem',
@@ -552,17 +552,7 @@ function ProductForm() {
         )}
 
         <div className="form-row">
-          <div className="form-group">
-            <label>단위</label>
-            <input
-              type="text"
-              name="unit"
-              value={formData.unit || ''}
-              onChange={handleChange}
-              placeholder="Box, kg"
-              style={inputStyle}
-            />
-          </div>
+
           <div className="form-group">
             <div style={{ display: 'flex', alignItems: 'center', marginBottom: '0.5rem' }}>
               <label style={{ marginRight: '1rem', marginBottom: 0 }}>중량 (kg)</label>

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import axios from 'axios';
+import { expenseCategoryAPI } from '../services/api';
 import '../components/TradePanel.css';
 
 const ExpenseCategoryManagement = () => {
@@ -22,7 +22,7 @@ const ExpenseCategoryManagement = () => {
     const fetchCategories = async () => {
         setLoading(true);
         try {
-            const response = await axios.get('http://localhost:5000/api/expense-categories');
+            const response = await expenseCategoryAPI.getAll();
             setCategories(response.data);
             setError(null);
         } catch (err) {
@@ -57,7 +57,7 @@ const ExpenseCategoryManagement = () => {
             if (modalData.id) {
                 // 수정
                 const currentCat = categories.find(c => c.id === modalData.id);
-                await axios.put(`http://localhost:5000/api/expense-categories/${modalData.id}`, {
+                await expenseCategoryAPI.update(modalData.id, {
                     name: modalData.name,
                     is_active: modalData.is_active,
                     sort_order: currentCat.sort_order
@@ -65,7 +65,7 @@ const ExpenseCategoryManagement = () => {
             } else {
                 // 추가
                 const maxOrder = categories.length > 0 ? Math.max(...categories.map(c => c.sort_order)) : 0;
-                await axios.post('http://localhost:5000/api/expense-categories', {
+                await expenseCategoryAPI.create({
                     name: modalData.name,
                     sort_order: maxOrder + 10,
                     is_active: modalData.is_active
@@ -80,7 +80,7 @@ const ExpenseCategoryManagement = () => {
 
     const handleToggleActive = async (category) => {
         try {
-            await axios.put(`http://localhost:5000/api/expense-categories/${category.id}`, {
+            await expenseCategoryAPI.update(category.id, {
                 name: category.name,
                 is_active: !category.is_active,
                 sort_order: category.sort_order
@@ -95,7 +95,7 @@ const ExpenseCategoryManagement = () => {
     const handleDelete = async (id) => {
         if (!window.confirm('정말 삭제하시겠습니까? 지출 내역이 있는 경우 삭제할 수 없습니다.')) return;
         try {
-            await axios.delete(`http://localhost:5000/api/expense-categories/${id}`);
+            await expenseCategoryAPI.delete(id);
             fetchCategories();
         } catch (err) {
             alert(err.response?.data?.message || '항목 삭제 중 오류가 발생했습니다.');
@@ -140,7 +140,7 @@ const ExpenseCategoryManagement = () => {
         }));
 
         try {
-            await axios.put('http://localhost:5000/api/expense-categories/reorder', {
+            await expenseCategoryAPI.reorder({
                 items: reorderedItems
             });
         } catch (err) {

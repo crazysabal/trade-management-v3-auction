@@ -29,6 +29,7 @@ const inventoryAdjustmentRouter = require('./routes/inventoryAdjustment');
 const inventoryProductionRouter = require('./routes/inventoryProduction'); // 신규 추가
 const expenseRouter = require('./routes/expenses');
 const expenseCategoryRouter = require('./routes/expenseCategories');
+const settlementRouter = require('./routes/settlement');
 
 app.use('/api/companies', companiesRouter);
 app.use('/api/products', productsRouter);
@@ -47,6 +48,7 @@ app.use('/api/inventory-production', inventoryProductionRouter);
 app.use('/api/inventory-adjustment', inventoryAdjustmentRouter); // Fix missing mount
 app.use('/api/expenses', expenseRouter);
 app.use('/api/expense-categories', expenseCategoryRouter);
+app.use('/api/settlement', settlementRouter);
 
 // 헬스체크
 app.get('/api/health', (req, res) => {
@@ -73,8 +75,8 @@ app.use((req, res) => {
 const PORT = process.env.PORT || 5000;
 
 app.listen(PORT, () => {
-  console.log('=================================');
-  console.log(`✓ 서버가 포트 ${PORT}에서 실행중입니다.`);
-  console.log(`✓ http://localhost:${PORT}`);
-  console.log('=================================');
+  console.log('---------------------------------');
+  console.log(`Server running on port ${PORT}`);
+  console.log(`http://localhost:${PORT}`);
+  console.log('---------------------------------');
 });

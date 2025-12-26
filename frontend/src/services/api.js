@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+const API_BASE_URL = process.env.REACT_APP_API_URL || '/api';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -110,6 +110,7 @@ export const purchaseInventoryAPI = {
   getSummaryByProduct: () => api.get('/purchase-inventory/summary/by-product'),
   getAvailable: (productId) => api.get(`/purchase-inventory/available/${productId}`),
   getTransactions: (params) => api.get('/purchase-inventory/transactions', { params }),
+  reorder: (orderedIds) => api.put('/purchase-inventory/reorder', { orderedIds }),
 };
 
 // 매출-매입 매칭 API (신규)
@@ -213,6 +214,25 @@ export const inventoryProductionAPI = {
   getRecent: () => api.get('/inventory-production/recent'), // @deprecated
   getHistory: (params) => api.get('/inventory-production', { params }), // 전체 이력 조회
   getDetail: (id) => api.get(`/inventory-production/${id}`), // 상세 조회 (재료 포함)
+};
+
+// 지출 관리 API
+export const expenseAPI = {
+  getAll: (params) => api.get('/expenses', { params }),
+  getById: (id) => api.get(`/expenses/${id}`),
+  create: (data) => api.post('/expenses', data),
+  update: (id, data) => api.put(`/expenses/${id}`, data),
+  delete: (id) => api.delete(`/expenses/${id}`),
+};
+
+// 지출 항목 API
+export const expenseCategoryAPI = {
+  getAll: (params) => api.get('/expense-categories', { params }),
+  getById: (id) => api.get(`/expense-categories/${id}`),
+  create: (data) => api.post('/expense-categories', data),
+  update: (id, data) => api.put(`/expense-categories/${id}`, data),
+  delete: (id) => api.delete(`/expense-categories/${id}`),
+  reorder: (data) => api.put('/expense-categories/reorder', data),
 };
 
 export default api;

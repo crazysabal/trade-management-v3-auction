@@ -1,4 +1,4 @@
-# 통합 개발 가이드라인 (Unified Development Guidelines)
+# 통합 개발 가이드라인 (Unified Development Guidelines) v2.0
 
 ## 1. 핵심 행동 수칙 (Critical Core Rules)
 이 섹션의 규칙은 프로젝트의 최우선 순위이며, 어떤 상황에서도 타협할 수 없습니다.
@@ -21,70 +21,52 @@
   - 필요한 사고 횟수(`totalThoughts`)를 유동적으로 조절하며, 불확실할 경우 "끝"이라고 생각되어도 사고를 추가하십시오.
   - 이전 사고를 자유롭게 비판, 수정(`isRevision`), 또는 분기(`branchFromThought`) 하십시오.
   - 최종적으로 **단 하나의 정답(ideally correct answer)**을 도출할 때까지 반복하십시오.
-  - 진정으로 완료되었을 때만 `nextThoughtNeeded`를 `false`로 설정하십시오.
 
 ### 2.2 Context7 라이브러리 도구
-- **Step 1: `resolve-library-id` (필수 선행)**
-  - 사용자가 ID를 직접 제공하지 않는 한, 문서를 조회하기 전 무조건 먼저 호출합니다.
-  - 선택 기준: 이름 일치 > 설명 관련성 > 코드 스니펫 수 > 평판 > 벤치마크 점수.
-  - 응답 시 선택된 이유를 명확히 설명해야 합니다.
-- **Step 2: `get-library-docs`**
-  - 확보된 ID를 사용하여 문서를 조회합니다.
-  - **Mode**: 코딩 작업 시 `mode='code'`, 개념/아키텍처 질문 시 `mode='info'`.
+- **resolve-library-id** (필수 선행): 문서를 조회하기 전 무조건 먼저 호출하여 ID를 확보합니다.
+- **get-library-docs**: 확보된 ID로 문서를 조회하며 적절한 Mode를 선택합니다.
 
 ## 3. 프로젝트 구현 규칙 & 컨벤션 (Project Rules & Conventions)
 
 ### 3.1 메타 규칙 (Meta Rules)
-- **지속적 개선**: 사용자와의 대화에서 반복적으로 요구되는 사항(수정 사항)이 발견되면, 즉시 이 가이드라인에 내용을 추가하여 영구적인 규칙으로 정립해야 합니다.
+- **지속적 개선**: 사용자와의 대화에서 반복적으로 요구되는 사항이 발견되면, 즉시 이 가이드라인을 업데이트합니다.
 
 ### 3.2 UI/UX 가이드라인
 
+#### 0. 일반 원칙: 비파괴적 UI 개선 (Non-Destructive UI Evolution)
+- **Legacy Layout Stability**: 새로운 기능을 추가하거나 버그를 수정할 때, 기존의 잘 잡힌 레이아웃(수평 폼, 컨트롤 높이 등)을 훼손해서는 안 됩니다.
+- **Simulation**: CSS 클래스나 스타일을 변경하기 전, 주변 요소의 정렬이나 크기에 미칠 영향을 먼저 Sequential Thinking으로 시뮬레이션하십시오.
+
 #### A. 모달 동작 (Modal Behavior)
-- **닫기 메커니즘**:
-  - **ESC 키**: 필수 지원. 반드시 `e.stopPropagation()`과 `e.preventDefault()`를 포함하여 부모 모달이 함께 닫히는 것을 방지해야 합니다.
-  - **배경 클릭**: 데이터 보호를 위해 배경 클릭으로 닫히는 기능은 비활성화합니다.
-- **구현 예시**:
-  ```javascript
-  const handleKeyDown = (e) => {
-    if (e.key === 'Escape') {
-      e.preventDefault();
-      e.stopPropagation(); // 이벤트 전파 중단 필수
-      onClose();
-    }
-  };
-  ```
+- **닫기 메커니즘**: ESC 키 지원 필수 (`stopPropagation` 포함), 배경 클릭 닫기 비활성화.
+- **[New] 맥락 인지형 삭제 (Context-Aware Safe Deletion)**:
+  - 모든 파괴적 작업(삭제)의 확인 모달에는 반드시 **"무엇을"** 삭제하는지 명시해야 합니다.
+  - **Bad**: "정말 삭제하시겠습니까?"
+  - **Good**: "12월 25일 '삼성전자'와의 매입 전표를 삭제하시겠습니까?"
+  - 대상 식별 정보(이름, 날짜, 금액 등)가 없는 일반적인 메시지는 사용을 금지합니다.
 
 #### B. 데이터 표시 표준 (Data Formatting)
-- **품목명 표시**: `${품목명} ${중량}kg (${등급})` 형식을 준수하며, Null 값은 자연스럽게 처리합니다.
-- **중량(무게) 표시**:
-  - 불필요한 소수점 및 0 제거 (`parseFloat` 사용).
-  - 예: `5.00` -> `5`, `5.50` -> `5.5`
-  - 코드: ``const weightText = p.weight ? `${parseFloat(p.weight)}kg` : '';``
-- **용어 및 언어**:
-  - 모든 라벨은 **한국어** 사용.
-  - "입고일자" 대신 **"매입 일자"**라는 용어를 사용합니다.
+- **포맷**: `${품목명} ${중량}kg (${등급})` 형식 준수. 중량의 불필요한 소수점 제거.
+- **용어**: 라벨은 한국어 사용 ("입고일자" -> "매입 일자").
 
 #### C. 스타일링 표준
-- **폰트 크기**:
-  - 업무용 데이터/입력 양식: `0.9rem` (약 14px) 표준.
-  - 목록 화면: `0.85rem` ~ `0.9rem`.
-- **페이지 헤더**:
-  - 인라인 스타일 금지. `App.css`의 `.page-header`, `.page-title` 클래스를 사용합니다.
-  - **구조**:
-    ```javascript
-    <div className="page-header">
-      <h1 className="page-title">📋 페이지 제목</h1>
-      <div className="page-header-actions">{/* 버튼 영역 */}</div>
-    </div>
-    ```
+- **폰트 크기**: 업무용 `0.9rem`, 목록 `0.85rem`~`0.9rem`.
+- **페이지 헤더**: `App.css`의 `.page-header`, `.page-title` 클래스 사용.
+- **[Critical] 인라인 스타일 금지 (Inline Style Ban)**:
+  - 프로토타이핑 단계를 제외한 최종 코드(Commit)에는 `style={{ ... }}` 객체 사용을 엄격히 금지합니다 (동적 값 제어 제외).
+  - 반드시 `TradePanel.css` 또는 컴포넌트 전용 CSS 파일의 클래스를 사용하십시오.
 
 ### 3.3 아키텍처 가이드라인
 
 #### Front-end
-- **모달 스타일 재사용**: 새로운 상세 모달 구현 시 `TradeDetailModal`의 구조와 CSS 클래스(`trade-detail-modal-*`)를 재사용하여 일관성을 유지합니다.
+- **모달 스타일 재사용**: `TradeDetailModal`, `ConfirmModal` 등의 표준 패턴을 재사용합니다.
 
 #### Back-end (API)
-- **에러 핸들링**: JSON 응답에 구체적인 에러 메시지를 포함합니다.
-  - `res.status(500).json({ success: false, message: '알림: ' + error.message });`
-- **안정성 (Robustness)**: 데이터 무결성 보장을 위해 목록 조회 시 `INNER JOIN` 보다는 **`LEFT JOIN`**을 권장합니다.
-- **라우팅 순서**: 고정 경로(예: `/recent`)는 파라미터 경로(예: `/:id`)보다 **반드시 먼저** 정의해야 합니다.
+- **안정성**: `LEFT JOIN` 권장.
+- **라우팅**: 고정 경로를 파라미터 경로보다 먼저 정의.
+
+## 4. 트러블슈팅 및 보고 (Troubleshooting & Reporting)
+
+### 4.1 환경적 요인 보고 프로토콜 (Environmental Issue Protocol)
+- **유령 버그 대응**: 코드베이스 전수 조사(Grep 등) 후에도 원인이 발견되지 않는 현상(예: 비프음)은 **"환경/하드웨어 요인(Environment Factor)"**으로 분류합니다.
+- **조치**: 무리한 코드 수정보다는 터미널, 브라우저, OS 설정을 점검하도록 사용자에게 제안합니다.

@@ -164,7 +164,7 @@ router.get('/:id', async (req, res) => {
         p.product_name,
         p.grade,
         p.weight as product_weight,
-        p.unit,
+
         spm.purchase_inventory_id as matched_inventory_id,
         spm.matched_quantity,
         pi.remaining_quantity as inventory_remaining, -- 현재 재고 잔량 (검증용)

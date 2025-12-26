@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { settingsAPI } from '../services/api';
 import './Settings.css'; // 스타일 파일 별도 생성 필요
 
-const Settings = () => {
+const Settings = ({ ...rest }) => {
     const [activeTab, setActiveTab] = useState('payment'); // 'general', 'payment'
     const [paymentMethods, setPaymentMethods] = useState([]);
     const [loading, setLoading] = useState(false);
@@ -189,9 +189,56 @@ const Settings = () => {
             </div>
 
             <div className="settings-content">
+
                 {activeTab === 'general' && (
                     <div className="general-settings">
-                        <p className="placeholder-text">추후 시스템 전반에 대한 설정 기능이 추가될 예정입니다.</p>
+                        <div className="settings-section">
+                            <h2>윈도우 관리 설정</h2>
+                            <div className="setting-item" style={{
+                                backgroundColor: 'white',
+                                padding: '1.5rem',
+                                borderRadius: '8px',
+                                border: '1px solid #e2e8f0',
+                                marginBottom: '1rem'
+                            }}>
+                                <h3 style={{ fontSize: '1.1rem', marginBottom: '1rem' }}>앱 실행 모드</h3>
+                                <div className="radio-group" style={{ display: 'flex', gap: '2rem' }}>
+                                    <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
+                                        <input
+                                            type="radio"
+                                            name="windowMode"
+                                            value="multi"
+                                            checked={rest.windowMode === 'multi'}
+                                            onChange={(e) => rest.setWindowMode && rest.setWindowMode(e.target.value)}
+                                            style={{ marginRight: '0.5rem', width: '18px', height: '18px' }}
+                                        />
+                                        <div>
+                                            <div style={{ fontWeight: '500' }}>다중 창 모드 (기본)</div>
+                                            <div style={{ fontSize: '0.9rem', color: '#64748b' }}>
+                                                같은 앱을 여러 개 띄울 수 있습니다.
+                                            </div>
+                                        </div>
+                                    </label>
+
+                                    <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
+                                        <input
+                                            type="radio"
+                                            name="windowMode"
+                                            value="single"
+                                            checked={rest.windowMode === 'single'}
+                                            onChange={(e) => rest.setWindowMode && rest.setWindowMode(e.target.value)}
+                                            style={{ marginRight: '0.5rem', width: '18px', height: '18px' }}
+                                        />
+                                        <div>
+                                            <div style={{ fontWeight: '500' }}>단일 창 모드</div>
+                                            <div style={{ fontSize: '0.9rem', color: '#64748b' }}>
+                                                이미 실행 중인 앱이 있으면 해당 창을 맨 앞으로 가져옵니다.
+                                            </div>
+                                        </div>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 )}
 

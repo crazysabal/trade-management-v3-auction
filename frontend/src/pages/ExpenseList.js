@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import { expenseAPI } from '../services/api';
 import ExpenseFormModal from '../components/ExpenseFormModal';
 import ConfirmModal from '../components/ConfirmModal'; // ConfirmModal 임포트
 import '../components/TradePanel.css';
@@ -35,11 +35,9 @@ const ExpenseList = () => {
     const fetchExpenses = async () => {
         setLoading(true);
         try {
-            const res = await axios.get('http://localhost:5000/api/expenses', {
-                params: {
-                    start_date: startDate,
-                    end_date: endDate
-                }
+            const res = await expenseAPI.getAll({
+                start_date: startDate,
+                end_date: endDate
             });
             setExpenses(res.data);
         } catch (err) {
@@ -74,7 +72,7 @@ const ExpenseList = () => {
     // 실제 삭제 로직
     const handleDeleteConfirm = async (id) => {
         try {
-            await axios.delete(`http://localhost:5000/api/expenses/${id}`);
+            await expenseAPI.delete(id);
             fetchExpenses();
             // showModal('삭제 완료', '지출 내역이 삭제되었습니다.', 'success', null, false); // 너무 빈번한 팝업 방지 위해 생략 가능
         } catch (err) {
