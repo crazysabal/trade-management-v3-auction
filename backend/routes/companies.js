@@ -11,15 +11,15 @@ const upload = multer({ storage: multer.memoryStorage() });
 router.get('/', async (req, res) => {
   try {
     const { search, type, is_active } = req.query;
-    
+
     let query = 'SELECT * FROM companies WHERE 1=1';
     const params = [];
-    
+
     if (search) {
       query += ' AND (company_name LIKE ? OR company_code LIKE ?)';
       params.push(`%${search}%`, `%${search}%`);
     }
-    
+
     if (type) {
       // SUPPLIER 조회 시 SUPPLIER 또는 BOTH, CUSTOMER 조회 시 CUSTOMER 또는 BOTH
       if (type === 'SUPPLIER') {
@@ -33,15 +33,15 @@ router.get('/', async (req, res) => {
         params.push(type);
       }
     }
-    
+
     // is_active가 'true' 또는 'false'일 때만 필터링 (빈 문자열이면 전체 조회)
     if (is_active === 'true' || is_active === 'false') {
       query += ' AND is_active = ?';
       params.push(is_active === 'true' ? 1 : 0);
     }
-    
+
     query += ' ORDER BY sort_order, company_code';
-    
+
     const [rows] = await db.query(query, params);
     res.json({ success: true, data: rows });
   } catch (error) {
@@ -54,11 +54,11 @@ router.get('/', async (req, res) => {
 router.get('/:id', async (req, res) => {
   try {
     const [rows] = await db.query('SELECT * FROM companies WHERE id = ?', [req.params.id]);
-    
+
     if (rows.length === 0) {
       return res.status(404).json({ success: false, message: '거래처를 찾을 수 없습니다.' });
     }
-    
+
     res.json({ success: true, data: rows[0] });
   } catch (error) {
     console.error('거래처 상세 조회 오류:', error);
@@ -74,11 +74,11 @@ async function generateCompanyCode() {
      ORDER BY CAST(SUBSTRING(company_code, 2) AS UNSIGNED) DESC 
      LIMIT 1`
   );
-  
+
   if (rows.length === 0) {
     return 'C001';
   }
-  
+
   const lastCode = rows[0].company_code;
   const lastNum = parseInt(lastCode.substring(1), 10);
   const nextNum = lastNum + 1;
@@ -94,10 +94,10 @@ router.post('/', async (req, res) => {
       contact_person, contact_phone, company_type_flag, notes,
       bank_name, account_number, account_holder, e_tax_invoice
     } = req.body;
-    
+
     // 거래처코드 자동 생성
     const company_code = await generateCompanyCode();
-    
+
     const [result] = await db.query(
       `INSERT INTO companies (
         company_code, company_name, alias, business_number, ceo_name,
@@ -112,7 +112,7 @@ router.post('/', async (req, res) => {
         bank_name, account_number, account_holder, e_tax_invoice ? 1 : 0
       ]
     );
-    
+
     res.status(201).json({
       success: true,
       message: '거래처가 등록되었습니다.',
@@ -144,15 +144,15 @@ router.post('/upload-preview', upload.single('file'), async (req, res) => {
     // 헤더 행 찾기 (일반적으로 첫 번째 행이지만, 특수한 경우 다른 행일 수 있음)
     let headerRowIndex = 0;
     let headers = jsonData[0];
-    
+
     // 헤더에 '거래처상호' 또는 '거래처명'이 포함된 행을 찾기
     for (let i = 0; i < Math.min(10, jsonData.length); i++) {
       const row = jsonData[i];
-      if (row && row.some(cell => 
-        cell && (String(cell).includes('거래처상호') || 
-                 String(cell).includes('거래처명') ||
-                 String(cell).includes('사업자번호') ||
-                 String(cell).includes('거래처등록번호'))
+      if (row && row.some(cell =>
+        cell && (String(cell).includes('거래처상호') ||
+          String(cell).includes('거래처명') ||
+          String(cell).includes('사업자번호') ||
+          String(cell).includes('거래처등록번호'))
       )) {
         headerRowIndex = i;
         headers = row;
@@ -160,7 +160,7 @@ router.post('/upload-preview', upload.single('file'), async (req, res) => {
         break;
       }
     }
-    
+
     const rows = jsonData.slice(headerRowIndex + 1).filter(row => row.length > 0 && row.some(cell => cell));
     console.log('데이터 행 수:', rows.length);
 
@@ -207,7 +207,7 @@ router.post('/upload-preview', upload.single('file'), async (req, res) => {
     // 데이터 변환
     const companies = rows.map((row, rowIndex) => {
       const company = { _rowNum: rowIndex + 2 }; // 엑셀 행 번호 (헤더 제외)
-      
+
       Object.entries(headerIndices).forEach(([field, index]) => {
         company[field] = row[index] !== undefined ? String(row[index]).trim() : '';
       });
@@ -251,7 +251,7 @@ router.post('/upload-preview', upload.single('file'), async (req, res) => {
 router.post('/bulk-import', async (req, res) => {
   try {
     const { companies } = req.body;
-    
+
     if (!Array.isArray(companies) || companies.length === 0) {
       return res.status(400).json({ success: false, message: '등록할 데이터가 없습니다.' });
     }
@@ -265,18 +265,18 @@ router.post('/bulk-import', async (req, res) => {
       try {
         // 거래처코드 자동 생성
         const company_code = await generateCompanyCode();
-        
+
         // sort_order 가져오기
         const [maxOrder] = await db.query('SELECT MAX(sort_order) as max_order FROM companies');
         const sort_order = (maxOrder[0].max_order || 0) + 1;
-        
+
         await db.query(
           `INSERT INTO companies (
             company_code, company_name, alias, business_number, ceo_name,
             company_type, company_category, address, phone, fax, email,
             contact_person, contact_phone, company_type_flag, notes,
-            bank_name, account_number, account_holder, sort_order
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            bank_name, account_number, account_holder, e_tax_invoice, sort_order
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             company_code,
             company.company_name || '',
@@ -296,10 +296,11 @@ router.post('/bulk-import', async (req, res) => {
             company.bank_name || '',
             company.account_number || '',
             company.account_holder || '',
+            company.e_tax_invoice ? 1 : 0,
             sort_order
           ]
         );
-        
+
         results.success.push({
           rowNum: company._rowNum,
           company_name: company.company_name,
@@ -329,7 +330,7 @@ router.post('/bulk-import', async (req, res) => {
 router.put('/reorder', async (req, res) => {
   try {
     const { items } = req.body;
-    
+
     if (!Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ success: false, message: '정렬할 거래처 데이터가 없습니다.' });
     }
@@ -340,7 +341,7 @@ router.put('/reorder', async (req, res) => {
         [item.sort_order, item.id]
       );
     }
-    
+
     res.json({ success: true, message: '거래처 순서가 저장되었습니다.' });
   } catch (error) {
     console.error('거래처 순번 변경 오류:', error);
@@ -357,7 +358,7 @@ router.put('/:id', async (req, res) => {
       contact_person, contact_phone, company_type_flag, notes, is_active,
       bank_name, account_number, account_holder, e_tax_invoice
     } = req.body;
-    
+
     // 거래처코드 중복 체크 (자기 자신 제외)
     const [existing] = await db.query(
       'SELECT id FROM companies WHERE company_code = ? AND id != ?',
@@ -366,7 +367,7 @@ router.put('/:id', async (req, res) => {
     if (existing.length > 0) {
       return res.status(400).json({ success: false, message: '이미 존재하는 거래처코드입니다.' });
     }
-    
+
     const [result] = await db.query(
       `UPDATE companies SET
         company_code = ?, company_name = ?, alias = ?, business_number = ?, ceo_name = ?,
@@ -383,11 +384,11 @@ router.put('/:id', async (req, res) => {
         req.params.id
       ]
     );
-    
+
     if (result.affectedRows === 0) {
       return res.status(404).json({ success: false, message: '거래처를 찾을 수 없습니다.' });
     }
-    
+
     res.json({ success: true, message: '거래처가 수정되었습니다.' });
   } catch (error) {
     console.error('거래처 수정 오류:', error);
@@ -403,20 +404,20 @@ router.delete('/:id', async (req, res) => {
       'SELECT id FROM trade_masters WHERE company_id = ? LIMIT 1',
       [req.params.id]
     );
-    
+
     if (trades.length > 0) {
       return res.status(400).json({
         success: false,
         message: '거래 전표에 사용중인 거래처는 삭제할 수 없습니다.'
       });
     }
-    
+
     const [result] = await db.query('DELETE FROM companies WHERE id = ?', [req.params.id]);
-    
+
     if (result.affectedRows === 0) {
       return res.status(404).json({ success: false, message: '거래처를 찾을 수 없습니다.' });
     }
-    
+
     res.json({ success: true, message: '거래처가 삭제되었습니다.' });
   } catch (error) {
     console.error('거래처 삭제 오류:', error);

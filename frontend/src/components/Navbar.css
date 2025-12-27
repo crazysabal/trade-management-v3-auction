@@ -91,7 +91,7 @@
     z-index: 1000;
 }
 
-.nav-item:hover .dropdown-menu {
+.dropdown-menu.active {
     display: block;
 }
 

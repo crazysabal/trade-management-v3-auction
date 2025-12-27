@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { warehousesAPI, inventoryTransferAPI } from '../services/api';
 import SearchableSelect from './SearchableSelect';
 
-const StockTransferModal = ({ isOpen, onClose, inventory, onSuccess, defaultToWarehouseId }) => {
+const StockTransferModal = ({ isOpen, onClose, inventory, inventoryList = [], onSuccess, defaultToWarehouseId }) => {
     const [warehouses, setWarehouses] = useState([]);
     const [toWarehouseId, setToWarehouseId] = useState('');
     const [quantity, setQuantity] = useState('');
@@ -12,11 +12,19 @@ const StockTransferModal = ({ isOpen, onClose, inventory, onSuccess, defaultToWa
     const [error, setError] = useState('');
 
     const quantityInputRef = React.useRef(null);
+    const isBulk = inventoryList.length > 0;
+    const targetItems = isBulk ? inventoryList : (inventory ? [inventory] : []);
 
     useEffect(() => {
         if (isOpen) {
             loadWarehouses();
-            setQuantity(inventory ? Number(inventory.remaining_quantity).toLocaleString() : ''); // 기본값을 잔여 수량으로 설정 (소수점 처리 및 콤마)
+
+            if (isBulk) {
+                setQuantity('전체 수량 (일괄 이동)');
+            } else {
+                setQuantity(inventory ? Number(inventory.remaining_quantity).toLocaleString() : '');
+            }
+
             setNotes('');
             setToWarehouseId(defaultToWarehouseId || '');
             setError('');
@@ -25,23 +33,22 @@ const StockTransferModal = ({ isOpen, onClose, inventory, onSuccess, defaultToWa
             setTimeout(() => {
                 if (quantityInputRef.current) {
                     quantityInputRef.current.focus();
-                    quantityInputRef.current.select();
+                    if (!isBulk) quantityInputRef.current.select();
                 }
             }, 100);
 
-            // ESC key handler
             const handleKeyDown = (e) => {
                 if (e.key === 'Escape') onClose();
             };
             window.addEventListener('keydown', handleKeyDown);
             return () => window.removeEventListener('keydown', handleKeyDown);
         }
-    }, [isOpen, defaultToWarehouseId, inventory, onClose]);
+    }, [isOpen, defaultToWarehouseId, inventory, inventoryList, onClose]);
 
     useEffect(() => {
         if (!isOpen) return;
+        if (isBulk) return; // Bulk mode skips quantity validation
 
-        // Real-time validation
         if (quantity) {
             const numVal = parseFloat(quantity.replace(/,/g, ''));
             const maxVal = parseFloat(inventory?.remaining_quantity || 0);
@@ -49,11 +56,6 @@ const StockTransferModal = ({ isOpen, onClose, inventory, onSuccess, defaultToWa
             if (numVal > maxVal) {
                 setError(`잔여 수량(${Number(maxVal)}개)을 초과할 수 없습니다.`);
             } else if (numVal <= 0) {
-                // 0 이하는 입력 중간일 수 있으므로 상황에 따라 다를 수 있지만, 사용자가 명시적으로 0을 입력했다면 에러 표시
-                // 여기서는 0을 입력하면 에러를 보여주지는 않고, 제출 시에만 체크하거나, 
-                // 엄격하게 하려면 setError('올바른 수량을 입력해주세요.');
-                // UX상 보통 초과만 즉시 알려주는게 덜 성가심. 0은 지우고 다시 쓰는 과정일 수 있음.
-                // 사용자가 '숫자를 입력하면서 바로 체크'라고 했으니 초과 체크에 집중.
                 setError('');
             } else {
                 setError('');
@@ -61,14 +63,14 @@ const StockTransferModal = ({ isOpen, onClose, inventory, onSuccess, defaultToWa
         } else {
             setError('');
         }
-
-    }, [quantity, inventory, isOpen]);
+    }, [quantity, inventory, isOpen, isBulk]);
 
     const loadWarehouses = async () => {
         try {
             const response = await warehousesAPI.getAll();
-            // 현재 창고 제외
-            const filtered = response.data.data.filter(w => w.id !== inventory?.warehouse_id);
+            // 현재 창고 제외 (단일 이동 시)
+            const currentWhId = isBulk ? targetItems[0]?.warehouse_id : inventory?.warehouse_id;
+            const filtered = response.data.data.filter(w => String(w.id) !== String(currentWhId));
             setWarehouses(filtered);
         } catch (err) {
             console.error('창고 목록 로드 실패:', err);
@@ -81,23 +83,40 @@ const StockTransferModal = ({ isOpen, onClose, inventory, onSuccess, defaultToWa
             setError('이동할 창고를 선택해주세요.');
             return;
         }
-        if (!quantity || parseFloat(quantity.replace(/,/g, '')) <= 0) {
-            setError('올바른 수량을 입력해주세요.');
-            return;
-        }
-        if (parseFloat(quantity.replace(/,/g, '')) > parseFloat(inventory.remaining_quantity)) {
-            setError('잔여 수량을 초과할 수 없습니다.');
-            return;
+
+        if (!isBulk) {
+            if (!quantity || parseFloat(quantity.replace(/,/g, '')) <= 0) {
+                setError('올바른 수량을 입력해주세요.');
+                return;
+            }
+            if (parseFloat(quantity.replace(/,/g, '')) > parseFloat(inventory.remaining_quantity)) {
+                setError('잔여 수량을 초과할 수 없습니다.');
+                return;
+            }
         }
 
         setLoading(true);
         try {
-            await inventoryTransferAPI.transfer({
-                purchase_inventory_id: inventory.id,
-                to_warehouse_id: toWarehouseId,
-                quantity: parseFloat(quantity.replace(/,/g, '')),
-                notes: notes
-            });
+            if (isBulk) {
+                // 일괄 이동 (전체 수량)
+                await Promise.all(targetItems.map(item =>
+                    inventoryTransferAPI.transfer({
+                        purchase_inventory_id: item.id,
+                        to_warehouse_id: toWarehouseId,
+                        quantity: parseFloat(item.remaining_quantity), // 전체 수량
+                        notes: notes
+                    })
+                ));
+            } else {
+                // 단일 이동
+                await inventoryTransferAPI.transfer({
+                    purchase_inventory_id: inventory.id,
+                    to_warehouse_id: toWarehouseId,
+                    quantity: parseFloat(quantity.replace(/,/g, '')),
+                    notes: notes
+                });
+            }
+
             onSuccess();
             onClose();
         } catch (err) {
@@ -108,7 +127,7 @@ const StockTransferModal = ({ isOpen, onClose, inventory, onSuccess, defaultToWa
         }
     };
 
-    if (!isOpen || !inventory) return null;
+    if (!isOpen || (!inventory && !isBulk)) return null;
 
     return createPortal(
         <div className="stock-transfer-modal-overlay" style={{
@@ -120,13 +139,27 @@ const StockTransferModal = ({ isOpen, onClose, inventory, onSuccess, defaultToWa
                 position: 'relative', top: 'auto', left: 'auto', transform: 'none',
                 boxShadow: '0 4px 6px rgba(0,0,0,0.1)'
             }}>
-                <h3 style={{ marginTop: 0, color: '#2c3e50' }}>📦 재고 이동</h3>
+                <h3 style={{ marginTop: 0, color: '#2c3e50' }}>
+                    {isBulk ? `📦 일괄 재고 이동 (${targetItems.length}건)` : '📦 재고 이동'}
+                </h3>
 
-                <div style={{ marginBottom: '1rem', padding: '0.75rem', backgroundColor: '#f8f9fa', borderRadius: '6px' }}>
-                    <div style={{ fontWeight: '600', color: '#34495e' }}>{inventory.product_name}</div>
-                    <div style={{ fontSize: '0.9rem', color: '#7f8c8d' }}>
-                        현재 창고: {inventory.warehouse_name || '미지정'} | 잔여: {Number(inventory.remaining_quantity)}
-                    </div>
+                <div style={{ marginBottom: '1rem', padding: '0.75rem', backgroundColor: '#f8f9fa', borderRadius: '6px', maxHeight: '150px', overflowY: 'auto' }}>
+                    {isBulk ? (
+                        <ul style={{ margin: 0, paddingLeft: '1.2rem', fontSize: '0.9rem', color: '#34495e' }}>
+                            {targetItems.map(item => (
+                                <li key={item.id}>
+                                    {item.product_name} ({Number(item.remaining_quantity)}개)
+                                </li>
+                            ))}
+                        </ul>
+                    ) : (
+                        <>
+                            <div style={{ fontWeight: '600', color: '#34495e' }}>{inventory.product_name}</div>
+                            <div style={{ fontSize: '0.9rem', color: '#7f8c8d' }}>
+                                현재 창고: {inventory.warehouse_name || '미지정'} | 잔여: {Number(inventory.remaining_quantity)}
+                            </div>
+                        </>
+                    )}
                 </div>
 
                 {error && (
@@ -151,7 +184,9 @@ const StockTransferModal = ({ isOpen, onClose, inventory, onSuccess, defaultToWa
                         ref={quantityInputRef}
                         type="text"
                         value={quantity}
+                        disabled={isBulk}
                         onChange={e => {
+                            if (isBulk) return;
                             const val = e.target.value.replace(/[^0-9.]/g, '');
                             const parts = val.split('.');
                             if (parts.length > 2) return; // 점 두개 이상 방지
@@ -159,7 +194,7 @@ const StockTransferModal = ({ isOpen, onClose, inventory, onSuccess, defaultToWa
                             const formatted = parts.length > 1 ? `${intPart}.${parts[1]}` : intPart;
                             setQuantity(formatted);
                         }}
-                        style={{ width: '100%', padding: '0.6rem', border: '1px solid #ddd', borderRadius: '4px' }}
+                        style={{ width: '100%', padding: '0.6rem', border: '1px solid #ddd', borderRadius: '4px', backgroundColor: isBulk ? '#f1f2f6' : 'white' }}
                         placeholder="수량 입력"
                         onKeyDown={e => {
                             if (e.key === 'Enter') {

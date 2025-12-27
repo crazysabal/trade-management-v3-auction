@@ -47,6 +47,7 @@
     border-radius: 4px;
     overflow: auto;
     flex: 1;
+    min-height: 0;
 }
 
 .trade-table {
@@ -82,17 +83,17 @@
 }
 
 .col-product {
-    min-width: 120px;
+    min-width: 230px;
 }
 
 .col-qty {
-    width: 70px;
-    min-width: 70px;
+    width: 60px;
+    min-width: 60px;
 }
 
 .col-price {
-    width: 90px;
-    min-width: 90px;
+    width: 80px;
+    min-width: 80px;
 }
 
 .col-amount {
@@ -101,20 +102,22 @@
 }
 
 .col-location {
-    min-width: 80px;
+    width: 110px;
+    min-width: 110px;
 }
 
 .col-owner {
-    min-width: 80px;
+    width: 110px;
+    min-width: 110px;
 }
 
 .col-remarks {
-    min-width: 100px;
+    min-width: 80px;
 }
 
 .col-action {
-    width: 50px;
-    min-width: 50px;
+    width: 30px;
+    min-width: 30px;
 }
 
 .trade-table td {
@@ -122,6 +125,11 @@
     border-bottom: 1px solid #eee;
     vertical-align: middle;
     font-size: 0.9rem;
+}
+
+.cell-action {
+    padding: 0 !important;
+    text-align: center;
 }
 
 .trade-table-row {
@@ -256,7 +264,12 @@
 
 .trade-input-wrapper {
     display: flex;
-    gap: 4px;
+    gap: 0;
+}
+
+.trade-input-wrapper .btn-icon {
+    padding: 0 4px;
+    min-width: 24px;
 }
 
 .trade-date-input {
@@ -268,6 +281,17 @@
     text-align: center;
     height: 34px;
     /* Unified height */
+    box-sizing: border-box;
+    transition: background-color 0.3s;
+}
+
+.trade-date-input.is-not-today {
+    background-color: #ffe0b2;
+    /* Warning Orange/Yellow */
+    color: #e65100;
+    font-weight: bold;
+    border-color: #ffcc80;
+
     box-sizing: border-box;
 }
 
@@ -387,6 +411,8 @@
     flex-direction: column;
     border-radius: 8px;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    min-height: 0;
+    overflow: hidden;
 }
 
 .trade-card-header {
@@ -673,6 +699,8 @@
     width: 100%;
     height: 100%;
     background-color: rgba(0, 0, 0, 0.5);
+    display: flex;
+    justify-content: center;
     align-items: center;
     z-index: 9999;
 }
@@ -686,4 +714,20 @@
     border-color: #3498db !important;
     outline: none !important;
     box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.1);
+}
+
+.btn-delete-row {
+    background: none;
+    border: none;
+    color: #e74c3c;
+    cursor: pointer;
+    font-size: 1.2rem;
+    line-height: 1;
+    padding: 0 1px;
+    /* Reduced margin as requested */
+    transition: color 0.2s;
+}
+
+.btn-delete-row:hover {
+    color: #c0392b;
 }

@@ -24,6 +24,19 @@ const Navbar = ({ onLaunchApp }) => {
         setActiveDropdown(null);
     };
 
+    // 마우스 호버 핸들러 (데스크탑 전용)
+    const handleMouseEnter = (menuName) => {
+        if (!isMobileMenuOpen) {
+            setActiveDropdown(menuName);
+        }
+    };
+
+    const handleMouseLeave = () => {
+        if (!isMobileMenuOpen) {
+            setActiveDropdown(null);
+        }
+    };
+
     // 앱 실행 래퍼 (실행 후 메뉴 닫기)
     const handleLaunch = (appType) => {
         if (onLaunchApp) {
@@ -65,7 +78,11 @@ const Navbar = ({ onLaunchApp }) => {
                     </li>
 
                     {/* 전표 관리 드롭다운 */}
-                    <li className="nav-item dropdown">
+                    <li
+                        className="nav-item dropdown"
+                        onMouseEnter={() => handleMouseEnter('trades')}
+                        onMouseLeave={handleMouseLeave}
+                    >
                         <span
                             className={`nav-links dropdown-toggle ${activeDropdown === 'trades' ? 'active' : ''}`}
                             onClick={() => toggleDropdown('trades')}
@@ -80,7 +97,11 @@ const Navbar = ({ onLaunchApp }) => {
                     </li>
 
                     {/* 경매 관리 드롭다운 */}
-                    <li className="nav-item dropdown">
+                    <li
+                        className="nav-item dropdown"
+                        onMouseEnter={() => handleMouseEnter('auction')}
+                        onMouseLeave={handleMouseLeave}
+                    >
                         <span
                             className={`nav-links dropdown-toggle ${activeDropdown === 'auction' ? 'active' : ''}`}
                             onClick={() => toggleDropdown('auction')}
@@ -94,7 +115,11 @@ const Navbar = ({ onLaunchApp }) => {
                     </li>
 
                     {/* 재고 관리 드롭다운 */}
-                    <li className="nav-item dropdown">
+                    <li
+                        className="nav-item dropdown"
+                        onMouseEnter={() => handleMouseEnter('inventory')}
+                        onMouseLeave={handleMouseLeave}
+                    >
                         <span
                             className={`nav-links dropdown-toggle ${activeDropdown === 'inventory' ? 'active' : ''}`}
                             onClick={() => toggleDropdown('inventory')}
@@ -114,7 +139,11 @@ const Navbar = ({ onLaunchApp }) => {
                     </li>
 
                     {/* 수금/지급 드롭다운 */}
-                    <li className="nav-item dropdown">
+                    <li
+                        className="nav-item dropdown"
+                        onMouseEnter={() => handleMouseEnter('payment')}
+                        onMouseLeave={handleMouseLeave}
+                    >
                         <span
                             className={`nav-links dropdown-toggle ${activeDropdown === 'payment' ? 'active' : ''}`}
                             onClick={() => toggleDropdown('payment')}
@@ -128,7 +157,11 @@ const Navbar = ({ onLaunchApp }) => {
                     </li>
 
                     {/* 경영/정산 드롭다운 */}
-                    <li className="nav-item dropdown">
+                    <li
+                        className="nav-item dropdown"
+                        onMouseEnter={() => handleMouseEnter('management')}
+                        onMouseLeave={handleMouseLeave}
+                    >
                         <span
                             className={`nav-links dropdown-toggle ${activeDropdown === 'management' ? 'active' : ''}`}
                             onClick={() => toggleDropdown('management')}
@@ -148,7 +181,11 @@ const Navbar = ({ onLaunchApp }) => {
 
 
                     {/* 설정 드롭다운 */}
-                    <li className="nav-item dropdown">
+                    <li
+                        className="nav-item dropdown"
+                        onMouseEnter={() => handleMouseEnter('settings')}
+                        onMouseLeave={handleMouseLeave}
+                    >
                         <span
                             className={`nav-links dropdown-toggle ${activeDropdown === 'settings' ? 'active' : ''}`}
                             onClick={() => toggleDropdown('settings')}

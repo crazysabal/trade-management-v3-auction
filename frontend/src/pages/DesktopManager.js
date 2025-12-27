@@ -5,6 +5,7 @@ import Taskbar from '../components/Taskbar';
 
 // Apps (Components)
 import TradePanel from '../components/TradePanel';
+import TradePrintModal from '../components/TradePrintModal';
 import InventoryQuickView from '../components/InventoryQuickView';
 import CompanyList from './CompanyList';
 import IntegratedProductManagement from './IntegratedProductManagement';
@@ -42,6 +43,9 @@ const DesktopManager = () => {
     const [maxZIndex, setMaxZIndex] = useState(100);
     const [activeWindowId, setActiveWindowId] = useState(null); // 현재 활성화된(최상위) 윈도우 ID
     const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
+    // 출력 모달 상태
+    const [printModal, setPrintModal] = useState({ isOpen: false, tradeId: null });
+    const handlePrint = (tradeId) => setPrintModal({ isOpen: true, tradeId });
 
     // 윈도우 모드 설정 (multi: 다중 창 허용, single: 중복 실행 방지)
     const [windowMode, setWindowMode] = useState(() => {
@@ -283,9 +287,9 @@ const DesktopManager = () => {
         const { type, componentProps } = win;
 
         switch (type) {
-            case 'PURCHASE': return <TradePanel tradeType="PURCHASE" panelId={`win-${win.id}`} onInventoryUpdate={handleInventoryUpdate} onTradeChange={handleTradeChange} onDirtyChange={(isDirty) => handleWindowDirtyChange(`win-${win.id}`, isDirty)} {...componentProps} />;
-            case 'SALE': return <TradePanel tradeType="SALE" panelId={`win-${win.id}`} onInventoryUpdate={handleInventoryUpdate} onTradeChange={handleTradeChange} onDirtyChange={(isDirty) => handleWindowDirtyChange(`win-${win.id}`, isDirty)} {...componentProps} />;
-            case 'TRADE_LIST': return <TradeList isWindow={true} onOpenTradeEdit={(type, tradeId) => launchApp(type, { initialTradeId: tradeId })} {...componentProps} />;
+            case 'PURCHASE': return <TradePanel tradeType="PURCHASE" panelId={`win-${win.id}`} onPrint={handlePrint} onInventoryUpdate={handleInventoryUpdate} onTradeChange={handleTradeChange} onDirtyChange={(isDirty) => handleWindowDirtyChange(`win-${win.id}`, isDirty)} {...componentProps} />;
+            case 'SALE': return <TradePanel tradeType="SALE" panelId={`win-${win.id}`} onPrint={handlePrint} onInventoryUpdate={handleInventoryUpdate} onTradeChange={handleTradeChange} onDirtyChange={(isDirty) => handleWindowDirtyChange(`win-${win.id}`, isDirty)} {...componentProps} />;
+            case 'TRADE_LIST': return <TradeList isWindow={true} onOpenTradeEdit={(type, tradeId, viewMode = false) => launchApp(type, { initialTradeId: tradeId, initialViewMode: viewMode })} {...componentProps} />;
             case 'COMPANY_LIST': return <CompanyList isWindow={true} {...componentProps} />;
             case 'PRODUCT_LIST': return <IntegratedProductManagement isWindow={true} {...componentProps} />;
             case 'INVENTORY_QUICK': return <InventoryQuickView isWindow={true} inventoryAdjustments={inventoryAdjustments} refreshKey={inventoryRefreshKey} onInventoryLoaded={(items) => {
@@ -337,8 +341,8 @@ const DesktopManager = () => {
                     zIndex={win.zIndex}
                     isMinimized={win.isMinimized}
                     isActive={activeWindowId === win.id}
-                    contentPadding={['PURCHASE', 'SALE'].includes(win.type) ? '0' : undefined}
-                    headerPadding={['PURCHASE', 'SALE'].includes(win.type) ? '6px 15px' : undefined}
+                    contentPadding="0"
+
                     onMouseDown={() => bringToFront(win.id)}
                     onResizeStop={(newSize) => {
                         if (!isMobile) {
@@ -364,6 +368,15 @@ const DesktopManager = () => {
                 onResetPosition={resetWindowPosition}
                 onCloseAll={closeAll}
             />
+
+            {/* 출력 모달 (전역) */}
+            {printModal.isOpen && (
+                <TradePrintModal
+                    isOpen={printModal.isOpen}
+                    onClose={() => setPrintModal({ isOpen: false, tradeId: null })}
+                    tradeId={printModal.tradeId}
+                />
+            )}
         </div>
     );
 };

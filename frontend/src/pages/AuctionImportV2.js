@@ -123,7 +123,7 @@ const AuctionItemRow = React.memo(({
                     type="checkbox"
                     checked={isSelected}
                     onChange={handleCheck}
-                    style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: '#e74c3c' }}
+                    style={{ width: '16px', height: '16px', cursor: 'pointer', accentColor: '#e74c3c' }}
                 />
             </td>
             <td>{item.arrive_no}</td>
@@ -532,15 +532,42 @@ function AuctionImportV2({ isWindow }) {
     }, [rawData]);
 
     return (
-        <div className="auction-import" style={{ maxWidth: isWindow ? '100%' : '1400px', margin: isWindow ? '0' : '0 auto', position: 'relative' }}>
+        <div className={`auction-import ${isWindow ? 'is-window' : ''}`} style={{ maxWidth: isWindow ? '100%' : '1400px', margin: isWindow ? '0' : '0 auto', position: 'relative', display: 'flex', flexDirection: 'column', height: isWindow ? '100%' : 'auto', maxHeight: isWindow ? '100%' : 'none', boxSizing: 'border-box' }}>
             {loading && (
                 <div className="loading-overlay">
                     <div className="loading-content"><div className="spinner"></div><p>{loadingMessage}</p></div>
                 </div>
             )}
 
+            <style>{`
+                .auction-import.is-window table th,
+                .auction-import.is-window table td {
+                    padding: 0.5rem 0.5rem !important;
+                    font-size: 0.85rem;
+                }
+                .auction-import.is-window .btn {
+                    padding: 0.2rem 0.6rem;
+                    font-size: 0.85rem;
+                }
+                .auction-import.is-window h2.card-title {
+                    font-size: 1rem;
+                    margin-bottom: 0.5rem;
+                }
+                .auction-import.is-window .form-group label {
+                    font-size: 0.85rem;
+                    width: auto !important;
+                    width: auto !important;
+                    min-width: auto !important;
+                    margin-right: 0.5rem !important;
+                }
+                .auction-import.is-window .card {
+                    padding: 0.75rem !important;
+                    margin-bottom: 0.75rem !important;
+                }
+            `}</style>
+
             {!isWindow && (
-                <div className="page-header" style={{ display: 'flex', alignItems: 'center' }}>
+                <div className="page-header" style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
                     <h1 className="page-title" style={{ margin: 0 }}>📥 경매 낙찰 데이터 가져오기</h1>
                 </div>
             )}
@@ -550,7 +577,7 @@ function AuctionImportV2({ isWindow }) {
                     <h2 className="card-title">낙찰 내역 크롤링</h2>
                     <div className="form-row" style={{ display: 'flex', alignItems: 'flex-end', gap: '1rem' }}>
                         <div className="form-group" style={{ width: '350px', flex: 'none', textAlign: 'left' }}>
-                            <label className="required">경매 계정</label>
+                            <label className="required" style={{ whiteSpace: 'nowrap' }}>경매 계정</label>
                             <SearchableSelect
                                 options={accounts.map(a => ({ value: a.id, label: `${a.account_name} (${a.username})` }))}
                                 value={crawlData.account_id}
@@ -558,7 +585,7 @@ function AuctionImportV2({ isWindow }) {
                             />
                         </div>
                         <div className="form-group" style={{ width: '180px', flex: 'none', textAlign: 'left' }}>
-                            <label className="required">경매일자</label>
+                            <label className="required" style={{ whiteSpace: 'nowrap' }}>경매일자</label>
                             <input
                                 type="date"
                                 value={crawlData.crawl_date}
@@ -592,18 +619,18 @@ function AuctionImportV2({ isWindow }) {
 
             {step === 2 && (
                 <>
-                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '1rem' }}>
-                        <button onClick={() => setStep(1)} className="btn btn-secondary">🔄 처음으로</button>
-                    </div>
-                    <div className="card" style={{ marginBottom: '1.5rem', backgroundColor: '#e7f3ff' }}>
-                        <h3>📊 결과 요약</h3>
-                        <div>총 {rawData.length}건 / 매칭 {mappedCount}건</div>
-                    </div>
-
-                    <div className="card">
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-                            <h2 style={{ margin: 0 }}>품목 매칭</h2>
+                    <div className="card" style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexShrink: 0 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                                <h2 style={{ margin: 0 }}>품목 매칭</h2>
+                                <span style={{ fontSize: '0.9rem', color: '#666', fontWeight: '500' }}>
+                                    (총 {rawData.length}건 / 매칭 {mappedCount}건)
+                                </span>
+                            </div>
                             <div style={{ display: 'flex', gap: '8px' }}>
+                                <button onClick={() => setStep(1)} className="btn btn-secondary" style={{ fontSize: '0.9rem', padding: '6px 12px', whiteSpace: 'nowrap' }}>
+                                    🔄 처음으로
+                                </button>
 
                                 <button
                                     onClick={handleRefreshProducts}
@@ -620,11 +647,11 @@ function AuctionImportV2({ isWindow }) {
                             </div>
                         </div>
 
-                        <div className="table-container" style={{ maxHeight: 'none', overflow: 'visible' }}>
+                        <div className="table-container" style={{ flex: 1, overflowY: 'auto', maxHeight: 'none', border: '1px solid #eee', borderRadius: '4px' }}>
                             <table>
                                 <thead>
                                     <tr>
-                                        <th><input type="checkbox" onChange={e => handleSelectAll(e.target.checked)} /></th>
+                                        <th style={{ textAlign: 'center' }}><input type="checkbox" style={{ width: '16px', height: '16px', cursor: 'pointer', accentColor: '#e74c3c' }} onChange={e => handleSelectAll(e.target.checked)} /></th>
                                         <th>입하번호</th>
                                         <th>품목명</th>
                                         <th>출하지</th>
@@ -658,67 +685,74 @@ function AuctionImportV2({ isWindow }) {
                             </table>
                         </div>
 
-                        <div className="card" style={{ marginTop: '2rem' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-                                <h2 className="card-title" style={{ margin: 0 }}>전표 생성 설정</h2>
-                                <button
-                                    onClick={handleImport}
-                                    className="btn btn-primary"
-                                    disabled={mappedCount === 0}
-                                    style={{
-                                        height: '38px',
-                                        width: 'auto',
-                                        flex: 'none',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        whiteSpace: 'nowrap',
-                                        fontWeight: 'bold',
-                                        padding: '0 1.5rem'
-                                    }}
-                                >
-                                    매입 전표 생성
-                                </button>
-                            </div>
+                    </div>
 
-                            <div className="form-row" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'nowrap' }}>
-                                <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: '4px', flex: 1, minWidth: 0 }}>
-                                    <label style={{ fontWeight: 'bold', whiteSpace: 'nowrap' }}>매입처</label>
-                                    <div style={{ flex: 1, minWidth: 0 }}>
-                                        <SearchableSelect
-                                            options={companies.map(c => ({ value: c.id, label: c.company_name }))}
-                                            value={importConfig.supplier_id}
-                                            onChange={o => setImportConfig({ ...importConfig, supplier_id: o ? o.value : '' })}
-                                            menuPortalTarget={document.body}
-                                        />
-                                    </div>
-                                </div>
-                                <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: '4px', flex: 1, minWidth: 0 }}>
-                                    <label style={{ fontWeight: 'bold', whiteSpace: 'nowrap' }}>입고 창고</label>
-                                    <div style={{ flex: 1, minWidth: 0 }}>
-                                        <SearchableSelect
-                                            options={warehouses.map(w => ({ value: w.id, label: w.name }))}
-                                            value={importConfig.warehouse_id}
-                                            onChange={o => setImportConfig({ ...importConfig, warehouse_id: o ? o.value : '' })}
-                                            placeholder="창고 선택 (기본값 사용)"
-                                            menuPortalTarget={document.body}
-                                        />
-                                    </div>
-                                </div>
-                                <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: '4px', flex: 1, minWidth: 0 }}>
-                                    <label style={{ fontWeight: 'bold', whiteSpace: 'nowrap' }}>거래일자</label>
-                                    <input
-                                        type="date"
-                                        value={importConfig.trade_date}
-                                        onChange={e => setImportConfig({ ...importConfig, trade_date: e.target.value })}
-                                        style={{ padding: '4px 8px', borderRadius: '4px', border: '1px solid #ddd', height: '38px', boxSizing: 'border-box', flex: 1, minWidth: 0, textAlign: 'center' }}
+                    <div className="card" style={{ marginTop: '0.75rem', flex: 'none' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                            <h2 className="card-title" style={{ margin: 0 }}>전표 생성 설정</h2>
+                            <button
+                                onClick={handleImport}
+                                className="btn btn-primary"
+                                disabled={mappedCount === 0}
+                                style={{
+                                    height: '38px',
+                                    width: 'auto',
+                                    flex: 'none',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    whiteSpace: 'nowrap',
+                                    fontWeight: 'bold',
+                                    padding: '0 1.5rem'
+                                }}
+                            >
+                                매입 전표 생성
+                            </button>
+                        </div>
+
+                        <div className="form-row" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'nowrap' }}>
+                            <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: '4px', flex: 1, minWidth: 0 }}>
+                                <label style={{ fontWeight: 'bold', whiteSpace: 'nowrap', textAlign: 'left' }}>매입처</label>
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                    <SearchableSelect
+                                        options={companies.map(c => ({
+                                            value: c.id,
+                                            label: c.alias || c.company_name,
+                                            // subLabel: c.company_name,
+                                            data: { subLabel: c.company_name, code: c.code }
+                                        }))}
+                                        value={importConfig.supplier_id}
+                                        onChange={o => setImportConfig({ ...importConfig, supplier_id: o ? o.value : '' })}
+                                        menuPortalTarget={document.body}
                                     />
                                 </div>
+                            </div>
+                            <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: '4px', flex: 1, minWidth: 0 }}>
+                                <label style={{ fontWeight: 'bold', whiteSpace: 'nowrap', textAlign: 'left' }}>입고 창고</label>
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                    <SearchableSelect
+                                        options={warehouses.map(w => ({ value: w.id, label: w.name }))}
+                                        value={importConfig.warehouse_id}
+                                        onChange={o => setImportConfig({ ...importConfig, warehouse_id: o ? o.value : '' })}
+                                        placeholder="창고 선택 (기본값 사용)"
+                                        menuPortalTarget={document.body}
+                                    />
+                                </div>
+                            </div>
+                            <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: '4px', flex: 1, minWidth: 0 }}>
+                                <label style={{ fontWeight: 'bold', whiteSpace: 'nowrap', textAlign: 'left' }}>거래일자</label>
+                                <input
+                                    type="date"
+                                    value={importConfig.trade_date}
+                                    onChange={e => setImportConfig({ ...importConfig, trade_date: e.target.value })}
+                                    style={{ padding: '4px 8px', borderRadius: '4px', border: '1px solid #ddd', height: '38px', boxSizing: 'border-box', flex: 1, minWidth: 0, textAlign: 'center' }}
+                                />
                             </div>
                         </div>
                     </div>
                 </>
-            )}
+            )
+            }
 
             <ConfirmModal
                 isOpen={modal.isOpen}
@@ -730,7 +764,7 @@ function AuctionImportV2({ isWindow }) {
                 showCancel={modal.showCancel}
                 confirmText={modal.confirmText}
             />
-        </div>
+        </div >
     );
 }
 

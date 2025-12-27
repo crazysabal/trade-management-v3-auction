@@ -19,7 +19,9 @@ const customStyles = {
   valueContainer: (base) => ({
     ...base,
     padding: '0 10px',
-    height: '34px'
+    height: '34px',
+    display: 'flex',
+    alignItems: 'center'
   }),
   input: (base) => ({
     ...base,
@@ -87,7 +89,9 @@ const smallStyles = {
   valueContainer: (base) => ({
     ...base,
     padding: '0 8px',
-    height: '28px'
+    height: '28px',
+    display: 'flex',
+    alignItems: 'center'
   }),
   option: (base, state) => ({
     ...customStyles.option(base, state),
@@ -112,7 +116,7 @@ const multiKeywordFilter = (option, inputValue) => {
   if (!inputValue) return true;
 
   const label = (option.label || '').toLowerCase();
-  const subLabel = (option.data?.subLabel || '').toLowerCase();
+  const subLabel = (option.subLabel || option.data?.subLabel || '').toLowerCase();
   const code = (option.data?.code || '').toLowerCase();
 
   const searchString = `${label} ${subLabel} ${code}`;

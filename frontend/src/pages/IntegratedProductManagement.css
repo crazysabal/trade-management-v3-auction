@@ -1,0 +1,61 @@
+.ipm-container {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+    background-color: #f1f5f9;
+    /* Soft slate background */
+    padding: 0.5rem;
+    /* Reduced padding */
+    gap: 0;
+}
+
+.ipm-left-panel {
+    flex-shrink: 0;
+    background-color: #ffffff;
+    border-radius: 12px;
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border: 1px solid #e2e8f0;
+    transition: width 0.1s ease-out;
+}
+
+.ipm-left-panel.dragging {
+    transition: none;
+}
+
+.ipm-resizer {
+    width: 12px;
+    cursor: col-resize;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: transparent;
+    z-index: 10;
+    margin: 0 4px;
+}
+
+.ipm-resizer-line {
+    width: 4px;
+    height: 40px;
+    background-color: #cbd5e1;
+    border-radius: 2px;
+    transition: background-color 0.2s;
+}
+
+.ipm-resizer-line.active {
+    background-color: #3b82f6;
+}
+
+.ipm-right-panel {
+    flex: 1;
+    background-color: #ffffff;
+    border-radius: 12px;
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border: 1px solid #e2e8f0;
+    min-width: 400px;
+}

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { companyAPI } from '../services/api';
 import ConfirmModal from '../components/ConfirmModal';
+import './CompanyForm.css';
 
 function CompanyForm({ id: propId, onSuccess, onCancel }) {
   const navigate = useNavigate();
@@ -149,77 +150,32 @@ function CompanyForm({ id: propId, onSuccess, onCancel }) {
     }
   };
 
-  // 섹션 헤더 스타일
-  const sectionHeaderStyle = (bgColor, borderColor, textColor) => ({
-    marginBottom: '1.0rem',
-    padding: '0.75rem',
-    backgroundColor: bgColor,
-    borderRadius: '8px',
-    borderLeft: `4px solid ${borderColor}`
-  });
 
-  const sectionTitleStyle = (color) => ({
-    margin: '0',
-    color: color,
-    fontSize: '0.95rem',
-    fontWeight: '600'
-  });
 
   return (
     <div className="company-form" style={{ maxWidth: '100% ', margin: '0 auto', height: isModalMode ? '100%' : 'auto', overflowY: isModalMode ? 'auto' : 'visible' }}>
-      {!isModalMode && (
-        <div className="page-header">
-          <h1 className="page-title">🏢 {isEdit ? '거래처 수정' : '거래처 등록'}</h1>
-          {!isEdit && (
-            <p style={{ color: '#6b7280', marginTop: '0.5rem' }}>
-              새로운 거래처 정보를 등록합니다.
-            </p>
-          )}
-        </div>
-      )}
+      <div className="page-header" style={{ marginBottom: '1rem' }}>
+        <h1 className="page-title" style={{ fontSize: '1.5rem', margin: 0 }}>🏢 {isEdit ? '거래처 수정' : '거래처 등록'}</h1>
+      </div>
+
 
       <form onSubmit={handleSubmit} className="form-container" style={{ boxShadow: isModalMode ? 'none' : undefined, padding: isModalMode ? '0' : undefined }}>
-        {/* 신규 등록시 안내 메시지 */}
-        {!isEdit && (
-          <div style={{
-            marginBottom: '1.5rem',
-            padding: '1rem',
-            backgroundColor: '#fef3c7',
-            borderRadius: '8px',
-            border: '1px solid #fcd34d'
-          }}>
-            <p style={{ margin: 0, color: '#92400e', fontSize: '0.9rem' }}>
-              💡 <strong>거래처코드는 자동 생성됩니다.</strong> 등록 시 C001, C002... 형태로 순차적으로 부여됩니다.
-            </p>
-          </div>
-        )}
+        {/* 신규 등록시 안내 메시지 제거됨 */}
 
         {/* ===== 기본 정보 섹션 ===== */}
-        <div style={sectionHeaderStyle('#f0f9ff', '#0284c7', '#0369a1')}>
-          <h3 style={sectionTitleStyle('#0369a1')}>📋 기본 정보</h3>
+        <div className="section-header section-header-basic">
+          <h3 className="section-title">📋 기본 정보</h3>
         </div>
-
-        {/* 수정시 거래처코드 표시 */}
 
         <div className="form-row">
           <div className="form-group">
-            <label className="required">거래처명</label>
-            <input
-              type="text"
-              name="company_name"
-              value={formData.company_name}
-              onChange={handleChange}
-              required
-            />
-          </div>
-          <div className="form-group">
-            <label>별칭</label>
+            <label>거래처 명</label>
             <input
               type="text"
               name="alias"
               value={formData.alias || ''}
               onChange={handleChange}
-              placeholder="약칭, 별명 등"
+              placeholder="거래처 명"
             />
           </div>
           <div className="form-group">
@@ -234,6 +190,38 @@ function CompanyForm({ id: propId, onSuccess, onCancel }) {
               <option value="SUPPLIER">매입처</option>
               <option value="BOTH">매입/매출</option>
             </select>
+          </div>
+        </div>
+
+        {/* ===== 사업자 정보 섹션 ===== */}
+        <div className="section-header section-header-business">
+          <h3 className="section-title">📋 사업자 정보</h3>
+        </div>
+
+        <div className="form-row">
+          <div className="form-group">
+            <label className="required">사업자 명</label>
+            <input
+              type="text"
+              name="company_name"
+              value={formData.company_name}
+              onChange={handleChange}
+              required
+            />
+          </div>
+          <div className="form-group">
+            <label>전자계산서</label>
+            <div style={{ display: 'flex', alignItems: 'center', padding: '0.25rem 0' }}>
+              <label className={`badge-toggle ${formData.e_tax_invoice ? 'checked' : ''}`} style={{ margin: 0 }}>
+                <input
+                  type="checkbox"
+                  name="e_tax_invoice"
+                  checked={formData.e_tax_invoice || false}
+                  onChange={handleChange}
+                />
+                {formData.e_tax_invoice ? '발행' : '미발행'}
+              </label>
+            </div>
           </div>
         </div>
 
@@ -295,8 +283,8 @@ function CompanyForm({ id: propId, onSuccess, onCancel }) {
         </div>
 
         {/* ===== 연락처 정보 섹션 ===== */}
-        <div style={{ ...sectionHeaderStyle('#faf5ff', '#9333ea', '#7e22ce'), marginTop: '1.5rem' }}>
-          <h3 style={sectionTitleStyle('#7e22ce')}>📞 연락처 정보</h3>
+        <div className="section-header section-header-contact">
+          <h3 className="section-title">📞 연락처 정보</h3>
         </div>
 
         <div className="form-row">
@@ -352,8 +340,8 @@ function CompanyForm({ id: propId, onSuccess, onCancel }) {
         </div>
 
         {/* ===== 계좌 정보 섹션 ===== */}
-        <div style={{ ...sectionHeaderStyle('#f0fdf4', '#16a34a', '#166534'), marginTop: '1.5rem' }}>
-          <h3 style={sectionTitleStyle('#166534')}>💳 계좌 정보</h3>
+        <div className="section-header section-header-account">
+          <h3 className="section-title">💳 계좌 정보</h3>
         </div>
 
         <div className="form-row">
@@ -388,29 +376,15 @@ function CompanyForm({ id: propId, onSuccess, onCancel }) {
         </div>
 
         {/* ===== 기타 정보 섹션 ===== */}
-        <div style={{ ...sectionHeaderStyle('#fef3c7', '#f59e0b', '#b45309'), marginTop: '1.5rem' }}>
-          <h3 style={sectionTitleStyle('#b45309')}>📝 기타 정보</h3>
+        <div className="section-header section-header-etc">
+          <h3 className="section-title">📝 기타 정보</h3>
         </div>
 
         <div className="form-row" style={{ alignItems: 'flex-start' }}>
           {/* 좌측: 체크박스 그룹 */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', flex: 1, paddingTop: '0.5rem' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', flex: 1, paddingTop: '0' }}>
             {/* 전자계산서 발행 뱃지 */}
-            <div className="form-group">
-              <label>전자계산서 발행</label>
-              <div style={{ flex: 1, display: 'flex', alignItems: 'center' }}>
-                <label className={`badge-toggle ${formData.e_tax_invoice ? 'checked' : ''}`} style={{ margin: 0 }}>
-                  <input
-                    type="checkbox"
-                    name="e_tax_invoice"
-                    checked={formData.e_tax_invoice || false}
-                    onChange={handleChange}
-                  />
 
-                  {formData.e_tax_invoice ? '발행' : '미발행'}
-                </label>
-              </div>
-            </div>
 
             {/* 사용여부 뱃지 */}
             {isEdit && (
@@ -446,7 +420,7 @@ function CompanyForm({ id: propId, onSuccess, onCancel }) {
           </div>
         </div>
 
-        <div className="form-actions" style={{ marginTop: '2rem' }}>
+        <div className="form-actions" style={{ marginTop: '1.5rem', paddingTop: '1rem' }}>
           <button type="button" onClick={handleCancel} className="btn btn-secondary">
             취소
           </button>

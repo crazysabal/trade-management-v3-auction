@@ -5,6 +5,7 @@ import { companyAPI } from '../services/api';
 import SearchableSelect from '../components/SearchableSelect';
 import ConfirmModal from '../components/ConfirmModal';
 import CompanyForm from './CompanyForm';
+import './CompanyList.css';
 
 // 테이블 행 컴포넌트 - React.memo로 최적화
 const CompanyRow = memo(function CompanyRow({
@@ -25,9 +26,9 @@ const CompanyRow = memo(function CompanyRow({
 }) {
   return (
     <tr
-      draggable={!isSelectMode}
-      onDragStart={!isSelectMode ? onDragStart : undefined}
-      onDragEnter={!isSelectMode ? onDragEnter : undefined}
+      draggable={true}
+      onDragStart={onDragStart}
+      onDragEnter={onDragEnter}
       onDragOver={(e) => e.preventDefault()}
       className={`${isDragOver ? 'drag-over' : ''} ${!company.is_active ? 'inactive-row' : ''}`}
       style={{
@@ -35,21 +36,18 @@ const CompanyRow = memo(function CompanyRow({
         borderTop: index > 0 ? '2px solid #e2e8f0' : 'none'
       }}
     >
-      {isSelectMode && (
-        <td className="text-center">
-          <input
-            type="checkbox"
-            checked={isSelected}
-            onChange={onCheckboxToggle}
-            className="row-checkbox"
-          />
-        </td>
-      )}
-      {!isSelectMode && (
-        <td className="drag-handle">☰</td>
-      )}
-      <td className="ellipsis" title={company.company_name}>{company.company_name}</td>
+      <td className="text-center">
+        <input
+          type="checkbox"
+          checked={isSelected}
+          onChange={onCheckboxToggle}
+          style={{ width: '16px', height: '16px', accentColor: '#e74c3c', cursor: 'pointer' }}
+        />
+      </td>
+      <td className="drag-handle">☰</td>
+
       <td className={`ellipsis ${company.alias ? '' : 'text-muted'}`} title={company.alias}>{company.alias || '-'}</td>
+      <td className="ellipsis" title={company.company_name}>{company.company_name}</td>
       <td>{company.business_number}</td>
       <td className="ellipsis" title={company.ceo_name}>{company.ceo_name}</td>
       <td
@@ -569,8 +567,16 @@ function CompanyList({ isWindow }) {
       formData.append('file', file);
 
       const response = await companyAPI.uploadPreview(formData);
-      setPreviewData(response.data.data);
-      setSelectedRows(response.data.data.companies.map((_, index) => index));
+
+      // 별칭이 없으면 사업자 명으로 자동 채움, 전자계산서 발행(true) 자동 설정
+      const companies = response.data.data.companies.map(c => ({
+        ...c,
+        alias: c.alias || c.company_name,
+        e_tax_invoice: true
+      }));
+
+      setPreviewData({ ...response.data.data, companies });
+      setSelectedRows(companies.map((_, index) => index));
     } catch (error) {
       console.error('파일 업로드 오류:', error);
       setModal({
@@ -702,38 +708,17 @@ function CompanyList({ isWindow }) {
 
 
 
-  return (
-    <div className="company-list" style={{ maxWidth: isWindow ? '100%' : '1400px', margin: '0 auto', padding: isWindow ? '0 10px' : '0' }}>
-      <div className="page-header" style={{ display: isWindow ? 'none' : 'flex', alignItems: 'center' }}>
-        {!isWindow && <h1 className="page-title" style={{ margin: 0 }}>🏢 거래처 관리</h1>}
-      </div>
 
-      {isSelectMode && (
-        <div style={{
-          marginBottom: '1rem',
-          padding: '1rem',
-          backgroundColor: '#fee2e2',
-          borderRadius: '8px',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between'
-        }}>
-          <span style={{ color: '#dc2626', fontWeight: '500' }}>
-            🗑 삭제할 거래처를 선택하세요 (거래 내역이 있는 거래처는 삭제할 수 없습니다)
-          </span>
-          <button
-            onClick={handleSelectAll}
-            className="btn btn-sm"
-            style={{
-              backgroundColor: '#fecaca',
-              color: '#dc2626',
-              border: 'none'
-            }}
-          >
-            {selectedIds.length === companies.length ? '전체 해제' : '전체 선택'}
-          </button>
+
+  return (
+    <div className={`company-list-wrapper ${isWindow ? 'is-window' : ''}`}>
+      {!isWindow && (
+        <div className="page-header">
+          <h1 className="page-title company-title">🏢 거래처 관리</h1>
         </div>
       )}
+
+
 
       <div className="search-filter-container">
         <div className="filter-row" style={{ gap: '8px' }}>
@@ -741,11 +726,10 @@ function CompanyList({ isWindow }) {
             <label style={{ whiteSpace: 'nowrap', margin: 0 }}>검색</label>
             <input
               type="text"
-              placeholder="🔍 거래처명, 대표자, 사업자번호, 구분... (띄어쓰기로 다중 검색)"
+              placeholder="🔍 거래처 명, 사업자 명, 대표자, 사업자번호, 구분... (띄어쓰기로 다중 검색)"
               value={filters.search}
               onChange={(e) => setFilters({ ...filters, search: e.target.value })}
               style={{
-                flex: 1,
                 flex: 1,
                 padding: '0 0.75rem',
                 height: '38px',
@@ -779,99 +763,59 @@ function CompanyList({ isWindow }) {
           </button>
 
           <div style={{ display: 'flex', gap: '8px' }}>
-            {isSelectMode ? (
-              <>
-                <button
-                  onClick={() => {
-                    setIsSelectMode(false);
-                    setSelectedIds([]);
-                  }}
-                  className="btn btn-secondary"
-                  style={{
-                    padding: '0 0.75rem',
-                    height: '38px',
-                    fontSize: '0.9rem',
-                    whiteSpace: 'nowrap',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center'
-                  }}
-                >
-                  ✕ 취소
-                </button>
-                <button
-                  onClick={handleMultiDelete}
-                  className="btn btn-danger"
-                  disabled={selectedIds.length === 0}
-                  style={{
-                    padding: '0 0.75rem',
-                    height: '38px',
-                    fontSize: '0.9rem',
-                    whiteSpace: 'nowrap',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center'
-                  }}
-                >
-                  🗑 선택 삭제 ({selectedIds.length})
-                </button>
-              </>
-            ) : (
-              <>
-                <button
-                  onClick={() => setIsSelectMode(true)}
-                  className="btn btn-outline"
-                  style={{
-                    border: '1px solid #ef4444',
-                    backgroundColor: 'white',
-                    color: '#ef4444',
-                    whiteSpace: 'nowrap',
-                    padding: '0 0.75rem',
-                    height: '38px',
-                    fontSize: '0.9rem',
-                    display: 'flex',
-                    alignItems: 'center'
-                  }}
-                >
-                  ☑ 선택 삭제
-                </button>
-                <button
-                  onClick={() => setShowUploadModal(true)}
-                  className="btn btn-outline"
-                  style={{
-                    border: '1px solid #10b981',
-                    backgroundColor: 'white',
-                    color: '#10b981',
-                    whiteSpace: 'nowrap',
-                    padding: '0 0.75rem',
-                    height: '38px',
-                    fontSize: '0.9rem',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center'
-                  }}
-                >
-                  📥 엑셀 불러오기
-                </button>
-                <button
-                  onClick={handleCreate}
-                  className="btn btn-primary"
-                  style={{
-                    whiteSpace: 'nowrap',
-                    padding: '0 0.75rem',
-                    height: '38px',
-                    fontSize: '0.9rem',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    width: '80px',
-                    flex: 'none'
-                  }}
-                >
-                  + 등록
-                </button>
-              </>
+            {/* 선택 삭제 버튼 (선택된 항목이 있을 때만 표시) */}
+            {selectedIds.length > 0 && (
+              <button
+                onClick={handleMultiDelete}
+                className="btn btn-danger"
+                style={{
+                  padding: '0 0.75rem',
+                  height: '38px',
+                  fontSize: '0.9rem',
+                  whiteSpace: 'nowrap',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}
+              >
+                🗑 선택 삭제 ({selectedIds.length})
+              </button>
             )}
+            <button
+              onClick={() => setShowUploadModal(true)}
+              className="btn btn-outline"
+              style={{
+                border: '1px solid #10b981',
+                backgroundColor: 'white',
+                color: '#10b981',
+                whiteSpace: 'nowrap',
+                padding: '0 0.75rem',
+                height: '38px',
+                fontSize: '0.9rem',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}
+            >
+              📥 엑셀 불러오기
+            </button>
+            <button
+              onClick={handleCreate}
+              className="btn btn-primary"
+              style={{
+                whiteSpace: 'nowrap',
+                padding: '0 0.75rem',
+                height: '38px',
+                fontSize: '0.9rem',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: '80px',
+                flex: 'none'
+              }}
+            >
+              + 등록
+            </button>
           </div>
         </div>
       </div>
@@ -880,10 +824,17 @@ function CompanyList({ isWindow }) {
         <table>
           <thead>
             <tr>
-              {isSelectMode && <th style={{ width: '40px' }}></th>}
-              {!isSelectMode && <th style={{ width: '40px' }}></th>}
-              <th>거래처명</th>
-              <th>별칭</th>
+              <th style={{ width: '40px', textAlign: 'center' }}>
+                <input
+                  type="checkbox"
+                  onChange={handleSelectAll}
+                  checked={companies.length > 0 && selectedIds.length === companies.length}
+                  style={{ width: '16px', height: '16px', accentColor: '#e74c3c', cursor: 'pointer' }}
+                />
+              </th>
+              <th style={{ width: '40px' }}></th>
+              <th>거래처 명</th>
+              <th>사업자 명</th>
               <th>사업자번호</th>
               <th>대표자</th>
               <th>구분</th>
@@ -895,7 +846,7 @@ function CompanyList({ isWindow }) {
           <tbody>
             {companies.length === 0 ? (
               <tr>
-                <td colSpan={isSelectMode ? "8" : "9"} className="text-center">등록된 거래처가 없습니다.</td>
+                <td colSpan="10" className="text-center">등록된 거래처가 없습니다.</td>
               </tr>
             ) : (
               companies.map((company, index) => (
@@ -923,232 +874,234 @@ function CompanyList({ isWindow }) {
       </div>
 
       {/* 엑셀 업로드 모달 - Portal로 body에 렌더링 */}
-      {showUploadModal && createPortal(
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          width: '100vw',
-          height: '100vh',
-          backgroundColor: 'rgba(0, 0, 0, 0.5)',
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center',
-          zIndex: 10000
-        }}>
+      {
+        showUploadModal && createPortal(
           <div style={{
-            backgroundColor: 'white',
-            borderRadius: '12px',
-            width: '90%',
-            maxWidth: '1200px',
-            maxHeight: '90vh',
-            overflow: 'hidden',
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            width: '100vw',
+            height: '100vh',
+            backgroundColor: 'rgba(0, 0, 0, 0.5)',
             display: 'flex',
-            flexDirection: 'column'
+            justifyContent: 'center',
+            alignItems: 'center',
+            zIndex: 10000
           }}>
-            {/* 모달 헤더 */}
             <div style={{
-              padding: '1.5rem',
-              borderBottom: '1px solid #e5e7eb',
+              backgroundColor: 'white',
+              borderRadius: '12px',
+              width: '90%',
+              maxWidth: '1200px',
+              maxHeight: '90vh',
+              overflow: 'hidden',
               display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center'
+              flexDirection: 'column'
             }}>
-              <h2 style={{ margin: 0, fontSize: '1.25rem', fontWeight: '600' }}>
-                📥 엑셀 파일로 거래처 일괄 등록
-              </h2>
-              <button
-                onClick={handleCloseModal}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  fontSize: '1.5rem',
-                  cursor: 'pointer',
-                  color: '#6b7280'
-                }}
-              >
-                ×
-              </button>
-            </div>
-
-            {/* 모달 본문 */}
-            <div style={{ flex: 1, overflow: 'auto', padding: '1.5rem' }}>
-              {/* 파일 업로드 영역 */}
+              {/* 모달 헤더 */}
               <div style={{
-                border: '2px dashed #d1d5db',
-                borderRadius: '8px',
-                padding: '2rem',
-                textAlign: 'center',
-                marginBottom: '1.5rem',
-                backgroundColor: '#f9fafb'
+                padding: '1.5rem',
+                borderBottom: '1px solid #e5e7eb',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center'
               }}>
-                <input
-                  type="file"
-                  ref={fileInputRef}
-                  accept=".xlsx,.xls"
-                  onChange={handleFileSelect}
-                  style={{ display: 'none' }}
-                />
-                <div style={{ marginBottom: '1rem' }}>
-                  <span style={{ fontSize: '3rem' }}>📁</span>
-                </div>
-                <p style={{ color: '#6b7280', marginBottom: '1rem' }}>
-                  {uploadFile ? uploadFile.name : '엑셀 파일을 선택하세요 (.xlsx, .xls)'}
-                </p>
+                <h2 style={{ margin: 0, fontSize: '1.25rem', fontWeight: '600' }}>
+                  📥 엑셀 파일로 거래처 일괄 등록
+                </h2>
                 <button
-                  onClick={() => fileInputRef.current?.click()}
-                  className="btn btn-primary"
-                  disabled={uploading}
+                  onClick={handleCloseModal}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    fontSize: '1.5rem',
+                    cursor: 'pointer',
+                    color: '#6b7280'
+                  }}
                 >
-                  {uploading ? '처리 중...' : '파일 선택'}
+                  ×
                 </button>
               </div>
 
-              {/* 엑셀 컬럼 안내 */}
-              <div style={{
-                backgroundColor: '#e8f4fd',
-                borderRadius: '8px',
-                padding: '1rem',
-                marginBottom: '1.5rem'
-              }}>
-                <p style={{ margin: 0, color: '#0056b3', fontSize: '0.9rem' }}>
-                  💡 <strong>엑셀 파일 형식 안내</strong><br />
-                  첫 번째 행은 헤더로 인식됩니다. 다음 컬럼명을 사용하세요:<br />
-                  <code style={{ backgroundColor: '#fff', padding: '0.25rem 0.5rem', borderRadius: '4px', marginTop: '0.5rem', display: 'inline-block' }}>
-                    거래처명, 별칭, 사업자번호, 대표자, 업태, 종목, 주소, 전화번호, 팩스, 이메일, 담당자, 담당자연락처, 구분, 비고, 은행명, 계좌번호, 예금주
-                  </code><br />
-                  <small>※ 구분: 매출처, 매입처, 매입/매출 중 하나</small>
-                </p>
-              </div>
-
-              {/* 미리보기 테이블 */}
-              {previewData && (
-                <>
-                  <div style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    marginBottom: '1rem'
-                  }}>
-                    <h3 style={{ margin: 0, fontSize: '1rem' }}>
-                      미리보기 (총 {previewData.totalCount}건, 선택 {selectedRows.length}건)
-                    </h3>
-                    <button
-                      onClick={handleSelectAllRows}
-                      style={{
-                        padding: '0.4rem 0.8rem',
-                        backgroundColor: '#fff',
-                        border: '1px solid #d1d5db',
-                        borderRadius: '4px',
-                        cursor: 'pointer',
-                        fontSize: '0.85rem'
-                      }}
-                    >
-                      {selectedRows.length === previewData.companies.length ? '전체 해제' : '전체 선택'}
-                    </button>
+              {/* 모달 본문 */}
+              <div style={{ flex: 1, overflow: 'auto', padding: '1.5rem' }}>
+                {/* 파일 업로드 영역 */}
+                <div style={{
+                  border: '2px dashed #d1d5db',
+                  borderRadius: '8px',
+                  padding: '2rem',
+                  textAlign: 'center',
+                  marginBottom: '1.5rem',
+                  backgroundColor: '#f9fafb'
+                }}>
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    accept=".xlsx,.xls"
+                    onChange={handleFileSelect}
+                    style={{ display: 'none' }}
+                  />
+                  <div style={{ marginBottom: '1rem' }}>
+                    <span style={{ fontSize: '3rem' }}>📁</span>
                   </div>
-                  <div style={{
-                    maxHeight: '500px',
-                    overflow: 'auto',
-                    border: '1px solid #e5e7eb',
-                    borderRadius: '8px'
-                  }}>
-                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
-                      <thead>
-                        <tr style={{ backgroundColor: '#1e3a5f', position: 'sticky', top: 0 }}>
-                          <th style={{ padding: '0.75rem', borderBottom: '1px solid #e5e7eb', width: '40px', color: '#ffffff' }}>
-                            <input
-                              type="checkbox"
-                              checked={selectedRows.length === previewData.companies.length}
-                              onChange={handleSelectAllRows}
-                              style={{ width: '16px', height: '16px' }}
-                            />
-                          </th>
-                          <th style={{ padding: '0.75rem', borderBottom: '1px solid #e5e7eb', textAlign: 'left', color: '#ffffff' }}>행</th>
-                          <th style={{ padding: '0.75rem', borderBottom: '1px solid #e5e7eb', textAlign: 'left', color: '#ffffff' }}>거래처명</th>
-                          <th style={{ padding: '0.75rem', borderBottom: '1px solid #e5e7eb', textAlign: 'left', color: '#ffffff' }}>사업자번호</th>
-                          <th style={{ padding: '0.75rem', borderBottom: '1px solid #e5e7eb', textAlign: 'left', color: '#ffffff' }}>대표자</th>
-                          <th style={{ padding: '0.75rem', borderBottom: '1px solid #e5e7eb', textAlign: 'left', color: '#ffffff' }}>전화번호</th>
-                          <th style={{ padding: '0.75rem', borderBottom: '1px solid #e5e7eb', textAlign: 'left', color: '#ffffff' }}>구분</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {previewData.companies.map((company, index) => (
-                          <tr
-                            key={index}
-                            style={{
-                              backgroundColor: selectedRows.includes(index) ? '#eff6ff' : 'white'
-                            }}
-                          >
-                            <td style={{ padding: '0.75rem', borderBottom: '1px solid #e5e7eb', textAlign: 'center' }}>
+                  <p style={{ color: '#6b7280', marginBottom: '1rem' }}>
+                    {uploadFile ? uploadFile.name : '엑셀 파일을 선택하세요 (.xlsx, .xls)'}
+                  </p>
+                  <button
+                    onClick={() => fileInputRef.current?.click()}
+                    className="btn btn-primary"
+                    disabled={uploading}
+                  >
+                    {uploading ? '처리 중...' : '파일 선택'}
+                  </button>
+                </div>
+
+                {/* 엑셀 컬럼 안내 */}
+                <div style={{
+                  backgroundColor: '#e8f4fd',
+                  borderRadius: '8px',
+                  padding: '1rem',
+                  marginBottom: '1.5rem'
+                }}>
+                  <p style={{ margin: 0, color: '#0056b3', fontSize: '0.9rem' }}>
+                    💡 <strong>엑셀 파일 형식 안내</strong><br />
+                    첫 번째 행은 헤더로 인식됩니다. 다음 컬럼명을 사용하세요:<br />
+                    <code style={{ backgroundColor: '#fff', padding: '0.25rem 0.5rem', borderRadius: '4px', marginTop: '0.5rem', display: 'inline-block' }}>
+                      사업자 명, 거래처 명, 사업자번호, 대표자, 업태, 종목, 주소, 전화번호, 팩스, 이메일, 담당자, 담당자연락처, 구분, 비고, 은행명, 계좌번호, 예금주
+                    </code><br />
+                    <small>※ 구분: 매출처, 매입처, 매입/매출 중 하나</small>
+                  </p>
+                </div>
+
+                {/* 미리보기 테이블 */}
+                {previewData && (
+                  <>
+                    <div style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      marginBottom: '1rem'
+                    }}>
+                      <h3 style={{ margin: 0, fontSize: '1rem' }}>
+                        미리보기 (총 {previewData.totalCount}건, 선택 {selectedRows.length}건)
+                      </h3>
+                      <button
+                        onClick={handleSelectAllRows}
+                        style={{
+                          padding: '0.4rem 0.8rem',
+                          backgroundColor: '#fff',
+                          border: '1px solid #d1d5db',
+                          borderRadius: '4px',
+                          cursor: 'pointer',
+                          fontSize: '0.85rem'
+                        }}
+                      >
+                        {selectedRows.length === previewData.companies.length ? '전체 해제' : '전체 선택'}
+                      </button>
+                    </div>
+                    <div style={{
+                      maxHeight: '500px',
+                      overflow: 'auto',
+                      border: '1px solid #e5e7eb',
+                      borderRadius: '8px'
+                    }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
+                        <thead>
+                          <tr style={{ backgroundColor: '#1e3a5f', position: 'sticky', top: 0 }}>
+                            <th style={{ padding: '0.75rem', borderBottom: '1px solid #e5e7eb', width: '40px', color: '#ffffff' }}>
                               <input
                                 type="checkbox"
-                                checked={selectedRows.includes(index)}
-                                onChange={() => handleRowSelect(index)}
+                                checked={selectedRows.length === previewData.companies.length}
+                                onChange={handleSelectAllRows}
                                 style={{ width: '16px', height: '16px' }}
                               />
-                            </td>
-                            <td style={{ padding: '0.75rem', borderBottom: '1px solid #e5e7eb', color: '#6b7280' }}>
-                              {company._rowNum}
-                            </td>
-                            <td style={{ padding: '0.75rem', borderBottom: '1px solid #e5e7eb', fontWeight: '500' }}>
-                              {company.company_name || '-'}
-                            </td>
-                            <td style={{ padding: '0.75rem', borderBottom: '1px solid #e5e7eb' }}>
-                              {company.business_number || '-'}
-                            </td>
-                            <td style={{ padding: '0.75rem', borderBottom: '1px solid #e5e7eb' }}>
-                              {company.ceo_name || '-'}
-                            </td>
-                            <td style={{ padding: '0.75rem', borderBottom: '1px solid #e5e7eb' }}>
-                              {company.phone || '-'}
-                            </td>
-                            <td style={{ padding: '0.75rem', borderBottom: '1px solid #e5e7eb' }}>
-                              <span style={{
-                                padding: '0.25rem 0.5rem',
-                                borderRadius: '4px',
-                                fontSize: '0.75rem',
-                                backgroundColor: company.company_type_flag === 'CUSTOMER' ? '#dbeafe' :
-                                  company.company_type_flag === 'SUPPLIER' ? '#fef3c7' : '#d1fae5',
-                                color: company.company_type_flag === 'CUSTOMER' ? '#1e40af' :
-                                  company.company_type_flag === 'SUPPLIER' ? '#92400e' : '#065f46'
-                              }}>
-                                {company.company_type_flag === 'CUSTOMER' ? '매출처' :
-                                  company.company_type_flag === 'SUPPLIER' ? '매입처' : '매입/매출'}
-                              </span>
-                            </td>
+                            </th>
+                            <th style={{ padding: '0.75rem', borderBottom: '1px solid #e5e7eb', textAlign: 'left', color: '#ffffff' }}>행</th>
+                            <th style={{ padding: '0.75rem', borderBottom: '1px solid #e5e7eb', textAlign: 'left', color: '#ffffff' }}>거래처명</th>
+                            <th style={{ padding: '0.75rem', borderBottom: '1px solid #e5e7eb', textAlign: 'left', color: '#ffffff' }}>사업자번호</th>
+                            <th style={{ padding: '0.75rem', borderBottom: '1px solid #e5e7eb', textAlign: 'left', color: '#ffffff' }}>대표자</th>
+                            <th style={{ padding: '0.75rem', borderBottom: '1px solid #e5e7eb', textAlign: 'left', color: '#ffffff' }}>전화번호</th>
+                            <th style={{ padding: '0.75rem', borderBottom: '1px solid #e5e7eb', textAlign: 'left', color: '#ffffff' }}>구분</th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </>
-              )}
-            </div>
+                        </thead>
+                        <tbody>
+                          {previewData.companies.map((company, index) => (
+                            <tr
+                              key={index}
+                              style={{
+                                backgroundColor: selectedRows.includes(index) ? '#eff6ff' : 'white'
+                              }}
+                            >
+                              <td style={{ padding: '0.75rem', borderBottom: '1px solid #e5e7eb', textAlign: 'center' }}>
+                                <input
+                                  type="checkbox"
+                                  checked={selectedRows.includes(index)}
+                                  onChange={() => handleRowSelect(index)}
+                                  style={{ width: '16px', height: '16px' }}
+                                />
+                              </td>
+                              <td style={{ padding: '0.75rem', borderBottom: '1px solid #e5e7eb', color: '#6b7280' }}>
+                                {company._rowNum}
+                              </td>
+                              <td style={{ padding: '0.75rem', borderBottom: '1px solid #e5e7eb', fontWeight: '500' }}>
+                                {company.company_name || '-'}
+                              </td>
+                              <td style={{ padding: '0.75rem', borderBottom: '1px solid #e5e7eb' }}>
+                                {company.business_number || '-'}
+                              </td>
+                              <td style={{ padding: '0.75rem', borderBottom: '1px solid #e5e7eb' }}>
+                                {company.ceo_name || '-'}
+                              </td>
+                              <td style={{ padding: '0.75rem', borderBottom: '1px solid #e5e7eb' }}>
+                                {company.phone || '-'}
+                              </td>
+                              <td style={{ padding: '0.75rem', borderBottom: '1px solid #e5e7eb' }}>
+                                <span style={{
+                                  padding: '0.25rem 0.5rem',
+                                  borderRadius: '4px',
+                                  fontSize: '0.75rem',
+                                  backgroundColor: company.company_type_flag === 'CUSTOMER' ? '#dbeafe' :
+                                    company.company_type_flag === 'SUPPLIER' ? '#fef3c7' : '#d1fae5',
+                                  color: company.company_type_flag === 'CUSTOMER' ? '#1e40af' :
+                                    company.company_type_flag === 'SUPPLIER' ? '#92400e' : '#065f46'
+                                }}>
+                                  {company.company_type_flag === 'CUSTOMER' ? '매출처' :
+                                    company.company_type_flag === 'SUPPLIER' ? '매입처' : '매입/매출'}
+                                </span>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </>
+                )}
+              </div>
 
-            {/* 모달 푸터 */}
-            <div style={{
-              padding: '1rem 1.5rem',
-              borderTop: '1px solid #e5e7eb',
-              display: 'flex',
-              justifyContent: 'flex-end',
-              gap: '0.5rem'
-            }}>
-              <button onClick={handleCloseModal} className="btn btn-secondary">
-                취소
-              </button>
-              <button
-                onClick={handleBulkImport}
-                className="btn btn-success"
-                disabled={!previewData || selectedRows.length === 0 || uploading}
-              >
-                {uploading ? '등록 중...' : `✓ ${selectedRows.length}건 일괄 등록`}
-              </button>
+              {/* 모달 푸터 */}
+              <div style={{
+                padding: '1rem 1.5rem',
+                borderTop: '1px solid #e5e7eb',
+                display: 'flex',
+                justifyContent: 'flex-end',
+                gap: '0.5rem'
+              }}>
+                <button onClick={handleCloseModal} className="btn btn-secondary">
+                  취소
+                </button>
+                <button
+                  onClick={handleBulkImport}
+                  className="btn btn-success"
+                  disabled={!previewData || selectedRows.length === 0 || uploading}
+                >
+                  {uploading ? '등록 중...' : `✓ ${selectedRows.length}건 일괄 등록`}
+                </button>
+              </div>
             </div>
-          </div>
-        </div>,
-        document.body
-      )}
+          </div>,
+          document.body
+        )
+      }
 
       {/* 거래처 등록/수정 모달 */}
       <ConfirmModal
@@ -1158,6 +1111,8 @@ function CompanyList({ isWindow }) {
         showConfirm={false}
         showCancel={false}
         maxWidth="1000px"
+        hideHeader={true} // 모달 헤더 숨김 (내부 폼 타이틀 사용)
+        padding="1rem" // 패딩 축소
       >
         {editModal.isOpen && (
           <CompanyForm

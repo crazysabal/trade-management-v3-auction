@@ -12,18 +12,17 @@ import ConfirmModal from './ConfirmModal';
  * 기존 TradeForm.js와 동일한 UI 구성
  */
 function TradePanel({
-  tradeType = 'SALE',  // 'SALE' | 'PURCHASE'
-  panelId,             // 패널 식별자
-  initialTradeId = null, // 초기 로드할 전표 ID
-  onSaveSuccess,       // 저장 성공 콜백
-  onPrint,             // 출력 콜백
-  onDirtyChange,       // 변경사항 상태 변경 콜백
-
-  onInventoryUpdate,   // 재고 수량 업데이트 콜백
-  onTradeChange,       // 전표 변경(저장/삭제) 콜백 (재고 리프레시용)
-  inventoryMap = {},   // 검증용 재고 맵 (from DualTradeForm)
-  // fontScale 제거됨 - 고정 폰트 크기 사용
-  cardColor = '#ffffff', // 카드 배경색
+  tradeType = 'SALE',
+  panelId,
+  initialTradeId = null,
+  initialViewMode = false,
+  onSaveSuccess,
+  onPrint,
+  onDirtyChange,
+  onInventoryUpdate,
+  onTradeChange,
+  inventoryMap = {},
+  cardColor = '#ffffff',
 }) {
   const isPurchase = tradeType === 'PURCHASE';
 
@@ -46,6 +45,7 @@ function TradePanel({
   // 현재 전표 상태
   const [currentTradeId, setCurrentTradeId] = useState(null);
   const [isEdit, setIsEdit] = useState(false);
+  const [isViewMode, setIsViewMode] = useState(initialViewMode);
 
   // 선택된 행
   const [selectedRowIndex, setSelectedRowIndex] = useState(null);
@@ -253,6 +253,8 @@ function TradePanel({
       setCompanies(companiesRes.data.data);
       setProducts(productsRes.data.data);
       setWarehouses(warehousesRes.data.data || []);
+      const defaultWh = (warehousesRes.data.data || []).find(w => w.is_default);
+      const defaultWhId = (isPurchase && defaultWh) ? defaultWh.id : '';
 
       // 결제 방법 로드
       try {
@@ -265,8 +267,9 @@ function TradePanel({
       }
 
       // 초기 데이터 설정
+      setMaster(prev => ({ ...prev, warehouse_id: defaultWhId }));
       setInitialData({
-        master: { ...master },
+        master: { ...master, warehouse_id: defaultWhId },
         details: []
       });
     } catch (error) {
@@ -369,7 +372,12 @@ function TradePanel({
       // 대기 중인 입출금 초기화
       setPendingPayments([]);
       setDeletedPaymentIds([]);
+      setPendingPayments([]);
+      setDeletedPaymentIds([]);
       setModifiedPayments({});
+
+      // 기존 전표 로드 시 보기 모드로 전환
+      setIsViewMode(true);
     } catch (error) {
       console.error('전표 로딩 오류:', error);
       showModal('warning', '로딩 실패', '전표를 불러오는데 실패했습니다.');
@@ -405,12 +413,18 @@ function TradePanel({
         message: '저장하지 않은 변경사항이 있습니다.\n초기화하면 현재 입력 내용이 사라집니다.\n정말 초기화하시겠습니까?',
         confirmText: '초기화',
         showCancel: true,
-        onConfirm: () => {
+        onConfirm: async () => {
+          await loadInitialData();
+          setLoading(false);
           resetForm(master.trade_date);
         }
       });
     } else {
-      resetForm(master.trade_date);
+      (async () => {
+        await loadInitialData();
+        setLoading(false);
+        resetForm(master.trade_date);
+      })();
     }
   };
 
@@ -470,6 +484,10 @@ function TradePanel({
     // 날짜 기본값 로직 일원화
     const effectiveDate = date || formatLocalDate(new Date());
 
+    // 기본 창고 설정
+    const defaultWh = warehouses.find(w => w.is_default);
+    const defaultWhId = (isPurchase && defaultWh) ? defaultWh.id : '';
+
     // 빈 행 생성
     const emptyRow = {
       rowIndex: 0,
@@ -488,7 +506,7 @@ function TradePanel({
       trade_type: tradeType,
       trade_date: effectiveDate,
       company_id: companyId,
-      warehouse_id: '',
+      warehouse_id: defaultWhId,
       notes: '',
       status: 'CONFIRMED',
       total_amount: 0
@@ -497,12 +515,14 @@ function TradePanel({
     setDetails(companyId ? [emptyRow] : []);
     setCurrentTradeId(null);
     setIsEdit(false);
+    setIsViewMode(false); // 신규 등록 모드에서는 편집 허용
     setLinkedPayments([]);
     setPendingPayments([]);
     setDeletedPaymentIds([]);
     setModifiedPayments({});
+    setModifiedPayments({});
     setInitialData({
-      master: { trade_type: tradeType, trade_date: effectiveDate, company_id: companyId, warehouse_id: '', notes: '' },
+      master: { trade_type: tradeType, trade_date: effectiveDate, company_id: companyId, warehouse_id: defaultWhId, notes: '' },
       details: []
     });
 
@@ -715,12 +735,21 @@ function TradePanel({
       supply_amount: qty * price,
       shipper_location: item.shipper_location || '',
       sender_name: item.sender || '',
-      notes: '',
+      notes: item.sender || '', // 출하주(sender)를 비고란에 자동 입력
       inventory_id: item.id,
       max_quantity: item.remaining_quantity || 0 // Validation limit
     };
 
     const newDetails = [...details];
+
+    // 첫 행이 빈 행이면 삭제 (빈 행에 추가되는 것 방지)
+    if (newDetails.length === 1) {
+      const first = newDetails[0];
+      const isFirstEmpty = !first.product_id && !first.quantity && !first.unit_price;
+      if (isFirstEmpty) {
+        newDetails.pop();
+      }
+    }
 
     // 드롭된 위치에 삽입
     if (typeof dropIndex === 'number' && dropIndex < newDetails.length) {
@@ -1213,9 +1242,9 @@ function TradePanel({
   const companyOptions = useMemo(() => {
     return companies.map(company => ({
       value: company.id,
-      label: company.alias
-        ? `${company.company_name} - ${company.alias}`
-        : company.company_name
+      label: company.alias || company.company_name,
+      // subLabel: company.company_name, // 표시 안함
+      data: { subLabel: company.company_name, code: company.code } // 검색 필터용 데이터
     }));
   }, [companies]);
 
@@ -1293,20 +1322,23 @@ function TradePanel({
                   className="btn btn-sm btn-icon"
                   style={{ height: '100%' }}
                   onClick={() => handleDateChange(-1)}
+                  disabled={isViewMode}
                 >◀</button>
                 <input
                   type="date"
                   value={master.trade_date}
                   onChange={(e) => handleDateInputChange(e.target.value)}
-                  className="trade-date-input"
+                  className={`trade-date-input ${master.trade_date !== new Date().toLocaleDateString('en-CA') ? 'is-not-today' : ''}`}
                   required
                   style={{ flex: 1, height: '100%' }}
+                  disabled={isViewMode}
                 />
                 <button
                   type="button"
                   className="btn btn-sm btn-icon"
                   style={{ height: '100%' }}
                   onClick={() => handleDateChange(1)}
+                  disabled={isViewMode}
                 >▶</button>
               </div>
             </div>
@@ -1331,7 +1363,7 @@ function TradePanel({
               </div>
             </div>
             {isPurchase && (
-              <div className="trade-form-group" style={{ width: '250px', display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '8px', height: '32px' }}>
+              <div className="trade-form-group" style={{ width: '180px', display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '8px', height: '32px' }}>
                 {/* <label className="trade-label" style={{ marginBottom: 0, whiteSpace: 'nowrap' }}>입고 창고</label> */}
                 <div style={{ flex: 1, height: '100%' }}>
                   <SearchableSelect
@@ -1339,6 +1371,7 @@ function TradePanel({
                     value={master.warehouse_id}
                     onChange={(o) => setMaster({ ...master, warehouse_id: o ? o.value : '' })}
                     placeholder="기본 창고"
+                    isDisabled={!master.company_id || isViewMode}
                     styles={{
                       control: (base) => ({ ...base, minHeight: '32px', height: '32px' }),
                       valueContainer: (base) => ({ ...base, height: '30px', padding: '0 8px' }),
@@ -1352,39 +1385,65 @@ function TradePanel({
             )}
             {/* 버튼 영역 */}
             <div className="trade-action-buttons">
-              <button
-                type="button"
-                className="btn btn-secondary btn-sm btn-custom"
-                onClick={handleReset}
-              >
-                초기화
-              </button>
-              {isEdit && currentTradeId && (
-                <button
-                  type="button"
-                  className="btn btn-danger btn-sm btn-custom"
-                  onClick={handleDelete}
-                  disabled={!master.company_id}
-                >
-                  삭제
-                </button>
+              {isViewMode ? (
+                <>
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm btn-custom"
+                    onClick={() => {
+                      if (onPrint && currentTradeId) {
+                        onPrint(currentTradeId);
+                      }
+                    }}
+                  >
+                    출력
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-primary btn-sm btn-custom"
+                    onClick={() => setIsViewMode(false)}
+                  >
+                    수정 모드
+                  </button>
+                  {/* View Mode에서는 닫기 버튼 등이 필요할 수 있으나 FloatingWindow가 처리 */}
+                </>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm btn-custom"
+                    onClick={handleReset}
+                  >
+                    초기화
+                  </button>
+                  {isEdit && currentTradeId && (
+                    <button
+                      type="button"
+                      className="btn btn-danger btn-sm btn-custom"
+                      onClick={handleDelete}
+                      disabled={!master.company_id}
+                    >
+                      삭제
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className={`btn btn-primary btn-sm btn-custom btn-save-edit ${hasChanges ? 'is-dirty' : ''}`}
+                    onClick={() => handleSave(false)}
+                    disabled={!master.company_id}
+                  >
+                    {isEdit ? '수정' : '저장'}
+                  </button>
+                  <button
+                    type="button"
+                    className={`btn btn-success btn-sm btn-custom btn-save-print ${hasChanges ? 'is-dirty' : ''}`}
+                    onClick={() => handleSave(true)}
+                    disabled={!master.company_id}
+                  >
+                    {isEdit ? '수정 및 출력' : '저장 및 출력'}
+                  </button>
+                </>
               )}
-              <button
-                type="button"
-                className={`btn btn-primary btn-sm btn-custom btn-save-edit ${hasChanges ? 'is-dirty' : ''}`}
-                onClick={() => handleSave(false)}
-                disabled={!master.company_id}
-              >
-                {isEdit ? '수정' : '저장'}
-              </button>
-              <button
-                type="button"
-                className={`btn btn-success btn-sm btn-custom btn-save-print ${hasChanges ? 'is-dirty' : ''}`}
-                onClick={() => handleSave(true)}
-                disabled={!master.company_id}
-              >
-                {isEdit ? '수정 및 출력' : '저장 및 출력'}
-              </button>
             </div>
           </div>
         </div>
@@ -1402,6 +1461,7 @@ function TradePanel({
                   type="button"
                   className="btn btn-secondary btn-custom btn-sm"
                   onClick={refreshProducts}
+                  disabled={isViewMode}
                 >
                   🔄 새로고침
                 </button>
@@ -1409,7 +1469,7 @@ function TradePanel({
                   type="button"
                   className="btn btn-success btn-custom btn-sm"
                   onClick={addDetailRow}
-                  disabled={!master.company_id}
+                  disabled={!master.company_id || isViewMode}
                 >
                   + 추가
                 </button>
@@ -1429,8 +1489,8 @@ function TradePanel({
                     <th className="col-qty">수량</th>
                     <th className="col-price">단가</th>
                     <th className="col-amount">금액</th>
-                    {isPurchase && <th className="col-location">출하지</th>}
                     {isPurchase && <th className="col-owner">출하주</th>}
+                    {isPurchase && <th className="col-location">출하지</th>}
                     <th className="col-remarks">비고</th>
                     <th className="col-action"></th>
                   </tr>
@@ -1482,7 +1542,7 @@ function TradePanel({
                           noOptionsMessage="품목 없음"
                           menuPortalTarget={document.body}
                           size="small"
-                          isDisabled={!!detail.inventory_id} // 재고 드롭 항목은 품목 변경 불가
+                          isDisabled={!!detail.inventory_id || isViewMode} // 재고 드롭 항목은 품목 변경 불가
                         />
                       </td>
                       <td>
@@ -1501,6 +1561,7 @@ function TradePanel({
                           onKeyDown={(e) => handleQuantityKeyDown(e, index)}
                           className="trade-input-table trade-input-right"
                           placeholder="0"
+                          disabled={isViewMode}
                         />
                       </td>
                       <td>
@@ -1515,23 +1576,12 @@ function TradePanel({
                           onKeyDown={(e) => handleUnitPriceKeyDown(e, index)}
                           className="trade-input-table trade-input-right"
                           placeholder="0"
+                          disabled={isViewMode}
                         />
                       </td>
                       <td className="trade-input-right" style={{ padding: '4px 8px', fontWeight: '600', color: isPurchase ? '#c0392b' : '#2980b9' }}>
                         {formatCurrency(detail.supply_amount)}
                       </td>
-                      {isPurchase && (
-                        <td>
-                          <input
-                            ref={el => shipperLocationRefs.current[index] = el}
-                            type="text"
-                            value={detail.shipper_location || ''}
-                            onChange={(e) => handleDetailChange(index, 'shipper_location', e.target.value)}
-                            onKeyDown={(e) => handleShipperLocationKeyDown(e, index)}
-                            className="trade-input-table"
-                          />
-                        </td>
-                      )}
                       {isPurchase && (
                         <td>
                           <input
@@ -1541,6 +1591,20 @@ function TradePanel({
                             onChange={(e) => handleDetailChange(index, 'sender_name', e.target.value)}
                             onKeyDown={(e) => handleSenderKeyDown(e, index)}
                             className="trade-input-table"
+                            disabled={isViewMode}
+                          />
+                        </td>
+                      )}
+                      {isPurchase && (
+                        <td>
+                          <input
+                            ref={el => shipperLocationRefs.current[index] = el}
+                            type="text"
+                            value={detail.shipper_location || ''}
+                            onChange={(e) => handleDetailChange(index, 'shipper_location', e.target.value)}
+                            onKeyDown={(e) => handleShipperLocationKeyDown(e, index)}
+                            className="trade-input-table"
+                            disabled={isViewMode}
                           />
                         </td>
                       )}
@@ -1552,25 +1616,19 @@ function TradePanel({
                           onChange={(e) => handleDetailChange(index, 'notes', e.target.value)}
                           onKeyDown={(e) => handleNotesKeyDown(e, index)}
                           className="trade-input-table"
+                          disabled={isViewMode}
                         />
                       </td>
-                      <td style={{ textAlign: 'center' }}>
+                      <td className="cell-action">
                         <button
                           type="button"
-                          style={{
-                            background: 'none',
-                            border: 'none',
-                            color: '#e74c3c',
-                            cursor: 'pointer',
-                            fontSize: '1.2rem',
-                            lineHeight: '1',
-                            padding: '0 5px'
-                          }}
+                          className="btn-delete-row"
                           onClick={(e) => {
                             e.stopPropagation(); // 행 선택 방지
                             handleDeleteRow(index);
                           }}
                           tabIndex="-1"
+                          disabled={isViewMode}
                         >
                           ✕
                         </button>
@@ -1603,18 +1661,16 @@ function TradePanel({
           <div style={{ display: 'flex', gap: '0.5rem', flexShrink: 0, alignItems: 'stretch' }}>
 
             {/* 왼쪽: 비고 카드 (새로 생성) */}
-            <div className="card" style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: '9px', backgroundColor: cardColor }}>
+            <div className="card" style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: '9px', backgroundColor: cardColor, marginBottom: 0 }}>
               <h2 className="card-title trade-card-title" style={{ marginBottom: '0.5rem' }}>비고</h2>
-              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-                <textarea
-                  value={master.notes}
-                  onChange={(e) => setMaster({ ...master, notes: e.target.value })}
-                  className="trade-textarea"
-                  placeholder="메모 입력..."
-                  style={{ flex: 1, resize: 'none', width: '100%' }}
-                  disabled={!master.company_id}
-                />
-              </div>
+              <textarea
+                value={master.notes}
+                onChange={(e) => setMaster({ ...master, notes: e.target.value })}
+                className="trade-textarea"
+                placeholder="메모 입력..."
+                style={{ flex: 1, resize: 'none', width: '100%', height: '100%' }}
+                disabled={!master.company_id || isViewMode}
+              />
             </div>
 
             {/* 오른쪽: 잔고 정보 카드 */}
@@ -1675,7 +1731,7 @@ function TradePanel({
                   <button
                     type="button"
                     onClick={handleOpenAddPayment}
-                    disabled={!master.company_id}
+                    disabled={!master.company_id || isViewMode}
                     className="payment-add-btn"
                     style={{
                       backgroundColor: master.company_id ? (isPurchase ? '#3498db' : '#27ae60') : '#ccc',
@@ -1832,22 +1888,7 @@ function TradePanel({
                       </div>
                     ))}
                   </div>
-                ) : (
-                  <div style={{
-                    padding: '0.75rem',
-                    textAlign: 'center',
-                    color: '#999',
-                    backgroundColor: '#f8f9fa',
-                    borderRadius: '6px',
-                    fontSize: fs(1),
-                    flex: 1,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center'
-                  }}>
-                    {isPurchase ? '출금' : '입금'} 내역이 없습니다
-                  </div>
-                )}
+                ) : null}
 
 
               </div>

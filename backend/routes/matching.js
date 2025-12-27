@@ -32,7 +32,8 @@ router.get('/pending-sales', async (req, res) => {
         tm.id as trade_master_id,
         tm.trade_number,
         tm.trade_date,
-        c.company_name as customer_name
+        c.company_name as customer_name,
+        c.alias
       FROM trade_details td
       JOIN trade_masters tm ON td.trade_master_id = tm.id
       JOIN products p ON td.product_id = p.id
@@ -95,6 +96,7 @@ router.get('/all-sales', async (req, res) => {
         tm.total_amount,
         tm.company_id,
         c.company_name as customer_name,
+        c.alias,
         COUNT(td.id) as item_count,
         SUM(td.quantity) as total_quantity,
         SUM(CASE WHEN td.matching_status = 'MATCHED' THEN td.quantity ELSE 0 END) as matched_quantity,
@@ -102,15 +104,25 @@ router.get('/all-sales', async (req, res) => {
         SUM(CASE WHEN td.matching_status = 'PARTIAL' THEN 1 ELSE 0 END) as partial_count,
         SUM(CASE WHEN td.matching_status = 'MATCHED' THEN 1 ELSE 0 END) as matched_count,
         SUM(td.supply_amount) as total_sales_amount,
-        SUM(IFNULL(td.purchase_price, 0) * td.quantity) as total_purchase_amount,
-        SUM(td.supply_amount - IFNULL(td.purchase_price, 0) * td.quantity) as total_margin
+        SUM(IFNULL((
+          SELECT SUM(spm.matched_quantity * pi.unit_price)
+          FROM sale_purchase_matching spm
+          JOIN purchase_inventory pi ON spm.purchase_inventory_id = pi.id
+          WHERE spm.sale_detail_id = td.id
+        ), 0)) as total_purchase_amount,
+        SUM(td.supply_amount - IFNULL((
+          SELECT SUM(spm.matched_quantity * pi.unit_price)
+          FROM sale_purchase_matching spm
+          JOIN purchase_inventory pi ON spm.purchase_inventory_id = pi.id
+          WHERE spm.sale_detail_id = td.id
+        ), 0)) as total_margin
       FROM trade_masters tm
       JOIN companies c ON tm.company_id = c.id
       JOIN trade_details td ON td.trade_master_id = tm.id
       WHERE tm.trade_type = 'SALE'
         AND tm.trade_date >= ?
         AND tm.trade_date <= ?
-      GROUP BY tm.id, tm.trade_number, tm.trade_date, tm.total_amount, tm.company_id, c.company_name
+      GROUP BY tm.id, tm.trade_number, tm.trade_date, tm.total_amount, tm.company_id, c.company_name, c.alias
       ORDER BY tm.trade_date DESC, tm.id DESC
     `, [filterStartDate, filterEndDate]);
 
@@ -833,7 +845,8 @@ router.get('/trade/:trade_master_id/inventory', async (req, res) => {
           p.product_name,
           p.grade,
           p.weight as product_weight,
-          c.company_name as purchase_company
+          c.company_name as purchase_company,
+          c.alias
         FROM sale_purchase_matching spm
         JOIN purchase_inventory pi ON spm.purchase_inventory_id = pi.id
         JOIN products p ON pi.product_id = p.id
@@ -871,7 +884,8 @@ router.get('/trade/:trade_master_id/inventory', async (req, res) => {
         p.grade,
         p.weight as product_weight,
         tm.trade_number,
-        c.company_name
+        c.company_name,
+        c.alias
       FROM purchase_inventory pi
       JOIN products p ON pi.product_id = p.id
       JOIN trade_details td ON pi.trade_detail_id = td.id

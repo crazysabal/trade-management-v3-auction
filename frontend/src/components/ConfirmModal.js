@@ -27,7 +27,9 @@ function ConfirmModal({
   showCancel = true,
   showConfirm = true,
   children,
-  maxWidth
+  maxWidth,
+  hideHeader = false, // 헤더 숨김 옵션 추가
+  padding // 커스텀 패딩 옵션 추가
 }) {
   // ESC 키로 닫기
   useEffect(() => {
@@ -98,19 +100,27 @@ function ConfirmModal({
 
       <div
         className="modal-container"
-        style={maxWidth ? { maxWidth } : undefined}
+        style={{
+          ...(maxWidth ? { maxWidth } : {}),
+          ...(typeof padding !== 'undefined' ? { padding } : {})
+        }}
         onClick={(e) => e.stopPropagation()}
       >
-        {/* 아이콘 */}
-        <div
-          className="modal-icon"
-          style={{ backgroundColor: config.iconBg }}
-        >
-          <span style={{ fontSize: '2rem' }}>{config.icon}</span>
-        </div>
+        {/* 헤더 (아이콘 + 제목) - hideHeader가 false일 때만 표시 */}
+        {!hideHeader && (
+          <>
+            {/* 아이콘 */}
+            <div
+              className="modal-icon"
+              style={{ backgroundColor: config.iconBg }}
+            >
+              <span style={{ fontSize: '2rem' }}>{config.icon}</span>
+            </div>
 
-        {/* 제목 */}
-        <h2 className="modal-title">{title}</h2>
+            {/* 제목 */}
+            <h2 className="modal-title">{title}</h2>
+          </>
+        )}
 
         {/* 메시지 또는 자식 컴포넌트 */}
         {children ? (

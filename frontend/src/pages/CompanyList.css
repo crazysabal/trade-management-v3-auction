@@ -1,0 +1,41 @@
+.company-list-wrapper {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 0;
+}
+
+.company-list-wrapper.is-window {
+    max-width: 100%;
+    width: 100%;
+    padding: 0.5rem;
+}
+
+.company-list-header {
+    display: flex;
+    align-items: center;
+}
+
+.company-list-header.is-hidden {
+    display: none;
+}
+
+.company-title {
+    margin: 0;
+}
+
+/* Reduce row height for floating window mode */
+.company-list-wrapper.is-window table th,
+.company-list-wrapper.is-window table td {
+    padding: 0.5rem 0.5rem !important;
+    font-size: 0.85rem;
+}
+
+.company-list-wrapper.is-window table td .btn {
+    padding: 0.2rem 0.5rem !important;
+    font-size: 0.8rem !important;
+}
+
+.company-list-wrapper.is-window .search-filter-container {
+    padding: 0.75rem !important;
+    margin-bottom: 0.75rem !important;
+}

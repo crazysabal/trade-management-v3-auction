@@ -17,8 +17,11 @@ const InventoryTransferManagement = () => {
     const [dragOverWarehouseId, setDragOverWarehouseId] = useState(null); // 드래그 오버 중인 창고 ID (Highlight용)
 
     // Modal State
-    const [transferModal, setTransferModal] = useState({ isOpen: false, inventory: null, toWarehouseId: '' });
+    const [transferModal, setTransferModal] = useState({ isOpen: false, inventory: null, inventoryList: [], toWarehouseId: '' });
     const [adjustmentModal, setAdjustmentModal] = useState({ isOpen: false, inventory: null });
+
+    // Multi-Select State
+    const [selectedItems, setSelectedItems] = useState(new Set()); // Set of inventory IDs
 
     // 필터
     const [searchKeyword, setSearchKeyword] = useState('');
@@ -49,14 +52,28 @@ const InventoryTransferManagement = () => {
     };
 
     // --- Drag & Drop Handlers (Inventory) ---
+    // --- Drag & Drop Handlers (Inventory) ---
     const handleDragStart = (e, item) => {
         e.stopPropagation();
+
+        let draggedItems = [];
+        // 만약 드래그하는 아이템이 선택된 상태라면, 선택된 모든 아이템을 함께 드래그
+        if (selectedItems.has(item.id)) {
+            // 현재 선택된 아이템들 중 화면에 보이는(inventory state에 있는) 것들만 추림
+            draggedItems = inventory.filter(i => selectedItems.has(i.id));
+        } else {
+            // 선택되지 않은 아이템을 드래그하면 단일 드래그로 처리 (혹은 선택 초기화 후 단일?)
+            // UX: 보통 선택되지 않은 아이템을 잡으면 그것만 드래그됨
+            draggedItems = [item];
+        }
+
         e.dataTransfer.effectAllowed = 'move';
-        e.dataTransfer.setData('text/plain', String(item.id));
-        e.dataTransfer.setData('source-inventory-id', String(item.id)); // 식별자
+        e.dataTransfer.setData('text/plain', String(item.id)); // Primary ID for compatibility
+        e.dataTransfer.setData('application/json', JSON.stringify(draggedItems)); // Full payload
+        e.dataTransfer.setData('source-inventory-id', String(item.id));
 
         setTimeout(() => {
-            setDraggedItem(item);
+            setDraggedItem(item); // Highlight effect for the primary dragged item
         }, 0);
     };
 
@@ -141,12 +158,40 @@ const InventoryTransferManagement = () => {
         }
 
         // 다른 창고로 드롭하면 -> 이동 모달 열기
+        // 드래그된 데이터 파싱
+        let inventoryList = [];
+        try {
+            const jsonData = e.dataTransfer.getData('application/json');
+            if (jsonData) {
+                inventoryList = JSON.parse(jsonData);
+            } else {
+                inventoryList = [draggedItem];
+            }
+        } catch (err) {
+            inventoryList = [draggedItem];
+        }
+
+        // 이동 불가 케이스: 다중 이동 시 다른 창고에 있는 아이템들이 섞여있다면?
+        // 백엔드/모달 로직 상 문제는 없지만, 단일 창고로 이동하게 됨. 기능상 OK.
+
         setTransferModal({
             isOpen: true,
-            inventory: draggedItem,
+            inventory: inventoryList.length === 1 ? inventoryList[0] : null,
+            inventoryList: inventoryList,
             toWarehouseId: targetWarehouseId
         });
         setDraggedItem(null);
+    };
+
+    const toggleSelection = (e, id) => {
+        e.stopPropagation();
+        const newSet = new Set(selectedItems);
+        if (newSet.has(id)) {
+            newSet.delete(id);
+        } else {
+            newSet.add(id);
+        }
+        setSelectedItems(newSet);
     };
 
     // --- Drag & Drop Handlers (Warehouse Reorder) ---
@@ -208,22 +253,7 @@ const InventoryTransferManagement = () => {
     return (
         <div className="inventory-transfer-page fade-in">
             <div className="page-header">
-                <div>
-                    <h1 className="page-title">📦 재고 이동 (Kanban)</h1>
-                </div>
-                <div className="header-controls">
-                    <div className="width-control">
-                        <span className="width-label">너비:</span>
-                        <input
-                            type="range"
-                            min="250"
-                            max="450"
-                            step="10"
-                            value={columnWidth}
-                            onChange={(e) => setColumnWidth(Number(e.target.value))}
-                            className="width-slider"
-                        />
-                    </div>
+                <div className="header-controls" style={{ marginLeft: 0, width: '100%', justifyContent: 'flex-start', gap: '1rem' }}>
                     <input
                         type="text"
                         placeholder="품목, 출하주, 매입처, 등급 검색 (띄어쓰기)..."
@@ -237,12 +267,25 @@ const InventoryTransferManagement = () => {
                     >
                         {reorderMode ? '순서 저장 완료' : '창고 순서 변경'}
                     </button>
+                    <div className="width-control">
+                        <span className="width-label">너비:</span>
+                        <input
+                            type="range"
+                            min="250"
+                            max="450"
+                            step="10"
+                            value={columnWidth}
+                            onChange={(e) => setColumnWidth(Number(e.target.value))}
+                            className="width-slider"
+                        />
+                    </div>
                     <button
                         onClick={loadData}
                         className="btn-refresh"
                     >
                         새로고침
                     </button>
+                    {/* 빈 공간은 flex-start로 인해 자연스럽게 우측에 생성됨 */}
                 </div>
             </div>
 
@@ -291,27 +334,28 @@ const InventoryTransferManagement = () => {
                                             style={{ cursor: reorderMode ? 'default' : 'grab' }}
                                         >
                                             <div className="card-content">
-                                                <div className="card-main-info">
-                                                    <span style={{ marginRight: '6px' }}>{item.product_name}</span>
-                                                    {Number(item.product_weight) > 0 && <span style={{ marginRight: '6px' }}>{Number(item.product_weight)}kg</span>}
-                                                    {item.grade && <span style={{ marginRight: '6px' }}>({item.grade})</span>}
-                                                    <span className="info-qty">
+                                                <div className="card-main-info" style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                                                    <span style={{ marginRight: 0 }}>{item.product_name}</span>
+                                                    {Number(item.product_weight) > 0 && <span style={{ color: '#555' }}>{Number(item.product_weight)}kg</span>}
+                                                    <span style={{ color: '#27ae60' }}>{item.sender}</span>
+                                                    {item.grade && <span style={{ color: '#7f8c8d' }}>({item.grade})</span>}
+
+                                                    <span style={{ flex: 1 }}></span> {/* Spacer */}
+
+                                                    <span className="info-qty" style={{ fontWeight: 'bold', color: '#2980b9' }}>
                                                         {Number(item.remaining_quantity) % 1 === 0 ? Math.floor(item.remaining_quantity) : Number(item.remaining_quantity)}개
                                                     </span>
-                                                    <span className="info-price">
+                                                    <span className="info-price" style={{ color: '#555' }}>
                                                         {Number(item.unit_price).toLocaleString()}원
                                                     </span>
                                                 </div>
 
-                                                <div className="card-sub-info">
-                                                    <div className="sender-info">
-                                                        <span>👤 {item.sender}</span>
-                                                        {item.company_name && <span className="company-name">({item.company_name})</span>}
+                                                <div className="card-sub-info" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '4px', borderTop: '1px solid #f0f0f0', paddingTop: '4px' }}>
+                                                    <div style={{ display: 'flex', gap: '8px', fontSize: '0.8rem', color: '#7f8c8d' }}>
+                                                        <span>{item.company_name || '-'}</span>
+                                                        <span>{item.purchase_date}</span>
                                                     </div>
-                                                    <div className="purchase-date">{item.purchase_date}</div>
-                                                </div>
 
-                                                <div className="card-actions">
                                                     <button
                                                         onClick={(e) => {
                                                             e.stopPropagation();
@@ -319,6 +363,7 @@ const InventoryTransferManagement = () => {
                                                         }}
                                                         className="btn-adjust"
                                                         title="재고 조정/폐기"
+                                                        style={{ margin: 0 }}
                                                     >
                                                         🗑️ 조정/폐기
                                                     </button>
@@ -341,10 +386,12 @@ const InventoryTransferManagement = () => {
             <StockTransferModal
                 isOpen={transferModal.isOpen}
                 inventory={transferModal.inventory}
+                inventoryList={transferModal.inventoryList}
                 defaultToWarehouseId={transferModal.toWarehouseId}
-                onClose={() => setTransferModal({ isOpen: false, inventory: null, toWarehouseId: '' })}
+                onClose={() => setTransferModal({ isOpen: false, inventory: null, inventoryList: [], toWarehouseId: '' })}
                 onSuccess={() => {
                     loadData();
+                    setSelectedItems(new Set()); // Clear selection after successful transfer
                 }}
             />
 

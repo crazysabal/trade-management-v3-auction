@@ -366,10 +366,10 @@ function TradeList({ isWindow, onOpenTradeEdit }) {
                         </button>
                         {isWindow && onOpenTradeEdit ? (
                           <button
-                            onClick={() => onOpenTradeEdit(type, trade.id)}
+                            onClick={() => onOpenTradeEdit(type, trade.id, true)}
                             style={{ padding: '0.25rem 0.5rem', fontSize: '0.85rem', backgroundColor: '#95a5a6', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
                           >
-                            수정
+                            보기
                           </button>
                         ) : (
                           <Link

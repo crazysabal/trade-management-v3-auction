@@ -1,18 +1,75 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
+import html2canvas from 'html2canvas';
 import { tradeAPI, companyInfoAPI, paymentAPI } from '../services/api';
 
+/**
 /**
  * 전표 인쇄용 모달 컴포넌트
  * A4 가로 이등분 출력 (좌우 동일 내용)
  */
+
+const formatCurrency = (value) => {
+  return new Intl.NumberFormat('ko-KR').format(value || 0);
+};
+
+const formatNumber = (value) => {
+  return new Intl.NumberFormat('ko-KR', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2
+  }).format(value || 0);
+};
+
+const formatDate = (dateString) => {
+  if (!dateString) return '-';
+  const date = new Date(dateString);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}년 ${month}월 ${day}일`;
+};
+
+const formatDateTime = (dateString) => {
+  if (!dateString) return '';
+  const date = new Date(dateString);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  const hours = String(date.getHours()).padStart(2, '0');
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+  return `${year}.${month}.${day} ${hours}:${minutes}`;
+};
+
+const formatProductName = (detail) => {
+  const parts = [detail.product_name];
+  if (detail.product_weight) {
+    // 소수점 이하가 0이면 정수로 표시, 아니면 소수점 포함
+    const weight = parseFloat(detail.product_weight);
+    const weightStr = weight % 1 === 0 ? weight.toFixed(0) : weight.toString().replace(/\.?0+$/, '');
+    parts.push(`${weightStr}kg`);
+  }
+  if (detail.grade) {
+    return `${parts.join(' ')} (${detail.grade})`;
+  }
+  return parts.join(' ');
+};
+
 function TradePrintModal({ isOpen, onClose, tradeId }) {
   const [loading, setLoading] = useState(false);
   const [trade, setTrade] = useState(null);
   const [companyInfo, setCompanyInfo] = useState(null);
   const [companySummary, setCompanySummary] = useState(null);
   const [error, setError] = useState(null);
+  const [zoomLevel, setZoomLevel] = useState(() => {
+    const saved = localStorage.getItem('tradePrintZoom');
+    return saved ? parseFloat(saved) : 1;
+  }); // 확대/축소 상태
   const printRef = useRef(null);
+
+  // 줌 레벨 저장
+  useEffect(() => {
+    localStorage.setItem('tradePrintZoom', zoomLevel);
+  }, [zoomLevel]);
 
   // 전표 상세 조회
   useEffect(() => {
@@ -85,6 +142,8 @@ function TradePrintModal({ isOpen, onClose, tradeId }) {
     };
   }, [isOpen]);
 
+  if (!isOpen) return null;
+
   // 공통 CSS (인쇄용 + 미리보기용 동일)
   const commonStyles = `
     .print-half {
@@ -101,7 +160,7 @@ function TradePrintModal({ isOpen, onClose, tradeId }) {
     .new-header {
       display: flex;
       align-items: stretch;
-      margin-bottom: 0;
+      margin-bottom: 5px; /* 헤더와 본문 사이 간격 추가 */
       gap: 8px;
     }
     .header-left-box {
@@ -157,7 +216,7 @@ function TradePrintModal({ isOpen, onClose, tradeId }) {
       width: 100%;
       border-collapse: collapse;
       border: 1px solid #000;
-      border-bottom: none;
+      /* border-bottom: none; 제거 - 명확한 경계선을 위해 복원 */
     }
     .header-right-box th, .header-right-box td {
       border: 1px solid #000;
@@ -304,13 +363,38 @@ function TradePrintModal({ isOpen, onClose, tradeId }) {
     }
   `;
 
+  // (Removed duplicate helpers: formatCurrency, formatNumber)
+
+  const isSale = trade?.trade_type === 'SALE';
+  const documentTitle = isSale ? '거래명세서' : '매입명세서';
+
+  // 공급받는자 / 공급자 정보 설정
+  const supplier = isSale ? companyInfo : {
+    company_name: trade?.company_name,
+    business_number: trade?.business_number || '',
+    representative: trade?.representative || '',
+    address: trade?.company_address || '',
+    business_type: trade?.business_type || '',
+    business_category: trade?.business_category || ''
+  };
+
+  const receiver = isSale ? {
+    company_name: trade?.company_name,
+    business_number: trade?.business_number || '',
+    representative: trade?.representative || '',
+    address: trade?.company_address || '',
+    business_type: trade?.business_type || '',
+    business_category: trade?.business_category || ''
+  } : companyInfo;
+
+  // 여백 설정 로직 (인쇄/미리보기 공통)
+  const hasAddress2 = !!supplier?.address2;
+  const topMargin = hasAddress2 ? '10mm' : '15mm';
+
   const handlePrint = () => {
     const printContent = printRef.current;
     if (!printContent) return;
 
-    // 주소2가 있으면 상단 여백을 줄이고 높이를 늘림
-    const hasAddress2 = !!supplier?.address2;
-    const topMargin = hasAddress2 ? '10mm' : '15mm';
     const wrapperHeight = hasAddress2 ? '200mm' : '195mm';
 
     const printWindow = window.open('', '_blank');
@@ -366,80 +450,75 @@ function TradePrintModal({ isOpen, onClose, tradeId }) {
     }, 250);
   };
 
-  if (!isOpen) return null;
+  // 클립보드 복사 핸들러 (이미지)
+  const handleCopy = async () => {
+    if (!trade) return;
 
-  const formatCurrency = (value) => {
-    return new Intl.NumberFormat('ko-KR').format(value || 0);
-  };
+    try {
+      // 미리보기 영역 선택 (첫 번째 페이지 또는 전체 컨테이너)
+      // 현재는 첫 번째 페이지만 캡처한다고 가정하거나, 모든 페이지를 포함하는 컨테이너를 찾음
+      const previewContainer = document.querySelector('.preview-container-for-copy');
+      if (!previewContainer) {
+        alert('미리보기 영역을 찾을 수 없습니다.');
+        return;
+      }
 
-  const formatNumber = (value) => {
-    return new Intl.NumberFormat('ko-KR', {
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 2
-    }).format(value || 0);
-  };
+      // html2canvas로 캡처
+      const canvas = await html2canvas(previewContainer, {
+        scale: 3, // 고해상도 (3배)
+        backgroundColor: '#ffffff',
+        logging: false,
+        useCORS: true,
+        // 캡처 시 zoom 제거 및 스타일 보정
+        onclone: (clonedDoc) => {
+          const clonedContainer = clonedDoc.querySelector('.preview-container-for-copy');
+          if (clonedContainer) {
+            clonedContainer.style.zoom = '1';
+            clonedContainer.style.transform = 'none';
+            // 폰트 간격 미세 조정
+            clonedContainer.style.letterSpacing = '-0.5px';
+            // 이미지 캡처용 여백 및 크기 최적화
+            clonedContainer.style.width = 'fit-content';
+            clonedContainer.style.height = 'auto';
+            clonedContainer.style.padding = '10px'; // 여백을 더 줄임 (사용자 요청)
+            clonedContainer.style.margin = '0';
+            clonedContainer.style.boxShadow = 'none'; // 그림자 제거
+            clonedContainer.style.borderRadius = '0'; // 둥근 모서리 제거
+          }
+        }
+      });
 
-  const formatDate = (dateString) => {
-    if (!dateString) return '-';
-    const date = new Date(dateString);
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    return `${year}년 ${month}월 ${day}일`;
-  };
+      // Canvas를 Blob으로 변환
+      canvas.toBlob(async (blob) => {
+        if (!blob) {
+          alert('이미지 생성에 실패했습니다.');
+          return;
+        }
 
-  const formatDateTime = (dateString) => {
-    if (!dateString) return '';
-    const date = new Date(dateString);
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    const hours = String(date.getHours()).padStart(2, '0');
-    const minutes = String(date.getMinutes()).padStart(2, '0');
-    return `${year}.${month}.${day} ${hours}:${minutes}`;
-  };
+        try {
+          // 클립보드에 이미지 쓰기
+          await navigator.clipboard.write([
+            new ClipboardItem({
+              [blob.type]: blob
+            })
+          ]);
+          // alert('전표 이미지가 클립보드에 복사되었습니다.'); // 사용자 요청으로 제거
+        } catch (clipboardErr) {
+          console.error('클립보드 쓰기 실패:', clipboardErr);
+          alert('클립보드 복사에 실패했습니다. (보안상의 이유로 지원되지 않을 수 있습니다)');
+        }
+      }, 'image/png');
 
-  const formatProductName = (detail) => {
-    const parts = [detail.product_name];
-    if (detail.product_weight) {
-      // 소수점 이하가 0이면 정수로 표시, 아니면 소수점 포함
-      const weight = parseFloat(detail.product_weight);
-      const weightStr = weight % 1 === 0 ? weight.toFixed(0) : weight.toString().replace(/\.?0+$/, '');
-      parts.push(`${weightStr}kg`);
+    } catch (err) {
+      console.error('캡처 실패:', err);
+      alert('이미지 캡처에 실패했습니다.');
     }
-    if (detail.grade) {
-      return `${parts.join(' ')} (${detail.grade})`;
-    }
-    return parts.join(' ');
   };
-
-  const isSale = trade?.trade_type === 'SALE';
-  const documentTitle = isSale ? '거래명세서' : '매입명세서';
-
-  // 공급받는자 / 공급자 정보 설정
-  const supplier = isSale ? companyInfo : {
-    company_name: trade?.company_name,
-    business_number: trade?.business_number || '',
-    representative: trade?.representative || '',
-    address: trade?.company_address || '',
-    business_type: trade?.business_type || '',
-    business_category: trade?.business_category || ''
-  };
-
-  const receiver = isSale ? {
-    company_name: trade?.company_name,
-    business_number: trade?.business_number || '',
-    representative: trade?.representative || '',
-    address: trade?.company_address || '',
-    business_type: trade?.business_type || '',
-    business_category: trade?.business_category || ''
-  } : companyInfo;
 
   // 잔고 계산
   const previousBalance = companySummary?.previous_balance || 0;
   const todayTotal = companySummary?.today_total || 0;
   const previousPlusTodayTotal = previousBalance + todayTotal;
-  // ★ final_balance 사용 (날짜 기반 계산된 최종 잔고)
   const finalBalance = companySummary?.final_balance || 0;
 
   // 페이지당 품목 수
@@ -637,7 +716,21 @@ function TradePrintModal({ isOpen, onClose, tradeId }) {
   };
 
   return createPortal(
-    <div className="modal-overlay">
+    <div
+      className="modal-overlay"
+      style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        width: '100%',
+        height: '100%',
+        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
+        zIndex: 9999
+      }}
+    >
       <div
         className="trade-print-modal"
         onClick={(e) => e.stopPropagation()}
@@ -662,9 +755,84 @@ function TradePrintModal({ isOpen, onClose, tradeId }) {
           backgroundColor: '#f8fafc'
         }}>
           <h2 style={{ margin: 0, fontSize: '1.25rem', color: '#1e293b' }}>
-            🖨️ 전표 출력 미리보기 <span style={{ fontSize: '0.9rem', color: '#64748b', fontWeight: 'normal' }}>(A4 가로 이등분)</span>
+            🖨️ 전표 출력 미리보기
           </h2>
-          <div style={{ display: 'flex', gap: '0.5rem' }}>
+          <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+            {/* 확대/축소 컨트롤 */}
+            <div style={{ display: 'flex', alignItems: 'center', backgroundColor: '#fff', borderRadius: '6px', border: '1px solid #cbd5e1', marginRight: '1rem' }}>
+              <button
+                onClick={() => setZoomLevel(prev => Math.max(0.5, prev - 0.1))}
+                style={{
+                  padding: '0.4rem 0.6rem',
+                  border: 'none',
+                  background: 'none',
+                  cursor: 'pointer',
+                  color: '#475569',
+                  fontSize: '1rem'
+                }}
+                title="축소 (-)"
+              >
+                ➖
+              </button>
+              <span style={{
+                padding: '0 0.5rem',
+                fontSize: '0.9rem',
+                minWidth: '3.5rem',
+                textAlign: 'center',
+                borderLeft: '1px solid #cbd5e1',
+                borderRight: '1px solid #cbd5e1',
+                lineHeight: '2rem'
+              }}>
+                {Math.round(zoomLevel * 100)}%
+              </span>
+              <button
+                onClick={() => setZoomLevel(prev => Math.min(2.0, prev + 0.1))}
+                style={{
+                  padding: '0.4rem 0.6rem',
+                  border: 'none',
+                  background: 'none',
+                  cursor: 'pointer',
+                  color: '#475569',
+                  fontSize: '1rem'
+                }}
+                title="확대 (+)"
+              >
+                ➕
+              </button>
+              <button
+                onClick={() => setZoomLevel(1)}
+                style={{
+                  padding: '0.4rem 0.6rem',
+                  border: 'none',
+                  background: 'none',
+                  cursor: 'pointer',
+                  color: '#64748b',
+                  fontSize: '0.8rem',
+                  borderLeft: '1px solid #cbd5e1'
+                }}
+                title="초기화"
+              >
+                ↺
+              </button>
+            </div>
+            <button
+              onClick={handleCopy}
+              style={{
+                padding: '0.5rem 1rem',
+                backgroundColor: '#10b981',
+                color: '#fff',
+                border: 'none',
+                borderRadius: '6px',
+                cursor: 'pointer',
+                fontWeight: '500',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.5rem'
+              }}
+              title="이미지 복사"
+            >
+              📋 복사
+            </button>
             <button
               onClick={handlePrint}
               style={{
@@ -719,27 +887,31 @@ function TradePrintModal({ isOpen, onClose, tradeId }) {
               <style>{commonStyles}</style>
 
               {/* 미리보기용 (모든 페이지 표시) - A4 이등분 실제 크기 (142mm x 200mm) */}
-              {Array.from({ length: totalPages }).map((_, pageIndex) => (
-                <div key={`preview-${pageIndex}`} style={{ marginBottom: pageIndex < totalPages - 1 ? '20px' : 0 }}>
-                  {totalPages > 1 && (
-                    <div style={{ textAlign: 'center', marginBottom: '5px', color: '#666', fontSize: '0.85rem', fontWeight: 'bold' }}>
-                      📄 {pageIndex + 1} / {totalPages} 페이지
+              <div className="preview-container-for-copy" style={{ zoom: zoomLevel, transformOrigin: 'top center' }}>
+                {Array.from({ length: totalPages }).map((_, pageIndex) => (
+                  <div key={`preview-${pageIndex}`} style={{ marginBottom: pageIndex < totalPages - 1 ? '20px' : 0 }}>
+                    {totalPages > 1 && (
+                      <div style={{ textAlign: 'center', marginBottom: '5px', color: '#666', fontSize: '0.85rem', fontWeight: 'bold' }}>
+                        📄 {pageIndex + 1} / {totalPages} 페이지
+                      </div>
+                    )}
+                    <div
+                      style={{
+                        backgroundColor: '#fff',
+                        margin: '0 auto',
+                        boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+                        width: '152mm', // A4 반절 (142mm) + 여백(10mm)
+                        height: '210mm', // A4 높이
+                        overflow: 'hidden',
+                        padding: `${topMargin} 5mm 0 5mm`, // 인쇄 여백 시뮬레이션
+                        boxSizing: 'border-box' // 패딩 포함 크기 계산
+                      }}
+                    >
+                      {renderHalfContent('left', pageIndex + 1, pageIndex + 1 === totalPages)}
                     </div>
-                  )}
-                  <div
-                    style={{
-                      backgroundColor: '#fff',
-                      margin: '0 auto',
-                      boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
-                      width: '142mm',
-                      height: '200mm',
-                      overflow: 'hidden'
-                    }}
-                  >
-                    {renderHalfContent('left', pageIndex + 1, pageIndex + 1 === totalPages)}
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
 
               {/* 인쇄용 (모든 페이지, 숨김) */}
               <div

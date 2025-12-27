@@ -1,0 +1,104 @@
+/* CompanyForm.css */
+
+/* Override global spacing for a tighter form */
+.company-form .form-row {
+    gap: 0.4rem !important;
+    /* Force override App.css default of 1.5rem */
+    margin-bottom: 0.4rem !important;
+    /* Enforce 2 columns by increasing min-width (approx 900px available / 2 = 450px) */
+    grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)) !important;
+}
+
+.company-form .form-group {
+    margin-bottom: 0;
+    /* Clear any default margin */
+}
+
+.company-form .form-group>label {
+    text-align: left !important;
+}
+
+/* Force left alignment for all inputs as requested */
+/* Force left alignment and reduce height for all inputs */
+.company-form input,
+.company-form select,
+.company-form textarea {
+    text-align: left !important;
+    padding: 0.5rem 0.75rem !important;
+    /* Redcued padding */
+    font-size: 0.9rem !important;
+    height: auto !important;
+}
+
+/* Section Header Styles */
+.section-header {
+    margin-bottom: 0.4rem;
+    padding: 0.3rem 0.5rem;
+    border-radius: 8px;
+    border-left-width: 4px;
+    border-left-style: solid;
+    display: flex;
+    align-items: center;
+}
+
+.section-title {
+    margin: 0;
+    font-size: 0.95rem;
+    font-weight: 600;
+}
+
+/* Color Variants */
+.section-header-basic {
+    background-color: #f0f9ff;
+    border-left-color: #0284c7;
+}
+
+.section-header-basic .section-title {
+    color: #0369a1;
+}
+
+.section-header-business {
+    background-color: #f0fdfa;
+    border-left-color: #0d9488;
+    margin-top: 0.75rem;
+}
+
+.section-header-business .section-title {
+    color: #0f766e;
+}
+
+.section-header-contact {
+    background-color: #faf5ff;
+    border-left-color: #9333ea;
+    margin-top: 0.75rem;
+}
+
+.section-header-contact .section-title {
+    color: #7e22ce;
+}
+
+.section-header-account {
+    background-color: #f0fdf4;
+    border-left-color: #16a34a;
+    margin-top: 0.75rem;
+}
+
+.section-header-account .section-title {
+    color: #166534;
+}
+
+.section-header-etc {
+    background-color: #fef3c7;
+    border-left-color: #f59e0b;
+    margin-top: 0.75rem;
+}
+
+.section-header-etc .section-title {
+    color: #b45309;
+}
+
+/* Make badges and toggle area tighter */
+.company-form .badge-toggle {
+    padding: 0.3rem 0.8rem;
+    font-size: 0.9rem;
+}

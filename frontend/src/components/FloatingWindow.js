@@ -4,7 +4,7 @@ import ReactDOM from 'react-dom';
 /**
  * FloatingWindow - 드래그 및 크기 조절 가능한 플로팅 윈도우
  */
-const FloatingWindow = ({ title, icon, onClose, initialPosition = { x: 100, y: 100 }, size = { width: 400, height: 500 }, children, zIndex = 9999, onMouseDown, onResizeStop, onDragStop, isActive, contentPadding = '8px', headerPadding = '10px 15px', ...rest }) => {
+const FloatingWindow = ({ title, icon, onClose, initialPosition = { x: 100, y: 100 }, size = { width: 400, height: 500 }, children, zIndex = 9999, onMouseDown, onResizeStop, onDragStop, isActive, contentPadding = '8px', headerPadding = '6px 15px', ...rest }) => {
     const windowRef = useRef(null);
 
     // 이동 관련 Refs
