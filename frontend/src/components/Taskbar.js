@@ -52,7 +52,7 @@ const Taskbar = ({ windows, activeWindowId, onToggleWindow, onCloseWindow, onRes
             bottom: 0,
             left: 0,
             right: 0,
-            height: '48px',
+            height: '38px',
             backgroundColor: 'rgba(243, 244, 246, 0.9)', // backdrop-filter용 반투명
             backdropFilter: 'blur(10px)',
             borderTop: '1px solid #e5e7eb',
@@ -71,7 +71,7 @@ const Taskbar = ({ windows, activeWindowId, onToggleWindow, onCloseWindow, onRes
                             onClick={() => onToggleWindow(win.id)}
                             onContextMenu={(e) => handleContextMenu(e, win.id)}
                             style={{
-                                padding: '0.5rem 1rem',
+                                padding: '0.2rem 1rem',
                                 borderRadius: '6px',
                                 border: 'none',
                                 backgroundColor: isActive ? '#fff' : 'transparent',

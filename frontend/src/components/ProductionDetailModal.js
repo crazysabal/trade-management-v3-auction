@@ -86,7 +86,13 @@ const ProductionDetailModal = ({ isOpen, onClose, productionId }) => {
             <div
                 className="trade-detail-modal"
                 onClick={(e) => e.stopPropagation()}
-                style={{ width: '900px', maxWidth: '95%' }} // 폭 조정
+                style={{
+                    width: '900px', maxWidth: '95%',
+                    backgroundColor: 'white',
+                    padding: '1rem', // Reduced padding
+                    borderRadius: '12px',
+                    boxShadow: '0 10px 25px rgba(0,0,0,0.2)'
+                }}
             >
                 {/* 헤더 */}
                 <div className="trade-detail-modal-header">
@@ -96,7 +102,12 @@ const ProductionDetailModal = ({ isOpen, onClose, productionId }) => {
                             <div className="trade-detail-header-summary">
                                 <span className="summary-item">
                                     <span className="summary-label">작업일</span>
-                                    <span className="summary-value">{new Date(data.created_at).toLocaleDateString()}</span>
+                                    <span className="summary-value">
+                                        {(() => {
+                                            const d = new Date(data.created_at);
+                                            return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+                                        })()}
+                                    </span>
                                 </span>
                                 <span className="summary-divider">|</span>
                                 <span className="summary-item">
@@ -119,34 +130,32 @@ const ProductionDetailModal = ({ isOpen, onClose, productionId }) => {
                         <>
                             {/* 섹션 1: 생산 정보 (결과물) */}
                             <h4 className="trade-detail-section-title">🏷️ 생산 결과 (Output)</h4>
-                            <div className="trade-detail-info-grid">
-                                <div className="trade-detail-info-item">
-                                    <label>생산 품목</label>
-                                    <div className="trade-detail-info-value highlight" style={{ color: '#6f42c1' }}>
-                                        {data.output_product_name}
-                                        {data.output_product_grade && <span className="text-gray-500 text-sm ml-1">({data.output_product_grade})</span>}
+                            <div className="trade-detail-info-grid" style={{ gridTemplateColumns: '1fr' }}>
+                                {/* Row 1: Product / Qty / Price */}
+                                <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: '1rem' }}>
+                                    <div className="trade-detail-info-item">
+                                        <label>생산 품목</label>
+                                        <div className="trade-detail-info-value highlight" style={{ color: '#6f42c1' }}>
+                                            {data.output_product_name}
+                                            {Number(data.output_product_weight || 0) > 0 ? ` ${Number(data.output_product_weight)}kg` : ''}
+                                            {data.output_product_grade ? ` (${data.output_product_grade})` : ''}
+                                        </div>
                                     </div>
-                                </div>
-                                <div className="trade-detail-info-item">
-                                    <label>생산 수량</label>
-                                    <div className="trade-detail-info-value">
-                                        {formatNumber(data.output_quantity)}
+                                    <div className="trade-detail-info-item">
+                                        <label>생산 수량</label>
+                                        <div className="trade-detail-info-value">
+                                            {formatNumber(data.output_quantity)}
+                                        </div>
                                     </div>
-                                </div>
-                                <div className="trade-detail-info-item">
-                                    <label>생산 단가</label>
-                                    <div className="trade-detail-info-value">
-                                        {formatNumber(Math.round(data.unit_cost))} 원
-                                    </div>
-                                </div>
-                                <div className="trade-detail-info-item">
-                                    <label>추가 비용</label>
-                                    <div className="trade-detail-info-value">
-                                        {formatNumber(data.additional_cost)} 원
+                                    <div className="trade-detail-info-item">
+                                        <label>생산 단가</label>
+                                        <div className="trade-detail-info-value">
+                                            {formatNumber(Math.round(data.unit_cost))} 원
+                                        </div>
                                     </div>
                                 </div>
                                 {data.memo && (
-                                    <div className="trade-detail-info-item full-width">
+                                    <div className="trade-detail-info-item full-width" style={{ marginTop: '1rem' }}>
                                         <label>메모</label>
                                         <div className="trade-detail-info-value">{data.memo}</div>
                                     </div>
@@ -158,16 +167,16 @@ const ProductionDetailModal = ({ isOpen, onClose, productionId }) => {
                                 📥 투입 재료 (Ingredients) ({data.ingredients ? data.ingredients.length : 0}건)
                             </h4>
                             <div className="trade-detail-table-container">
-                                <table className="trade-detail-table">
-                                    <thead>
+                                <table className="trade-detail-table" style={{ borderCollapse: 'collapse', width: '100%', border: '1px solid #dce4ec' }}>
+                                    <thead style={{ backgroundColor: '#34495e' }}>
                                         <tr>
-                                            <th>품목</th>
-                                            <th>출하주</th>
-                                            <th>매입 거래처</th>
-                                            <th>매입 일자</th>
-                                            <th className="text-right">투입 수량</th>
-                                            <th className="text-right">재고 단가</th>
-                                            <th className="text-right">투입 원가 합계</th>
+                                            <th style={{ padding: '10px 8px', textAlign: 'center', borderBottom: '2px solid #dde2e6', color: 'white', fontWeight: 'bold' }}>품목</th>
+                                            <th style={{ padding: '10px 8px', textAlign: 'center', borderBottom: '2px solid #dde2e6', color: 'white', fontWeight: 'bold' }}>출하주</th>
+                                            <th style={{ padding: '10px 8px', textAlign: 'center', borderBottom: '2px solid #dde2e6', color: 'white', fontWeight: 'bold' }}>매입 거래처</th>
+                                            <th style={{ padding: '10px 8px', textAlign: 'center', borderBottom: '2px solid #dde2e6', color: 'white', fontWeight: 'bold' }}>매입 일자</th>
+                                            <th style={{ padding: '10px 8px', textAlign: 'center', borderBottom: '2px solid #dde2e6', color: 'white', fontWeight: 'bold' }}>수량</th>
+                                            <th style={{ padding: '10px 8px', textAlign: 'center', borderBottom: '2px solid #dde2e6', color: 'white', fontWeight: 'bold' }}>단가</th>
+                                            <th style={{ padding: '10px 8px', textAlign: 'center', borderBottom: '2px solid #dde2e6', color: 'white', fontWeight: 'bold' }}>합계</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -175,9 +184,14 @@ const ProductionDetailModal = ({ isOpen, onClose, productionId }) => {
                                             data.ingredients.map((ing, idx) => (
                                                 <tr key={idx}>
                                                     <td style={{ fontWeight: '500' }}>{renderIngredientName(ing)}</td>
-                                                    <td>{ing.sender || '-'}</td>
-                                                    <td>{ing.company_name || '-'}</td>
-                                                    <td>{ing.purchase_date ? new Date(ing.purchase_date).toLocaleDateString() : '-'}</td>
+                                                    <td style={{ textAlign: 'center' }}>{ing.sender || '-'}</td>
+                                                    <td style={{ textAlign: 'center' }}>{ing.company_name || '-'}</td>
+                                                    <td style={{ textAlign: 'center' }}>
+                                                        {ing.purchase_date ? (() => {
+                                                            const d = new Date(ing.purchase_date);
+                                                            return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+                                                        })() : '-'}
+                                                    </td>
                                                     <td className="text-right" style={{ color: '#b45309', fontWeight: 'bold' }}>
                                                         {formatNumber(ing.used_quantity)}
                                                     </td>
@@ -218,8 +232,30 @@ const ProductionDetailModal = ({ isOpen, onClose, productionId }) => {
                 </div>
 
                 {/* 푸터 */}
-                <div className="trade-detail-modal-footer">
-                    <button className="btn btn-secondary" onClick={onClose}>닫기</button>
+                {/* 푸터 */}
+                <div className="trade-detail-modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '0.5rem' }}>
+                    <button
+                        className="btn btn-secondary"
+                        onClick={onClose}
+                        style={{
+                            width: '80px',
+                            height: '36px',
+                            fontSize: '0.9rem',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            padding: 0,
+                            flex: 'none'
+                            // marginRight: '1rem' // Optional: if user wants space on right. Let's stick to size first. 
+                            // User said "If I put space on right it might get smaller". I'll ensuring size is fixed is better.
+                        }}
+                    >
+                        닫기
+                    </button>
+                    {/* Add a spacer if they seemingly want "space on the right"? No, let's just make sure it's sized correctly. 
+                       "버튼이 여전히 모달 가로 전체로 되어있는것 같은데?" -> It IS full width.
+                       Attributes like flex: 'none' and width: '80px' should fix it.
+                    */}
                 </div>
             </div>
         </div>,

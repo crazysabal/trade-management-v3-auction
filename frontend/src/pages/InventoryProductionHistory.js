@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { inventoryProductionAPI, productAPI } from '../services/api';
-import SearchableSelect from '../components/SearchableSelect';
+import { inventoryProductionAPI } from '../services/api';
 import ConfirmModal from '../components/ConfirmModal';
 import ProductionDetailModal from '../components/ProductionDetailModal';
+import './InventoryProductionHistory.css';
 
 function InventoryProductionHistory() {
     const [history, setHistory] = useState([]);
-    const [products, setProducts] = useState([]);
+    const [originalHistory, setOriginalHistory] = useState([]);
+    const [searchText, setSearchText] = useState('');
     const [loading, setLoading] = useState(true);
 
     // 모달 상태
@@ -16,8 +17,7 @@ function InventoryProductionHistory() {
     // 필터
     const [filters, setFilters] = useState({
         start_date: new Date(new Date().setMonth(new Date().getMonth() - 1)).toISOString().split('T')[0],
-        end_date: new Date().toISOString().split('T')[0],
-        product_id: ''
+        end_date: new Date().toISOString().split('T')[0]
     });
 
     useEffect(() => {
@@ -26,8 +26,6 @@ function InventoryProductionHistory() {
 
     const loadInitialData = async () => {
         try {
-            const productsRes = await productAPI.getAll({ is_active: 'true' });
-            setProducts(productsRes.data.data);
             loadHistory();
         } catch (error) {
             console.error('초기 데이터 로딩 오류:', error);
@@ -38,7 +36,10 @@ function InventoryProductionHistory() {
         try {
             setLoading(true);
             const response = await inventoryProductionAPI.getHistory(filters);
-            setHistory(response.data.data || []);
+            const data = response.data.data || [];
+            setOriginalHistory(data);
+            setHistory(data);
+            setSearchText(''); // 새로운 조회 시 검색어 초기화 (선택 사항, 사용자 UX에 따라 결정)
         } catch (error) {
             console.error('이력 로딩 오류:', error);
             showStatus('error', '작업 이력을 불러오는데 실패했습니다.');
@@ -46,6 +47,34 @@ function InventoryProductionHistory() {
             setLoading(false);
         }
     };
+
+    // 다중 필터링 로직
+    useEffect(() => {
+        if (originalHistory.length === 0) return;
+
+        const filtered = originalHistory.filter(item => {
+            if (!searchText.trim()) return true;
+
+            const keywords = searchText.toLowerCase().trim().split(/\s+/).filter(k => k);
+
+            const date = new Date(item.created_at);
+            const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')} ${date.toLocaleTimeString()}`;
+            const qty = Number(item.output_quantity).toLocaleString();
+            const cost = Math.round(item.unit_cost).toLocaleString();
+
+            const searchableText = [
+                dateStr,
+                item.output_product_name || '',
+                qty,
+                cost,
+                item.memo || ''
+            ].join(' ').toLowerCase();
+
+            return keywords.every(k => searchableText.includes(k));
+        });
+
+        setHistory(filtered);
+    }, [searchText, originalHistory]);
 
     const handleSearch = () => {
         loadHistory();
@@ -86,60 +115,70 @@ function InventoryProductionHistory() {
         });
     };
 
-    // 품목 옵션
-    const sortedProducts = [...products].sort((a, b) => (a.product_name || '').localeCompare(b.product_name || '', 'ko'));
-    const productOptions = [
-        { value: '', label: '전체 품목' },
-        ...sortedProducts.map(p => {
-            const weightText = p.weight ? ` ${parseFloat(p.weight)}kg` : '';
-            const gradeText = p.grade ? ` (${p.grade})` : '';
-            return {
-                value: p.id,
-                label: `${p.product_name}${weightText}${gradeText}`
-            };
-        })
-    ];
+
 
     if (loading && history.length === 0) return <div className="loading">로딩 중...</div>;
 
     return (
-        <div className="inventory-production-history" style={{ maxWidth: '1400px', margin: '0 auto' }}>
-            <div className="page-header" style={{ display: 'flex', alignItems: 'center' }}>
-                <h1 className="page-title" style={{ margin: 0 }}>🏭 재고 작업 이력</h1>
-            </div>
+        <div className="inventory-production-history" style={{ margin: '0 auto', width: '100%', padding: '0.5rem' }}>
 
-            <div className="search-filter-container">
-                <div className="filter-row">
-                    <div className="filter-group">
-                        <label>시작일</label>
+
+            <div className="search-filter-container" style={{ padding: '0.75rem', marginBottom: '0.75rem' }}>
+                <div className="filter-row" style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                    {/* 기간 조절 */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <input
                             type="date"
                             value={filters.start_date}
                             onChange={(e) => setFilters({ ...filters, start_date: e.target.value })}
-                            style={{ fontSize: '0.9rem' }}
+                            style={{ fontSize: '0.9rem', width: '130px', padding: '6px', border: '1px solid #ddd', borderRadius: '4px' }}
                         />
-                    </div>
-                    <div className="filter-group">
-                        <label>종료일</label>
+                        <span>~</span>
                         <input
                             type="date"
                             value={filters.end_date}
                             onChange={(e) => setFilters({ ...filters, end_date: e.target.value })}
-                            style={{ fontSize: '0.9rem' }}
+                            style={{
+                                padding: '4px 8px',
+                                border: '1px solid #ddd',
+                                borderRadius: '4px',
+                                fontSize: '0.9rem',
+                                color: '#495057'
+                            }}
                         />
                     </div>
-                    <div className="filter-group" style={{ minWidth: '250px' }}>
-                        <label>생산 품목</label>
-                        <SearchableSelect
-                            options={productOptions}
-                            value={filters.product_id}
-                            onChange={(option) => setFilters({ ...filters, product_id: option ? option.value : '' })}
-                            placeholder="전체 품목"
+
+                    {/* 구분선 */}
+                    <div style={{ width: '1px', height: '24px', backgroundColor: '#e9ecef', margin: '0 8px' }}></div>
+
+                    {/* 검색 필터 */}
+                    <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <label style={{ whiteSpace: 'nowrap', margin: 0, fontWeight: 'bold' }}>검색</label>
+                        <input
+                            type="text"
+                            placeholder="🔍 작업일시, 품목, 수량, 단가, 비고... (띄어쓰기로 다중 검색)"
+                            value={searchText}
+                            onChange={(e) => setSearchText(e.target.value)}
+                            style={{
+                                flex: 1,
+                                height: '36px',
+                                padding: '0 0.75rem',
+                                fontSize: '0.9rem',
+                                border: '1px solid #ddd',
+                                borderRadius: '4px'
+                            }}
                         />
                     </div>
-                    <div className="filter-group">
-                        <label>&nbsp;</label>
-                        <button onClick={handleSearch} className="btn btn-primary">조회</button>
+
+                    {/* 조회 버튼 */}
+                    <div>
+                        <button
+                            onClick={handleSearch}
+                            className="btn btn-primary"
+                            style={{ padding: '6px 16px', height: '36px', fontSize: '0.9rem' }}
+                        >
+                            조회
+                        </button>
                     </div>
                 </div>
             </div>
@@ -148,43 +187,73 @@ function InventoryProductionHistory() {
                 <table>
                     <thead>
                         <tr>
-                            <th>작업일시</th>
-                            <th>생산 품목</th>
-                            <th>생산 수량</th>
-                            <th>단위 비용</th>
-                            <th>비고(메모)</th>
-                            <th className="text-center">상세보기</th>
+                            <th className="text-center">작업일시</th>
+                            <th className="text-center">생산 품목</th>
+                            <th className="text-right">수량</th>
+                            <th className="text-right">단가</th>
+                            <th className="text-center">비고</th>
                             <th className="text-center">관리</th>
                         </tr>
                     </thead>
                     <tbody>
                         {history.length === 0 ? (
-                            <tr><td colSpan="7" className="text-center">조회된 이력이 없습니다.</td></tr>
+                            <tr><td colSpan="6" className="text-center">조회된 이력이 없습니다.</td></tr>
                         ) : (
                             history.map(item => (
                                 <tr key={item.id}>
-                                    <td>{new Date(item.created_at).toLocaleString()}</td>
-                                    <td>
-                                        <strong>{item.output_product_name}</strong>
-                                        {item.output_product_grade && <span className="text-gray-500 text-sm ml-1">({item.output_product_grade})</span>}
+                                    <td style={{ textAlign: 'center' }}>
+                                        {(() => {
+                                            const d = new Date(item.created_at);
+                                            return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${d.toLocaleTimeString()}`;
+                                        })()}
                                     </td>
-                                    <td className="font-bold text-primary">
+                                    <td>
+                                        <strong>
+                                            {item.output_product_name}
+                                            {Number(item.output_product_weight || 0) > 0 ? ` ${Number(item.output_product_weight)}kg` : ''}
+                                            {item.output_product_grade ? ` (${item.output_product_grade})` : ''}
+                                        </strong>
+                                    </td>
+                                    <td className="font-bold text-primary" style={{ textAlign: 'right' }}>
                                         {Number(item.output_quantity).toLocaleString()}
                                     </td>
-                                    <td>{Math.round(item.unit_cost).toLocaleString()} 원</td>
+                                    <td style={{ textAlign: 'right' }}>{Math.round(item.unit_cost).toLocaleString()} 원</td>
                                     <td className="text-gray-600">{item.memo || '-'}</td>
-                                    <td className="text-center">
+                                    <td className="text-center" style={{ display: 'flex', gap: '6px', justifyContent: 'center', padding: '10px' }}>
                                         <button
-                                            className="btn btn-sm btn-outline-info"
                                             onClick={() => setDetailModal({ isOpen: true, productionId: item.id })}
+                                            style={{
+                                                padding: '4px 8px',
+                                                fontSize: '0.8rem',
+                                                color: '#2980b9',
+                                                backgroundColor: '#f0f9ff',
+                                                border: '1px solid #abd5f7',
+                                                borderRadius: '4px',
+                                                cursor: 'pointer',
+                                                display: 'flex', alignItems: 'center', gap: '4px'
+                                            }}
+                                            title="재료 상세 보기"
                                         >
-                                            🔍 투입 재료 확인
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                                                <polyline points="14 2 14 8 20 8"></polyline>
+                                                <line x1="16" y1="13" x2="8" y2="13"></line>
+                                                <line x1="16" y1="17" x2="8" y2="17"></line>
+                                                <polyline points="10 9 9 9 8 9"></polyline>
+                                            </svg>
+                                            상세
                                         </button>
-                                    </td>
-                                    <td className="text-center">
                                         <button
-                                            className="btn btn-sm btn-outline-danger"
                                             onClick={() => handleDelete(item.id)}
+                                            style={{
+                                                padding: '4px 8px',
+                                                fontSize: '0.8rem',
+                                                color: '#c0392b',
+                                                backgroundColor: '#fff0f0',
+                                                border: '1px solid #fab1a0',
+                                                borderRadius: '4px',
+                                                cursor: 'pointer'
+                                            }}
                                         >
                                             취소
                                         </button>

@@ -136,7 +136,14 @@ function TradeDetailModal({ isOpen, onClose, tradeId }) {
         {/* 헤더 */}
         <div className="trade-detail-modal-header">
           <div className="trade-detail-modal-header-left">
-            <h2>📋 전표 상세</h2>
+            <h2 style={{ display: 'flex', alignItems: 'center' }}>
+              <span>📋 전표 상세</span>
+              {trade && (
+                <span style={{ marginLeft: '10px', fontSize: '0.6em' }}>
+                  {getTradeTypeBadge(trade.trade_type)}
+                </span>
+              )}
+            </h2>
             {trade && (
               <div className="trade-detail-header-summary">
                 <span className="summary-item">
@@ -186,12 +193,7 @@ function TradeDetailModal({ isOpen, onClose, tradeId }) {
                     {trade.trade_number}
                   </div>
                 </div>
-                <div className="trade-detail-info-item">
-                  <label>유형</label>
-                  <div className="trade-detail-info-value">
-                    {getTradeTypeBadge(trade.trade_type)}
-                  </div>
-                </div>
+
                 <div className="trade-detail-info-item">
                   <label>결제방법</label>
                   <div className="trade-detail-info-value">
@@ -259,13 +261,13 @@ function TradeDetailModal({ isOpen, onClose, tradeId }) {
                 <table className="trade-detail-table">
                   <thead>
                     <tr>
-                      <th style={{ width: '40px' }}>No</th>
-                      <th>품목</th>
-                      <th className="text-right">수량</th>
-                      <th className="text-right">단가</th>
-                      <th className="text-right">금액</th>
-                      {isPurchase && <th>출하주</th>}
-                      <th>비고</th>
+                      <th className="text-center" style={{ width: '50px', textAlign: 'center' }}>No</th>
+                      <th className="text-center" style={{ textAlign: 'center' }}>품목</th>
+                      <th className="text-center" style={{ textAlign: 'center' }}>수량</th>
+                      <th className="text-center" style={{ textAlign: 'center' }}>단가</th>
+                      <th className="text-center" style={{ textAlign: 'center' }}>금액</th>
+                      {isPurchase && <th className="text-center" style={{ textAlign: 'center' }}>출하주</th>}
+                      <th className="text-center" style={{ textAlign: 'center' }}>비고</th>
                     </tr>
                   </thead>
                   <tbody>

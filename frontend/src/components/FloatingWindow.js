@@ -146,21 +146,34 @@ const FloatingWindow = ({ title, icon, onClose, initialPosition = { x: 100, y: 1
         }
     };
 
-    // --- 리사이즈 핸들러 ---
-    const handleResizeMouseDown = (e) => {
-        e.stopPropagation(); // 드래그 이벤트 전파 방지
+    const resizeDirection = useRef(null); // 'left', 'right', 'bottom', 'bottom-right', 'bottom-left'
+    const windowStartRect = useRef({ x: 0, y: 0, width: 0, height: 0 }); // Store initial rect
+
+    const handleResizeMouseDown = (e, direction) => {
+        e.stopPropagation();
         if (e.button !== 0) return;
 
         isResizing.current = true;
+        resizeDirection.current = direction;
 
         const rect = windowRef.current.getBoundingClientRect();
-        windowStartSize.current = { width: rect.width, height: rect.height };
+        windowStartRect.current = { x: rect.left, y: rect.top, width: rect.width, height: rect.height };
         resizeStartPos.current = { x: e.clientX, y: e.clientY };
 
         windowRef.current.style.transition = 'none';
-
         document.body.style.userSelect = 'none';
-        document.body.style.cursor = 'nwse-resize';
+
+        // Set cursor based on direction
+        let cursorStyle = 'default';
+        switch (direction) {
+            case 'left':
+            case 'right': cursorStyle = 'ew-resize'; break;
+            case 'bottom': cursorStyle = 'ns-resize'; break;
+            case 'bottom-right': cursorStyle = 'nwse-resize'; break;
+            case 'bottom-left': cursorStyle = 'nesw-resize'; break;
+            default: cursorStyle = 'default';
+        }
+        document.body.style.cursor = cursorStyle;
 
         document.addEventListener('mousemove', handleResizeMouseMove);
         document.addEventListener('mouseup', handleResizeMouseUp);
@@ -172,13 +185,44 @@ const FloatingWindow = ({ title, icon, onClose, initialPosition = { x: 100, y: 1
         requestAnimationFrame(() => {
             const deltaX = e.clientX - resizeStartPos.current.x;
             const deltaY = e.clientY - resizeStartPos.current.y;
+            const startRect = windowStartRect.current;
+            const direction = resizeDirection.current;
 
-            const newWidth = Math.max(300, windowStartSize.current.width + deltaX); // 최소 너비 300
-            const newHeight = Math.max(200, windowStartSize.current.height + deltaY); // 최소 높이 200
+            let newWidth = startRect.width;
+            let newHeight = startRect.height;
+            let newLeft = startRect.x;
+            // let newTop = startRect.y; // Top resizing not implemented yet as per request
+
+            // Helper to constrain width/height
+            const MIN_WIDTH = 300;
+            const MIN_HEIGHT = 200;
+
+            // Horizontal Resizing
+            if (direction.includes('right')) {
+                newWidth = Math.max(MIN_WIDTH, startRect.width + deltaX);
+            } else if (direction.includes('left')) {
+                // For left resize, width increases as we move left (negative deltaX)
+                // Width = StartWidth - DeltaX
+                // But we must also clamp such that Width >= MIN_WIDTH
+                // So effective delta might be different
+                const rawWidth = startRect.width - deltaX;
+                newWidth = Math.max(MIN_WIDTH, rawWidth);
+
+                // If width was clamped, we must adjust left position appropriately
+                // Left = StartLeft + (StartWidth - NewWidth)
+                newLeft = startRect.x + (startRect.width - newWidth);
+            }
+
+            // Vertical Resizing
+            if (direction.includes('bottom')) {
+                newHeight = Math.max(MIN_HEIGHT, startRect.height + deltaY);
+            }
 
             if (windowRef.current) {
                 windowRef.current.style.width = `${newWidth}px`;
                 windowRef.current.style.height = `${newHeight}px`;
+                windowRef.current.style.left = `${newLeft}px`;
+                // windowRef.current.style.top = `${newTop}px`;
             }
         });
     };
@@ -187,20 +231,72 @@ const FloatingWindow = ({ title, icon, onClose, initialPosition = { x: 100, y: 1
         if (!isResizing.current) return;
 
         isResizing.current = false;
+        resizeDirection.current = null;
         document.body.style.userSelect = '';
         document.body.style.cursor = '';
 
         document.removeEventListener('mousemove', handleResizeMouseMove);
         document.removeEventListener('mouseup', handleResizeMouseUp);
 
-        // 부모에게 최종 크기 전달
         if (onResizeStop && windowRef.current) {
             const rect = windowRef.current.getBoundingClientRect();
             onResizeStop({ width: rect.width, height: rect.height });
         }
     };
 
-    // Portal을 사용하여 document.body에 렌더링
+    // Maximize/Restore Logic
+    const [isMaximized, setIsMaximized] = useState(false);
+    const prevRect = useRef(null);
+
+    const toggleMaximize = (e) => {
+        if (e) e.stopPropagation();
+        if (isMaximized) {
+            // Restore
+            setIsMaximized(false);
+            if (prevRect.current && windowRef.current) {
+                windowRef.current.style.transition = 'all 0.2s';
+                windowRef.current.style.left = `${prevRect.current.left}px`;
+                windowRef.current.style.top = `${prevRect.current.top}px`;
+                windowRef.current.style.width = `${prevRect.current.width}px`;
+                windowRef.current.style.height = `${prevRect.current.height}px`;
+
+                setTimeout(() => {
+                    if (windowRef.current) windowRef.current.style.transition = '';
+                }, 200);
+            }
+        } else {
+            // Maximize
+            if (windowRef.current) {
+                const rect = windowRef.current.getBoundingClientRect();
+                prevRect.current = { left: rect.left, top: rect.top, width: rect.width, height: rect.height };
+
+                setIsMaximized(true);
+                windowRef.current.style.transition = 'all 0.2s';
+                windowRef.current.style.left = '0';
+                windowRef.current.style.top = '50px'; // Below Navbar
+                windowRef.current.style.width = '100vw';
+                windowRef.current.style.height = 'calc(100vh - 88px)'; // Navbar(50) + Taskbar(38) 제외
+
+                setTimeout(() => {
+                    if (windowRef.current) windowRef.current.style.transition = '';
+                }, 200);
+            }
+        }
+    };
+
+    // Resizer Component Helper
+    const Resizer = ({ direction, style, cursor }) => (
+        <div
+            onMouseDown={(e) => handleResizeMouseDown(e, direction)}
+            style={{
+                position: 'absolute',
+                zIndex: 10,
+                cursor: cursor,
+                ...style // width/height/positioning
+            }}
+        />
+    );
+
     return ReactDOM.createPortal(
         <div
             ref={windowRef}
@@ -209,42 +305,52 @@ const FloatingWindow = ({ title, icon, onClose, initialPosition = { x: 100, y: 1
             }}
             style={{
                 position: 'fixed',
-                // left, top, width, height는 ref로 제어
                 backgroundColor: 'white',
                 boxShadow: isActive ? '0 8px 30px rgba(0,0,0,0.3)' : '0 4px 12px rgba(0,0,0,0.15)',
-                borderRadius: '8px',
+                borderRadius: isMaximized ? '0' : '8px',
                 border: isActive ? '2px solid #3498db' : '1px solid #ddd',
                 zIndex: zIndex,
-                display: rest.isMinimized ? 'none' : 'flex', // 최소화 시 숨김
+                display: rest.isMinimized ? 'none' : 'flex',
                 flexDirection: 'column',
-                overflow: 'hidden',
-                transition: 'box-shadow 0.2s, border 0.2s', // 부드러운 전환
+                overflow: 'visible', // Changed to visible so resize handles outside/edge work better if needed, but 'hidden' clips corners. 
+                // Actually 'hidden' is safer for rounded corners, so we'll keep handles inside.
+                transition: 'box-shadow 0.2s, border 0.2s',
             }}
         >
-            {/* 헤더 (드래그 핸들) */}
+            {/* Header */}
             <div
-                onMouseDown={handleMouseDown}
+                onMouseDown={isMaximized ? undefined : handleMouseDown}
+                onDoubleClick={toggleMaximize}
                 style={{
                     padding: headerPadding,
-                    backgroundColor: isActive ? '#2980b9' : '#34495e', // 활성: 밝은 파랑, 비활성: 짙은 회색
+                    backgroundColor: isActive ? '#2980b9' : '#34495e',
                     color: 'white',
                     cursor: 'grab',
                     display: 'flex',
                     justifyContent: 'space-between',
                     alignItems: 'center',
                     userSelect: 'none',
-                    flexShrink: 0, // 헤더 크기 고정
-                    position: 'relative', // 컨텐츠보다 위에 표시되도록 설정
-                    zIndex: 100
+                    flexShrink: 0,
+                    position: 'relative',
+                    zIndex: 100,
+                    borderTopLeftRadius: isMaximized ? '0' : '6px',
+                    borderTopRightRadius: isMaximized ? '0' : '6px'
                 }}
             >
-                <div style={{ fontWeight: 'bold', fontSize: '0.95rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                {/* ... Header Content (Same as before) ... */}
+                <div
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        navigator.clipboard.writeText(title);
+                    }}
+                    style={{ fontWeight: 'bold', fontSize: '0.95rem', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}
+                    title="클릭하여 화면 명 복사"
+                >
                     {icon && <span>{icon}</span>}
                     {title}
-                    {/* 수정 상태 뱃지 */}
                     {rest.isDirty && (
                         <span style={{
-                            backgroundColor: '#e74c3c',
+                            backgroundColor: '#e74c3c', // Red
                             color: 'white',
                             fontSize: '0.7rem',
                             padding: '2px 6px',
@@ -272,70 +378,70 @@ const FloatingWindow = ({ title, icon, onClose, initialPosition = { x: 100, y: 1
                                 rest.onMinimize();
                             }}
                             title="최소화"
-                            style={{
-                                background: 'none',
-                                border: 'none',
-                                color: 'white',
-                                fontSize: '1rem',
-                                cursor: 'pointer',
-                                padding: '0 5px',
-                                lineHeight: 1
-                            }}
+                            style={{ background: 'none', border: 'none', color: 'white', fontSize: '1rem', cursor: 'pointer', padding: '0 5px', lineHeight: 1 }}
                         >
                             ─
                         </button>
                     )}
                     <button
-                        onClick={onClose}
-                        title="닫기"
-                        style={{
-                            background: 'none',
-                            border: 'none',
-                            color: 'white',
-                            fontSize: '1.2rem',
-                            cursor: 'pointer',
-                            padding: '0 5px',
-                            lineHeight: 1
-                        }}
+                        onClick={toggleMaximize}
+                        title={isMaximized ? "이전 크기로 복원" : "최대화"}
+                        style={{ background: 'none', border: 'none', color: 'white', fontSize: '1rem', cursor: 'pointer', padding: '0 5px', lineHeight: 1 }}
                     >
+                        {isMaximized ? '❐' : '□'}
+                    </button>
+                    <button onClick={onClose} title="닫기" style={{ background: 'none', border: 'none', color: 'white', fontSize: '1.2rem', cursor: 'pointer', padding: '0 5px', lineHeight: 1 }}>
                         &times;
                     </button>
                 </div>
             </div>
 
-            {/* 컨텐츠 영역 */}
+            {/* Content */}
             <div style={{ flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column', padding: contentPadding }}>
                 {children}
             </div>
 
-            {/* 리사이즈 핸들 (우측 하단) */}
+            {/* --- Resize Handles --- */}
+
+            {/* Right Edge */}
+            <Resizer
+                direction="right"
+                cursor="ew-resize"
+                style={{ top: 0, right: -4, width: '10px', height: '100%' }}
+            />
+            {/* Left Edge */}
+            <Resizer
+                direction="left"
+                cursor="ew-resize"
+                style={{ top: 0, left: -4, width: '10px', height: '100%' }}
+            />
+            {/* Bottom Edge */}
+            <Resizer
+                direction="bottom"
+                cursor="ns-resize"
+                style={{ bottom: -3, left: 0, width: '100%', height: '6px' }}
+            />
+
+            {/* Bottom-Right Corner (Visual Icon) */}
             <div
-                onMouseDown={handleResizeMouseDown}
+                onMouseDown={(e) => handleResizeMouseDown(e, 'bottom-right')}
                 style={{
-                    position: 'absolute',
-                    right: 0,
-                    bottom: 0,
-                    width: '20px',
-                    height: '20px',
-                    cursor: 'nwse-resize',
-                    zIndex: 10,
-                    display: 'flex',
-                    alignItems: 'flex-end',
-                    justifyContent: 'flex-end',
-                    padding: '2px'
+                    position: 'absolute', right: 0, bottom: 0, width: '20px', height: '20px',
+                    cursor: 'nwse-resize', zIndex: 11, display: 'flex', alignItems: 'flex-end', justifyContent: 'flex-end', padding: '2px'
                 }}
             >
-                {/* 삼각형 모양 아이콘 */}
-                <div style={{
-                    width: 0,
-                    height: 0,
-                    borderStyle: 'solid',
-                    borderWidth: '0 0 10px 10px',
-                    borderColor: 'transparent transparent #95a5a6 transparent'
-                }} />
+                <div style={{ width: 0, height: 0, borderStyle: 'solid', borderWidth: '0 0 10px 10px', borderColor: 'transparent transparent #95a5a6 transparent' }} />
             </div>
+
+            {/* Bottom-Left Corner */}
+            <Resizer
+                direction="bottom-left"
+                cursor="nesw-resize"
+                style={{ bottom: -4, left: -4, width: '16px', height: '16px', zIndex: 11 }}
+            />
+
         </div>,
-        document.body // 렌더링 타겟
+        document.body
     );
 };
 

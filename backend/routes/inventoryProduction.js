@@ -283,6 +283,7 @@ router.get('/recent', async (req, res) => {
                 ip.additional_cost,
                 p.product_name AS output_product_name,
                 p.grade AS output_product_grade,
+                p.weight AS output_product_weight,
                 pi.original_quantity AS output_quantity,
 
                 pi.unit_price AS unit_cost
@@ -316,6 +317,7 @@ router.get('/', async (req, res) => {
                 ip.additional_cost,
                 p.product_name AS output_product_name,
                 p.grade AS output_product_grade,
+                p.weight AS output_product_weight,
                 pi.original_quantity AS output_quantity,
 
                 pi.unit_price AS unit_cost
@@ -380,6 +382,7 @@ router.get('/:id', async (req, res) => {
                 ip.additional_cost,
                 p.product_name AS output_product_name,
                 p.grade AS output_product_grade,
+                p.weight AS output_product_weight,
                 pi.original_quantity AS output_quantity,
 
                 pi.unit_price AS unit_cost,

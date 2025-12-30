@@ -666,7 +666,7 @@ router.post('/transactions-with-allocation', async (req, res) => {
 router.get('/company-today-summary/:companyId', async (req, res) => {
   try {
     const { companyId } = req.params;
-    const { trade_type, trade_date } = req.query; // 'SALE' 또는 'PURCHASE', 날짜
+    const { trade_type, trade_date, exclude_trade_id } = req.query; // 'SALE' 또는 'PURCHASE', 날짜, 제외할 전표 ID
 
     const targetDate = trade_date || new Date().toISOString().split('T')[0];
 
@@ -712,15 +712,23 @@ router.get('/company-today-summary/:companyId', async (req, res) => {
     const previousBalance = beforeTradeTotal - beforePaymentTotal;
 
     // 오늘 거래 합계 (해당 trade_type만)
-    const [todayTradesRows] = await pool.query(
-      `SELECT IFNULL(SUM(total_price), 0) as today_total
+    // ★ 제외할 전표 ID가 있으면 제외 (수정 시 중복 합산 방지)
+    let todayTradeQuery = `
+       SELECT IFNULL(SUM(total_price), 0) as today_total
        FROM trade_masters 
        WHERE company_id = ? 
          AND trade_date = ? 
          AND trade_type = ?
-         AND status != 'CANCELLED'`,
-      [companyId, targetDate, trade_type]
-    );
+         AND status != 'CANCELLED'
+    `;
+    const todayTradeParams = [companyId, targetDate, trade_type];
+
+    if (exclude_trade_id) {
+      todayTradeQuery += ` AND id != ?`;
+      todayTradeParams.push(exclude_trade_id);
+    }
+
+    const [todayTradesRows] = await pool.query(todayTradeQuery, todayTradeParams);
     const todayTotal = parseFloat(todayTradesRows[0].today_total || 0);
 
     // ★ 핵심 수정: 오늘 입금/출금 합계 (모든 결제수단 포함)
@@ -769,6 +777,31 @@ router.get('/company-today-summary/:companyId', async (req, res) => {
     // 최종 잔고 (금일 합계 + 전잔고 - 입금)
     const finalBalance = totalBeforePayment - todayPayment;
 
+
+
+    // ★ 추가: 해당 거래처의 마지막 전표 일자 조회 (현재 전표 제외)
+    const [lastTradeRows] = await pool.query(
+      `SELECT MAX(trade_date) as last_trade_date
+       FROM trade_masters 
+       WHERE company_id = ? 
+         AND trade_type = ?
+         AND status != 'CANCELLED'
+         AND trade_date < ?`, // 현재 처리 중인 날짜 이전의 마지막 거래일
+      [companyId, trade_type, targetDate]
+    );
+    const lastTradeDate = lastTradeRows[0]?.last_trade_date || null;
+
+    // ★ 추가: 해당 거래처의 마지막 입출금 일자 조회 (현재 날짜 제외)
+    const [lastPaymentRows] = await pool.query(
+      `SELECT MAX(transaction_date) as last_payment_date
+       FROM payment_transactions 
+       WHERE company_id = ? 
+         AND transaction_type = ?
+         AND transaction_date < ?`,
+      [companyId, paymentType, targetDate]
+    );
+    const lastPaymentDate = lastPaymentRows[0]?.last_payment_date || null;
+
     res.json({
       success: true,
       data: {
@@ -776,6 +809,8 @@ router.get('/company-today-summary/:companyId', async (req, res) => {
         company_name: company.company_name,
         trade_date: targetDate,
         trade_type: trade_type,
+        last_trade_date: lastTradeDate,
+        last_payment_date: lastPaymentDate, // 추가된 필드
         // 전잔고 (오늘 거래 전)
         previous_balance: previousBalance,
         // 금일 합계

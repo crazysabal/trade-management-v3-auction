@@ -24,7 +24,16 @@
 }
 
 /* Reduce row height for floating window mode */
-.company-list-wrapper.is-window table th,
+.company-list-wrapper.is-window table th {
+    background-color: #34495e;
+    /* Match InventoryHistory Dark Header */
+    color: white;
+    border-bottom: 1px solid #2c3e50;
+    padding: 0.5rem 0.5rem !important;
+    font-size: 0.85rem;
+    text-align: center;
+}
+
 .company-list-wrapper.is-window table td {
     padding: 0.5rem 0.5rem !important;
     font-size: 0.85rem;

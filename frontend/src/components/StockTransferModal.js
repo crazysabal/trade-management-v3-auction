@@ -12,7 +12,7 @@ const StockTransferModal = ({ isOpen, onClose, inventory, inventoryList = [], on
     const [error, setError] = useState('');
 
     const quantityInputRef = React.useRef(null);
-    const isBulk = inventoryList.length > 0;
+    const isBulk = inventoryList.length > 1;
     const targetItems = isBulk ? inventoryList : (inventory ? [inventory] : []);
 
     useEffect(() => {
@@ -68,9 +68,13 @@ const StockTransferModal = ({ isOpen, onClose, inventory, inventoryList = [], on
     const loadWarehouses = async () => {
         try {
             const response = await warehousesAPI.getAll();
-            // 현재 창고 제외 (단일 이동 시)
-            const currentWhId = isBulk ? targetItems[0]?.warehouse_id : inventory?.warehouse_id;
-            const filtered = response.data.data.filter(w => String(w.id) !== String(currentWhId));
+            // 현재 창고 제외 (단일 이동 시에만)
+            // 일괄 이동 시에는 여러 창고가 섞여 있을 수 있으므로 모두 허용하고 submit 시 필터링
+            let filtered = response.data.data;
+            if (!isBulk) {
+                const currentWhId = inventory?.warehouse_id;
+                filtered = response.data.data.filter(w => String(w.id) !== String(currentWhId));
+            }
             setWarehouses(filtered);
         } catch (err) {
             console.error('창고 목록 로드 실패:', err);
@@ -99,14 +103,33 @@ const StockTransferModal = ({ isOpen, onClose, inventory, inventoryList = [], on
         try {
             if (isBulk) {
                 // 일괄 이동 (전체 수량)
-                await Promise.all(targetItems.map(item =>
-                    inventoryTransferAPI.transfer({
+                // 이미 해당 창고에 있는 아이템은 제외하고 이동
+                const itemsToMove = targetItems.filter(item => String(item.warehouse_id) !== String(toWarehouseId));
+
+                if (itemsToMove.length === 0) {
+                    setError('선택된 모든 품목이 이미 해당 창고에 있습니다.');
+                    setLoading(false);
+                    return;
+                }
+
+                // 순서는 선택된 순서(targetItems)대로 들어가야 함.
+                // targetItems: [A, B, C] (A가 먼저 선택됨)
+                // 목표: A가 제일 위, B가 그 다음, C가 그 다음.
+                // 로직: item이 추가될 때마다 최상단(min - 1)으로 들어감.
+                // 따라서 C를 먼저 넣으면 C가 맨 위. 그 다음 B를 넣으면 B가 B, C보다 위(B, C). A 넣으면 A, B, C.
+                // 즉, 선택된 순서의 역순으로 넣어야 A가 가장 마지막에 최상단으로 가서 1등이 됨.
+                // -> 역순으로 순회 (C -> B -> A)
+
+                const itemsToProcess = [...itemsToMove].reverse();
+
+                for (const item of itemsToProcess) {
+                    await inventoryTransferAPI.transfer({
                         purchase_inventory_id: item.id,
                         to_warehouse_id: toWarehouseId,
                         quantity: parseFloat(item.remaining_quantity), // 전체 수량
                         notes: notes
-                    })
-                ));
+                    });
+                }
             } else {
                 // 단일 이동
                 await inventoryTransferAPI.transfer({
@@ -148,7 +171,7 @@ const StockTransferModal = ({ isOpen, onClose, inventory, inventoryList = [], on
                         <ul style={{ margin: 0, paddingLeft: '1.2rem', fontSize: '0.9rem', color: '#34495e' }}>
                             {targetItems.map(item => (
                                 <li key={item.id}>
-                                    {item.product_name} ({Number(item.remaining_quantity)}개)
+                                    {item.product_name} {Number(item.product_weight) > 0 ? `${Number(item.product_weight)}kg` : ''} {item.sender} {item.grade} ({Number(item.remaining_quantity)}개)
                                 </li>
                             ))}
                         </ul>

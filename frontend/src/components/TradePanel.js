@@ -8,7 +8,6 @@ import ConfirmModal from './ConfirmModal';
 
 /**
  * TradePanel - 단일 전표 패널 컴포넌트
- * DualTradeForm에서 좌/우 패널로 사용
  * 기존 TradeForm.js와 동일한 UI 구성
  */
 function TradePanel({
@@ -23,8 +22,11 @@ function TradePanel({
   onTradeChange,
   inventoryMap = {},
   cardColor = '#ffffff',
+  timestamp // 리로드 트리거용
 }) {
   const isPurchase = tradeType === 'PURCHASE';
+
+
 
   // 모바일 감지
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
@@ -143,6 +145,7 @@ function TradePanel({
   const senderRefs = useRef([]);
   const notesRefs = useRef([]);
   const modalConfirmRef = useRef(null);
+  const isSaving = useRef(false); // 저장 중 중복 클릭 방지
 
 
 
@@ -175,6 +178,7 @@ function TradePanel({
 
   // 변경사항 감지
   const checkDirty = useCallback(() => {
+    if (isViewMode) return false; // 보기 모드일 때는 항상 수정 중 아님
     if (!initialData) return false;
 
     // 상세 비교 및 원인 로깅
@@ -231,15 +235,23 @@ function TradePanel({
     loadInitialData();
   }, []);
 
-  // initialTradeId가 있으면 해당 전표 로드 (최초 1회만)
-  const initialLoadDone = useRef(false);
+  // initialTradeId가 있으면 해당 전표 로드
   useEffect(() => {
     // 로딩 상태와 무관하게 데이터가 준비되면 전표 로드 시작 (연속 로딩 UX)
-    if (initialTradeId && companies.length > 0 && !initialLoadDone.current) {
-      initialLoadDone.current = true;
-      loadTrade(initialTradeId);
+    if (initialTradeId) {
+      // 1. 현재 로드된 전표와 다른 경우
+      if (String(initialTradeId) !== String(currentTradeId)) {
+        loadTrade(initialTradeId);
+      }
+      // 2. 같은 전표지만 외부에서 다시 보기를 요청한 경우 (timestamp 변경됨)
+      else if (initialViewMode && !isViewMode) {
+        setIsViewMode(true);
+      }
     }
-  }, [initialTradeId, companies.length]);
+
+    // timestamp가 변경되면(외부에서 호출 시) 무조건 효과를 다시 실행하여 체크
+    // currentTradeId는 내부 네비게이션 시 변경되므로 의존성에서 제외 (자동 리로드 방지)
+  }, [initialTradeId, timestamp]);
 
   const loadInitialData = async () => {
     try {
@@ -267,11 +279,13 @@ function TradePanel({
       }
 
       // 초기 데이터 설정
-      setMaster(prev => ({ ...prev, warehouse_id: defaultWhId }));
-      setInitialData({
-        master: { ...master, warehouse_id: defaultWhId },
-        details: []
-      });
+      if (!initialTradeId) {
+        setMaster(prev => ({ ...prev, warehouse_id: defaultWhId }));
+        setInitialData({
+          master: { ...master, warehouse_id: defaultWhId },
+          details: []
+        });
+      }
     } catch (error) {
       console.error('초기 데이터 로딩 오류:', error);
       showModal('warning', '로딩 실패', '데이터를 불러오는데 실패했습니다.');
@@ -296,13 +310,13 @@ function TradePanel({
   };
 
   // 거래처 잔고 정보 로드
-  const loadCompanySummary = async (companyId, type, date) => {
+  const loadCompanySummary = async (companyId, type, date, excludeTradeId = null) => {
     if (!companyId) {
       setCompanySummary(null);
       return;
     }
     try {
-      const response = await paymentAPI.getCompanyTodaySummary(companyId, type, date);
+      const response = await paymentAPI.getCompanyTodaySummary(companyId, type, date, excludeTradeId);
       setCompanySummary(response.data.data);
     } catch (error) {
       console.error('거래처 잔고 조회 오류:', error);
@@ -351,12 +365,15 @@ function TradePanel({
         details: loadedDetails.map(d => ({ ...d }))
       });
 
+
       setCurrentTradeId(tradeId);
       setIsEdit(true);
+      // 기존 전표 로드 시 보기 모드로 전환 (에러 발생 전 미리 설정)
+      setIsViewMode(true);
 
       // 잔고 정보 로드
       if (data.master.company_id) {
-        await loadCompanySummary(data.master.company_id, data.master.trade_type, data.master.trade_date);
+        await loadCompanySummary(data.master.company_id, data.master.trade_type, data.master.trade_date, tradeId);
       }
 
       // 연결된 입출금 내역 조회
@@ -372,12 +389,9 @@ function TradePanel({
       // 대기 중인 입출금 초기화
       setPendingPayments([]);
       setDeletedPaymentIds([]);
-      setPendingPayments([]);
-      setDeletedPaymentIds([]);
       setModifiedPayments({});
 
-      // 기존 전표 로드 시 보기 모드로 전환
-      setIsViewMode(true);
+      // (Deprecated) setIsViewMode(true) was here
     } catch (error) {
       console.error('전표 로딩 오류:', error);
       showModal('warning', '로딩 실패', '전표를 불러오는데 실패했습니다.');
@@ -643,6 +657,13 @@ function TradePanel({
 
   const handleDrop = (e, dropIndex) => {
     e.preventDefault();
+
+    // 보기 모드에서는 드롭 차단
+    if (isViewMode) {
+      showModal('warning', '작업 불가', '수정 모드로 전환 후 이용해주세요.');
+      return;
+    }
+
     const inventoryJson = e.dataTransfer.getData('application/json');
 
     // 1. 외부 재고 아이템 드래그 앤 드롭
@@ -988,167 +1009,174 @@ function TradePanel({
 
   // 저장
   const handleSave = async (shouldPrint = false) => {
-    // 유효성 검사
-    if (!master.company_id) {
-      showModal('warning', '입력 오류', '거래처를 선택하세요.');
-      return;
-    }
-
-    const validDetails = details.filter(d => d.product_id && d.quantity);
-    const hasModifiedPayments = Object.keys(modifiedPayments).length > 0;
-    const hasDeletedPayments = deletedPaymentIds.length > 0;
-    const hasPendingPayments = pendingPayments.length > 0;
-    const isDirty = checkDirty();
-
-    // 변경사항이 있는지 체크
-    const hasChanges = isDirty || hasPendingPayments || hasModifiedPayments || hasDeletedPayments;
-
-    // 저장 및 출력 버튼 클릭 시, 변경사항이 없으면 출력만 할지 물어봄
-    if (shouldPrint && isEdit && currentTradeId && !hasChanges) {
-      showModal(
-        'info',
-        '출력 확인',
-        '변경된 내용이 없습니다.\n출력만 하시겠습니까?',
-        () => {
-          if (onPrint) {
-            onPrint(currentTradeId);
-          }
-        },
-        '출력',
-        true
-      );
-      return;
-    }
-
-    // 새 전표: 품목 또는 새 입출금 필요
-    // 기존 전표 수정: 품목, 새 입출금, 수정/삭제된 입출금 중 하나라도 있으면 됨
-    if (!isEdit && validDetails.length === 0 && pendingPayments.length === 0) {
-      showModal('warning', '입력 오류', '최소 1개의 품목을 입력하거나 입출금을 추가하세요.');
-      return;
-    }
-
-    if (isEdit && validDetails.length === 0 && pendingPayments.length === 0 && !hasModifiedPayments && !hasDeletedPayments) {
-      showModal('warning', '입력 오류', '저장할 변경 사항이 없습니다.');
-      return;
-    }
+    if (isSaving.current) return;
+    isSaving.current = true;
 
     try {
-      // 중복 체크
-      const duplicateCheck = await tradeAPI.checkDuplicate({
-        company_id: master.company_id,
-        trade_date: master.trade_date,
-        trade_type: tradeType,
-        exclude_trade_id: isEdit ? currentTradeId : undefined
-      });
+      // 유효성 검사
+      if (!master.company_id) {
+        showModal('warning', '입력 오류', '거래처를 선택하세요.');
+        return;
+      }
 
-      if (duplicateCheck.data.isDuplicate) {
+      const validDetails = details.filter(d => d.product_id && d.quantity);
+      const hasModifiedPayments = Object.keys(modifiedPayments).length > 0;
+      const hasDeletedPayments = deletedPaymentIds.length > 0;
+      const hasPendingPayments = pendingPayments.length > 0;
+      const isDirty = checkDirty();
+
+      // 변경사항이 있는지 체크
+      const hasChanges = isDirty || hasPendingPayments || hasModifiedPayments || hasDeletedPayments;
+
+      // 저장 및 출력 버튼 클릭 시, 변경사항이 없으면 출력만 할지 물어봄
+      if (shouldPrint && isEdit && currentTradeId && !hasChanges) {
         showModal(
-          'warning',
-          '중복 전표',
-          `이미 동일 거래처에 ${master.trade_date} 날짜로 전표가 존재합니다.`,
-          () => loadTrade(duplicateCheck.data.existingTradeId),
-          '기존 전표 수정',
+          'info',
+          '출력 확인',
+          '변경된 내용이 없습니다.\n출력만 하시겠습니까?',
+          () => {
+            if (onPrint) {
+              onPrint(currentTradeId);
+            }
+          },
+          '출력',
           true
         );
         return;
       }
 
-      // 저장 데이터 준비
-      const saveData = {
-        master: {
-          ...master,
-          total_amount: totalAmount,
-          tax_amount: 0,
-          total_price: totalAmount
-        },
-        details: validDetails.map(d => ({
-          id: d.id, // ID 포함 (수정 시 필수)
-          product_id: d.product_id,
-          quantity: parseFloat(d.quantity) || 0,
-          unit_price: parseFloat(d.unit_price) || 0,
-          supply_amount: parseFloat(d.supply_amount) || 0,
-          tax_amount: 0,
-          shipper_location: d.shipper_location || '',
-          sender_name: d.sender_name || '',
-          notes: d.notes || '',
-          inventory_id: d.inventory_id // 재고 매칭을 위해 ID 전달
-        }))
-      };
-
-      let savedTradeId;
-      if (isEdit && currentTradeId) {
-        await tradeAPI.update(currentTradeId, saveData);
-        savedTradeId = currentTradeId;
-      } else {
-        const response = await tradeAPI.create(saveData);
-        savedTradeId = response.data.data.id;
+      // 새 전표: 품목 또는 새 입출금 필요
+      // 기존 전표 수정: 품목, 새 입출금, 수정/삭제된 입출금 중 하나라도 있으면 됨
+      if (!isEdit && validDetails.length === 0 && pendingPayments.length === 0) {
+        showModal('warning', '입력 오류', '최소 1개의 품목을 입력하거나 입출금을 추가하세요.');
+        return;
       }
 
-      // 삭제 대기 중인 입출금 처리
-      if (deletedPaymentIds.length > 0) {
-        for (const paymentId of deletedPaymentIds) {
-          try {
-            await paymentAPI.deleteLinkedTransaction(paymentId);
-          } catch (err) {
-            console.error('입출금 삭제 오류:', err);
+      if (isEdit && validDetails.length === 0 && pendingPayments.length === 0 && !hasModifiedPayments && !hasDeletedPayments) {
+        showModal('warning', '입력 오류', '저장할 변경 사항이 없습니다.');
+        return;
+      }
+
+      try {
+        // 중복 체크
+        const duplicateCheck = await tradeAPI.checkDuplicate({
+          company_id: master.company_id,
+          trade_date: master.trade_date,
+          trade_type: tradeType,
+          exclude_trade_id: isEdit ? currentTradeId : undefined
+        });
+
+        if (duplicateCheck.data.isDuplicate) {
+          showModal(
+            'warning',
+            '중복 전표',
+            `이미 동일 거래처에 ${master.trade_date} 날짜로 전표가 존재합니다.`,
+            () => loadTrade(duplicateCheck.data.existingTradeId),
+            '기존 전표 수정',
+            true
+          );
+          return;
+        }
+
+        // 저장 데이터 준비
+        const saveData = {
+          master: {
+            ...master,
+            total_amount: totalAmount,
+            tax_amount: 0,
+            total_price: totalAmount
+          },
+          details: validDetails.map(d => ({
+            id: d.id, // ID 포함 (수정 시 필수)
+            product_id: d.product_id,
+            quantity: parseFloat(d.quantity) || 0,
+            unit_price: parseFloat(d.unit_price) || 0,
+            supply_amount: parseFloat(d.supply_amount) || 0,
+            tax_amount: 0,
+            shipper_location: d.shipper_location || '',
+            sender_name: d.sender_name || '',
+            notes: d.notes || '',
+            inventory_id: d.inventory_id // 재고 매칭을 위해 ID 전달
+          }))
+        };
+
+        let savedTradeId;
+        if (isEdit && currentTradeId) {
+          await tradeAPI.update(currentTradeId, saveData);
+          savedTradeId = currentTradeId;
+        } else {
+          const response = await tradeAPI.create(saveData);
+          savedTradeId = response.data.data.id;
+        }
+
+        // 삭제 대기 중인 입출금 처리
+        if (deletedPaymentIds.length > 0) {
+          for (const paymentId of deletedPaymentIds) {
+            try {
+              await paymentAPI.deleteLinkedTransaction(paymentId);
+            } catch (err) {
+              console.error('입출금 삭제 오류:', err);
+            }
           }
+          setDeletedPaymentIds([]);
         }
-        setDeletedPaymentIds([]);
-      }
 
-      // 수정 대기 중인 입출금 처리
-      const modifiedIds = Object.keys(modifiedPayments);
-      if (modifiedIds.length > 0) {
-        for (const paymentId of modifiedIds) {
-          try {
-            await paymentAPI.updateTransaction(paymentId, modifiedPayments[paymentId]);
-          } catch (err) {
-            console.error('입출금 수정 오류:', err);
+        // 수정 대기 중인 입출금 처리
+        const modifiedIds = Object.keys(modifiedPayments);
+        if (modifiedIds.length > 0) {
+          for (const paymentId of modifiedIds) {
+            try {
+              await paymentAPI.updateTransaction(paymentId, modifiedPayments[paymentId]);
+            } catch (err) {
+              console.error('입출금 수정 오류:', err);
+            }
           }
+          setModifiedPayments({});
         }
-        setModifiedPayments({});
-      }
 
-      // 대기 중인 입금 처리
-      if (pendingPayments.length > 0) {
-        const transactionType = isPurchase ? 'PAYMENT' : 'RECEIPT';
-        for (const payment of pendingPayments) {
-          await paymentAPI.createTransactionWithAllocation({
-            transaction_date: master.trade_date,
-            company_id: master.company_id,
-            transaction_type: transactionType,
-            amount: payment.amount,
-            payment_method: payment.payment_method,
-            notes: payment.notes || '',
-            source_trade_id: savedTradeId
-          });
+        // 대기 중인 입금 처리
+        if (pendingPayments.length > 0) {
+          const transactionType = isPurchase ? 'PAYMENT' : 'RECEIPT';
+          for (const payment of pendingPayments) {
+            await paymentAPI.createTransactionWithAllocation({
+              transaction_date: master.trade_date,
+              company_id: master.company_id,
+              transaction_type: transactionType,
+              amount: payment.amount,
+              payment_method: payment.payment_method,
+              notes: payment.notes || '',
+              source_trade_id: savedTradeId
+            });
+          }
+          setPendingPayments([]);
         }
-        setPendingPayments([]);
-      }
 
-      if (!shouldPrint) {
-        showModal('success', '저장 완료', `전표가 ${isEdit ? '수정' : '등록'}되었습니다.`);
-      }
+        if (!shouldPrint) {
+          showModal('success', '저장 완료', `전표가 ${isEdit ? '수정' : '등록'}되었습니다.`);
+        }
 
-      // 저장 후 전표 다시 로드
-      await loadTrade(savedTradeId);
+        // 저장 후 전표 다시 로드
+        await loadTrade(savedTradeId);
 
-      // 전표 변경 알림 (재고 목록 리프레시 등)
-      if (onTradeChange) {
-        onTradeChange();
-      }
+        // 전표 변경 알림 (재고 목록 리프레시 등)
+        if (onTradeChange) {
+          onTradeChange();
+        }
 
-      if (onSaveSuccess) {
-        onSaveSuccess(savedTradeId);
-      }
+        if (onSaveSuccess) {
+          onSaveSuccess(savedTradeId);
+        }
 
-      // 출력
-      if (shouldPrint && onPrint) {
-        onPrint(savedTradeId);
+        // 출력
+        if (shouldPrint && onPrint) {
+          onPrint(savedTradeId);
+        }
+      } catch (error) {
+        console.error('저장 오류:', error);
+        showModal('warning', '저장 실패', error.response?.data?.message || '저장에 실패했습니다.');
       }
-    } catch (error) {
-      console.error('저장 오류:', error);
-      showModal('warning', '저장 실패', error.response?.data?.message || '저장에 실패했습니다.');
+    } finally {
+      isSaving.current = false;
     }
   };
 
@@ -1271,13 +1299,14 @@ function TradePanel({
     previous_balance: 0,
     subtotal: 0,
     today_payment: 0,
-    final_balance: 0
+    final_balance: 0,
+    last_trade_date: null
   };
 
   // 금일합계: 현재 입력 중인 품목의 합계 (실시간 반영)
   const currentTodayTotal = totalAmount;
-  // 전잔고 + 금일 (실시간 계산)
-  const currentSubtotal = (summary.previous_balance || 0) + currentTodayTotal;
+  // 전잔고 + 금일 타 전표 + 금일 현재 전표 (실시간 계산)
+  const currentSubtotal = (summary.previous_balance || 0) + (summary.today_total || 0) + currentTodayTotal;
   // 입출금 대기 금액
   const pendingTotal = pendingPayments.reduce((sum, p) => sum + (p.amount || 0), 0);
   const displayPayment = summary.today_payment + pendingTotal;
@@ -1322,7 +1351,7 @@ function TradePanel({
                   className="btn btn-sm btn-icon"
                   style={{ height: '100%' }}
                   onClick={() => handleDateChange(-1)}
-                  disabled={isViewMode}
+                // disabled={isViewMode} // 거래처 선택 상태에서도 날짜 변경 가능하도록 수정
                 >◀</button>
                 <input
                   type="date"
@@ -1331,14 +1360,14 @@ function TradePanel({
                   className={`trade-date-input ${master.trade_date !== new Date().toLocaleDateString('en-CA') ? 'is-not-today' : ''}`}
                   required
                   style={{ flex: 1, height: '100%' }}
-                  disabled={isViewMode}
+                // disabled={isViewMode} // 거래처 선택 상태에서도 날짜 변경 가능하도록 수정
                 />
                 <button
                   type="button"
                   className="btn btn-sm btn-icon"
                   style={{ height: '100%' }}
                   onClick={() => handleDateChange(1)}
-                  disabled={isViewMode}
+                // disabled={isViewMode} // 거래처 선택 상태에서도 날짜 변경 가능하도록 수정
                 >▶</button>
               </div>
             </div>
@@ -1385,6 +1414,13 @@ function TradePanel({
             )}
             {/* 버튼 영역 */}
             <div className="trade-action-buttons">
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm btn-custom"
+                onClick={handleReset}
+              >
+                초기화
+              </button>
               {isViewMode ? (
                 <>
                   <button
@@ -1409,13 +1445,6 @@ function TradePanel({
                 </>
               ) : (
                 <>
-                  <button
-                    type="button"
-                    className="btn btn-secondary btn-sm btn-custom"
-                    onClick={handleReset}
-                  >
-                    초기화
-                  </button>
                   {isEdit && currentTradeId && (
                     <button
                       type="button"
@@ -1686,7 +1715,14 @@ function TradePanel({
                   </span>
                 </div>
                 <div className="balance-item">
-                  <span className="balance-text-label">전잔고</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <span className="balance-text-label">전잔고</span>
+                    {summary.last_trade_date && (
+                      <span style={{ fontSize: '0.75rem', color: '#888', fontWeight: 'normal' }}>
+                        {summary.last_trade_date.substring(5).replace('-', '/')}
+                      </span>
+                    )}
+                  </div>
                   <span className="balance-text-value">{formatCurrency(summary.previous_balance)}원</span>
                 </div>
                 <div className="balance-item">
@@ -1694,10 +1730,17 @@ function TradePanel({
                   <span className="balance-text-value">{formatCurrency(currentSubtotal)}원</span>
                 </div>
                 <div className="balance-item">
-                  <span className="balance-text-label">
-                    {isPurchase ? '출금' : '입금'}
-                    {pendingTotal > 0 && <span className="tag-pending-count"> ({pendingPayments.length}건)</span>}
-                  </span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <span className="balance-text-label">
+                      {isPurchase ? '출금' : '입금'}
+                      {pendingTotal > 0 && <span className="tag-pending-count"> ({pendingPayments.length}건)</span>}
+                    </span>
+                    {summary.last_payment_date && (
+                      <span style={{ fontSize: '0.75rem', color: '#888', fontWeight: 'normal' }}>
+                        {summary.last_payment_date.substring(5).replace('-', '/')}
+                      </span>
+                    )}
+                  </div>
                   <span className="balance-text-value text-green">
                     {formatCurrency(displayPayment)}원
                   </span>
@@ -1785,7 +1828,7 @@ function TradePanel({
                               )}
                             </div>
                           </div>
-                          {canDelete && (
+                          {canDelete && !isViewMode && (
                             <div className="payment-actions">
                               <button
                                 type="button"
@@ -1851,39 +1894,43 @@ function TradePanel({
                           </div>
                         </div>
                         <div style={{ display: 'flex', gap: '0.25rem' }}>
-                          <button
-                            type="button"
-                            onClick={() => setEditingPendingPayment({
-                              ...payment,
-                              displayAmount: new Intl.NumberFormat('ko-KR').format(Math.abs(payment.amount))
-                            })}
-                            style={{
-                              padding: '3px 8px',
-                              fontSize: fs(0.85),
-                              backgroundColor: '#3498db',
-                              color: 'white',
-                              border: 'none',
-                              borderRadius: '3px',
-                              cursor: 'pointer'
-                            }}
-                          >
-                            수정
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleRemovePendingPayment(payment.tempId)}
-                            style={{
-                              padding: '3px 8px',
-                              fontSize: fs(0.85),
-                              backgroundColor: '#e74c3c',
-                              color: 'white',
-                              border: 'none',
-                              borderRadius: '3px',
-                              cursor: 'pointer'
-                            }}
-                          >
-                            취소
-                          </button>
+                          {!isViewMode && (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => setEditingPendingPayment({
+                                  ...payment,
+                                  displayAmount: new Intl.NumberFormat('ko-KR').format(Math.abs(payment.amount))
+                                })}
+                                style={{
+                                  padding: '3px 8px',
+                                  fontSize: fs(0.85),
+                                  backgroundColor: '#3498db',
+                                  color: 'white',
+                                  border: 'none',
+                                  borderRadius: '3px',
+                                  cursor: 'pointer'
+                                }}
+                              >
+                                수정
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleRemovePendingPayment(payment.tempId)}
+                                style={{
+                                  padding: '3px 8px',
+                                  fontSize: fs(0.85),
+                                  backgroundColor: '#e74c3c',
+                                  color: 'white',
+                                  border: 'none',
+                                  borderRadius: '3px',
+                                  cursor: 'pointer'
+                                }}
+                              >
+                                취소
+                              </button>
+                            </>
+                          )}
                         </div>
                       </div>
                     ))}

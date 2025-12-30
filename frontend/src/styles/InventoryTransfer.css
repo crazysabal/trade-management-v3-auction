@@ -154,8 +154,8 @@
 /* Inventory Card */
 .inventory-card {
     background-color: white;
-    padding: 0.8rem;
-    margin-bottom: 0.5rem;
+    padding: 0.6rem;
+    margin-bottom: 0.4rem;
     border-radius: 6px;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
     border: 1px solid #eee;
@@ -177,7 +177,7 @@
 .card-content {
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: 4px;
 }
 
 .card-main-info {
@@ -203,8 +203,9 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding-top: 6px;
+    padding-top: 4px;
     border-top: 1px solid #f3f4f6;
+    min-height: 24px;
 }
 
 .sender-info {
@@ -277,4 +278,32 @@
 
 .btn-refresh:hover {
     background-color: #2980b9;
+}
+
+/* Multi-select styles */
+.inventory-card.selected {
+    border: 2px solid #3498db !important;
+    background-color: #eaf6ff !important;
+    position: relative;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(52, 152, 219, 0.3) !important;
+}
+
+.inventory-card.selected::after {
+    content: attr(data-order);
+    position: absolute;
+    top: -8px;
+    right: -8px;
+    background-color: #3498db;
+    color: white;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.8rem;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    z-index: 10;
+    font-weight: bold;
 }

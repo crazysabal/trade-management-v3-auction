@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { companyInfoAPI } from '../services/api';
 import ConfirmModal from '../components/ConfirmModal';
+import './CompanyInfo.css';
 
 function CompanyInfo() {
   const [modal, setModal] = useState({ isOpen: false, type: 'info', title: '', message: '', onConfirm: () => { }, confirmText: '확인', showCancel: false });
@@ -75,30 +76,15 @@ function CompanyInfo() {
   }
 
   return (
-    <div className="company-info-page" style={{ maxWidth: '800px', margin: '0 auto', paddingBottom: '3rem' }}>
-      <div className="page-header">
-        <h1 className="page-title">🏢 본사 정보</h1>
-        <p style={{ color: '#6b7280', marginTop: '0.5rem' }}>
-          거래명세서에 표시되는 본사 정보를 관리합니다.
-        </p>
-      </div>
-
-      <form onSubmit={handleSubmit} className="form-container">
-        {/* 기본 정보 */}
-        <div style={{
-          marginBottom: '1.5rem',
-          padding: '1rem',
-          backgroundColor: '#f0f9ff',
-          borderRadius: '8px',
-          borderLeft: '4px solid #0284c7'
-        }}>
-          <h3 style={{ margin: '0 0 0.5rem 0', color: '#0369a1', fontSize: '1rem' }}>
-            📋 기본 정보
-          </h3>
+    <div className="company-info-page">
+      <form onSubmit={handleSubmit} className="company-form-container" autoComplete="off">
+        {/* ===== 기본 정보 ===== */}
+        <div className="section-header section-header-basic">
+          <h3 className="section-title">📋 기본 정보</h3>
         </div>
 
-        <div className="form-row">
-          <div className="form-group">
+        <div className="info-form-row">
+          <div className="info-form-group">
             <label className="required">회사명</label>
             <input
               type="text"
@@ -106,21 +92,16 @@ function CompanyInfo() {
               value={formData.company_name || ''}
               onChange={handleChange}
               required
+              autoComplete="off"
             />
           </div>
-          <div className="form-group">
-            <label>대표자명</label>
-            <input
-              type="text"
-              name="ceo_name"
-              value={formData.ceo_name || ''}
-              onChange={handleChange}
-            />
+          <div className="info-form-group">
+            {/* 빈공간 */}
           </div>
         </div>
 
-        <div className="form-row">
-          <div className="form-group">
+        <div className="info-form-row">
+          <div className="info-form-group">
             <label>사업자번호</label>
             <input
               type="text"
@@ -128,30 +109,46 @@ function CompanyInfo() {
               value={formData.business_number || ''}
               onChange={handleChange}
               placeholder="123-45-67890"
+              autoComplete="off"
             />
           </div>
-          <div className="form-group">
+          <div className="info-form-group">
+            <label>대표자명</label>
+            <input
+              type="text"
+              name="ceo_name"
+              value={formData.ceo_name || ''}
+              onChange={handleChange}
+              autoComplete="off"
+            />
+          </div>
+        </div>
+
+        <div className="info-form-row">
+          <div className="info-form-group">
             <label>업태</label>
             <input
               type="text"
               name="company_type"
               value={formData.company_type || ''}
               onChange={handleChange}
+              autoComplete="off"
             />
           </div>
-          <div className="form-group">
+          <div className="info-form-group">
             <label>업종</label>
             <input
               type="text"
               name="company_category"
               value={formData.company_category || ''}
               onChange={handleChange}
+              autoComplete="off"
             />
           </div>
         </div>
 
-        <div className="form-row">
-          <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+        <div className="info-form-row">
+          <div className="info-form-group" style={{ gridColumn: '1 / -1' }}>
             <label>주소 1</label>
             <input
               type="text"
@@ -163,8 +160,8 @@ function CompanyInfo() {
           </div>
         </div>
 
-        <div className="form-row">
-          <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+        <div className="info-form-row">
+          <div className="info-form-group" style={{ gridColumn: '1 / -1' }}>
             <label>주소 2</label>
             <input
               type="text"
@@ -176,8 +173,13 @@ function CompanyInfo() {
           </div>
         </div>
 
-        <div className="form-row">
-          <div className="form-group">
+        {/* ===== 연락처 정보 ===== */}
+        <div className="section-header section-header-contact">
+          <h3 className="section-title">📞 연락처 정보</h3>
+        </div>
+
+        <div className="info-form-row">
+          <div className="info-form-group">
             <label>전화번호</label>
             <input
               type="text"
@@ -186,7 +188,7 @@ function CompanyInfo() {
               onChange={handleChange}
             />
           </div>
-          <div className="form-group">
+          <div className="info-form-group">
             <label>팩스번호</label>
             <input
               type="text"
@@ -195,7 +197,7 @@ function CompanyInfo() {
               onChange={handleChange}
             />
           </div>
-          <div className="form-group">
+          <div className="info-form-group">
             <label>이메일</label>
             <input
               type="email"
@@ -206,22 +208,13 @@ function CompanyInfo() {
           </div>
         </div>
 
-        {/* 계좌 정보 */}
-        <div style={{
-          marginTop: '2rem',
-          marginBottom: '1.5rem',
-          padding: '1rem',
-          backgroundColor: '#f0fdf4',
-          borderRadius: '8px',
-          borderLeft: '4px solid #16a34a'
-        }}>
-          <h3 style={{ margin: '0 0 0.5rem 0', color: '#166534', fontSize: '1rem' }}>
-            💳 계좌 정보
-          </h3>
+        {/* ===== 계좌 정보 ===== */}
+        <div className="section-header section-header-account">
+          <h3 className="section-title">💳 계좌 정보</h3>
         </div>
 
-        <div className="form-row">
-          <div className="form-group">
+        <div className="info-form-row">
+          <div className="info-form-group">
             <label>은행명</label>
             <input
               type="text"
@@ -231,7 +224,7 @@ function CompanyInfo() {
               placeholder="예: 농협, 국민은행"
             />
           </div>
-          <div className="form-group">
+          <div className="info-form-group">
             <label>계좌번호</label>
             <input
               type="text"
@@ -240,7 +233,7 @@ function CompanyInfo() {
               onChange={handleChange}
             />
           </div>
-          <div className="form-group">
+          <div className="info-form-group">
             <label>예금주</label>
             <input
               type="text"
@@ -251,22 +244,13 @@ function CompanyInfo() {
           </div>
         </div>
 
-        {/* 이미지 정보 */}
-        <div style={{
-          marginTop: '2rem',
-          marginBottom: '1.5rem',
-          padding: '1rem',
-          backgroundColor: '#fef3c7',
-          borderRadius: '8px',
-          borderLeft: '4px solid #f59e0b'
-        }}>
-          <h3 style={{ margin: '0 0 0.5rem 0', color: '#b45309', fontSize: '1rem' }}>
-            🖼️ 이미지 (선택)
-          </h3>
+        {/* ===== 이미지 정보 ===== */}
+        <div className="section-header section-header-etc">
+          <h3 className="section-title">🖼️ 이미지 (선택)</h3>
         </div>
 
-        <div className="form-row">
-          <div className="form-group">
+        <div className="info-form-row">
+          <div className="info-form-group">
             <label>로고 URL</label>
             <input
               type="text"
@@ -276,7 +260,7 @@ function CompanyInfo() {
               placeholder="https://example.com/logo.png"
             />
           </div>
-          <div className="form-group">
+          <div className="info-form-group">
             <label>직인 URL</label>
             <input
               type="text"
@@ -288,10 +272,13 @@ function CompanyInfo() {
           </div>
         </div>
 
-        {/* 비고 */}
-        <div className="form-row" style={{ marginTop: '1.5rem' }}>
-          <div className="form-group" style={{ gridColumn: '1 / -1' }}>
-            <label>비고</label>
+        {/* ===== 비고 ===== */}
+        <div className="section-header section-header-etc" style={{ marginTop: '0.75rem' }}>
+          <h3 className="section-title">📝 비고</h3>
+        </div>
+
+        <div className="info-form-row">
+          <div className="info-form-group" style={{ gridColumn: '1 / -1' }}>
             <textarea
               name="notes"
               value={formData.notes || ''}
@@ -302,10 +289,10 @@ function CompanyInfo() {
           </div>
         </div>
 
-        <div className="form-actions" style={{ marginTop: '2rem' }}>
+        <div className="form-actions">
           <button
             type="submit"
-            className="btn btn-primary"
+            className="btn btn-primary btn-save-company"
             disabled={saving}
           >
             {saving ? '저장 중...' : '💾 저장'}

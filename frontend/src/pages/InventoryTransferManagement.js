@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { purchaseInventoryAPI, warehousesAPI, inventoryAdjustmentAPI } from '../services/api';
 import StockTransferModal from '../components/StockTransferModal';
 import InventoryAdjustmentModal from '../components/InventoryAdjustmentModal';
+import InventoryPrintModal from '../components/InventoryPrintModal';
 import '../styles/InventoryTransfer.css';
 
 const InventoryTransferManagement = () => {
@@ -19,6 +20,7 @@ const InventoryTransferManagement = () => {
     // Modal State
     const [transferModal, setTransferModal] = useState({ isOpen: false, inventory: null, inventoryList: [], toWarehouseId: '' });
     const [adjustmentModal, setAdjustmentModal] = useState({ isOpen: false, inventory: null });
+    const [printModalOpen, setPrintModalOpen] = useState(false);
 
     // Multi-Select State
     const [selectedItems, setSelectedItems] = useState(new Set()); // Set of inventory IDs
@@ -32,6 +34,7 @@ const InventoryTransferManagement = () => {
 
     const loadData = async () => {
         setLoading(true);
+        setSelectedItems(new Set()); // 새로고침 시 선택 초기화
         try {
             const [invRes, whRes] = await Promise.all([
                 purchaseInventoryAPI.getAll({ has_remaining: 'true' }),
@@ -59,8 +62,12 @@ const InventoryTransferManagement = () => {
         let draggedItems = [];
         // 만약 드래그하는 아이템이 선택된 상태라면, 선택된 모든 아이템을 함께 드래그
         if (selectedItems.has(item.id)) {
-            // 현재 선택된 아이템들 중 화면에 보이는(inventory state에 있는) 것들만 추림
-            draggedItems = inventory.filter(i => selectedItems.has(i.id));
+            // 현재 선택된 아이템들 (선택 순서 유지)
+            // Set은 삽입 순서를 유지하므로, selectedItems를 순회하면 클릭한 순서대로 정렬됨
+            const inventoryMap = new Map(inventory.map(i => [i.id, i]));
+            draggedItems = Array.from(selectedItems)
+                .map(id => inventoryMap.get(id))
+                .filter(item => item !== undefined);
         } else {
             // 선택되지 않은 아이템을 드래그하면 단일 드래그로 처리 (혹은 선택 초기화 후 단일?)
             // UX: 보통 선택되지 않은 아이템을 잡으면 그것만 드래그됨
@@ -109,20 +116,32 @@ const InventoryTransferManagement = () => {
         e.preventDefault();
         if (reorderMode || !draggedItem || String(draggedItem.warehouse_id) !== String(targetItem.warehouse_id)) return;
 
-        // 같은 창고 내에서의 드래그라면 순서 변경 시각화 (Optimistic UI)
-        if (draggedItem.id === targetItem.id) return;
+        // 다중 선택 여부 확인
+        const isMultiSelect = selectedItems.has(draggedItem.id);
+        const movingIds = isMultiSelect ? selectedItems : new Set([draggedItem.id]);
 
-        // 배열 상에서의 인덱스 찾기 및 이동
+        // 타겟이 이동 그룹에 포함되어 있으면 무시
+        if (movingIds.has(targetItem.id)) return;
+
+        // 1. 현재 인벤토리에서 이동할 아이템들과 나머지 아이템들 분리
         const currentInventory = [...inventory];
-        const dragIndex = currentInventory.findIndex(i => i.id === draggedItem.id);
-        const hoverIndex = currentInventory.findIndex(i => i.id === targetItem.id);
 
-        if (dragIndex < 0 || hoverIndex < 0) return;
+        // 이동할 아이템들 (현재 순서 유지)
+        const movingItems = currentInventory.filter(i => movingIds.has(i.id));
+        // 나머지 아이템들
+        const remainingItems = currentInventory.filter(i => !movingIds.has(i.id));
 
-        // 순서 바꾸기
-        const newInventory = [...currentInventory];
-        const [movedItem] = newInventory.splice(dragIndex, 1);
-        newInventory.splice(hoverIndex, 0, movedItem);
+        // 2. 타겟 위치 찾기 (나머지 아이템들 기준)
+        const targetIndex = remainingItems.findIndex(i => i.id === targetItem.id);
+        if (targetIndex < 0) return;
+
+        // 3. 타겟 위치에 이동 그룹 삽입 (Insert Before)
+        // 마우스 위치에 따라 After/Before 구분하면 더 좋지만, 간단히 Insert Before로 구현
+        const newInventory = [
+            ...remainingItems.slice(0, targetIndex),
+            ...movingItems,
+            ...remainingItems.slice(targetIndex)
+        ];
 
         setInventory(newInventory); // 화면상 즉시 반영
     };
@@ -224,6 +243,11 @@ const InventoryTransferManagement = () => {
         }
     };
 
+    // --- Print Handler ---
+    const handlePrint = () => {
+        setPrintModalOpen(true);
+    };
+
     // --- Rendering Helpers ---
     const getInventoryForWarehouse = (warehouseId) => {
         // 이미 렌더링 시 state.inventory 순서대로 나오므로 필터만 하면 됨
@@ -285,6 +309,13 @@ const InventoryTransferManagement = () => {
                     >
                         새로고침
                     </button>
+                    <button
+                        className="btn-print"
+                        onClick={handlePrint}
+                        style={{ marginRight: '10px', padding: '0.5rem 1rem', backgroundColor: '#95a5a6', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px' }}
+                    >
+                        🖨 목록 출력
+                    </button>
                     {/* 빈 공간은 flex-start로 인해 자연스럽게 우측에 생성됨 */}
                 </div>
             </div>
@@ -330,8 +361,10 @@ const InventoryTransferManagement = () => {
                                             draggable={!reorderMode}
                                             onDragStart={(e) => handleDragStart(e, item)}
                                             onDragOver={(e) => handleCardDragOver(e, item)}
-                                            className={`inventory-card ${draggedItem?.id === item.id ? 'dragging' : ''}`}
-                                            style={{ cursor: reorderMode ? 'default' : 'grab' }}
+                                            onClick={(e) => toggleSelection(e, item.id)}
+                                            data-order={[...selectedItems].indexOf(item.id) + 1}
+                                            className={`inventory-card ${draggedItem?.id === item.id ? 'dragging' : ''} ${selectedItems.has(item.id) ? 'selected' : ''}`}
+                                            style={{ cursor: reorderMode ? 'default' : 'pointer' }}
                                         >
                                             <div className="card-content">
                                                 <div className="card-main-info" style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
@@ -351,8 +384,9 @@ const InventoryTransferManagement = () => {
                                                 </div>
 
                                                 <div className="card-sub-info" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '4px', borderTop: '1px solid #f0f0f0', paddingTop: '4px' }}>
-                                                    <div style={{ display: 'flex', gap: '8px', fontSize: '0.8rem', color: '#7f8c8d' }}>
+                                                    <div style={{ display: 'flex', gap: '8px', fontSize: '0.8rem', color: '#7f8c8d', alignItems: 'center', lineHeight: '1' }}>
                                                         <span>{item.company_name || '-'}</span>
+                                                        <span style={{ fontSize: '0.7rem', color: '#bdc3c7' }}>|</span>
                                                         <span>{item.purchase_date}</span>
                                                     </div>
 
@@ -398,8 +432,15 @@ const InventoryTransferManagement = () => {
             <InventoryAdjustmentModal
                 isOpen={adjustmentModal.isOpen}
                 inventory={adjustmentModal.inventory}
-                onClose={() => setAdjustmentModal({ isOpen: false, inventory: null })}
-                onConfirm={handleAdjustment}
+                onClose={() => setAdjustmentModal({ ...adjustmentModal, isOpen: false })}
+                onSave={handleAdjustment}
+            />
+
+            <InventoryPrintModal
+                isOpen={printModalOpen}
+                onClose={() => setPrintModalOpen(false)}
+                inventory={inventory}
+                warehouses={warehouses}
             />
         </div>
     );

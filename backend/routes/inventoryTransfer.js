@@ -38,6 +38,12 @@ router.post('/', async (req, res) => {
     `, [moveQty, purchase_inventory_id]);
 
     // 3. 대상 창고에 재고 생성 또는 병합 (Auto-Merge Logic)
+    // 순서 결정을 위해 대상 창고의 최소 display_order 조회
+    const [minOrderRows] = await connection.query(`
+      SELECT MIN(display_order) as min_order FROM purchase_inventory WHERE warehouse_id = ?
+    `, [to_warehouse_id]);
+    const nextDisplayOrder = (minOrderRows[0]?.min_order || 0) - 1;
+
     // 동일한 trade_detail_id와 단가를 가진 재고가 대상 창고에 있는지 확인
     const [existingRows] = await connection.query(`
             SELECT id, original_quantity, remaining_quantity, total_weight 
@@ -59,9 +65,10 @@ router.post('/', async (req, res) => {
                 UPDATE purchase_inventory 
                 SET remaining_quantity = remaining_quantity + ?,
                     original_quantity = original_quantity + ?,
-                    total_weight = total_weight + ?
+                    total_weight = total_weight + ?,
+                    display_order = ?
                 WHERE id = ?
-            `, [moveQty, moveQty, addedWeight, targetItem.id]);
+            `, [moveQty, moveQty, addedWeight, nextDisplayOrder, targetItem.id]);
 
     } else {
       // 신규 생성 (New Lot)
@@ -69,8 +76,8 @@ router.post('/', async (req, res) => {
                 INSERT INTO purchase_inventory (
                     trade_detail_id, product_id, company_id, warehouse_id, purchase_date,
                     original_quantity, remaining_quantity, unit_price, total_weight,
-                    shipper_location, sender, status
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'AVAILABLE')
+                    shipper_location, sender, status, display_order
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'AVAILABLE', ?)
             `, [
         sourceItem.trade_detail_id,
         sourceItem.product_id,
@@ -82,18 +89,20 @@ router.post('/', async (req, res) => {
         sourceItem.unit_price,
         (sourceItem.total_weight / sourceItem.original_quantity) * moveQty,
         sourceItem.shipper_location,
-        sourceItem.sender
+        sourceItem.sender,
+        nextDisplayOrder
       ]);
     }
 
     // 4. 이동 이력 기록
     await connection.query(`
       INSERT INTO warehouse_transfers (
-        transfer_date, product_id, from_warehouse_id, to_warehouse_id,
+        transfer_date, product_id, purchase_inventory_id, from_warehouse_id, to_warehouse_id,
         quantity, weight, notes, created_by
-      ) VALUES (CURDATE(), ?, ?, ?, ?, ?, ?, 'system')
+      ) VALUES (CURDATE(), ?, ?, ?, ?, ?, ?, ?, 'system')
     `, [
       sourceItem.product_id,
+      purchase_inventory_id,
       sourceItem.warehouse_id,
       to_warehouse_id,
       moveQty,

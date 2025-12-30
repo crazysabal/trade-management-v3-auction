@@ -79,7 +79,7 @@ const InventoryQuickView = ({ inventoryAdjustments = {}, refreshKey, onInventory
         setLoading(true);
         try {
             // SaleFromInventory.js와 동일하게 상세 목록(Lot) 조회
-            const response = await purchaseInventoryAPI.getAll({ status: 'AVAILABLE' });
+            const response = await purchaseInventoryAPI.getAll({ has_remaining: 'true' });
             const data = response.data?.data || response.data || [];
             const validData = Array.isArray(data) ? data : [];
 
@@ -121,14 +121,14 @@ const InventoryQuickView = ({ inventoryAdjustments = {}, refreshKey, onInventory
         if (!searchTerm) {
             setFilteredInventory(adjustedInventory);
         } else {
-            // ... (rest of logic)
             const terms = searchTerm.toLowerCase().split(/\s+/).filter(t => t.length > 0);
             const filtered = adjustedInventory.filter(item => {
                 const searchTarget = `
                     ${item.product_name || ''} 
                     ${item.sender || ''} 
-                    ${item.shipper_location || ''} 
+                    ${item.warehouse_name || ''} 
                     ${item.grade || ''}
+                    ${item.company_name || ''}
                 `.toLowerCase();
                 return terms.every(term => searchTarget.includes(term));
             });
@@ -169,17 +169,18 @@ const InventoryQuickView = ({ inventoryAdjustments = {}, refreshKey, onInventory
     };
 
     return (
-        <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+        <div style={{ height: '100%', display: 'flex', flexDirection: 'column', padding: '0.5rem' }}>
             {/* 검색바 */}
             <div style={{ marginBottom: '1rem' }}>
                 <input
                     type="text"
-                    placeholder="품목/매입처/출하주 검색..."
+                    placeholder="🔍 품목, 매입처, 출하주, 창고 검색 (띄어쓰기로 다중 검색)"
                     value={searchTerm}
                     onChange={handleSearch}
                     style={{
                         width: '100%',
-                        padding: '8px',
+                        height: '38px',
+                        padding: '0 0.75rem',
                         border: '1px solid #ddd',
                         borderRadius: '4px',
                         fontSize: '0.9rem',
@@ -205,13 +206,13 @@ const InventoryQuickView = ({ inventoryAdjustments = {}, refreshKey, onInventory
                                 <th style={{ padding: '0.6rem 0.5rem', textAlign: 'right', whiteSpace: 'nowrap', width: '50px' }}>잔량</th>
                                 <th style={{ padding: '0.6rem 0.5rem', textAlign: 'right', whiteSpace: 'nowrap', width: '60px' }}>단가</th>
                                 <th style={{ padding: '0.6rem 0.5rem', textAlign: 'left', whiteSpace: 'nowrap' }}>매입처</th>
-                                <th style={{ padding: '0.6rem 0.5rem', textAlign: 'left', whiteSpace: 'nowrap' }}>출하지</th>
+                                <th style={{ padding: '0.6rem 0.5rem', textAlign: 'left', whiteSpace: 'nowrap' }}>창고</th>
                                 <th style={{ padding: '0.6rem 0.5rem', textAlign: 'center', whiteSpace: 'nowrap', width: '50px' }}>매입일</th>
                             </tr>
                         </thead>
                         <tbody>
                             {filteredInventory.map((item, index) => {
-                                const shipperInfo = [item.shipper_location, item.sender].filter(Boolean).join(' / ') || '-';
+                                // const shipperInfo = [item.shipper_location, item.sender].filter(Boolean).join(' / ') || '-';
                                 return (
                                     <tr
                                         key={item.id}
@@ -248,7 +249,7 @@ const InventoryQuickView = ({ inventoryAdjustments = {}, refreshKey, onInventory
                                             {item.company_name || '-'}
                                         </td>
                                         <td style={{ padding: '0.5rem', whiteSpace: 'nowrap', color: '#666' }}>
-                                            {item.shipper_location || '-'}
+                                            {item.warehouse_name || '-'}
                                         </td>
                                         <td style={{ padding: '0.5rem', textAlign: 'center', whiteSpace: 'nowrap' }}>
                                             {formatDateShort(item.purchase_date)}

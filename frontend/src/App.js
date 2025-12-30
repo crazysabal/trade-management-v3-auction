@@ -12,7 +12,7 @@ import IntegratedProductManagement from './pages/IntegratedProductManagement';
 import ProductForm from './pages/ProductForm';
 // import CategoryList from './pages/CategoryList'; // Removed
 import TradeList from './pages/TradeList';
-import DualTradeForm from './pages/DualTradeForm';
+// import DualTradeForm from './pages/DualTradeForm'; // Removed
 import TradeView from './pages/TradeView';
 
 import Statistics from './pages/Statistics';

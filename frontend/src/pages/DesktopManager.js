@@ -14,6 +14,7 @@ import InventoryList from './InventoryList';
 import InventoryTransferManagement from './InventoryTransferManagement';
 import InventoryProductionManagement from './InventoryProductionManagement';
 import MatchingPage from './MatchingPage';
+import InventoryProductionHistory from './InventoryProductionHistory'; // [New]
 import InventoryHistory from './InventoryHistory';
 import InventoryCheckPage from './InventoryCheckPage';
 import InventoryTransactions from './InventoryTransactions';
@@ -76,14 +77,18 @@ const DesktopManager = () => {
 
         // 1. 항상 단일 인스턴스인 앱
         if (existing && alwaysSingleInstanceApps.includes(appType)) {
-            restoreWindow(existing.id); // 최소화된 경우 복원
+            // 기존 윈도우의 props 업데이트
+            setWindows(prev => prev.map(w => w.id === existing.id ? { ...w, componentProps: { ...w.componentProps, ...props, timestamp: Date.now() }, isMinimized: false } : w));
+            // restoreWindow(existing.id); // 위에서 isMinimized 처리함
             bringToFront(existing.id);
             return;
         }
 
         // 2. 사용자 설정이 'single' 모드이고, 이미 열려있는 경우
         if (windowMode === 'single' && existing) {
-            restoreWindow(existing.id); // 최소화된 경우 복원
+            // 기존 윈도우의 props 업데이트
+            setWindows(prev => prev.map(w => w.id === existing.id ? { ...w, componentProps: { ...w.componentProps, ...props, timestamp: Date.now() }, isMinimized: false } : w));
+            // restoreWindow(existing.id); // 위에서 isMinimized 처리함
             bringToFront(existing.id);
             return;
         }
@@ -114,6 +119,7 @@ const DesktopManager = () => {
             case 'INVENTORY_LIST': title = '재고 현황'; icon = '📊'; break;
             case 'INVENTORY_TRANSFER': title = '재고 이동'; icon = '🚚'; break;
             case 'INVENTORY_PRODUCTION': title = '재고 작업'; icon = '🏭'; break;
+            case 'INVENTORY_PRODUCTION_HISTORY': title = '재고 작업 이력'; icon = '📜'; break;
             case 'INVENTORY_HISTORY': title = '재고 이력'; icon = '📜'; break;
             case 'INVENTORY_CHECK': title = '재고 실사'; icon = '🔍'; break;
             case 'INVENTORY_TRANSACTIONS': title = '재고 수불부'; icon = '📒'; break;
@@ -131,6 +137,8 @@ const DesktopManager = () => {
             case 'MESSAGE_TEST': title = '시스템 테스트'; icon = '🧪'; break;
             default: title = appType; icon = '📱';
         }
+        // [DEBUG] Append App Type for User Identification
+        title = `${title} [${appType}]`;
 
         // 모바일이면 전체 화면 강제
         if (isMobile) {
@@ -298,7 +306,8 @@ const DesktopManager = () => {
             case 'INVENTORY_LIST': return <InventoryList isWindow={true} {...componentProps} />;
             case 'INVENTORY_TRANSFER': return <InventoryTransferManagement isWindow={true} {...componentProps} />;
             case 'INVENTORY_PRODUCTION': return <InventoryProductionManagement isWindow={true} {...componentProps} />;
-            case 'INVENTORY_HISTORY': return <InventoryHistory isWindow={true} {...componentProps} />;
+            case 'INVENTORY_PRODUCTION_HISTORY': return <InventoryProductionHistory isWindow={true} {...componentProps} />;
+            case 'INVENTORY_HISTORY': return <InventoryHistory isWindow={true} onOpenTrade={(type, tradeId) => launchApp(type, { initialTradeId: tradeId, initialViewMode: true })} {...componentProps} />;
             case 'INVENTORY_CHECK': return <InventoryCheckPage isWindow={true} {...componentProps} />;
             case 'INVENTORY_TRANSACTIONS': return <InventoryTransactions isWindow={true} {...componentProps} />;
             case 'MATCHING': return <MatchingPage isWindow={true} {...componentProps} />;
@@ -318,7 +327,7 @@ const DesktopManager = () => {
     };
 
     return (
-        <div className="desktop-env" style={{ minHeight: '100vh', background: '#f0f2f5', paddingBottom: '48px' }}>
+        <div className="desktop-env" style={{ minHeight: '100vh', background: '#f0f2f5', paddingBottom: '38px' }}>
             {/* 상단 런처 (Navbar 대체) */}
             <Navbar onLaunchApp={launchApp} />
 

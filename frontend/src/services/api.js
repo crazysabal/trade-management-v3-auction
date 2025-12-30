@@ -172,8 +172,8 @@ export const paymentAPI = {
   getLedger: (companyId, params) => api.get(`/payments/ledger/${companyId}`, { params }),
 
   // 거래처 오늘 거래 현황 (전표 등록 화면용)
-  getCompanyTodaySummary: (companyId, tradeType, tradeDate) =>
-    api.get(`/payments/company-today-summary/${companyId}`, { params: { trade_type: tradeType, trade_date: tradeDate } }),
+  getCompanyTodaySummary: (companyId, tradeType, tradeDate, excludeTradeId) =>
+    api.get(`/payments/company-today-summary/${companyId}`, { params: { trade_type: tradeType, trade_date: tradeDate, exclude_trade_id: excludeTradeId } }),
 
   // 전표와 연결된 입출금 조회
   getByTrade: (tradeId) => api.get(`/payments/by-trade/${tradeId}`),

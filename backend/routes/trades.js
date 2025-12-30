@@ -312,6 +312,32 @@ router.delete('/:id', async (req, res) => {
         });
       }
 
+      // [NEW] 생산 투입 내역 확인
+      const [usedInProduction] = await connection.query(
+        `SELECT 
+           p.product_name,
+           p.grade,
+           p.weight as product_weight,
+           ipi.used_quantity,
+           ip.created_at as production_date,
+           ip.id as production_id
+         FROM trade_details td
+         JOIN purchase_inventory pi ON td.id = pi.trade_detail_id
+         JOIN inventory_production_ingredients ipi ON pi.id = ipi.used_inventory_id
+         JOIN inventory_productions ip ON ipi.production_id = ip.id
+         JOIN products p ON td.product_id = p.id
+         WHERE td.trade_master_id = ?`,
+        [req.params.id]
+      );
+
+      if (usedInProduction.length > 0) {
+        await connection.rollback();
+        return res.status(400).json({
+          success: false,
+          message: `이미 생산(재포장)에 사용된 재고가 포함되어 있어 삭제할 수 없습니다. (총 ${usedInProduction.length}건)`
+        });
+      }
+
       // 3. 매입 전표: 연관된 purchase_inventory 먼저 삭제
       await connection.query(
         `DELETE FROM purchase_inventory 

@@ -1,0 +1,178 @@
+/* CompanyInfo.css */
+
+.company-info-page {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    padding: 1.5rem;
+    box-sizing: border-box;
+    background-color: #fff;
+}
+
+.page-header {
+    margin-bottom: 1rem;
+}
+
+.page-title {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: #1a1a1a;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.company-info-subtitle {
+    color: #6b7280;
+    font-size: 0.95rem;
+    margin-top: 0.25rem;
+}
+
+.company-form-container {
+    display: flex;
+    flex-direction: column;
+    padding-bottom: 2rem;
+}
+
+/* Form Layout - Matching CompanyForm.css */
+.info-form-row {
+    display: grid;
+    /* Force 2 columns regardless of screen width */
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.4rem;
+    margin-bottom: 0.4rem;
+}
+
+.info-form-group {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 1rem;
+}
+
+.info-form-group label {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: #4b5563;
+    min-width: 100px;
+    /* Fixed label width */
+    text-align: right;
+    margin-right: 0.5rem;
+}
+
+.info-form-group label.required::after {
+    content: '*';
+    color: #ef4444;
+    margin-left: 0.2rem;
+}
+
+.info-form-group input,
+.info-form-group textarea {
+    flex: 1;
+    padding: 0.5rem 0.75rem;
+    /* Reduced padding */
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    font-size: 0.9rem;
+    /* Reduced font size */
+    transition: all 0.2s;
+    background-color: #fff;
+}
+
+.info-form-group input:focus,
+.info-form-group textarea:focus {
+    outline: none;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+/* Section Header Styles - from CompanyForm.css */
+.section-header {
+    margin-bottom: 0.4rem;
+    padding: 0.3rem 0.5rem;
+    border-radius: 8px;
+    border-left-width: 4px;
+    border-left-style: solid;
+    display: flex;
+    align-items: center;
+    margin-top: 0.75rem;
+}
+
+.section-header:first-of-type {
+    margin-top: 0;
+}
+
+.section-title {
+    margin: 0;
+    font-size: 0.95rem;
+    font-weight: 600;
+}
+
+/* Color Variants */
+.section-header-basic {
+    background-color: #f0f9ff;
+    border-left-color: #0284c7;
+}
+
+.section-header-basic .section-title {
+    color: #0369a1;
+}
+
+.section-header-business {
+    background-color: #f0fdfa;
+    border-left-color: #0d9488;
+}
+
+.section-header-business .section-title {
+    color: #0f766e;
+}
+
+.section-header-contact {
+    background-color: #faf5ff;
+    border-left-color: #9333ea;
+}
+
+.section-header-contact .section-title {
+    color: #7e22ce;
+}
+
+.section-header-account {
+    background-color: #f0fdf4;
+    border-left-color: #16a34a;
+}
+
+.section-header-account .section-title {
+    color: #166534;
+}
+
+.section-header-etc {
+    background-color: #fef3c7;
+    border-left-color: #f59e0b;
+}
+
+.section-header-etc .section-title {
+    color: #b45309;
+}
+
+/* Sticky Footer */
+.form-actions {
+    position: sticky;
+    bottom: 0;
+    background-color: rgba(255, 255, 255, 0.95);
+    border-top: 1px solid #e5e7eb;
+    padding: 1rem;
+    display: flex;
+    justify-content: flex-end;
+    margin: 0 -1.5rem -1.5rem -1.5rem;
+    /* Compensate for parent padding */
+    z-index: 10;
+}
+
+.btn-save-company {
+    padding: 0.5rem 1.5rem;
+    font-size: 0.95rem;
+    font-weight: 600;
+}

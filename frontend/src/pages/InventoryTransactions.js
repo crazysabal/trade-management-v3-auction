@@ -138,7 +138,7 @@ function InventoryTransactions() {
   }
 
   return (
-    <div className="inventory-transactions" style={{ maxWidth: '1400px', margin: '0 auto', width: '100%' }}>
+    <div className="inventory-transactions" style={{ margin: '0 auto', width: '100%' }}>
       <div className="page-header" style={{ display: 'flex', alignItems: 'center' }}>
         <h1 className="page-title" style={{ margin: 0 }}>📒 재고 수불부</h1>
       </div>
