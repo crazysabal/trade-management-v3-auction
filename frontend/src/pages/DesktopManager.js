@@ -16,8 +16,9 @@ import InventoryProductionManagement from './InventoryProductionManagement';
 import MatchingPage from './MatchingPage';
 import InventoryProductionHistory from './InventoryProductionHistory'; // [New]
 import InventoryHistory from './InventoryHistory';
-import InventoryCheckPage from './InventoryCheckPage';
-import InventoryTransactions from './InventoryTransactions';
+import InventoryAuditPage from './InventoryAuditPage';
+
+
 import CompanyBalances from './CompanyBalances';
 import ExpenseList from './ExpenseList';
 import SettlementPage from './SettlementPage';
@@ -39,10 +40,32 @@ import AuctionAccounts from './AuctionAccounts';
  */
 const DesktopManager = () => {
     // 열린 윈도우 목록
-    // { id, type, zIndex, position, title, size, componentProps, isMinimized }
-    const [windows, setWindows] = useState([]);
-    const [maxZIndex, setMaxZIndex] = useState(100);
-    const [activeWindowId, setActiveWindowId] = useState(null); // 현재 활성화된(최상위) 윈도우 ID
+    // { id, type, zIndex, position, title, icon, size, componentProps, isMinimized }
+    const [windows, setWindows] = useState(() => {
+        const saved = localStorage.getItem('desktop_windows');
+        if (saved) {
+            try {
+                const parsed = JSON.parse(saved);
+                // 세션 복구 시 isDirty는 false로 초기화 (새로고침 시점의 상태를 알 수 없으므로)
+                return parsed.map(w => ({ ...w, isDirty: false }));
+            } catch (e) {
+                console.error('Failed to restore windows:', e);
+            }
+        }
+        return [];
+    });
+
+    const [maxZIndex, setMaxZIndex] = useState(() => {
+        if (windows.length > 0) {
+            return Math.max(...windows.map(w => w.zIndex), 100);
+        }
+        return 100;
+    });
+
+    const [activeWindowId, setActiveWindowId] = useState(() => {
+        const saved = localStorage.getItem('active_window_id');
+        return saved ? parseInt(saved) : null;
+    }); // 현재 활성화된(최상위) 윈도우 ID
     const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
     // 출력 모달 상태
     const [printModal, setPrintModal] = useState({ isOpen: false, tradeId: null });
@@ -65,6 +88,21 @@ const DesktopManager = () => {
         setWindowMode(mode);
         localStorage.setItem('window_mode', mode);
     };
+
+    // 윈도우 상태 변경 시 localStorage 저장
+    useEffect(() => {
+        // 불필요한 속성(isDirty 등) 제외하고 저장하거나, 초기화하여 저장
+        const dataToSave = windows.map(({ isDirty, ...rest }) => rest);
+        localStorage.setItem('desktop_windows', JSON.stringify(dataToSave));
+    }, [windows]);
+
+    useEffect(() => {
+        if (activeWindowId) {
+            localStorage.setItem('active_window_id', activeWindowId.toString());
+        } else {
+            localStorage.removeItem('active_window_id');
+        }
+    }, [activeWindowId]);
 
     // 앱 실행 (윈도우 열기)
     const launchApp = useCallback((appType, props = {}) => {
@@ -121,8 +159,9 @@ const DesktopManager = () => {
             case 'INVENTORY_PRODUCTION': title = '재고 작업'; icon = '🏭'; break;
             case 'INVENTORY_PRODUCTION_HISTORY': title = '재고 작업 이력'; icon = '📜'; break;
             case 'INVENTORY_HISTORY': title = '재고 이력'; icon = '📜'; break;
-            case 'INVENTORY_CHECK': title = '재고 실사'; icon = '🔍'; break;
-            case 'INVENTORY_TRANSACTIONS': title = '재고 수불부'; icon = '📒'; break;
+            case 'INVENTORY_AUDIT': title = '재고 실사'; icon = '🔍'; break;
+
+
             case 'MATCHING': title = '마감 (매칭)'; icon = '🔗'; break;
             case 'AUCTION_IMPORT': title = '낙찰 데이터 가져오기'; icon = '🔨'; break;
             case 'AUCTION_ACCOUNTS': title = '경매 계정 관리'; icon = '🆔'; break;
@@ -295,8 +334,8 @@ const DesktopManager = () => {
         const { type, componentProps } = win;
 
         switch (type) {
-            case 'PURCHASE': return <TradePanel tradeType="PURCHASE" panelId={`win-${win.id}`} onPrint={handlePrint} onInventoryUpdate={handleInventoryUpdate} onTradeChange={handleTradeChange} onDirtyChange={(isDirty) => handleWindowDirtyChange(`win-${win.id}`, isDirty)} {...componentProps} />;
-            case 'SALE': return <TradePanel tradeType="SALE" panelId={`win-${win.id}`} onPrint={handlePrint} onInventoryUpdate={handleInventoryUpdate} onTradeChange={handleTradeChange} onDirtyChange={(isDirty) => handleWindowDirtyChange(`win-${win.id}`, isDirty)} {...componentProps} />;
+            case 'PURCHASE': return <TradePanel tradeType="PURCHASE" panelId={`win-${win.id}`} onClose={() => closeWindow(win.id)} onPrint={handlePrint} onInventoryUpdate={handleInventoryUpdate} onTradeChange={handleTradeChange} onDirtyChange={(isDirty) => handleWindowDirtyChange(`win-${win.id}`, isDirty)} {...componentProps} />;
+            case 'SALE': return <TradePanel tradeType="SALE" panelId={`win-${win.id}`} onClose={() => closeWindow(win.id)} onPrint={handlePrint} onInventoryUpdate={handleInventoryUpdate} onTradeChange={handleTradeChange} onDirtyChange={(isDirty) => handleWindowDirtyChange(`win-${win.id}`, isDirty)} {...componentProps} />;
             case 'TRADE_LIST': return <TradeList isWindow={true} onOpenTradeEdit={(type, tradeId, viewMode = false) => launchApp(type, { initialTradeId: tradeId, initialViewMode: viewMode })} {...componentProps} />;
             case 'COMPANY_LIST': return <CompanyList isWindow={true} {...componentProps} />;
             case 'PRODUCT_LIST': return <IntegratedProductManagement isWindow={true} {...componentProps} />;
@@ -307,9 +346,10 @@ const DesktopManager = () => {
             case 'INVENTORY_TRANSFER': return <InventoryTransferManagement isWindow={true} {...componentProps} />;
             case 'INVENTORY_PRODUCTION': return <InventoryProductionManagement isWindow={true} {...componentProps} />;
             case 'INVENTORY_PRODUCTION_HISTORY': return <InventoryProductionHistory isWindow={true} {...componentProps} />;
-            case 'INVENTORY_HISTORY': return <InventoryHistory isWindow={true} onOpenTrade={(type, tradeId) => launchApp(type, { initialTradeId: tradeId, initialViewMode: true })} {...componentProps} />;
-            case 'INVENTORY_CHECK': return <InventoryCheckPage isWindow={true} {...componentProps} />;
-            case 'INVENTORY_TRANSACTIONS': return <InventoryTransactions isWindow={true} {...componentProps} />;
+            case 'INVENTORY_HISTORY': return <InventoryHistory isWindow={true} {...componentProps} />;
+            case 'INVENTORY_AUDIT': return <InventoryAuditPage isWindow={true} {...componentProps} />;
+
+
             case 'MATCHING': return <MatchingPage isWindow={true} {...componentProps} />;
             case 'AUCTION_IMPORT': return <AuctionImportV2 isWindow={true} {...componentProps} />;
             case 'AUCTION_ACCOUNTS': return <AuctionAccounts isWindow={true} {...componentProps} />;
@@ -327,7 +367,7 @@ const DesktopManager = () => {
     };
 
     return (
-        <div className="desktop-env" style={{ minHeight: '100vh', background: '#f0f2f5', paddingBottom: '38px' }}>
+        <div className="desktop-env" style={{ minHeight: '100vh', background: '#f0f2f5', paddingBottom: isMobile ? '0' : '38px' }}>
             {/* 상단 런처 (Navbar 대체) */}
             <Navbar onLaunchApp={launchApp} />
 
@@ -368,15 +408,17 @@ const DesktopManager = () => {
                 </FloatingWindow>
             ))}
 
-            {/* 하단 태스크바 */}
-            <Taskbar
-                windows={windows}
-                activeWindowId={activeWindowId}
-                onToggleWindow={toggleWindow}
-                onCloseWindow={closeWindow}
-                onResetPosition={resetWindowPosition}
-                onCloseAll={closeAll}
-            />
+            {/* 하단 태스크바 (모바일에서는 숨김) */}
+            {!isMobile && (
+                <Taskbar
+                    windows={windows}
+                    activeWindowId={activeWindowId}
+                    onToggleWindow={toggleWindow}
+                    onCloseWindow={closeWindow}
+                    onResetPosition={resetWindowPosition}
+                    onCloseAll={closeAll}
+                />
+            )}
 
             {/* 출력 모달 (전역) */}
             {printModal.isOpen && (

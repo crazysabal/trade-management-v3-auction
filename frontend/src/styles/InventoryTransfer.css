@@ -307,3 +307,8 @@
     z-index: 10;
     font-weight: bold;
 }
+
+.inactive-label {
+    font-size: 0.8rem;
+    color: #e74c3c;
+}

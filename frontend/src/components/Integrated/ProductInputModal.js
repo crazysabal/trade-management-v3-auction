@@ -546,9 +546,47 @@ function ProductInputModal({ isOpen, onClose, onSuccess, initialData = null, isE
                     )}
 
 
-                    <div style={{ marginTop: '1rem', display: 'flex', justifyContent: 'flex-end', gap: '0.5rem' }}>
-                        <button type="button" onClick={onClose} style={{ padding: '0.5rem 1rem', borderRadius: '6px', border: '1px solid #cbd5e1', backgroundColor: 'white', cursor: 'pointer' }}>취소</button>
-                        <button type="submit" style={{ padding: '0.5rem 1rem', borderRadius: '6px', border: 'none', backgroundColor: '#3b82f6', color: 'white', fontWeight: 'bold', cursor: 'pointer' }}>
+                    <div style={{ marginTop: '1.5rem', paddingTop: '1rem', borderTop: '1px solid #eee', textAlign: 'right', display: 'block' }}>
+                        <button
+                            type="button"
+                            onClick={onClose}
+                            style={{
+                                padding: '0.4rem 1.2rem',
+                                fontSize: '0.9rem',
+                                borderRadius: '6px',
+                                border: '1px solid #cbd5e1',
+                                backgroundColor: 'white',
+                                cursor: 'pointer',
+                                width: 'auto',
+                                minWidth: '0',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                flex: 'none'
+                            }}
+                        >
+                            취소
+                        </button>
+                        <button
+                            type="submit"
+                            style={{
+                                padding: '0.4rem 1.2rem',
+                                fontSize: '0.9rem',
+                                borderRadius: '6px',
+                                border: 'none',
+                                backgroundColor: '#3b82f6',
+                                color: 'white',
+                                fontWeight: 'bold',
+                                cursor: 'pointer',
+                                width: 'auto',
+                                minWidth: '0',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                flex: 'none',
+                                marginLeft: '0.5rem'
+                            }}
+                        >
                             {isEdit ? '수정 저장' : '등록'}
                         </button>
                     </div>

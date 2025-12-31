@@ -41,7 +41,9 @@ const InventoryTransferManagement = () => {
                 warehousesAPI.getAll()
             ]);
             setInventory(invRes.data.data || []);
-            setWarehouses(whRes.data.data || []);
+            // 미사용이면서 재고가 없는 창고는 표시하지 않음
+            const filteredWarehouses = (whRes.data.data || []).filter(w => w.is_active || w.stock_count > 0);
+            setWarehouses(filteredWarehouses);
         } catch (error) {
             console.error('Data load error:', error);
         } finally {
@@ -280,10 +282,11 @@ const InventoryTransferManagement = () => {
                 <div className="header-controls" style={{ marginLeft: 0, width: '100%', justifyContent: 'flex-start', gap: '1rem' }}>
                     <input
                         type="text"
-                        placeholder="품목, 출하주, 매입처, 등급 검색 (띄어쓰기)..."
+                        placeholder="🔍 품목, 화주, 매입처, 수량, 단가... (띄어쓰기로 다중 검색)"
                         value={searchKeyword}
                         onChange={(e) => setSearchKeyword(e.target.value)}
                         className="search-input"
+                        style={{ height: '36px', border: '1px solid #ddd', borderRadius: '4px', paddingLeft: '0.75rem', width: '380px' }}
                     />
                     <button
                         onClick={() => setReorderMode(!reorderMode)}
@@ -346,7 +349,7 @@ const InventoryTransferManagement = () => {
                                 <div className={`warehouse-header ${draggedItem && dragOverWarehouseId === wh.id ? 'highlight' : (wh.is_default ? 'default' : '')}`}>
                                     <h3 className="warehouse-title">
                                         {reorderMode && '↕ '}
-                                        {wh.name}
+                                        {wh.name} {!wh.is_active && <span className="inactive-label">(비활성)</span>}
                                     </h3>
                                     <span className="warehouse-count">
                                         {getInventoryForWarehouse(wh.id).length} 건
@@ -368,10 +371,10 @@ const InventoryTransferManagement = () => {
                                         >
                                             <div className="card-content">
                                                 <div className="card-main-info" style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-                                                    <span style={{ marginRight: 0 }}>{item.product_name}</span>
-                                                    {Number(item.product_weight) > 0 && <span style={{ color: '#555' }}>{Number(item.product_weight)}kg</span>}
-                                                    <span style={{ color: '#27ae60' }}>{item.sender}</span>
-                                                    {item.grade && <span style={{ color: '#7f8c8d' }}>({item.grade})</span>}
+                                                    <span style={{ marginRight: 0, fontWeight: 600, color: '#2d3748' }}>{item.product_name}</span>
+                                                    {Number(item.product_weight) > 0 && <span style={{ color: '#4a5568' }}>{Number(item.product_weight)}kg</span>}
+                                                    <span style={{ color: '#2b6cb0' }}>{item.sender}</span>
+                                                    {item.grade && <span style={{ color: '#718096' }}>({item.grade})</span>}
 
                                                     <span style={{ flex: 1 }}></span> {/* Spacer */}
 

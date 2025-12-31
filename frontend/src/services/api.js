@@ -191,7 +191,7 @@ export const paymentAPI = {
 
 // 창고 관리 API
 export const warehousesAPI = {
-  getAll: () => api.get('/warehouses'),
+  getAll: (params) => api.get('/warehouses', { params }),
   create: (data) => api.post('/warehouses', data),
   update: (id, data) => api.put(`/warehouses/${id}`, data),
   reorder: (orderedIds) => api.put('/warehouses/reorder', { orderedIds }),
@@ -233,6 +233,18 @@ export const expenseCategoryAPI = {
   update: (id, data) => api.put(`/expense-categories/${id}`, data),
   delete: (id) => api.delete(`/expense-categories/${id}`),
   reorder: (data) => api.put('/expense-categories/reorder', data),
+};
+
+// 재고 실사 API
+export const inventoryAuditAPI = {
+  getAll: (params) => api.get('/inventory-audit', { params }),
+  getById: (id) => api.get(`/inventory-audit/${id}`),
+  start: (data) => api.post('/inventory-audit/start', data),
+  updateItems: (id, items) => api.put(`/inventory-audit/${id}/items`, { items }),
+  finalize: (id) => api.post(`/inventory-audit/${id}/finalize`),
+  revert: (id) => api.post(`/inventory-audit/${id}/revert`),
+  cancel: (id) => api.post(`/inventory-audit/${id}/cancel`),
+  delete: (id) => api.delete(`/inventory-audit/${id}`),
 };
 
 export default api;

@@ -1,4 +1,4 @@
-const express = require('express'); // Force restart again 4
+const express = require('express'); // Force restart for revert feature
 const cors = require('cors');
 require('dotenv').config();
 
@@ -30,6 +30,7 @@ const inventoryProductionRouter = require('./routes/inventoryProduction'); // �
 const expenseRouter = require('./routes/expenses');
 const expenseCategoryRouter = require('./routes/expenseCategories');
 const settlementRouter = require('./routes/settlement');
+const inventoryAuditRouter = require('./routes/inventoryAudit');
 
 app.use('/api/companies', companiesRouter);
 app.use('/api/products', productsRouter);
@@ -49,6 +50,7 @@ app.use('/api/inventory-adjustment', inventoryAdjustmentRouter); // Fix missing 
 app.use('/api/expenses', expenseRouter);
 app.use('/api/expense-categories', expenseCategoryRouter);
 app.use('/api/settlement', settlementRouter);
+app.use('/api/inventory-audit', inventoryAuditRouter);
 
 // 헬스체크
 app.get('/api/health', (req, res) => {

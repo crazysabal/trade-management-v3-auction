@@ -67,9 +67,8 @@ const StockTransferModal = ({ isOpen, onClose, inventory, inventoryList = [], on
 
     const loadWarehouses = async () => {
         try {
-            const response = await warehousesAPI.getAll();
+            const response = await warehousesAPI.getAll({ active_only: 'true' });
             // 현재 창고 제외 (단일 이동 시에만)
-            // 일괄 이동 시에는 여러 창고가 섞여 있을 수 있으므로 모두 허용하고 submit 시 필터링
             let filtered = response.data.data;
             if (!isBulk) {
                 const currentWhId = inventory?.warehouse_id;

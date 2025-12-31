@@ -6,6 +6,13 @@ import ReactDOM from 'react-dom';
  */
 const FloatingWindow = ({ title, icon, onClose, initialPosition = { x: 100, y: 100 }, size = { width: 400, height: 500 }, children, zIndex = 9999, onMouseDown, onResizeStop, onDragStop, isActive, contentPadding = '8px', headerPadding = '6px 15px', ...rest }) => {
     const windowRef = useRef(null);
+    const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
+
+    useEffect(() => {
+        const handleResize = () => setIsMobile(window.innerWidth <= 768);
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, []);
 
     // 이동 관련 Refs
     const dragStartPos = useRef({ x: 0, y: 0 });
@@ -18,6 +25,9 @@ const FloatingWindow = ({ title, icon, onClose, initialPosition = { x: 100, y: 1
     const isResizing = useRef(false);
 
     useEffect(() => {
+        // 모바일이면 위치/크기 조절 로직 스킵 (항상 전체화면)
+        if (isMobile) return;
+
         // 초기 위치 및 크기 설정
         if (windowRef.current) {
             // Width 처리
@@ -48,7 +58,7 @@ const FloatingWindow = ({ title, icon, onClose, initialPosition = { x: 100, y: 1
             if (initialPosition === 'center') {
                 // 렌더링 후 크기를 알 수 있도록 setTimeout 사용
                 setTimeout(() => {
-                    if (windowRef.current) {
+                    if (windowRef.current && !isMobile) {
                         const rect = windowRef.current.getBoundingClientRect();
                         const winW = window.innerWidth;
                         const winH = window.innerHeight;
@@ -72,10 +82,13 @@ const FloatingWindow = ({ title, icon, onClose, initialPosition = { x: 100, y: 1
                 windowRef.current.style.top = `${finalY}px`;
             }
         }
-    }, [initialPosition]);
+    }, [initialPosition, isMobile]);
+
+    // ... (Handlers unchanged)
 
     // --- 드래그 이동 핸들러 ---
     const handleMouseDown = (e) => {
+        if (isMobile) return; // 모바일 드래그 방지
         if (e.button !== 0) return;
 
         // 버튼 등을 클릭했을 때는 드래그 방지
@@ -150,6 +163,7 @@ const FloatingWindow = ({ title, icon, onClose, initialPosition = { x: 100, y: 1
     const windowStartRect = useRef({ x: 0, y: 0, width: 0, height: 0 }); // Store initial rect
 
     const handleResizeMouseDown = (e, direction) => {
+        if (isMobile) return; // 모바일 리사이즈 방지
         e.stopPropagation();
         if (e.button !== 0) return;
 
@@ -249,6 +263,7 @@ const FloatingWindow = ({ title, icon, onClose, initialPosition = { x: 100, y: 1
     const prevRect = useRef(null);
 
     const toggleMaximize = (e) => {
+        if (isMobile) return; // 모바일에서는 토글 불가
         if (e) e.stopPropagation();
         if (isMaximized) {
             // Restore
@@ -303,7 +318,18 @@ const FloatingWindow = ({ title, icon, onClose, initialPosition = { x: 100, y: 1
             onMouseDown={(e) => {
                 if (onMouseDown) onMouseDown(e);
             }}
-            style={{
+            style={isMobile ? {
+                position: 'fixed',
+                top: '50px', // Navbar 높이만큼 내림
+                left: 0,
+                width: '100%',
+                height: 'calc(100% - 50px)', // 전체 높이에서 Navbar 높이 제외
+                backgroundColor: 'white',
+                zIndex: zIndex,
+                display: rest.isMinimized ? 'none' : 'flex',
+                flexDirection: 'column',
+                overflow: 'hidden'
+            } : {
                 position: 'fixed',
                 backgroundColor: 'white',
                 boxShadow: isActive ? '0 8px 30px rgba(0,0,0,0.3)' : '0 4px 12px rgba(0,0,0,0.15)',
@@ -312,92 +338,93 @@ const FloatingWindow = ({ title, icon, onClose, initialPosition = { x: 100, y: 1
                 zIndex: zIndex,
                 display: rest.isMinimized ? 'none' : 'flex',
                 flexDirection: 'column',
-                overflow: 'visible', // Changed to visible so resize handles outside/edge work better if needed, but 'hidden' clips corners. 
-                // Actually 'hidden' is safer for rounded corners, so we'll keep handles inside.
+                overflow: 'visible',
                 transition: 'box-shadow 0.2s, border 0.2s',
             }}
         >
-            {/* Header */}
-            <div
-                onMouseDown={isMaximized ? undefined : handleMouseDown}
-                onDoubleClick={toggleMaximize}
-                style={{
-                    padding: headerPadding,
-                    backgroundColor: isActive ? '#2980b9' : '#34495e',
-                    color: 'white',
-                    cursor: 'grab',
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    userSelect: 'none',
-                    flexShrink: 0,
-                    position: 'relative',
-                    zIndex: 100,
-                    borderTopLeftRadius: isMaximized ? '0' : '6px',
-                    borderTopRightRadius: isMaximized ? '0' : '6px'
-                }}
-            >
-                {/* ... Header Content (Same as before) ... */}
+            {/* Header: 모바일에서는 숨김 */}
+            {!isMobile && (
                 <div
-                    onClick={(e) => {
-                        e.stopPropagation();
-                        navigator.clipboard.writeText(title);
+                    onMouseDown={isMaximized ? undefined : handleMouseDown}
+                    onDoubleClick={toggleMaximize}
+                    style={{
+                        padding: headerPadding,
+                        backgroundColor: isActive ? '#2980b9' : '#34495e',
+                        color: 'white',
+                        cursor: 'grab',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        userSelect: 'none',
+                        flexShrink: 0,
+                        position: 'relative',
+                        zIndex: 100,
+                        borderTopLeftRadius: isMaximized ? '0' : '6px',
+                        borderTopRightRadius: isMaximized ? '0' : '6px'
                     }}
-                    style={{ fontWeight: 'bold', fontSize: '0.95rem', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}
-                    title="클릭하여 화면 명 복사"
                 >
-                    {icon && <span>{icon}</span>}
-                    {title}
-                    {rest.isDirty && (
-                        <span style={{
-                            backgroundColor: '#e74c3c', // Red
-                            color: 'white',
-                            fontSize: '0.7rem',
-                            padding: '2px 6px',
-                            borderRadius: '10px',
-                            fontWeight: 'normal',
-                            boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
-                            animation: 'pulse 2s infinite'
-                        }}>
-                            수정중
-                        </span>
-                    )}
-                </div>
-                <style>{`
-                    @keyframes pulse {
-                        0% { opacity: 1; transform: scale(1); }
-                        50% { opacity: 0.8; transform: scale(0.95); }
-                        100% { opacity: 1; transform: scale(1); }
-                    }
-                `}</style>
-                <div style={{ display: 'flex', gap: '8px' }}>
-                    {rest.onMinimize && (
+                    {/* ... Header Content ... */}
+                    <div
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            navigator.clipboard.writeText(title);
+                        }}
+                        style={{ fontWeight: 'bold', fontSize: '0.95rem', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}
+                        title="클릭하여 화면 명 복사"
+                    >
+                        {icon && <span>{icon}</span>}
+                        {title}
+                        {rest.isDirty && (
+                            <span style={{
+                                backgroundColor: '#e74c3c', // Red
+                                color: 'white',
+                                fontSize: '0.7rem',
+                                padding: '2px 6px',
+                                borderRadius: '10px',
+                                fontWeight: 'normal',
+                                boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
+                                animation: 'pulse 2s infinite'
+                            }}>
+                                수정중
+                            </span>
+                        )}
+                    </div>
+                    <style>{`
+                        @keyframes pulse {
+                            0% { opacity: 1; transform: scale(1); }
+                            50% { opacity: 0.8; transform: scale(0.95); }
+                            100% { opacity: 1; transform: scale(1); }
+                        }
+                    `}</style>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                        {rest.onMinimize && (
+                            <button
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    rest.onMinimize();
+                                }}
+                                title="최소화"
+                                style={{ background: 'none', border: 'none', color: 'white', fontSize: '1rem', cursor: 'pointer', padding: '0 5px', lineHeight: 1 }}
+                            >
+                                ─
+                            </button>
+                        )}
                         <button
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                rest.onMinimize();
-                            }}
-                            title="최소화"
+                            onClick={toggleMaximize}
+                            title={isMaximized ? "이전 크기로 복원" : "최대화"}
                             style={{ background: 'none', border: 'none', color: 'white', fontSize: '1rem', cursor: 'pointer', padding: '0 5px', lineHeight: 1 }}
                         >
-                            ─
+                            {isMaximized ? '❐' : '□'}
                         </button>
-                    )}
-                    <button
-                        onClick={toggleMaximize}
-                        title={isMaximized ? "이전 크기로 복원" : "최대화"}
-                        style={{ background: 'none', border: 'none', color: 'white', fontSize: '1rem', cursor: 'pointer', padding: '0 5px', lineHeight: 1 }}
-                    >
-                        {isMaximized ? '❐' : '□'}
-                    </button>
-                    <button onClick={onClose} title="닫기" style={{ background: 'none', border: 'none', color: 'white', fontSize: '1.2rem', cursor: 'pointer', padding: '0 5px', lineHeight: 1 }}>
-                        &times;
-                    </button>
+                        <button onClick={onClose} title="닫기" style={{ background: 'none', border: 'none', color: 'white', fontSize: '1.2rem', cursor: 'pointer', padding: '0 5px', lineHeight: 1 }}>
+                            &times;
+                        </button>
+                    </div>
                 </div>
-            </div>
+            )}
 
             {/* Content */}
-            <div style={{ flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column', padding: contentPadding }}>
+            <div style={{ flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column', padding: isMobile ? 0 : contentPadding }}>
                 {children}
             </div>
 

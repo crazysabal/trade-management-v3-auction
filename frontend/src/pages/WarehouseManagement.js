@@ -25,8 +25,13 @@ const WarehouseManagement = () => {
     const handleDragStart = (e, position) => {
         dragItem.current = position;
         e.dataTransfer.effectAllowed = 'move';
+        // 드래그 이미지를 행 전체로 설정
+        const row = e.target.closest('tr');
+        if (row) {
+            e.dataTransfer.setDragImage(row, 0, 0);
+        }
         // 드래그 중인 행 스타일링 (선택적)
-        e.target.classList.add('dragging');
+        if (row) row.classList.add('dragging');
     };
 
     const handleDragEnter = (e, position) => {
@@ -161,102 +166,128 @@ const WarehouseManagement = () => {
     };
 
     return (
-        <div className="warehouse-management" style={{ maxWidth: '800px', margin: '0 auto', padding: '1.5rem' }}>
-            {/* 헤더 섹션 */}
-            <div className="page-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
-                <h1 className="page-title" style={{ margin: 0, fontSize: '1.5rem', fontWeight: 'bold' }}>🏭 창고 관리</h1>
-                <div style={{ display: 'flex', gap: '0.5rem' }}>
-                    <button
-                        onClick={handleCreate}
-                        className="btn btn-primary"
-                        style={{ fontSize: '1rem', padding: '0.5rem 1rem' }}
-                    >
-                        + 창고 추가
-                    </button>
-                </div>
+        <div className="warehouse-management" style={{ width: '100%', height: '100%', padding: '0.5rem' }}>
+            {/* 상단 버튼 영역 */}
+            <div style={{ textAlign: 'right', marginBottom: '0.5rem' }}>
+                <button
+                    onClick={handleCreate}
+                    className="btn btn-primary"
+                    style={{
+                        fontSize: '0.9rem',
+                        padding: '0.4rem 1.2rem',
+                        width: 'auto',
+                        minWidth: '0',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        flex: 'none'
+                    }}
+                >
+                    + 창고 추가
+                </button>
             </div>
 
-            {/* 본문 카드 섹션 */}
-            <div className="card" style={{ backgroundColor: '#fff', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)', padding: '1.5rem' }}>
-                <div className="table-container">
-                    <table className="trade-Table" style={{ width: '100%' }}>
-                        <thead>
-                            <tr>
-                                <th style={{ width: '50px', textAlign: 'center' }}></th>
-                                <th style={{ width: '80px', textAlign: 'center' }}>순서</th>
-                                <th>창고명</th>
-                                <th style={{ width: '80px', textAlign: 'center' }}>기본</th>
-                                <th style={{ width: '100px', textAlign: 'center' }}>상태</th>
-                                <th>설명</th>
-                                <th style={{ width: '140px', textAlign: 'center' }}>관리</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {warehouses.length > 0 ? (
-                                warehouses.map((wh, index) => (
-                                    <tr
-                                        key={wh.id}
-                                        className={!wh.is_active ? 'inactive-row' : 'hover-row'}
-                                        draggable
-                                        onDragStart={(e) => handleDragStart(e, index)}
-                                        onDragEnter={(e) => handleDragEnter(e, index)}
-                                        onDragOver={handleDragOver}
-                                        onDragEnd={handleDragEnd}
-                                        style={{ cursor: 'move' }}
-                                    >
-                                        <td style={{ textAlign: 'center', color: '#adb5bd' }}>
+            <div className="table-container">
+                <table className="trade-Table" style={{ width: '100%' }}>
+                    <thead>
+                        <tr>
+                            <th style={{ width: '50px', textAlign: 'center', padding: '0.5rem', fontSize: '0.85rem' }}></th>
+                            <th style={{ width: '80px', textAlign: 'center', padding: '0.5rem', fontSize: '0.85rem' }}>순서</th>
+                            <th style={{ padding: '0.5rem', fontSize: '0.85rem' }}>창고명</th>
+                            <th style={{ width: '80px', textAlign: 'center', padding: '0.5rem', fontSize: '0.85rem' }}>기본</th>
+                            <th style={{ width: '100px', textAlign: 'center', padding: '0.5rem', fontSize: '0.85rem' }}>상태</th>
+                            <th style={{ padding: '0.5rem', fontSize: '0.85rem' }}>설명</th>
+                            <th style={{ width: '140px', textAlign: 'center', padding: '0.5rem', fontSize: '0.85rem' }}>관리</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {warehouses.length > 0 ? (
+                            warehouses.map((wh, index) => (
+                                <tr
+                                    key={wh.id}
+                                    className={!wh.is_active ? 'inactive-row' : 'hover-row'}
+                                    onDragEnter={(e) => handleDragEnter(e, index)}
+                                    onDragOver={handleDragOver}
+                                    onDragEnd={handleDragEnd}
+                                >
+                                    <td style={{ textAlign: 'center', color: '#adb5bd', padding: '0.5rem', fontSize: '0.85rem' }}>
+                                        <span
+                                            className="drag-handle"
+                                            draggable={true}
+                                            onDragStart={(e) => handleDragStart(e, index)}
+                                            style={{ cursor: 'grab', display: 'inline-block', width: '100%', height: '100%' }}
+                                            title="드래그하여 순서 변경"
+                                        >
                                             ☰
-                                        </td>
-                                        <td style={{ textAlign: 'center' }}>{index + 1}</td>
-                                        <td>{wh.name}</td>
-                                        <td style={{ textAlign: 'center' }}>{wh.is_default ? '✅' : ''}</td>
-                                        <td style={{ textAlign: 'center' }}>
-                                            <span
-                                                className={`badge ${wh.is_active ? 'badge-success' : 'badge-secondary'}`}
-                                                onClick={() => toggleActive(wh)}
-                                                style={{
-                                                    cursor: 'pointer',
-                                                    padding: '0.4em 0.8em',
-                                                    borderRadius: '10px',
-                                                    userSelect: 'none'
-                                                }}
-                                            >
-                                                {wh.is_active ? '사용 중' : '미사용'}
-                                            </span>
-                                        </td>
-                                        <td>{wh.description}</td>
-                                        <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
+                                        </span>
+                                    </td>
+                                    <td style={{ textAlign: 'center', padding: '0.5rem', fontSize: '0.85rem' }}>{index + 1}</td>
+                                    <td style={{ padding: '0.5rem', fontSize: '0.85rem' }}>{wh.name}</td>
+                                    <td style={{ textAlign: 'center', padding: '0.5rem', fontSize: '0.85rem' }}>{wh.is_default ? '✅' : ''}</td>
+                                    <td style={{ textAlign: 'center', padding: '0.5rem', fontSize: '0.85rem' }}>
+                                        <span
+                                            className={`badge ${wh.is_active ? 'badge-success' : 'badge-secondary'}`}
+                                            onClick={() => toggleActive(wh)}
+                                            style={{
+                                                cursor: 'pointer',
+                                                padding: '0.4em 0.8em',
+                                                borderRadius: '10px',
+                                                userSelect: 'none'
+                                            }}
+                                        >
+                                            {wh.is_active ? '사용' : '미사용'}
+                                        </span>
+                                    </td>
+                                    <td style={{ padding: '0.5rem', fontSize: '0.85rem' }}>{wh.description}</td>
+                                    <td style={{ textAlign: 'center', whiteSpace: 'nowrap', padding: '0.5rem', fontSize: '0.85rem' }}>
+                                        <div style={{ display: 'flex', gap: '4px', justifyContent: 'center', alignItems: 'center' }}>
                                             <button
-                                                className="btn btn-sm btn-info"
+                                                className="btn btn-sm btn-primary"
                                                 onClick={() => handleEdit(wh)}
-                                                style={{ fontSize: '0.85rem', marginRight: '5px' }}
+                                                style={{
+                                                    fontSize: '0.8rem',
+                                                    padding: '2px 8px',
+                                                    width: 'auto',
+                                                    minWidth: '0',
+                                                    height: '28px',
+                                                    whiteSpace: 'nowrap',
+                                                    flex: 'none'
+                                                }}
                                             >
                                                 수정
                                             </button>
                                             <button
                                                 className="btn btn-sm btn-danger"
                                                 onClick={() => handleDelete(wh)}
-                                                style={{ fontSize: '0.85rem' }}
+                                                style={{
+                                                    fontSize: '0.8rem',
+                                                    padding: '2px 8px',
+                                                    width: 'auto',
+                                                    minWidth: '0',
+                                                    height: '28px',
+                                                    whiteSpace: 'nowrap',
+                                                    flex: 'none'
+                                                }}
                                             >
                                                 삭제
                                             </button>
-                                        </td>
-                                    </tr>
-                                ))
-                            ) : (
-                                <tr>
-                                    <td colSpan="7" style={{ textAlign: 'center', padding: '3rem', color: '#6c757d' }}>
-                                        {loading ? '로딩 중...' : '등록된 창고가 없습니다.'}
+                                        </div>
                                     </td>
                                 </tr>
-                            )}
-                        </tbody>
-                    </table>
-                </div>
-                <div style={{ marginTop: '1rem', fontSize: '0.9rem', color: '#6c757d' }}>
-                    💡 목록의 ☰ 아이콘을 드래그하여 순서를 변경할 수 있습니다.<br />
-                    💡 상태 뱃지를 클릭하여 사용 여부를 변경할 수 있습니다.
-                </div>
+                            ))
+                        ) : (
+                            <tr>
+                                <td colSpan="7" style={{ textAlign: 'center', padding: '3rem', color: '#6c757d' }}>
+                                    {loading ? '로딩 중...' : '등록된 창고가 없습니다.'}
+                                </td>
+                            </tr>
+                        )}
+                    </tbody>
+                </table>
+            </div>
+            <div style={{ marginTop: '1rem', fontSize: '0.9rem', color: '#6c757d' }}>
+                💡 목록의 ☰ 아이콘을 드래그하여 순서를 변경할 수 있습니다.<br />
+                💡 상태 뱃지를 클릭하여 사용 여부를 변경할 수 있습니다.
             </div>
 
             <WarehouseModal

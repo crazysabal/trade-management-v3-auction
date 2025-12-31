@@ -65,60 +65,94 @@ const WarehouseModal = ({ isOpen, onClose, onSubmit, initialData }) => {
                     {initialData ? '창고 정보 수정' : '새 창고 추가'}
                 </h2>
 
-                <div className="form-group" style={{ marginBottom: '1rem' }}>
-                    <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500' }}>창고명</label>
+                <div className="form-group" style={{ marginBottom: '1rem', display: 'flex', alignItems: 'center' }}>
+                    <label style={{ width: '80px', minWidth: '80px', marginRight: '1rem', textAlign: 'right', fontWeight: '500' }}>창고명</label>
                     <input
                         type="text"
                         name="name"
                         value={formData.name}
                         onChange={handleChange}
-                        style={{ width: '100%', padding: '0.6rem', border: '1px solid #ddd', borderRadius: '4px' }}
+                        style={{ flex: 1, padding: '0.6rem', border: '1px solid #ddd', borderRadius: '4px' }}
                         placeholder="예: 제1창고, 부산 물류센터"
                     />
                 </div>
 
-                <div className="form-group" style={{ marginBottom: '1rem' }}>
-                    <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500' }}>주소</label>
+                <div className="form-group" style={{ marginBottom: '1rem', display: 'flex', alignItems: 'center' }}>
+                    <label style={{ width: '80px', minWidth: '80px', marginRight: '1rem', textAlign: 'right', fontWeight: '500' }}>주소</label>
                     <input
                         type="text"
                         name="address"
                         value={formData.address}
                         onChange={handleChange}
-                        style={{ width: '100%', padding: '0.6rem', border: '1px solid #ddd', borderRadius: '4px' }}
+                        style={{ flex: 1, padding: '0.6rem', border: '1px solid #ddd', borderRadius: '4px' }}
                         placeholder="주소 입력"
                     />
                 </div>
 
-                <div className="form-group" style={{ marginBottom: '1rem' }}>
-                    <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500' }}>설명</label>
+                <div className="form-group" style={{ marginBottom: '0.6rem', display: 'flex', alignItems: 'flex-start' }}>
+                    <label style={{ width: '80px', minWidth: '80px', marginRight: '1rem', textAlign: 'right', fontWeight: '500', paddingTop: '8px' }}>설명</label>
                     <textarea
                         name="description"
                         value={formData.description}
                         onChange={handleChange}
                         rows="3"
-                        style={{ width: '100%', padding: '0.6rem', border: '1px solid #ddd', borderRadius: '4px' }}
+                        style={{ flex: 1, padding: '0.6rem', border: '1px solid #ddd', borderRadius: '4px' }}
                         placeholder="창고에 대한 설명..."
                     />
                 </div>
 
-                <div className="form-group" style={{ marginBottom: '1.5rem' }}>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+                <div className="form-group" style={{ marginBottom: '0.4rem', display: 'flex', alignItems: 'center' }}>
+                    <label style={{ width: '80px', minWidth: '80px', marginRight: '1rem', textAlign: 'right', fontWeight: '500' }}>
+                        기본창고
+                    </label>
+                    <div style={{ flex: 1 }}>
                         <input
                             type="checkbox"
                             name="is_default"
                             checked={formData.is_default}
                             onChange={handleChange}
+                            style={{ cursor: 'pointer', width: '18px', height: '18px', margin: 0, display: 'block' }}
                         />
-                        기본 창고로 설정 (입고 시 기본 선택됨)
-                    </label>
+                    </div>
                 </div>
 
-                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem' }}>
+                <div style={{ marginBottom: '1.5rem', fontSize: '0.85rem', color: '#6c757d', textAlign: 'left' }}>
+                    💡 기본 창고로 설정하면 입고/이동 시 기본으로 선택됩니다.
+                </div>
+
+                <div className="form-actions" style={{ marginTop: '1.5rem', paddingTop: '1rem', borderTop: '1px solid #eee', textAlign: 'right', display: 'block' }}>
                     <button onClick={onClose} style={{
-                        padding: '0.6rem 1.2rem', backgroundColor: '#95a5a6', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer'
-                    }}>취소</button>
+                        padding: '0.4rem 1.2rem',
+                        backgroundColor: '#95a5a6',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '4px',
+                        cursor: 'pointer',
+                        fontSize: '0.9rem',
+                        width: 'auto',
+                        minWidth: '0',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        flex: 'none'
+                    }}>
+                        취소
+                    </button>
                     <button onClick={handleSubmit} style={{
-                        padding: '0.6rem 1.2rem', backgroundColor: '#3498db', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer'
+                        padding: '0.4rem 1.2rem',
+                        backgroundColor: '#3498db',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '4px',
+                        cursor: 'pointer',
+                        fontSize: '0.9rem',
+                        width: 'auto',
+                        minWidth: '0',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        flex: 'none',
+                        marginLeft: '8px'
                     }}>
                         {initialData ? '저장' : '추가'}
                     </button>

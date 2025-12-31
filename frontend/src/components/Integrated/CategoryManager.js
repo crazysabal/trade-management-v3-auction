@@ -185,7 +185,7 @@ function CategoryManager({ onSelectCategory, selectedCategoryId }) {
             backgroundColor: '#3b82f6',
             color: 'white',
             border: 'none',
-            padding: '0.4rem 0.8rem',
+            padding: '0.4rem 1.2rem',
             borderRadius: '6px',
             fontSize: '0.8rem',
             fontWeight: '600',

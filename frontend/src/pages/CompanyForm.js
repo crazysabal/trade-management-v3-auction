@@ -380,51 +380,73 @@ function CompanyForm({ id: propId, onSuccess, onCancel }) {
           <h3 className="section-title">📝 기타 정보</h3>
         </div>
 
-        <div className="form-row" style={{ alignItems: 'flex-start' }}>
-          {/* 좌측: 체크박스 그룹 */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', flex: 1, paddingTop: '0' }}>
-            {/* 전자계산서 발행 뱃지 */}
-
-
-            {/* 사용여부 뱃지 */}
-            {isEdit && (
-              <div className="form-group">
-                <label>사용여부</label>
-                <div style={{ flex: 1, display: 'flex', alignItems: 'center' }}>
-                  <label className={`badge-toggle ${formData.is_active ? 'checked' : ''}`} style={{ margin: 0 }}>
-                    <input
-                      type="checkbox"
-                      name="is_active"
-                      checked={formData.is_active}
-                      onChange={handleChange}
-                    />
-
-                    {formData.is_active ? '사용' : '미사용'}
-                  </label>
-                </div>
+        {isEdit && (
+          <div className="form-row">
+            <div className="form-group">
+              <label>사용여부</label>
+              <div style={{ flex: 1, display: 'flex', alignItems: 'center' }}>
+                <label className={`badge-toggle ${formData.is_active ? 'checked' : ''}`} style={{ margin: 0 }}>
+                  <input
+                    type="checkbox"
+                    name="is_active"
+                    checked={formData.is_active}
+                    onChange={handleChange}
+                  />
+                  {formData.is_active ? '사용' : '미사용'}
+                </label>
               </div>
-            )}
+            </div>
+            <div className="form-group"></div> {/* Placeholder for 2 columns */}
           </div>
+        )}
 
-          {/* 우측: 기타 메모 */}
-          <div className="form-group" style={{ flex: 1 }}>
-            <label>비고</label>
+        <div className="form-row" style={{ gridTemplateColumns: '1fr' }}>
+          <div className="form-group" style={{ flexDirection: 'column', alignItems: 'flex-start' }}>
+            <label style={{ textAlign: 'left', width: 'auto', minWidth: 'auto', marginBottom: '0.4rem' }}>비고</label>
             <textarea
               name="notes"
               value={formData.notes || ''}
               onChange={handleChange}
-              rows="4"
+              rows="3"
               placeholder="기타 메모"
-              style={{ height: '100%', minHeight: isEdit ? '8rem' : '4rem' }}
+              style={{ width: '100%', minHeight: '6rem' }}
             />
           </div>
         </div>
 
-        <div className="form-actions" style={{ marginTop: '1.5rem', paddingTop: '1rem' }}>
-          <button type="button" onClick={handleCancel} className="btn btn-secondary">
+        <div className="form-actions" style={{ marginTop: '1.5rem', paddingTop: '1rem', borderTop: '1px solid #eee', textAlign: 'right', display: 'block' }}>
+          <button
+            type="button"
+            onClick={handleCancel}
+            className="btn btn-secondary"
+            style={{
+              padding: '0.4rem 1.2rem',
+              fontSize: '0.9rem',
+              width: 'auto',
+              minWidth: '0',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flex: 'none'
+            }}
+          >
             취소
           </button>
-          <button type="submit" className="btn btn-primary">
+          <button
+            type="submit"
+            className="btn btn-primary"
+            style={{
+              padding: '0.4rem 1.2rem',
+              fontSize: '0.9rem',
+              width: 'auto',
+              minWidth: '0',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flex: 'none',
+              marginLeft: '8px'
+            }}
+          >
             💾 {isEdit ? '수정' : '등록'}
           </button>
         </div>

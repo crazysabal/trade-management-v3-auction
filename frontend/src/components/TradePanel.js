@@ -20,6 +20,7 @@ function TradePanel({
   onDirtyChange,
   onInventoryUpdate,
   onTradeChange,
+  onClose,
   inventoryMap = {},
   cardColor = '#ffffff',
   timestamp // 리로드 트리거용
@@ -394,7 +395,14 @@ function TradePanel({
       // (Deprecated) setIsViewMode(true) was here
     } catch (error) {
       console.error('전표 로딩 오류:', error);
-      showModal('warning', '로딩 실패', '전표를 불러오는데 실패했습니다.');
+
+      if (error.response && error.response.status === 404) {
+        showModal('warning', '전표 없음', '해당 전표가 존재하지 않거나 삭제되었습니다.', () => {
+          if (onClose) onClose();
+        });
+      } else {
+        showModal('warning', '로딩 실패', '전표를 불러오는데 실패했습니다.');
+      }
     } finally {
       setLoading(false);
     }
@@ -1396,7 +1404,9 @@ function TradePanel({
                 {/* <label className="trade-label" style={{ marginBottom: 0, whiteSpace: 'nowrap' }}>입고 창고</label> */}
                 <div style={{ flex: 1, height: '100%' }}>
                   <SearchableSelect
-                    options={warehouses.map(w => ({ value: w.id, label: w.name }))}
+                    options={warehouses
+                      .filter(w => w.is_active || String(w.id) === String(master.warehouse_id))
+                      .map(w => ({ value: w.id, label: w.is_active ? w.name : `${w.name} (비활성)` }))}
                     value={master.warehouse_id}
                     onChange={(o) => setMaster({ ...master, warehouse_id: o ? o.value : '' })}
                     placeholder="기본 창고"

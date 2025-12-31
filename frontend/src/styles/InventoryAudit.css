@@ -1,0 +1,207 @@
+/* InventoryAudit.css */
+
+.audit-container {
+    padding: 0.5rem;
+    background-color: #f1f5f9;
+    min-height: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    font-family: 'Inter', 'Noto Sans KR', sans-serif;
+}
+
+/* Header & Controls */
+.audit-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: white;
+    padding: 0.75rem 1rem;
+    border-radius: 8px;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+    border: 1px solid #e9ecef;
+}
+
+.scanner-card {
+    background: white;
+    padding: 0.6rem 0.75rem;
+    border-radius: 8px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    border: 1px solid #e2e8f0;
+}
+
+/* Stat Cards */
+.audit-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 0.5rem;
+}
+
+.audit-stat-card {
+    background: white;
+    padding: 0.75rem 1rem;
+    border-radius: 6px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    border-left: 4px solid #3182ce;
+    transition: transform 0.2s;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+.audit-stat-card:hover {
+    transform: translateY(-1px);
+}
+
+.stat-label {
+    font-size: 0.85rem;
+    color: #555;
+    margin-bottom: 0.25rem;
+    font-weight: 500;
+}
+
+.stat-value {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: #2d3748;
+}
+
+.stat-unit {
+    font-size: 0.85rem;
+    color: #a0aec0;
+    margin-left: 0.25rem;
+    font-weight: normal;
+}
+
+/* Labels & Form Elements */
+.form-label {
+    display: block;
+    margin-bottom: 0.25rem;
+    font-weight: 500;
+    color: #555;
+    font-size: 0.9rem;
+}
+
+.form-control {
+    height: 34px !important;
+    padding: 0.4rem 0.75rem !important;
+    font-size: 0.9rem !important;
+    border-radius: 4px !important;
+    border: 1px solid #ddd !important;
+}
+
+.form-control:focus {
+    border-color: #3498db !important;
+    box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.1) !important;
+    outline: none !important;
+}
+
+/* Audit Session List (History) */
+.audit-history-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.audit-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9rem;
+}
+
+.audit-table th {
+    background: #f8f9fa;
+    padding: 0.5rem 0.75rem;
+    text-align: left;
+    font-weight: 600;
+    color: #555;
+    border-bottom: 2px solid #ddd;
+    position: sticky;
+    top: 0;
+    z-index: 5;
+}
+
+.audit-table td {
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid #eee;
+    vertical-align: middle;
+}
+
+.audit-table tr:hover {
+    background-color: #f9f9f9;
+}
+
+.session-status {
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.status-in_progress {
+    background-color: #e3f2fd;
+    color: #1565c0;
+}
+
+.status-completed {
+    background-color: #e8f5e9;
+    color: #2e7d32;
+}
+
+.status-cancelled {
+    background-color: #fff3e0;
+    color: #e65100;
+}
+
+/* Active Session View (PC/Desk) */
+.audit-desk-layout {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    height: 100%;
+}
+
+.qty-input {
+    width: 90px;
+    height: 30px;
+    padding: 0 0.5rem;
+    border: 1px solid #cbd5e0;
+    border-radius: 4px;
+    text-align: right;
+    font-weight: 600;
+    font-size: 0.9rem;
+}
+
+.diff-badge {
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-weight: 600;
+    font-size: 0.8rem;
+}
+
+.diff-positive {
+    color: #2e7d32;
+    background: #e8f5e9;
+}
+
+.diff-negative {
+    color: #c62828;
+    background: #ffebee;
+}
+
+/* Animations */
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(5px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.fade-in {
+    animation: fadeIn 0.2s ease-out forwards;
+}

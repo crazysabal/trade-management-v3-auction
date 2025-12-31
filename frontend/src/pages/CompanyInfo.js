@@ -289,7 +289,7 @@ function CompanyInfo() {
           </div>
         </div>
 
-        <div className="form-actions">
+        <div className="info-form-row" style={{ marginTop: '1.5rem', marginBottom: 0, display: 'block', textAlign: 'right' }}>
           <button
             type="submit"
             className="btn btn-primary btn-save-company"
@@ -299,7 +299,16 @@ function CompanyInfo() {
           </button>
         </div>
       </form>
-      <ConfirmModal isOpen={modal.isOpen} onClose={() => setModal(prev => ({ ...prev, isOpen: false }))} onConfirm={modal.onConfirm} title={modal.title} message={modal.message} type={modal.type} confirmText={modal.confirmText} showCancel={modal.showCancel} />
+      <ConfirmModal
+        isOpen={modal.isOpen}
+        onClose={() => setModal(prev => ({ ...prev, isOpen: false }))}
+        onConfirm={modal.onConfirm}
+        title={modal.title}
+        message={modal.message}
+        type={modal.type}
+        confirmText={modal.confirmText}
+        showCancel={modal.showCancel}
+      />
     </div>
   );
 }

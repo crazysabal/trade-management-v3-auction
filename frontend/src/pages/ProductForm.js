@@ -663,11 +663,39 @@ function ProductForm() {
           </div>
         )}
 
-        <div className="form-actions">
-          <button type="button" onClick={() => navigate('/products')} className="btn btn-secondary">
+        <div className="form-actions" style={{ marginTop: '2rem', paddingTop: '1rem', borderTop: '1px solid #eee', textAlign: 'right', display: 'block' }}>
+          <button
+            type="button"
+            onClick={() => navigate('/products')}
+            className="btn btn-secondary"
+            style={{
+              padding: '0.4rem 1.2rem',
+              fontSize: '0.9rem',
+              width: 'auto',
+              minWidth: '0',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flex: 'none'
+            }}
+          >
             취소
           </button>
-          <button type="submit" className="btn btn-primary">
+          <button
+            type="submit"
+            className="btn btn-primary"
+            style={{
+              padding: '0.4rem 1.2rem',
+              fontSize: '0.9rem',
+              width: 'auto',
+              minWidth: '0',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flex: 'none',
+              marginLeft: '0.5rem'
+            }}
+          >
             {isEdit ? '수정' : ((isMultiGrade || isMultiWeight) ? '일괄 등록' : '등록')}
           </button>
         </div>

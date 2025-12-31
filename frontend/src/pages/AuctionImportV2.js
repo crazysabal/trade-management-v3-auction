@@ -233,7 +233,7 @@ function AuctionImportV2({ isWindow }) {
                 auctionAPI.getAccounts(),
                 productAPI.getAll({ is_active: 'true' }),
                 companyAPI.getAll({ type: 'SUPPLIER', is_active: 'true' }),
-                warehousesAPI.getAll()
+                warehousesAPI.getAll({ active_only: 'true' })
             ]);
 
             const accountsData = accountsRes.data?.data || [];

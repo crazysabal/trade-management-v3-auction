@@ -338,6 +338,46 @@ router.delete('/:id', async (req, res) => {
         });
       }
 
+      // [NEW] 실사(Audit) 포함 여부 확인
+      const [auditItems] = await connection.query(
+        `SELECT ia.id as audit_id, ia.status, iai.id as audit_item_id
+         FROM trade_details td
+         JOIN purchase_inventory pi ON td.id = pi.trade_detail_id
+         JOIN inventory_audit_items iai ON pi.id = iai.inventory_id
+         JOIN inventory_audits ia ON iai.audit_id = ia.id
+         WHERE td.trade_master_id = ?`,
+        [req.params.id]
+      );
+
+      // 완료된 실사에 포함된 경우 삭제 불가
+      const completedAudits = auditItems.filter(item => item.status === 'COMPLETED');
+      if (completedAudits.length > 0) {
+        await connection.rollback();
+        return res.status(400).json({
+          success: false,
+          message: `이미 완료된 실사(Audit ID: ${completedAudits[0].audit_id})에 포함된 재고가 있어 삭제할 수 없습니다.`
+        });
+      }
+
+      // 진행 중인 실사에 포함된 경우 -> 실사 항목을 먼저 삭제 (Smart Cascade)
+      if (auditItems.length > 0) {
+        const auditItemIds = auditItems.map(item => item.audit_item_id);
+        await connection.query(
+          `DELETE FROM inventory_audit_items WHERE id IN (?)`,
+          [auditItemIds]
+        );
+      }
+
+      // 3-0. 매입 전표: 연관된 purchase_inventory의 이력(adjustments) 먼저 삭제
+      await connection.query(
+        `DELETE FROM inventory_adjustments 
+         WHERE purchase_inventory_id IN (
+            SELECT id FROM purchase_inventory 
+            WHERE trade_detail_id IN (SELECT id FROM trade_details WHERE trade_master_id = ?)
+         )`,
+        [req.params.id]
+      );
+
       // 3. 매입 전표: 연관된 purchase_inventory 먼저 삭제
       await connection.query(
         `DELETE FROM purchase_inventory 

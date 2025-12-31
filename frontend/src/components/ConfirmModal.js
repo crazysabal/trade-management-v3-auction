@@ -29,7 +29,8 @@ function ConfirmModal({
   children,
   maxWidth,
   hideHeader = false, // 헤더 숨김 옵션 추가
-  padding // 커스텀 패딩 옵션 추가
+  padding, // 커스텀 패딩 옵션 추가
+  icon // 커스텀 아이콘 옵션 추가
 }) {
   // ESC 키로 닫기
   useEffect(() => {
@@ -114,7 +115,7 @@ function ConfirmModal({
               className="modal-icon"
               style={{ backgroundColor: config.iconBg }}
             >
-              <span style={{ fontSize: '2rem' }}>{config.icon}</span>
+              <span style={{ fontSize: '2rem' }}>{icon || config.icon}</span>
             </div>
 
             {/* 제목 */}

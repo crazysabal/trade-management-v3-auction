@@ -207,6 +207,24 @@ router.get('/transactions', async (req, res) => {
       prevTransOutQuery += ' GROUP BY purchase_inventory_id';
       const [prevTransOutRows] = await db.query(prevTransOutQuery, prevTransOutParams);
 
+      // [NEW] 5. 이전 조정 내역 합계 (Lot별)
+      let prevAdjustQuery = `
+        SELECT purchase_inventory_id as lot_id, SUM(quantity_change) as total_adjust
+        FROM inventory_adjustments
+        WHERE adjusted_at < ?
+      `;
+      const prevAdjustParams = [start_date];
+      if (product_id) {
+        prevAdjustQuery += ' AND purchase_inventory_id IN (SELECT id FROM purchase_inventory WHERE product_id = ?)';
+        prevAdjustParams.push(product_id);
+      }
+      if (warehouse_id) {
+        prevAdjustQuery += ' AND purchase_inventory_id IN (SELECT id FROM purchase_inventory WHERE warehouse_id = ?)';
+        prevAdjustParams.push(warehouse_id);
+      }
+      prevAdjustQuery += ' GROUP BY purchase_inventory_id';
+      const [prevAdjustRows] = await db.query(prevAdjustQuery, prevAdjustParams);
+
       // 합산 (Key: lot_id)
       prevInRows.forEach(row => {
         if (!initialStocks[row.lot_id]) initialStocks[row.lot_id] = 0;
@@ -223,6 +241,10 @@ router.get('/transactions', async (req, res) => {
       prevTransOutRows.forEach(row => {
         if (!initialStocks[row.lot_id]) initialStocks[row.lot_id] = 0;
         initialStocks[row.lot_id] -= parseFloat(row.total_trans_out || 0);
+      });
+      prevAdjustRows.forEach(row => {
+        if (!initialStocks[row.lot_id]) initialStocks[row.lot_id] = 0;
+        initialStocks[row.lot_id] += parseFloat(row.total_adjust || 0);
       });
     }
 
@@ -267,8 +289,6 @@ router.get('/transactions', async (req, res) => {
         c.company_name,
         pi.shipper_location,
         pi.sender,
-        tm.trade_number,
-        tm.id as trade_master_id,
         tm.trade_number,
         tm.id as trade_master_id,
         pi.created_at as detail_date,
@@ -464,10 +484,70 @@ router.get('/transactions', async (req, res) => {
 
     const [transOutRows] = await db.query(transOutQuery, transOutParams);
 
+    // [NEW] 재고 조정 내역 (Adjustments including Audit)
+    let adjParams = [];
+    let adjProductFilter = '';
+    let adjDateFilter = '';
+
+    if (product_id) {
+      adjProductFilter = ' AND pi.product_id = ?';
+      adjParams.push(product_id);
+    }
+
+    if (start_date) {
+      adjDateFilter += ' AND DATE(ia.adjusted_at) >= ?';
+      adjParams.push(start_date);
+    }
+
+    if (end_date) {
+      adjDateFilter += ' AND DATE(ia.adjusted_at) <= ?';
+      adjParams.push(end_date);
+    }
+
+    if (warehouse_id) {
+      adjDateFilter += ' AND pi.warehouse_id = ?';
+      adjParams.push(warehouse_id);
+    }
+
+    const adjQuery = `
+      SELECT 
+        'ADJUST' as transaction_type,
+        DATE(ia.adjusted_at) as transaction_date,
+        ia.id as reference_id,
+        ia.purchase_inventory_id as lot_id,
+        pi.product_id,
+        p.product_name,
+        p.weight as product_weight,
+        p.grade,
+        ia.quantity_change as quantity,
+        pi.unit_price,
+        pi.company_id,
+        c.company_name,
+        pi.shipper_location as shipper_location,
+        pi.sender as sender,
+        ia.reason as adjustment_reason,
+        CONCAT('ADJ-', ia.id) as trade_number,
+        NULL as trade_master_id,
+        tm_source.id as source_trade_id,
+        tm_source.trade_number as source_trade_number,
+        ia.adjusted_at as detail_date,
+        w.name as warehouse_name
+      FROM inventory_adjustments ia
+      JOIN purchase_inventory pi ON ia.purchase_inventory_id = pi.id
+      JOIN products p ON pi.product_id = p.id
+      JOIN companies c ON pi.company_id = c.id
+      LEFT JOIN trade_details td_source ON pi.trade_detail_id = td_source.id
+      LEFT JOIN trade_masters tm_source ON td_source.trade_master_id = tm_source.id
+      LEFT JOIN warehouses w ON pi.warehouse_id = w.id
+      WHERE 1=1 ${adjProductFilter} ${adjDateFilter}
+    `;
+
+    const [adjRows] = await db.query(adjQuery, adjParams);
+
 
 
     // 합치고 정렬
-    const allRows = [...inRows, ...outRows, ...prodRows, ...transOutRows].sort((a, b) => {
+    const allRows = [...inRows, ...outRows, ...prodRows, ...transOutRows, ...adjRows].sort((a, b) => {
       // 날짜 기준 정렬, 같으면 상세 시간 기준
       const dateA = new Date(a.transaction_date);
       const dateB = new Date(b.transaction_date);
@@ -502,8 +582,10 @@ router.get('/transactions', async (req, res) => {
       }
 
       const qty = parseFloat(row.quantity);
-      if (['IN', 'PURCHASE', 'PRODUCTION_IN'].includes(row.transaction_type)) {
+      if (['IN', 'PURCHASE', 'PRODUCTION_IN', 'TRANSFER_IN'].includes(row.transaction_type)) {
         stockByLot[key] += qty;
+      } else if (row.transaction_type === 'ADJUST') {
+        stockByLot[key] += qty; // ADJUST is quantity_change, can be positive or negative
       } else {
         // SALE, PRODUCTION_OUT, TRANSFER_OUT
         stockByLot[key] -= qty;

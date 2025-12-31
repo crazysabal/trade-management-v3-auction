@@ -4,8 +4,9 @@ const db = require('../config/database');
 
 // 창고 목록 조회
 router.get('/', async (req, res) => {
+    const { active_only } = req.query;
     try {
-        const [rows] = await db.query(`
+        let sql = `
             SELECT 
                 w.*,
                 (
@@ -16,8 +17,15 @@ router.get('/', async (req, res) => {
                     AND pi.status = 'AVAILABLE'
                 ) as stock_count
             FROM warehouses w
-            ORDER BY w.display_order ASC, w.id ASC
-        `);
+        `;
+
+        if (active_only === 'true' || active_only === '1') {
+            sql += ' WHERE w.is_active = 1';
+        }
+
+        sql += ' ORDER BY w.display_order ASC, w.id ASC';
+
+        const [rows] = await db.query(sql);
         res.json({ success: true, data: rows });
     } catch (error) {
         console.error('창고 목록 조회 오류:', error);

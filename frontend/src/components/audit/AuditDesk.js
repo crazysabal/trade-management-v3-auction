@@ -1,0 +1,400 @@
+import React, { useState, useMemo, useEffect, useRef } from 'react';
+import { purchaseInventoryAPI } from '../../services/api';
+
+const AuditDesk = ({ audit, items, onUpdate, isSaving, reorderMode, setReorderMode, onRefresh }) => {
+    const [search, setSearch] = useState('');
+    const [filterWithDiff, setFilterWithDiff] = useState(false);
+    const [localItems, setLocalItems] = useState([]);
+    const [isReordering, setIsReordering] = useState(false);
+
+    // DnD State
+    const [draggedId, setDraggedId] = useState(null);
+    const [dragOverId, setDragOverId] = useState(null);
+    const draggedIdRef = useRef(null);
+    const itemsRef = useRef([]);
+    const dragNode = useRef(null);
+
+    // Sync itemsRef
+    useEffect(() => {
+        itemsRef.current = localItems;
+    }, [localItems]);
+
+    // Update local items when props change (sync with server/parent)
+    useEffect(() => {
+        if (!items) return;
+
+        setLocalItems(prevLocal => {
+            // If local is currently empty, just take the server items (initial load)
+            if (prevLocal.length === 0) return items;
+
+            // If we have local items (maybe reordered), we want to update their data 
+            // (e.g. check status, notes) without losing the order.
+            const itemMap = new Map(items.map(i => [i.id, i]));
+
+            // Map over PREV local items to preserve order
+            const merged = prevLocal.map(localItem => {
+                const updated = itemMap.get(localItem.id);
+                // If the item still exists in server data, update it.
+                // If not (deleted?), keep it or remove it?
+                // For safety, if it's missing from server, we technically should remove it,
+                // but for simple updates assume it exists.
+                return updated ? { ...localItem, ...updated } : localItem;
+            });
+
+            // What if server has NEW items? (e.g. concurrent add)
+            // They need to be appended.
+            if (merged.length < items.length) {
+                const localIds = new Set(prevLocal.map(i => i.id));
+                const newItems = items.filter(i => !localIds.has(i.id));
+                return [...merged, ...newItems];
+            }
+
+            return merged;
+        });
+    }, [items]);
+
+    const filteredItems = useMemo(() => {
+        // Determine the source list for filtering:
+        // If reordering is possible (no search/filter), use localItems (which holds the reordered state).
+        // Otherwise, use the original 'items' prop and apply filters.
+        const sourceItems = (!search.trim() && !filterWithDiff) ? localItems : items;
+
+        if (!sourceItems) return [];
+
+        return sourceItems.filter(item => {
+            // If no search or filter is active, show all items from the source list.
+            if (!search.trim() && !filterWithDiff) return true;
+
+            const hasDiff = parseFloat(item.actual_quantity) !== parseFloat(item.system_quantity);
+            if (filterWithDiff && !hasDiff) return false;
+
+            if (!search.trim()) return true;
+
+            const keywords = search.toLowerCase().trim().split(/\s+/).filter(k => k);
+            const systemQty = parseFloat(item.system_quantity);
+
+            const searchableText = [
+                item.product_name || '',
+                item.product_weight ? `${parseFloat(item.product_weight)}kg` : '',
+                item.sender || '',
+                item.grade || '',
+                systemQty.toString(),
+                item.purchase_store_name || '',
+                item.purchase_date || '',
+                item.diff_notes || ''
+            ].join(' ').toLowerCase();
+
+            return keywords.every(k => searchableText.includes(k));
+        });
+    }, [items, localItems, search, filterWithDiff]);
+
+    const stats = useMemo(() => {
+        if (!items) return { total: 0, matched: 0, withDiff: 0 };
+        const total = items.length;
+        const matched = items.filter(i => parseFloat(i.actual_quantity) === parseFloat(i.system_quantity)).length;
+        const withDiff = total - matched;
+        return { total, matched, withDiff };
+    }, [items]);
+
+    const handleQtyChange = (itemId, value) => {
+        const numValue = value === '' ? 0 : parseInt(value, 10);
+        onUpdate([{ id: itemId, actual_quantity: numValue }]);
+    };
+
+    const handleNotesChange = (itemId, notes) => {
+        onUpdate([{ id: itemId, diff_notes: notes }]);
+    };
+
+    const handleCheck = (item) => {
+        onUpdate([{
+            id: item.id,
+            is_checked: !item.is_checked
+            // actual_quantity is preserved by backend/merge logic or we can send it if needed.
+            // API updateItems usually merges fields.
+        }]);
+    };
+
+    const formatQty = (val) => {
+        const num = parseFloat(val);
+        return num % 1 === 0 ? num.toLocaleString() : num.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 3 });
+    };
+
+    const handleAutoSave = async (itemsToSave) => {
+        // No loading state to keep it smooth, just background save
+        try {
+            const orderedIds = itemsToSave.map(item => item.inventory_id || item.purchase_inventory_id);
+            if (orderedIds.some(id => !id)) return;
+
+            await purchaseInventoryAPI.reorder(orderedIds);
+        } catch (error) {
+            console.error('Auto-save failed:', error);
+            // alert('순서 저장에 실패했습니다.'); // Suppress alert for smoothness
+        }
+    };
+
+    // --- HTML5 DnD Logic ---
+    const handleDragStart = (e, item) => {
+        if (!canReorder) {
+            e.preventDefault();
+            return;
+        }
+        setDraggedId(item.id);
+        draggedIdRef.current = item.id;
+        dragNode.current = e.target;
+
+        // Use native event listener for better reliability across renders
+        dragNode.current.addEventListener('dragend', handleDragEnd);
+
+        // Make it obvious it's dragging
+        setTimeout(() => {
+            if (dragNode.current) dragNode.current.style.opacity = '0.5';
+        }, 0);
+    };
+
+    const handleDragEnter = (e, targetItem) => {
+        if (!draggedIdRef.current || targetItem.id === draggedIdRef.current) return;
+
+        setDragOverId(targetItem.id);
+
+        setLocalItems(prevItems => {
+            const newItems = [...prevItems];
+            const draggedIndex = newItems.findIndex(i => i.id === draggedIdRef.current);
+            const targetIndex = newItems.findIndex(i => i.id === targetItem.id);
+
+            if (draggedIndex === -1 || targetIndex === -1) return prevItems;
+
+            const [draggedItem] = newItems.splice(draggedIndex, 1);
+            newItems.splice(targetIndex, 0, draggedItem);
+
+            // Sync ref immediately for consistent state during rapid drags
+            itemsRef.current = newItems;
+
+            return newItems;
+        });
+    };
+
+    const handleDragEnd = async () => {
+        if (dragNode.current) {
+            dragNode.current.removeEventListener('dragend', handleDragEnd);
+            dragNode.current.style.opacity = '1';
+        }
+
+        const currentItems = itemsRef.current;
+        setDraggedId(null);
+        setDragOverId(null);
+        draggedIdRef.current = null;
+        dragNode.current = null;
+
+        await handleAutoSave(currentItems);
+    };
+
+
+
+    // Condition to enable reordering (DnD handles and column)
+    const canReorder = !search.trim() && !filterWithDiff;
+
+    return (
+        <div className="audit-desk-layout">
+            <div className="audit-stats-grid">
+                <div className="audit-stat-card" style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '0.5rem', padding: '0.5rem 1rem', borderLeftColor: '#4a5568', marginBottom: 0 }}>
+                    <div className="stat-label" style={{ marginBottom: 0 }}>전체 품목</div>
+                    <div className="stat-value" style={{ fontSize: '1.1rem' }}>{stats.total} <span className="stat-unit" style={{ fontSize: '0.9rem' }}>건</span></div>
+                </div>
+                <div className="audit-stat-card" style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '0.5rem', padding: '0.5rem 1rem', borderLeftColor: '#38a169', marginBottom: 0 }}>
+                    <div className="stat-label" style={{ marginBottom: 0 }}>일치 품목</div>
+                    <div className="stat-value" style={{ fontSize: '1.1rem' }}>{stats.matched} <span className="stat-unit" style={{ fontSize: '0.9rem' }}>건</span></div>
+                </div>
+                <div className="audit-stat-card" style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '0.5rem', padding: '0.5rem 1rem', borderLeftColor: '#e53e3e', marginBottom: 0 }}>
+                    <div className="stat-label" style={{ marginBottom: 0 }}>차이 발생</div>
+                    <div className="stat-value" style={{ fontSize: '1.1rem', color: stats.withDiff > 0 ? '#e53e3e' : 'inherit' }}>
+                        {stats.withDiff} <span className="stat-unit" style={{ fontSize: '0.9rem' }}>건</span>
+                    </div>
+                </div>
+            </div>
+
+            <div className="search-filter-container" style={{ padding: '0.75rem', marginBottom: '0.75rem' }}>
+                <div className="filter-row" style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                    <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <label style={{ whiteSpace: 'nowrap', margin: 0, fontWeight: 'bold' }}>검색</label>
+                        <input
+                            type="text"
+                            placeholder="🔍 품목, 출하주, 매입처, 수량, 단가, 비고... (띄어쓰기로 다중 검색)"
+                            value={search}
+                            onChange={e => setSearch(e.target.value)}
+                            style={{
+                                flex: 1,
+                                height: '36px',
+                                padding: '0 0.75rem',
+                                fontSize: '0.9rem',
+                                border: '1px solid #ddd',
+                                borderRadius: '4px',
+                                backgroundColor: canReorder ? 'white' : '#f7fafc' // Indicate if reordering is active
+                            }}
+                        />
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', userSelect: 'none', margin: 0 }}>
+                            <input
+                                type="checkbox"
+                                style={{ width: '16px', height: '16px' }}
+                                checked={filterWithDiff}
+                                onChange={e => setFilterWithDiff(e.target.checked)}
+                            />
+                            <span style={{ fontSize: '0.9rem', fontWeight: 600, color: '#4a5568' }}>차이 있는 항목만 보기</span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <div className="audit-table-container" style={{ flex: 1, overflowY: 'auto' }}>
+                <table className="audit-table">
+                    <thead style={{ position: 'sticky', top: 0, zIndex: 1 }}>
+                        <tr style={{ backgroundColor: '#34495e', color: 'white' }}>
+                            {canReorder && (
+                                <th style={{ width: '5%', backgroundColor: '#2d3748', borderBottom: '1px solid #1a202c', textAlign: 'center' }}>☰</th>
+                            )}
+                            <th style={{ width: '30%', backgroundColor: '#34495e', color: 'white', borderBottom: '1px solid #2c3e50', padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 600 }}>품목</th>
+                            <th style={{ width: '10%', backgroundColor: '#34495e', color: 'white', borderBottom: '1px solid #2c3e50', padding: '0.75rem 1rem', textAlign: 'right', fontWeight: 600 }}>전산 재고</th>
+                            <th style={{ width: '10%', backgroundColor: '#34495e', color: 'white', borderBottom: '1px solid #2c3e50', padding: '0.75rem 1rem', textAlign: 'center', fontWeight: 600 }}>실사 재고</th>
+                            <th style={{ width: '8%', backgroundColor: '#34495e', color: 'white', borderBottom: '1px solid #2c3e50', padding: '0.75rem 1rem', textAlign: 'center', fontWeight: 600 }}>차이</th>
+                            <th style={{ width: '5%', backgroundColor: '#34495e', color: 'white', borderBottom: '1px solid #2c3e50', padding: '0.75rem 0.5rem', textAlign: 'center', fontWeight: 600 }}>확인</th>
+                            <th style={{ width: '32%', backgroundColor: '#34495e', color: 'white', borderBottom: '1px solid #2c3e50', padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 600 }}>비고 (차이 사유)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {filteredItems.map((item, index) => {
+                            const systemQty = parseFloat(item.system_quantity);
+                            const actualQty = parseFloat(item.actual_quantity);
+                            const diff = actualQty - systemQty;
+                            const isDragging = draggedId === item.id;
+                            const isDragOver = dragOverId === item.id;
+
+                            return (
+                                <tr
+                                    key={item.id}
+                                    draggable={canReorder}
+                                    onDragStart={(e) => handleDragStart(e, item)}
+                                    // Native event listeners handled inside handleDragStart/End for cleaner React cycle
+                                    // But we need onDragEnter for the target
+                                    onDragEnter={(e) => handleDragEnter(e, item)}
+                                    onDragOver={(e) => e.preventDefault()}
+                                    className={`${diff !== 0 ? 'has-diff' : ''} ${item.is_checked ? 'is-checked' : ''} ${isDragOver ? 'drag-over' : ''}`}
+                                    style={{
+                                        opacity: isDragging ? 0.4 : 1,
+                                        backgroundColor: item.is_checked ? '#f0fff4' : 'inherit',
+                                        transition: 'background-color 0.2s'
+                                    }}
+                                >
+                                    {canReorder && (
+                                        <td
+                                            style={{ textAlign: 'center', cursor: 'grab', color: '#718096', fontSize: '1.2rem', userSelect: 'none' }}
+                                        >
+                                            ≡
+                                        </td>
+                                    )}
+
+                                    <td>
+                                        <div style={{ fontWeight: 600, fontSize: '0.95rem', color: '#2d3748', lineHeight: '1.4' }}>
+                                            <span style={{ marginRight: '6px' }}>{item.product_name}</span>
+                                            {item.product_weight && <span style={{ marginRight: '6px' }}>{parseFloat(item.product_weight)}kg</span>}
+                                            {item.sender && <span style={{ marginRight: '6px' }}>{item.sender}</span>}
+                                            {item.grade && <span style={{ marginRight: '6px' }}>({item.grade})</span>}
+                                            <span style={{ color: '#4a5568', fontWeight: 500, marginRight: '6px' }}>{parseFloat(item.system_quantity).toLocaleString()}개</span>
+                                            <span style={{ color: '#718096', fontSize: '0.9rem', fontWeight: 400 }}>{parseFloat(item.unit_cost || 0).toLocaleString()}원</span>
+                                        </div>
+                                        <div style={{ fontSize: '0.8rem', color: '#718096', marginTop: '2px' }}>
+                                            {item.purchase_store_name || item.sender || '매입처 미지정'} | {item.purchase_date || '-'}
+                                        </div>
+                                    </td>
+                                    <td style={{ textAlign: 'right', fontWeight: 600, color: '#4a5568' }}>
+                                        {formatQty(systemQty)}
+                                    </td>
+                                    <td style={{ textAlign: 'center' }}>
+                                        <input
+                                            type="text"
+                                            inputMode="numeric"
+                                            className="qty-input"
+                                            value={parseInt(item.actual_quantity) || 0}
+                                            disabled={audit.status !== 'IN_PROGRESS'}
+                                            onChange={e => {
+                                                const val = e.target.value;
+                                                if (val === '' || /^\d+$/.test(val)) {
+                                                    handleQtyChange(item.id, val);
+                                                }
+                                            }}
+                                            style={{
+                                                height: '34px',
+                                                border: '1px solid #cbd5e0',
+                                                borderRadius: '4px',
+                                                padding: '0 0.5rem',
+                                                width: '100%',
+                                                textAlign: 'center'
+                                            }}
+                                        />
+                                    </td>
+                                    <td style={{ textAlign: 'center' }}>
+                                        {diff !== 0 ? (
+                                            <span className={`diff-badge ${diff > 0 ? 'diff-positive' : 'diff-negative'}`}>
+                                                {diff > 0 ? '+' : ''}{formatQty(diff)}
+                                            </span>
+                                        ) : (
+                                            <span style={{ color: '#cbd5e0' }}>-</span>
+                                        )}
+                                    </td>
+                                    <td style={{ textAlign: 'center' }}>
+                                        <button
+                                            onClick={() => handleCheck(item)}
+                                            style={{
+                                                width: '24px',
+                                                height: '24px',
+                                                borderRadius: '4px',
+                                                border: item.is_checked ? '1px solid #48bb78' : '1px solid #cbd5e0',
+                                                backgroundColor: item.is_checked ? '#48bb78' : 'white',
+                                                color: 'white',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                cursor: 'pointer',
+                                                margin: '0 auto',
+                                                padding: 0
+                                            }}
+                                            disabled={audit.status !== 'IN_PROGRESS'}
+                                        >
+                                            {item.is_checked && '✓'}
+                                        </button>
+                                    </td>
+                                    <td>
+                                        <input
+                                            type="text"
+                                            className="form-control"
+                                            placeholder="사유..."
+                                            value={item.diff_notes || ''}
+                                            disabled={audit.status !== 'IN_PROGRESS'}
+                                            onChange={e => handleNotesChange(item.id, e.target.value)}
+                                            style={{
+                                                height: '34px',
+                                                border: '1px solid #cbd5e0',
+                                                borderRadius: '4px',
+                                                padding: '0 0.5rem',
+                                                width: '100%'
+                                            }}
+                                        />
+                                    </td>
+                                </tr>
+                            );
+                        })}
+                    </tbody>
+                </table>
+                {filteredItems.length === 0 && (
+                    <div style={{ textAlign: 'center', padding: '3rem', color: '#a0aec0' }}>
+                        검색 결과가 없습니다.
+                    </div>
+                )}
+            </div>
+
+
+        </div>
+    );
+};
+
+export default AuditDesk;

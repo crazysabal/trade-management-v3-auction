@@ -17,7 +17,7 @@ import TradeView from './pages/TradeView';
 
 import Statistics from './pages/Statistics';
 import InventoryList from './pages/InventoryList';
-import InventoryTransactions from './pages/InventoryTransactions';
+
 
 import AuctionAccounts from './pages/AuctionAccounts';
 
@@ -32,7 +32,7 @@ import MessageTestPage from './pages/MessageTestPage';
 import InventoryTransferManagement from './pages/InventoryTransferManagement';
 import InventoryProductionManagement from './pages/InventoryProductionManagement';
 import InventoryHistory from './pages/InventoryHistory'; // [New] 재고 이력 조회
-import InventoryCheckPage from './pages/InventoryCheckPage'; // [New] 재고 실사
+import InventoryAuditPage from './pages/InventoryAuditPage'; // [New] 재고 실사
 
 import FloatingTradeLauncher from './pages/FloatingTradeLauncher';
 import ExpenseList from './pages/ExpenseList';

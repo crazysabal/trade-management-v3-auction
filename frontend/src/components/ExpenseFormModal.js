@@ -195,19 +195,38 @@ export default function ExpenseFormModalComponent({ isOpen, onClose, initialData
                                     )}
                                 </select>
                             </div>
-                            <div className="modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '2rem' }}>
+                            <div className="modal-footer" style={{ marginTop: '2rem', paddingTop: '1rem', borderTop: '1px solid #eee', textAlign: 'right', display: 'block' }}>
                                 <button
                                     type="button"
                                     className="btn btn-secondary"
                                     onClick={onClose}
-                                    style={{ padding: '0.5rem 1rem' }}
+                                    style={{
+                                        padding: '0.4rem 1.2rem',
+                                        fontSize: '0.9rem',
+                                        width: 'auto',
+                                        minWidth: '0',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        flex: 'none'
+                                    }}
                                 >
                                     취소
                                 </button>
                                 <button
                                     type="submit"
                                     className="btn btn-primary"
-                                    style={{ padding: '0.5rem 1rem' }}
+                                    style={{
+                                        padding: '0.4rem 1.2rem',
+                                        fontSize: '0.9rem',
+                                        width: 'auto',
+                                        minWidth: '0',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        flex: 'none',
+                                        marginLeft: '0.5rem'
+                                    }}
                                 >
                                     저장
                                 </button>

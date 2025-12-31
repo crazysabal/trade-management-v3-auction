@@ -26,13 +26,13 @@ const Navbar = ({ onLaunchApp }) => {
 
     // 마우스 호버 핸들러 (데스크탑 전용)
     const handleMouseEnter = (menuName) => {
-        if (!isMobileMenuOpen) {
+        if (window.innerWidth > 1200 && !isMobileMenuOpen) {
             setActiveDropdown(menuName);
         }
     };
 
     const handleMouseLeave = () => {
-        if (!isMobileMenuOpen) {
+        if (window.innerWidth > 1200 && !isMobileMenuOpen) {
             setActiveDropdown(null);
         }
     };
@@ -66,15 +66,24 @@ const Navbar = ({ onLaunchApp }) => {
                         </span>
                     </li> 
                     */}
-                    <li className="nav-item">
-                        <span className="nav-links" onClick={() => handleLaunch('COMPANY_LIST')}>
-                            🏢 거래처
+                    {/* 기초 정보 드롭다운 */}
+                    <li
+                        className="nav-item dropdown"
+                        onMouseEnter={() => handleMouseEnter('basicInfo')}
+                        onMouseLeave={handleMouseLeave}
+                    >
+                        <span
+                            className={`nav-links dropdown-toggle ${activeDropdown === 'basicInfo' ? 'active' : ''}`}
+                            onClick={() => toggleDropdown('basicInfo')}
+                        >
+                            🏗️ 기초 정보
                         </span>
-                    </li>
-                    <li className="nav-item">
-                        <span className="nav-links" onClick={() => handleLaunch('PRODUCT_LIST')}>
-                            📦 품목
-                        </span>
+                        <ul className={`dropdown-menu ${activeDropdown === 'basicInfo' ? 'active' : ''}`}>
+                            <li><span onClick={() => handleLaunch('COMPANY_LIST')}>거래처 관리</span></li>
+                            <li><span onClick={() => handleLaunch('PRODUCT_LIST')}>품목 관리</span></li>
+                            <li><span onClick={() => handleLaunch('WAREHOUSES')}>창고 관리</span></li>
+                            <li><span onClick={() => handleLaunch('EXPENSE_CATEGORIES')}>지출 관리</span></li>
+                        </ul>
                     </li>
 
                     {/* 전표 관리 드롭다운 */}
@@ -134,8 +143,9 @@ const Navbar = ({ onLaunchApp }) => {
                             <li><span onClick={() => handleLaunch('INVENTORY_PRODUCTION_HISTORY')}>재고 작업 이력</span></li>
                             <li><span onClick={() => handleLaunch('MATCHING')}>마감 (매칭)</span></li>
                             <li><span onClick={() => handleLaunch('INVENTORY_HISTORY')}>재고 이력</span></li>
-                            <li><span onClick={() => handleLaunch('INVENTORY_CHECK')}>재고 실사</span></li>
-                            <li><span onClick={() => handleLaunch('INVENTORY_TRANSACTIONS')}>재고 수불부</span></li>
+                            <li><span onClick={() => handleLaunch('INVENTORY_AUDIT')}>재고 실사</span></li>
+
+
                         </ul>
                     </li>
 
@@ -195,8 +205,7 @@ const Navbar = ({ onLaunchApp }) => {
                         </span>
                         <ul className={`dropdown-menu ${activeDropdown === 'settings' ? 'active' : ''}`}>
                             <li><span onClick={() => handleLaunch('SETTINGS')}>시스템 설정</span></li>
-                            <li><span onClick={() => handleLaunch('WAREHOUSES')}>창고 관리</span></li>
-                            <li><span onClick={() => handleLaunch('EXPENSE_CATEGORIES')}>지출 항목</span></li>
+
                             <li><span onClick={() => handleLaunch('COMPANY_INFO')}>본사 정보</span></li>
                             <li><span onClick={() => handleLaunch('MESSAGE_TEST')}>시스템 테스트</span></li>
                         </ul>

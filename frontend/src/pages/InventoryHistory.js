@@ -71,6 +71,7 @@ const InventoryHistory = ({ onOpenTrade }) => {
             case 'OUT': return '출고';
             case 'TRANSFER_IN': return '창고 입고';
             case 'TRANSFER_OUT': return '창고 출고';
+            case 'ADJUST': return '재고 조정';
             default: return type;
         }
     };
@@ -262,8 +263,8 @@ const InventoryHistory = ({ onOpenTrade }) => {
                                         {item.grade ? ` (${item.grade})` : ''}
                                     </td>
                                     <td>
-                                        <strong style={{ color: ['IN', 'PURCHASE', 'PRODUCTION_IN', 'TRANSFER_IN'].includes(item.transaction_type) ? '#2ecc71' : '#e74c3c' }}>
-                                            {['IN', 'PURCHASE', 'PRODUCTION_IN', 'TRANSFER_IN'].includes(item.transaction_type) ? '+' : '-'}{formatNumber(item.quantity)}
+                                        <strong style={{ color: ['IN', 'PURCHASE', 'PRODUCTION_IN', 'TRANSFER_IN'].includes(item.transaction_type) ? '#2ecc71' : (Number(item.quantity) > 0 ? '#2ecc71' : '#e74c3c') }}>
+                                            {Number(item.quantity) > 0 ? '+' : ''}{formatNumber(item.quantity)}
                                         </strong>
                                     </td>
                                     <td style={{ color: '#7f8c8d' }}>

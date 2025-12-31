@@ -15,7 +15,7 @@
 }
 
 .company-form .form-group>label {
-    text-align: left !important;
+    text-align: right !important;
 }
 
 /* Force left alignment for all inputs as requested */

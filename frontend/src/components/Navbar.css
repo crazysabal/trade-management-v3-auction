@@ -159,8 +159,8 @@
 
     .nav-links {
         text-align: center;
-        padding: 1.5rem;
-        /* 버튼 크기 키움 */
+        padding: 0.8rem 1.5rem;
+        /* 버튼 크기 축소 */
         width: 100%;
         display: table;
         height: auto;
@@ -229,13 +229,14 @@
         /* 기본 숨김 */
     }
 
-    .dropdown-menu.active {
-        display: block;
-        /* 클릭 시 표시 */
+    .nav-item .dropdown-menu.active {
+        display: block !important;
+        /* 클릭 시 표시 (호버 스타일보다 우선순위 높임) */
     }
 
+    .dropdown-menu li span,
     .dropdown-menu li a {
-        padding-left: 2rem;
-        /* 들여쓰기 */
+        padding: 0.6rem 1rem 0.6rem 2rem;
+        /* 모바일 드롭다운 높이 축소 */
     }
 }
