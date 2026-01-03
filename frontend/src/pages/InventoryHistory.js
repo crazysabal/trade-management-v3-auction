@@ -51,12 +51,17 @@ const InventoryHistory = ({ onOpenTrade }) => {
                         return timeB - timeA;
                     }
 
-                    // 2.5 Tie-breaker: Transaction Type Priority (Result > Ingredient)
-                    // We want PRODUCTION_IN (Result) to appear ABOVE PRODUCTION_OUT (Ingredient) in Descending list
-                    // So PRODUCTION_IN should be considered "Newer/Larger"
+                    // 2.5 Tie-breaker: Transaction Type Priority (Logically Newer Events > Older Events)
+                    // Higher Number = Newer = Shows Top in Descending List
                     const typePriority = {
-                        'PRODUCTION_IN': 2,
-                        'PRODUCTION_OUT': 1
+                        'TRANSFER_IN': 5,      // Result of Transfer (Newest)
+                        'SALE': 4,             // Consumption
+                        'TRANSFER_OUT': 4,     // Consumption
+                        'PRODUCTION_IN': 3,    // Production Result
+                        'PRODUCTION_OUT': 2,   // Production Input (Used)
+                        'PURCHASE': 1,         // Initial Source
+                        'IN': 1,
+                        'ADJUST': 0            // Flexible
                     };
                     const pA = typePriority[a.transaction_type] || 0;
                     const pB = typePriority[b.transaction_type] || 0;

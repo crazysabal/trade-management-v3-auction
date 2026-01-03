@@ -302,6 +302,7 @@ router.get('/transactions', async (req, res) => {
       LEFT JOIN warehouses w ON pi.warehouse_id = w.id
       LEFT JOIN inventory_productions ip ON ip.output_inventory_id = pi.id -- [NEW] Join to get Production ID
       WHERE 1=1 ${productFilter} ${dateFilter}
+      AND (pi.warehouse_id = tm.warehouse_id OR tm.warehouse_id IS NULL) -- [NEW] Only show initial inventory (exclude transferred copies)
     `;
 
     // 출고 내역 (매칭)
@@ -490,6 +491,68 @@ router.get('/transactions', async (req, res) => {
 
     const [transOutRows] = await db.query(transOutQuery, transOutParams);
 
+    // [NEW] 이동 입고 (Transfer In) - Inverse of Out
+    let transInParams = [];
+    let transInProductFilter = '';
+    let transInDateFilter = '';
+
+    if (product_id) {
+      transInProductFilter = ' AND wt.product_id = ?';
+      transInParams.push(product_id);
+    }
+
+    if (start_date) {
+      transInDateFilter += ' AND wt.transfer_date >= ?';
+      transInParams.push(start_date);
+    }
+
+    if (end_date) {
+      transInDateFilter += ' AND wt.transfer_date <= ?';
+      transInParams.push(end_date);
+    }
+
+    if (warehouse_id) {
+      // For IN, we check to_warehouse_id
+      transInDateFilter += ' AND wt.to_warehouse_id = ?';
+      transInParams.push(warehouse_id);
+    }
+
+    const transInQuery = `
+      SELECT 
+        'TRANSFER_IN' as transaction_type,
+        DATE(wt.transfer_date) as transaction_date,
+        wt.id as reference_id,
+        wt.purchase_inventory_id as lot_id,
+        wt.product_id,
+        p.product_name,
+        p.weight as product_weight,
+        p.grade,
+        wt.quantity,
+        pi.unit_price,
+        pi.company_id,
+        c.company_name,
+        CONCAT('From: ', w_from.name) as shipper_location, -- Source as Location
+        td_source.sender as sender,
+        CONCAT('TRANS-', wt.id) as trade_number,
+        NULL as trade_master_id,
+        NULL as production_id,
+        tm_source.id as source_trade_id,
+        tm_source.trade_number as source_trade_number,
+        wt.created_at as detail_date,
+        w_to.name as warehouse_name -- Destination Warehouse (Current Location for IN)
+      FROM warehouse_transfers wt
+      JOIN purchase_inventory pi ON wt.purchase_inventory_id = pi.id
+      JOIN products p ON wt.product_id = p.id
+      JOIN companies c ON pi.company_id = c.id
+      JOIN warehouses w_from ON wt.from_warehouse_id = w_from.id
+      JOIN warehouses w_to ON wt.to_warehouse_id = w_to.id
+      LEFT JOIN trade_details td_source ON pi.trade_detail_id = td_source.id
+      LEFT JOIN trade_masters tm_source ON td_source.trade_master_id = tm_source.id
+      WHERE wt.purchase_inventory_id IS NOT NULL ${transInProductFilter} ${transInDateFilter}
+    `;
+
+    const [transInRows] = await db.query(transInQuery, transInParams);
+
     // [NEW] 재고 조정 내역 (Adjustments including Audit)
     let adjParams = [];
     let adjProductFilter = '';
@@ -554,7 +617,7 @@ router.get('/transactions', async (req, res) => {
 
 
     // 합치고 정렬
-    const allRows = [...inRows, ...outRows, ...prodRows, ...transOutRows, ...adjRows].sort((a, b) => {
+    const allRows = [...inRows, ...outRows, ...prodRows, ...transOutRows, ...transInRows, ...adjRows].sort((a, b) => {
       // 날짜 기준 정렬, 같으면 상세 시간 기준
       const dateA = new Date(a.transaction_date);
       const dateB = new Date(b.transaction_date);
