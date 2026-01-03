@@ -181,6 +181,7 @@ const Navbar = ({ onLaunchApp }) => {
                         </span>
                         <ul className={`dropdown-menu ${activeDropdown === 'management' ? 'active' : ''}`}>
                             <li><span onClick={() => handleLaunch('SETTLEMENT')}>정산 리포트</span></li>
+                            <li><span onClick={() => handleLaunch('SETTLEMENT_HISTORY')}>정산 이력 조회</span></li>
                         </ul>
                     </li>
 

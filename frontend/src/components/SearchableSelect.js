@@ -28,9 +28,10 @@ const customStyles = {
     margin: 0,
     padding: 0
   }),
-  placeholder: (base) => ({
+  placeholder: (base, state) => ({
     ...base,
-    color: '#9ca3af'
+    color: '#9ca3af',
+    display: state.isFocused ? 'none' : 'block'
   }),
   singleValue: (base) => ({
     ...base,

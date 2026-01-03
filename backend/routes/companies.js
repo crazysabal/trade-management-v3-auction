@@ -98,6 +98,17 @@ router.post('/', async (req, res) => {
     // 거래처코드 자동 생성
     const company_code = await generateCompanyCode();
 
+    // 별칭(거래처명) 중복 체크
+    if (alias) {
+      const [existingAlias] = await db.query(
+        'SELECT id FROM companies WHERE alias = ?',
+        [alias]
+      );
+      if (existingAlias.length > 0) {
+        return res.status(400).json({ success: false, message: `이미 사용 중인 거래처 명(별칭)입니다: ${alias}` });
+      }
+    }
+
     const [result] = await db.query(
       `INSERT INTO companies (
         company_code, company_name, alias, business_number, ceo_name,
@@ -366,6 +377,17 @@ router.put('/:id', async (req, res) => {
     );
     if (existing.length > 0) {
       return res.status(400).json({ success: false, message: '이미 존재하는 거래처코드입니다.' });
+    }
+
+    // 별칭(거래처명) 중복 체크 (자기 자신 제외)
+    if (alias) {
+      const [existingAlias] = await db.query(
+        'SELECT id FROM companies WHERE alias = ? AND id != ?',
+        [alias, req.params.id]
+      );
+      if (existingAlias.length > 0) {
+        return res.status(400).json({ success: false, message: `이미 사용 중인 거래처 명(별칭)입니다: ${alias}` });
+      }
     }
 
     const [result] = await db.query(

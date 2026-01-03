@@ -479,19 +479,8 @@ const TradeController = {
                         );
                         const newDetailId = detailResult.insertId;
 
-                        // Create Purchase Inventory
-                        await connection.query(
-                            `INSERT INTO purchase_inventory 
-                            (trade_detail_id, product_id, company_id, warehouse_id, 
-                             purchase_date, original_quantity, remaining_quantity, 
-                             unit_price, status, created_at) 
-                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'AVAILABLE', NOW())`,
-                            [
-                                newDetailId, detail.product_id, master.company_id, master.warehouse_id || null,
-                                master.trade_date, detail.quantity, detail.quantity,
-                                detail.unit_price
-                            ]
-                        );
+                        // Purchase Inventory creation is handled by 'after_trade_detail_insert' trigger.
+                        // Do NOT manually insert here to avoid duplicates.
                     }
                 }
 

@@ -2005,3 +2005,21 @@ table .input-styled {
   background-color: #e5e7eb !important;
   /* 호버 시 조금 더 진한 회색 */
 }
+/* ==================== Global Mobile DnD Utilities ==================== */
+/* Promoted from InventoryAudit.css for system-wide reuse */
+.no-select {
+    user-select: none !important;
+    -webkit-user-select: none !important;
+    -moz-user-select: none !important;
+    -ms-user-select: none !important;
+    outline: none !important;
+    -webkit-tap-highlight-color: transparent !important;
+}
+
+.touch-none {
+    touch-action: none !important;
+}
+
+.no-tap-highlight {
+    -webkit-tap-highlight-color: transparent !important;
+}

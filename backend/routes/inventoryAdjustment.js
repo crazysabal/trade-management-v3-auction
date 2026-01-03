@@ -74,4 +74,88 @@ router.post('/', async (req, res) => {
     }
 });
 
+/**
+ * 재고 조정 취소 (원복)
+ * DELETE /api/inventory-adjustment/:id
+ */
+router.delete('/:id', async (req, res) => {
+    const connection = await db.getConnection();
+    try {
+        await connection.beginTransaction();
+
+        const adjustmentId = req.params.id;
+
+        // 1. 조정 내역 조회
+        const [adjRows] = await connection.query(
+            'SELECT * FROM inventory_adjustments WHERE id = ? FOR UPDATE',
+            [adjustmentId]
+        );
+
+        if (adjRows.length === 0) {
+            throw new Error('조정 내역을 찾을 수 없습니다.');
+        }
+
+        const adjustment = adjRows[0];
+        const { purchase_inventory_id, quantity_change } = adjustment;
+
+        // 2. 현재 재고 조회
+        const [invRows] = await connection.query(
+            'SELECT * FROM purchase_inventory WHERE id = ? FOR UPDATE',
+            [purchase_inventory_id]
+        );
+
+        if (invRows.length === 0) {
+            throw new Error('재고 정보를 찾을 수 없습니다 (이미 삭제되었을 수 있음).');
+        }
+
+        const inventory = invRows[0];
+        const currentQty = Number(inventory.remaining_quantity);
+
+        // 3. 수량 원복 (조정했던 수량을 뺌)
+        // 예: -5개 조정(폐기) -> (-(-5)) = +5개 복구
+        // 예: +3개 조정(발견) -> (-(+3)) = -3개 차감
+        const revertQty = -Number(quantity_change);
+        const newQty = currentQty + revertQty;
+
+        if (newQty < 0) {
+            throw new Error('조정 취소 시 재고가 0보다 작아집니다. (이미 소진되었을 수 있음)');
+        }
+
+        // 4. 재고 업데이트 및 상태 변경
+        const newStatus = (newQty <= 0) ? 'DEPLETED' : 'AVAILABLE'; // Restore to AVAILABLE if positive
+
+        await connection.query(
+            `UPDATE purchase_inventory 
+             SET remaining_quantity = ?, status = ? 
+             WHERE id = ?`,
+            [newQty, newStatus, purchase_inventory_id]
+        );
+
+        // 5. 조정 내역 삭제 (Hard Delete)
+        await connection.query(
+            'DELETE FROM inventory_adjustments WHERE id = ?',
+            [adjustmentId]
+        );
+
+        await connection.commit();
+
+        res.json({
+            success: true,
+            message: '재고 조정이 취소되었습니다.',
+            data: {
+                purchase_inventory_id,
+                reverted_quantity: revertQty,
+                new_quantity: newQty
+            }
+        });
+
+    } catch (error) {
+        await connection.rollback();
+        console.error('재고 조정 취소 오류:', error);
+        res.status(500).json({ success: false, message: error.message || '서버 오류가 발생했습니다.' });
+    } finally {
+        connection.release();
+    }
+});
+
 module.exports = router;

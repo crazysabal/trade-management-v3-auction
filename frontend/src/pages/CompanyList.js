@@ -101,37 +101,60 @@ const CompanyRow = memo(function CompanyRow({
 
 // 다중 필터링 함수 (AND 조건) - 컴포넌트 외부
 // 다중 필터링 함수 (AND 조건) - 컴포넌트 외부
-const filterCompanies = (companies, filterText) => {
-  if (!filterText.trim()) return companies;
+const filterCompanies = (companies, filters) => {
+  let filtered = companies;
 
-  const keywords = filterText.toLowerCase().trim().split(/\s+/).filter(k => k);
-  return companies.filter(company => {
-    const typeText = company.company_type_flag === 'CUSTOMER' ? '매출처' :
-      company.company_type_flag === 'SUPPLIER' ? '매입처' : '매입/매출';
-    const activeText = company.is_active ? '사용' : '미사용';
+  // 1. 상태 필터 (is_active)
+  if (filters.is_active && filters.is_active !== 'all') {
+    const isActive = filters.is_active === 'true';
+    filtered = filtered.filter(c => c.is_active === isActive);
+  }
 
-    const searchableText = [
-      company.company_name?.toLowerCase() || '',
-      company.company_code?.toLowerCase() || '',
-      company.alias?.toLowerCase() || '',
-      company.ceo_name?.toLowerCase() || '',
-      company.business_number || '',
-      typeText,
-      activeText,
-      company.phone || '',
-      company.email || ''
-    ].join(' ');
+  // 2. 구분 필터 (company_type)
+  if (filters.company_type && filters.company_type !== 'all') {
+    filtered = filtered.filter(c => c.company_type_flag === filters.company_type);
+  }
 
-    // 모든 키워드가 포함되어야 함
-    return keywords.every(keyword => searchableText.includes(keyword));
-  });
+  // 3. 전자계산서 필터 (e_tax_invoice) - Optional if added to UI later
+  if (filters.e_tax_invoice && filters.e_tax_invoice !== 'all') {
+    const isETax = filters.e_tax_invoice === 'true';
+    filtered = filtered.filter(c => !!c.e_tax_invoice === isETax);
+  }
+
+  // 4. 검색어 필터 (filterText)
+  if (filters.search && filters.search.trim()) {
+    const keywords = filters.search.toLowerCase().trim().split(/\s+/).filter(k => k);
+    filtered = filtered.filter(company => {
+      const typeText = company.company_type_flag === 'CUSTOMER' ? '매출처' :
+        company.company_type_flag === 'SUPPLIER' ? '매입처' : '매입/매출';
+      const activeText = company.is_active ? '사용' : '미사용';
+
+      const searchableText = [
+        company.company_name?.toLowerCase() || '',
+        company.company_code?.toLowerCase() || '',
+        company.alias?.toLowerCase() || '',
+        company.ceo_name?.toLowerCase() || '',
+        company.business_number || '',
+        typeText,
+        activeText,
+        company.phone || '',
+        company.email || ''
+      ].join(' ');
+
+      return keywords.every(keyword => searchableText.includes(keyword));
+    });
+  }
+
+  return filtered;
 };
 
 function CompanyList({ isWindow }) {
   const [companies, setCompanies] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState({
-    search: ''
+    search: '',
+    company_type: 'all',
+    is_active: 'all'
   });
   const [draggedId, setDraggedId] = useState(null);
   const [dragOverId, setDragOverId] = useState(null);
@@ -139,6 +162,29 @@ function CompanyList({ isWindow }) {
   const pendingReorder = useRef(false);
   const companiesRef = useRef(companies);
   const draggedIdRef = useRef(null);
+
+  // --- Mobile DnD State & Refs ---
+  const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
+  const [dragOverlayStyle, setDragOverlayStyle] = useState(null);
+  const dragOverlayRef = useRef(null);
+  const cachedItemRects = useRef([]);
+  const touchStart = useRef({ y: 0, top: 0, height: 0, width: 0, left: 0 });
+  const touchAnimationFrame = useRef(null);
+  const dragItemIndex = useRef(null);
+  const latestCompanies = useRef(companies); // Ref pattern for stable access
+
+  // Sync latestCompanies ref
+  useEffect(() => {
+    latestCompanies.current = companies;
+    companiesRef.current = companies; // Use existing ref too
+  }, [companies]);
+
+  // Mobile Resize Handler
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth <= 768);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   // 다중 선택 삭제 관련 상태
   const [selectedIds, setSelectedIds] = useState([]);
@@ -198,7 +244,7 @@ function CompanyList({ isWindow }) {
     if (originalCompanies.length === 0) return;
 
     // 필터링 로직 개선 (단일 함수 사용)
-    const result = filterCompanies(originalCompanies, filters.search);
+    const result = filterCompanies(originalCompanies, filters);
     setCompanies(result);
   }, [filters, originalCompanies]);
 
@@ -490,6 +536,15 @@ function CompanyList({ isWindow }) {
     }
   };
 
+  const handleSearchChange = (e) => {
+    setFilters(prev => ({ ...prev, search: e.target.value }));
+  };
+
+  const handleFilterChange = (e) => {
+    const { name, value } = e.target;
+    setFilters(prev => ({ ...prev, [name]: value }));
+  };
+
   // 드래그 시작
   const handleDragStart = (e, company) => {
     setDraggedId(company.id);
@@ -525,6 +580,7 @@ function CompanyList({ isWindow }) {
   };
 
   // 드래그 종료 - 자동 저장
+  // 드래그 종료 - 자동 저장
   const handleDragEnd = async () => {
     if (dragNode.current) {
       dragNode.current.removeEventListener('dragend', handleDragEnd);
@@ -552,6 +608,140 @@ function CompanyList({ isWindow }) {
         pendingReorder.current = false;
       }
     }
+  };
+
+  // --- Mobile DnD Handlers (Stable Callback Pattern) ---
+
+  const handleWindowTouchMove = useCallback((e) => {
+    if (dragItemIndex.current === null) return;
+    if (e.cancelable) e.preventDefault(); // Lock Scroll
+
+    const touchY = e.touches[0].clientY;
+
+    // Absolute positioning using offset (Gold Standard)
+    const newTop = touchY - touchStart.current.offsetY;
+
+    // 1. Direct DOM Manipulation (60fps)
+    if (dragOverlayRef.current) {
+      // Use absolute coordinates instead of delta transform for stability
+      dragOverlayRef.current.style.top = `${newTop}px`;
+      dragOverlayRef.current.style.transform = 'none'; // Clear transform as we set top directly, or keep translate(0,0,0)
+    }
+
+    // 2. Throttled Live Swap
+    if (!touchAnimationFrame.current) {
+      touchAnimationFrame.current = requestAnimationFrame(() => {
+        // Calculate center based on new absolute top
+        const currentCenterY = (touchY - touchStart.current.offsetY) + (touchStart.current.height / 2);
+        let closestIndex = dragItemIndex.current;
+        let minDistance = Number.MAX_VALUE;
+
+        // Check against cached rects
+        cachedItemRects.current.forEach((rect, idx) => {
+          if (!rect) return;
+          const targetCenterY = rect.top + (rect.height / 2);
+          const distance = Math.abs(currentCenterY - targetCenterY);
+
+          if (distance < minDistance) {
+            minDistance = distance;
+            closestIndex = idx;
+          }
+        });
+
+        // Live Swap
+        if (closestIndex !== dragItemIndex.current && closestIndex !== -1) {
+          const newItems = [...latestCompanies.current];
+          const [moved] = newItems.splice(dragItemIndex.current, 1);
+          newItems.splice(closestIndex, 0, moved);
+
+          // Update State & Refs immediately
+          setCompanies(newItems); // Triggers re-render
+          // Note: Ref update happens in effect, but for atomic safety we update ref manually if needed for next frame
+          latestCompanies.current = newItems;
+          companiesRef.current = newItems;
+
+          dragItemIndex.current = closestIndex;
+        }
+        touchAnimationFrame.current = null;
+      });
+    }
+  }, []);
+
+  const handleWindowTouchEnd = useCallback(async () => {
+    if (touchAnimationFrame.current) {
+      cancelAnimationFrame(touchAnimationFrame.current);
+      touchAnimationFrame.current = null;
+    }
+
+    // Cleanup Global Listeners
+    window.removeEventListener('touchmove', handleWindowTouchMove);
+    window.removeEventListener('touchend', handleWindowTouchEnd);
+    window.removeEventListener('touchcancel', handleWindowTouchEnd);
+    window.removeEventListener('contextmenu', handleContextMenu, { capture: true });
+
+    // Clear Overlay State
+    setDraggedId(null);
+    setDragOverlayStyle(null);
+    dragItemIndex.current = null;
+    cachedItemRects.current = [];
+
+    // Save Reorder
+    try {
+      const items = latestCompanies.current.map((company, index) => ({
+        id: company.id,
+        sort_order: index + 1
+      }));
+      await companyAPI.reorder({ items });
+    } catch (error) {
+      console.error('순번 저장 오류:', error);
+    }
+  }, [handleWindowTouchMove]);
+
+  const handleContextMenu = useCallback((e) => {
+    e.preventDefault();
+    e.stopPropagation();
+  }, []);
+
+  const handleTouchStart = (e, index, company) => {
+    // filters check
+    if (filters.search.trim()) return; // 검색 중에는 정렬 불가
+
+    if (e.cancelable) e.preventDefault();
+    e.stopPropagation();
+
+    // Cache Rects
+    const itemElements = document.querySelectorAll('.company-card');
+    cachedItemRects.current = Array.from(itemElements).map(el => el.getBoundingClientRect());
+
+    const rect = cachedItemRects.current[index];
+    if (!rect) return;
+
+    const touchY = e.touches[0].clientY;
+
+    dragItemIndex.current = index;
+    touchStart.current = {
+      y: touchY,
+      top: rect.top,
+      height: rect.height,
+      width: rect.width,
+      left: rect.left,
+      offsetY: touchY - rect.top // Store offset for absolute positioning
+    };
+
+    setDraggedId(company.id);
+    setDragOverlayStyle({
+      top: rect.top,
+      left: rect.left,
+      width: rect.width,
+      height: rect.height,
+      company: company // Pass content to overlay
+    });
+
+    // Attach Global Listeners
+    window.addEventListener('touchmove', handleWindowTouchMove, { passive: false });
+    window.addEventListener('touchend', handleWindowTouchEnd);
+    window.addEventListener('touchcancel', handleWindowTouchEnd);
+    window.addEventListener('contextmenu', handleContextMenu, { capture: true });
   };
 
   // 엑셀 파일 선택
@@ -721,156 +911,178 @@ function CompanyList({ isWindow }) {
 
 
       <div className="search-filter-container">
-        <div className="filter-row" style={{ gap: '8px' }}>
-          <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <label style={{ whiteSpace: 'nowrap', margin: 0 }}>검색</label>
+
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '0.5rem',
+          flexWrap: 'nowrap'
+        }}>
+          {/* 1. 검색 (Search) */}
+          <div style={{ flex: 1, minWidth: 0 }}>
             <input
               type="text"
-              placeholder="🔍 거래처 명, 사업자 명, 대표자, 사업자번호, 구분... (띄어쓰기로 다중 검색)"
+              placeholder="거래처명, 대표자 검색..."
               value={filters.search}
-              onChange={(e) => setFilters({ ...filters, search: e.target.value })}
+              onChange={handleSearchChange}
               style={{
-                flex: 1,
-                padding: '0 0.75rem',
-                height: '38px',
+                width: '100%',
+                padding: '0.6rem',
+                fontSize: '1rem',
                 border: '1px solid #ddd',
                 borderRadius: '4px',
-                fontSize: '0.9rem'
+                height: '38px', // Match button height
+                boxSizing: 'border-box'
               }}
             />
           </div>
 
-          <button
-            onClick={() => {
-              setFilters({ ...filters, search: '' });
-              loadCompanies();
-            }}
-            className="btn btn-secondary"
-            disabled={!filters.search}
-            style={{
-              padding: '0 0.5rem',
-              height: '38px',
-              fontSize: '0.9rem',
-              whiteSpace: 'nowrap',
-              width: '80px',
-              flex: 'none',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center'
-            }}
-          >
-            초기화
-          </button>
-
-          <div style={{ display: 'flex', gap: '8px' }}>
-            {/* 선택 삭제 버튼 (선택된 항목이 있을 때만 표시) */}
-            {selectedIds.length > 0 && (
-              <button
-                onClick={handleMultiDelete}
-                className="btn btn-danger"
-                style={{
-                  padding: '0 0.75rem',
-                  height: '38px',
-                  fontSize: '0.9rem',
-                  whiteSpace: 'nowrap',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center'
-                }}
-              >
-                🗑 선택 삭제 ({selectedIds.length})
-              </button>
-            )}
-            <button
-              onClick={() => setShowUploadModal(true)}
-              className="btn btn-outline"
-              style={{
-                border: '1px solid #10b981',
-                backgroundColor: 'white',
-                color: '#10b981',
-                whiteSpace: 'nowrap',
-                padding: '0 0.75rem',
-                height: '38px',
-                fontSize: '0.9rem',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center'
-              }}
-            >
-              📥 엑셀 불러오기
-            </button>
+          {/* 3. 등록 (Register) */}
+          <div style={{ display: 'flex', gap: '0.5rem' }}>
             <button
               onClick={handleCreate}
               className="btn btn-primary"
               style={{
                 whiteSpace: 'nowrap',
-                padding: '0 0.75rem',
                 height: '38px',
+                padding: '0 0.75rem',
                 fontSize: '0.9rem',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                width: '80px',
-                flex: 'none'
+                minWidth: '60px'
               }}
             >
               + 등록
             </button>
+            {!isMobile && (
+              <button
+                onClick={() => setShowUploadModal(true)}
+                className="btn btn-success"
+                style={{ height: '38px', padding: '0 0.75rem', whiteSpace: 'nowrap' }}
+              >
+                📥 엑셀
+              </button>
+            )}
           </div>
         </div>
+
+
       </div>
 
       <div className="table-container">
-        <table>
-          <thead>
-            <tr>
-              <th style={{ width: '40px', textAlign: 'center' }}>
-                <input
-                  type="checkbox"
-                  onChange={handleSelectAll}
-                  checked={companies.length > 0 && selectedIds.length === companies.length}
-                  style={{ width: '16px', height: '16px', accentColor: '#e74c3c', cursor: 'pointer' }}
-                />
-              </th>
-              <th style={{ width: '40px' }}></th>
-              <th>거래처 명</th>
-              <th>사업자 명</th>
-              <th>사업자번호</th>
-              <th>대표자</th>
-              <th>구분</th>
-              <th className="text-center">전자계산서</th>
-              <th className="text-center">사용여부</th>
-              {!isSelectMode && <th className="text-center" style={{ minWidth: '120px' }}>액션</th>}
-            </tr>
-          </thead>
-          <tbody>
+        {isMobile ? (
+          <div className="mobile-company-list">
             {companies.length === 0 ? (
-              <tr>
-                <td colSpan="10" className="text-center">등록된 거래처가 없습니다.</td>
-              </tr>
+              <div className="text-center p-3 text-muted">등록된 거래처가 없습니다.</div>
             ) : (
               companies.map((company, index) => (
-                <CompanyRow
+                <div
                   key={company.id}
-                  company={company}
-                  index={index}
-                  isSelectMode={isSelectMode}
-                  isSelected={selectedIds.includes(company.id)}
-                  isDragOver={dragOverId === company.id}
-                  onDragStart={(e) => handleDragStart(e, company)}
-                  onDragEnter={(e) => handleDragEnter(e, company)}
-                  onCheckboxToggle={() => handleCheckboxToggle(company.id)}
-                  onToggleCompanyType={() => handleToggleCompanyType(company)}
-                  onToggleETaxInvoice={() => handleToggleETaxInvoice(company)}
-                  onToggleActive={() => handleToggleActive(company)}
-                  onDelete={() => handleDelete(company.id, company.company_name)}
-                  onEdit={handleEdit}
-                  getTypeBadge={getTypeBadge}
-                />
+                  className={`company-card ${draggedId === company.id ? 'dragging' : ''} ${!company.is_active ? 'inactive' : ''}`}
+                  style={{ opacity: draggedId === company.id ? 0.3 : 1 }}
+                >
+                  <div className="card-row-content" style={{ display: 'flex', alignItems: 'center', padding: '0.4rem', gap: '0' }}>
+
+                    {/* 1. Name (Flex Grow - Left aligned) */}
+                    <div style={{ flex: 1, minWidth: 0, paddingRight: '0.5rem' }}>
+                      <span className="company-alias" style={{ fontWeight: '600', fontSize: '1rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block' }}>
+                        {company.alias || company.company_name}
+                      </span>
+                    </div>
+
+                    {/* 2. Type (Fixed Width - Centered) - "구분" 컬럼 효과 */}
+                    <div style={{ width: '85px', display: 'flex', justifyContent: 'center', flexShrink: 0, whiteSpace: 'nowrap' }}>
+                      {getTypeBadge(company.company_type_flag)}
+                    </div>
+
+                    {/* 3. Status (Fixed Width - Centered) */}
+                    <div style={{ width: '60px', display: 'flex', justifyContent: 'center', flexShrink: 0 }}>
+                      <span
+                        className={`status-badge ${company.is_active ? 'active' : 'inactive'}`}
+                        onClick={(e) => { e.stopPropagation(); handleToggleActive(company); }}
+                        style={{ fontSize: '0.8rem', whiteSpace: 'nowrap' }}
+                      >
+                        {company.is_active ? '사용' : '미사용'}
+                      </span>
+                    </div>
+
+                    {/* 4. Edit (Fixed Width) */}
+                    <div style={{ width: '50px', display: 'flex', justifyContent: 'center', flexShrink: 0 }}>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleEdit(company); }}
+                        className="btn btn-sm btn-primary"
+                        style={{ padding: '0.2rem 0.5rem', fontSize: '0.8rem' }}
+                      >
+                        수정
+                      </button>
+                    </div>
+
+                    {/* 5. Handle (Fixed Width) */}
+                    <div
+                      className="drag-handle touch-none no-select"
+                      onTouchStart={(e) => handleTouchStart(e, index, company)}
+                      style={{ width: '40px', display: 'flex', justifyContent: 'center', fontSize: '1.2rem', color: '#999', cursor: 'grab', flexShrink: 0 }}
+                    >
+                      ≡
+                    </div>
+                  </div>
+                </div>
               ))
             )}
-          </tbody>
-        </table>
+          </div>
+        ) : (
+          <table>
+            <thead>
+              <tr>
+                <th style={{ width: '40px', textAlign: 'center' }}>
+                  <input
+                    type="checkbox"
+                    onChange={handleSelectAll}
+                    checked={companies.length > 0 && selectedIds.length === companies.length}
+                    style={{ width: '16px', height: '16px', accentColor: '#e74c3c', cursor: 'pointer' }}
+                  />
+                </th>
+                <th style={{ width: '40px' }}></th>
+                <th>거래처 명</th>
+                <th>사업자 명</th>
+                <th>사업자번호</th>
+                <th>대표자</th>
+                <th>구분</th>
+                <th className="text-center">전자계산서</th>
+                <th className="text-center">사용여부</th>
+                {!isSelectMode && <th className="text-center" style={{ minWidth: '120px' }}>액션</th>}
+              </tr>
+            </thead>
+            <tbody>
+              {companies.length === 0 ? (
+                <tr>
+                  <td colSpan="10" className="text-center">등록된 거래처가 없습니다.</td>
+                </tr>
+              ) : (
+                companies.map((company, index) => (
+                  <CompanyRow
+                    key={company.id}
+                    company={company}
+                    index={index}
+                    isSelectMode={isSelectMode}
+                    isSelected={selectedIds.includes(company.id)}
+                    isDragOver={dragOverId === company.id}
+                    onDragStart={(e) => handleDragStart(e, company)}
+                    onDragEnter={(e) => handleDragEnter(e, company)}
+                    onCheckboxToggle={() => handleCheckboxToggle(company.id)}
+                    onToggleCompanyType={() => handleToggleCompanyType(company)}
+                    onToggleETaxInvoice={() => handleToggleETaxInvoice(company)}
+                    onToggleActive={() => handleToggleActive(company)}
+                    onDelete={() => handleDelete(company.id, company.company_name)}
+                    onEdit={handleEdit}
+                    getTypeBadge={getTypeBadge}
+                  />
+                ))
+              )}
+            </tbody>
+          </table>
+        )}
       </div>
 
       {/* 엑셀 업로드 모달 - Portal로 body에 렌더링 */}
@@ -1135,6 +1347,55 @@ function CompanyList({ isWindow }) {
         showCancel={modal.showCancel}
       />
 
+      {/* Drag Overlay - Hoisted to Root for Stability */}
+      {dragOverlayStyle && (
+        <div
+          ref={dragOverlayRef}
+          className="company-card-overlay"
+          style={{
+            position: 'fixed',
+            top: dragOverlayStyle.top,
+            left: dragOverlayStyle.left,
+            width: dragOverlayStyle.width,
+            height: dragOverlayStyle.height,
+            zIndex: 9999,
+            pointerEvents: 'none',
+            transform: 'none',
+            boxShadow: '0 10px 15px -3px rgba(0,0,0,0.2)',
+            background: 'white',
+            opacity: 0.95
+          }}
+        >
+          <div className="card-row-content" style={{ display: 'flex', alignItems: 'center', padding: '0.4rem', gap: '0' }}>
+            {/* 1. Name */}
+            <div style={{ flex: 1, minWidth: 0, paddingRight: '0.5rem' }}>
+              <span className="company-alias" style={{ fontWeight: '600', fontSize: '1rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block' }}>
+                {dragOverlayStyle.company.alias || dragOverlayStyle.company.company_name}
+              </span>
+            </div>
+
+            {/* 2. Type */}
+            <div style={{ width: '85px', display: 'flex', justifyContent: 'center', flexShrink: 0, whiteSpace: 'nowrap' }}>
+              {getTypeBadge(dragOverlayStyle.company.company_type_flag)}
+            </div>
+
+            {/* 3. Status */}
+            <div style={{ width: '60px', display: 'flex', justifyContent: 'center', flexShrink: 0 }}>
+              <span className={`status-badge ${dragOverlayStyle.company.is_active ? 'active' : 'inactive'}`} style={{ fontSize: '0.8rem', whiteSpace: 'nowrap' }}>
+                {dragOverlayStyle.company.is_active ? '사용' : '미사용'}
+              </span>
+            </div>
+
+            {/* 4. Edit */}
+            <div style={{ width: '50px', display: 'flex', justifyContent: 'center', flexShrink: 0 }}>
+              <button className="btn btn-sm btn-primary" style={{ padding: '0.2rem 0.5rem', fontSize: '0.8rem' }}>수정</button>
+            </div>
+
+            {/* 5. Handle */}
+            <div style={{ width: '40px', display: 'flex', justifyContent: 'center', fontSize: '1.2rem', color: '#999', flexShrink: 0 }}>≡</div>
+          </div>
+        </div>
+      )}
     </div >
   );
 }

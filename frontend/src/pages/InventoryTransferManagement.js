@@ -436,7 +436,7 @@ const InventoryTransferManagement = () => {
                 isOpen={adjustmentModal.isOpen}
                 inventory={adjustmentModal.inventory}
                 onClose={() => setAdjustmentModal({ ...adjustmentModal, isOpen: false })}
-                onSave={handleAdjustment}
+                onConfirm={handleAdjustment}
             />
 
             <InventoryPrintModal

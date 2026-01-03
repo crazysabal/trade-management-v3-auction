@@ -27,6 +27,10 @@ router.get('/', async (req, res) => {
             sql += ' AND a.status = ?';
             params.push(status);
         }
+        if (req.query.date) {
+            sql += ' AND a.audit_date = ?';
+            params.push(req.query.date);
+        }
 
         sql += ' ORDER BY a.audit_date DESC, a.id DESC';
 
@@ -69,7 +73,7 @@ router.get('/:id', async (req, res) => {
                 p.product_name,
                 p.grade,
                 p.weight as product_weight,
-                pi.sender,
+                td.sender,
                 pi.purchase_date,
                 pi.unit_price as unit_cost,
                 c.company_name as purchase_store_name

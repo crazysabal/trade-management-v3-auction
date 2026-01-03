@@ -198,10 +198,13 @@
 
     to {
         opacity: 1;
-        transform: translateY(0);
+        transform: none;
+        /* Release Stacking Context */
     }
 }
 
 .fade-in {
     animation: fadeIn 0.2s ease-out forwards;
 }
+
+/* Moved to App.css */

@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { inventoryAuditAPI, purchaseInventoryAPI } from '../../services/api';
 
 const AuditScanner = ({ audit, items, onUpdate, isSaving, onRefresh, reorderMode, setReorderMode }) => {
@@ -55,28 +55,28 @@ const AuditScanner = ({ audit, items, onUpdate, isSaving, onRefresh, reorderMode
         });
     }, [items, localItems, reorderMode, search, filterWithDiff]);
 
-    const handleMatch = (item) => {
+    const handleMatch = useCallback((item) => {
         onUpdate([{ id: item.id, actual_quantity: item.system_quantity }]);
-    };
+    }, [onUpdate]);
 
-    const adjustQty = (item, delta) => {
+    const adjustQty = useCallback((item, delta) => {
         const currentCharge = parseInt(item.actual_quantity) || 0;
         const next = Math.max(0, currentCharge + delta);
         onUpdate([{ id: item.id, actual_quantity: next, is_checked: false }]);
-    };
+    }, [onUpdate]);
 
-    const handleQtyChange = (itemId, value) => {
+    const handleQtyChange = useCallback((itemId, value) => {
         const numValue = parseInt(value) || 0;
         onUpdate([{ id: itemId, actual_quantity: numValue, is_checked: false }]);
-    };
+    }, [onUpdate]);
 
-    const handleCheck = (item) => {
+    const handleCheck = useCallback((item) => {
         onUpdate([{
             id: item.id,
             is_checked: !item.is_checked,
             actual_quantity: item.actual_quantity
         }]);
-    };
+    }, [onUpdate]);
 
     const toggleReorder = () => {
         if (!reorderMode) {
@@ -115,109 +115,116 @@ const AuditScanner = ({ audit, items, onUpdate, isSaving, onRefresh, reorderMode
     };
 
     // --- Touch Drag & Drop Logic (Overlay Pattern + Global Listeners) ---
-    const handleTouchStart = (e, index, item) => {
-        // Prevent default to avoid scrolling/refresh?
-        // Usually better to let user scroll if they don't hold the handle, 
-        // but since this IS the handle event, we might want to prevent default.
-        // e.preventDefault(); 
+    const dragOverlayRef = useRef(null);
+    const listRef = useRef(null); // Reference to the scrollable list container
+    const cachedItemRects = useRef([]);
+    const dragHandlers = useRef({});
+    // Track the latest auto-save function to call it safely from stable callbacks
+    const latestAutoSave = useRef(handleAutoSave);
+    useEffect(() => { latestAutoSave.current = handleAutoSave; });
 
-        // Sync Data Snapshop
-        itemsRef.current = [...localItems];
+    const handleContextMenu = useCallback((e) => {
+        e.preventDefault();
+        e.stopPropagation();
+    }, []);
 
-        const el = itemRefs.current[index];
-        if (!el) return;
+    const touchAnimationFrame = useRef(null);
 
-        const rect = el.getBoundingClientRect();
-        const touchY = e.touches[0].clientY;
-
-        // Init Refs
-        dragItemIndex.current = index;
-        dropTargetIndex.current = index; // Init target as self
-        touchStart.current = {
-            y: touchY,
-            top: rect.top,
-            height: rect.height,
-            width: rect.width,
-            left: rect.left
-        };
-
-        // Init State for Overlay
-        setDraggingId(item.id);
-        setDragOverlayStyle({
-            top: rect.top,
-            left: rect.left,
-            width: rect.width,
-            height: rect.height,
-            yOffset: 0
-        });
-
-        // Attach Global Listeners
-        window.addEventListener('touchmove', handleWindowTouchMove, { passive: false });
-        window.addEventListener('touchend', handleWindowTouchEnd);
-        window.addEventListener('touchcancel', handleWindowTouchEnd);
-    };
-
-    const handleWindowTouchMove = (e) => {
+    // Stable Move Handler
+    const handleWindowTouchMove = useCallback((e) => {
         if (dragItemIndex.current === null) return;
-        if (e.cancelable) e.preventDefault(); // Stop scrolling globally while dragging
+        if (e.cancelable) e.preventDefault();
+        if (!e.touches[0]) return; // Safety check
 
         const touchY = e.touches[0].clientY;
         const deltaY = touchY - touchStart.current.y;
 
-        // Update Overlay Position
-        setDragOverlayStyle(prev => {
-            if (!prev) return null;
-            return {
-                ...prev,
-                yOffset: deltaY
-            };
-        });
-
-        // Find Closest Item Logic (Robust)
-        const currentCenterY = touchStart.current.top + deltaY + (touchStart.current.height / 2);
-        let closestIndex = dragItemIndex.current;
-        let minDistance = Number.MAX_VALUE;
-
-        const currentItems = itemsRef.current;
-        for (let idx = 0; idx < currentItems.length; idx++) {
-            const el = itemRefs.current[idx];
-            if (!el) continue;
-
-            const rect = el.getBoundingClientRect();
-            const targetCenterY = rect.top + (rect.height / 2);
-            const distance = Math.abs(currentCenterY - targetCenterY);
-
-            if (distance < minDistance) {
-                minDistance = distance;
-                closestIndex = idx;
-            }
+        // 1. Direct DOM Manipulation - Overlay
+        if (dragOverlayRef.current) {
+            dragOverlayRef.current.style.transform = `translate3d(0, ${deltaY}px, 0)`;
         }
 
-        // Only update if changed
-        dropTargetIndex.current = closestIndex;
+        // 2. Calculate Drop Target using elementFromPoint (Robust for scrolling)
+        if (!touchAnimationFrame.current) {
+            touchAnimationFrame.current = requestAnimationFrame(() => {
+                const touch = e.touches[0];
+                const touchY = touch.clientY;
 
-        // Update Visual State (with check to avoid excess renders)
-        setDropTarget(prev => prev === closestIndex ? prev : closestIndex);
-    };
+                // --- Auto Scroll (Robust) ---
+                if (listRef.current) {
+                    const { top, bottom } = listRef.current.getBoundingClientRect();
+                    const triggerZone = 100;
+                    const scrollSpeed = 15;
 
-    const handleWindowTouchEnd = () => {
-        const fromIndex = dragItemIndex.current;
-        const toIndex = dropTargetIndex.current;
+                    if (touchY < top + triggerZone) {
+                        listRef.current.scrollTop -= scrollSpeed;
+                    } else if (touchY > bottom - triggerZone) {
+                        listRef.current.scrollTop += scrollSpeed;
+                    }
+                }
 
-        console.log('TouchEnd:', { fromIndex, toIndex });
+                // Temporarily hide overlay to peek underneath if needed (though pointer-events: none should handle it)
+                // Using clientX from touch to find element
+                const element = document.elementFromPoint(touch.clientX, touchY);
+                let targetIndex = null;
 
-        if (fromIndex !== null && toIndex !== null && fromIndex !== toIndex) {
-            // Double check bounds
-            if (toIndex >= 0 && toIndex < itemsRef.current.length) {
-                const newItems = [...itemsRef.current];
-                const [moved] = newItems.splice(fromIndex, 1);
-                newItems.splice(toIndex, 0, moved);
+                if (element) {
+                    const row = element.closest('.scanner-card');
+                    if (row && row.dataset.index !== undefined) {
+                        targetIndex = parseInt(row.dataset.index, 10);
+                    }
+                }
 
-                setLocalItems(newItems);
-                itemsRef.current = newItems; // Sync immediately
+                // Fallback: If in gap (no direct hit), find closest item spatially
+                if (targetIndex === null) {
+                    let minDist = Number.MAX_VALUE;
+                    const touchY = touch.clientY;
 
-                // Trigger Auto Save
-                handleAutoSave(newItems);
+                    // Iterate through known item refs to find the closest one vertically
+                    Object.entries(itemRefs.current).forEach(([idx, el]) => {
+                        if (!el) return;
+                        const rect = el.getBoundingClientRect();
+                        const centerY = rect.top + (rect.height / 2);
+                        const dist = Math.abs(touchY - centerY);
+
+                        // Only consider if within reasonable proximity (e.g., 120px)
+                        if (dist < minDist && dist < 120) {
+                            minDist = dist;
+                            targetIndex = parseInt(idx, 10);
+                        }
+                    });
+                }
+
+                // Update Drop Target Visuals only (No State Mutation)
+                if (targetIndex !== null && !isNaN(targetIndex) && dropTargetIndex.current !== targetIndex) {
+                    dropTargetIndex.current = targetIndex;
+                    setDropTarget(targetIndex); // Trigger render for highlight only
+                }
+
+                touchAnimationFrame.current = null;
+            });
+        }
+    }, []); // Empty deps = stable function
+
+    // Stable End Handler
+    const handleWindowTouchEnd = useCallback((e) => {
+        if (touchAnimationFrame.current) {
+            cancelAnimationFrame(touchAnimationFrame.current);
+            touchAnimationFrame.current = null;
+        }
+
+        // Perform the Swap ONCE at the end
+        if (dragItemIndex.current !== null && dropTargetIndex.current !== null && dragItemIndex.current !== dropTargetIndex.current) {
+            const newItems = [...itemsRef.current];
+            const [moved] = newItems.splice(dragItemIndex.current, 1);
+            newItems.splice(dropTargetIndex.current, 0, moved);
+
+            setLocalItems(newItems); // Commit new order
+            itemsRef.current = newItems; // Sync Ref
+
+            // Trigger Auto Save immediately
+            if (latestAutoSave.current) {
+                latestAutoSave.current(newItems);
             }
         }
 
@@ -228,10 +235,53 @@ const AuditScanner = ({ audit, items, onUpdate, isSaving, onRefresh, reorderMode
         dragItemIndex.current = null;
         dropTargetIndex.current = null;
 
-        // Remove Global Listeners
+        // Remove listeners
         window.removeEventListener('touchmove', handleWindowTouchMove);
         window.removeEventListener('touchend', handleWindowTouchEnd);
         window.removeEventListener('touchcancel', handleWindowTouchEnd);
+        window.removeEventListener('contextmenu', handleContextMenu, { capture: true });
+    }, [handleWindowTouchMove, handleContextMenu]); // Dependencies are stable callbacks
+
+    const handleTouchStart = (e, index, item) => {
+        if (e.cancelable) e.preventDefault();
+        e.stopPropagation();
+
+        itemsRef.current = [...localItems];
+
+        // Find the element to get initial rect for overlay
+        const el = e.target.closest('.scanner-card');
+        if (!el) return;
+
+        const rect = el.getBoundingClientRect();
+        const touchY = e.touches[0].clientY;
+
+        // Init Refs
+        dragItemIndex.current = index;
+        dropTargetIndex.current = index;
+        touchStart.current = {
+            y: touchY,
+            top: rect.top,
+            height: rect.height,
+            width: rect.width,
+            left: rect.left
+        };
+
+        // Init State
+        setDraggingId(item.id);
+        setDropTarget(index); // Mark self as initial target
+        setDragOverlayStyle({
+            top: rect.top,
+            left: rect.left,
+            width: rect.width,
+            height: rect.height,
+            yOffset: 0
+        });
+
+        // Attach - These references are STABLE now
+        window.addEventListener('touchmove', handleWindowTouchMove, { passive: false });
+        window.addEventListener('touchend', handleWindowTouchEnd);
+        window.addEventListener('touchcancel', handleWindowTouchEnd);
+        window.addEventListener('contextmenu', handleContextMenu, { capture: true });
     };
 
     // Cleanup on unmount
@@ -240,9 +290,9 @@ const AuditScanner = ({ audit, items, onUpdate, isSaving, onRefresh, reorderMode
             window.removeEventListener('touchmove', handleWindowTouchMove);
             window.removeEventListener('touchend', handleWindowTouchEnd);
             window.removeEventListener('touchcancel', handleWindowTouchEnd);
+            window.removeEventListener('contextmenu', handleContextMenu, { capture: true });
         };
-    }, []);
-
+    }, [handleWindowTouchMove, handleWindowTouchEnd, handleContextMenu]);
     // Helper to check if index is checked (for background restoration) but clearing style is better.
     const isChecked = (index) => {
         if (index === undefined) return false;
@@ -286,13 +336,175 @@ const AuditScanner = ({ audit, items, onUpdate, isSaving, onRefresh, reorderMode
         return localItems.find(item => item.id === draggingId);
     }, [draggingId, localItems]);
 
+    // MEMOIZED Item Component to prevent excessive re-renders
+    const AuditScannerItem = React.memo(({ item, index, draggingId, dropTarget, reorderMode, audit, onAdjustQty, onHandleQtyChange, onHandleCheck, onTouchStart, setItemRef, formatQty }) => {
+        const systemQty = parseFloat(item.system_quantity);
+        const actualQty = parseFloat(item.actual_quantity);
+        const hasDiff = actualQty !== systemQty;
+        const isChecked = !!item.is_checked;
+
+        const isDraggingThis = draggingId === item.id;
+        const isDropTarget = dropTarget === index; // This index is stable within the list
+
+        return (
+            <div
+                ref={el => setItemRef(index, el)}
+                data-index={index}
+                className={`scanner-card ${hasDiff ? 'has-diff' : ''}`}
+                style={{
+                    border: isChecked ? '2px solid #48bb78' : isDropTarget ? '2px solid #3182ce' : '1px solid #e2e8f0', // Visual feedback for drop target
+                    backgroundColor: isChecked ? '#f0fff4' : isDropTarget ? '#ebf8ff' : 'white',
+                    position: 'relative',
+                    opacity: isDraggingThis ? 0.3 : 1, // Visual ghost
+                    zIndex: isDropTarget ? 2 : 1,
+                    pointerEvents: isDraggingThis ? 'none' : 'auto', // CRITICAL: Allow finding element behind ghost
+                    transition: 'border-color 0.1s, background-color 0.1s' // Smooth transition
+                }}
+            >
+                {/* Conditional Rendering based on Reorder Mode */}
+                {
+                    reorderMode ? (
+                        // REORDER MODE: Simplified Layout
+                        <div style={{ display: 'flex', alignItems: 'center', padding: '0.5rem', gap: '0.75rem' }}>
+                            {/* Simplified Content (Left) */}
+                            <div style={{ flex: 1 }}>
+                                <div style={{ fontSize: '1.05rem', color: '#2d3748', fontWeight: 600, marginBottom: '0.1rem' }}>
+                                    {item.product_name} {item.product_weight ? `${parseFloat(item.product_weight)}kg` : ''} {item.sender} {item.grade ? `(${item.grade})` : ''} <span style={{ color: '#e53e3e' }}>{formatQty(item.actual_quantity)}개</span> <span style={{ color: '#718096', fontWeight: 400, fontSize: '0.9rem' }}>{parseFloat(item.unit_cost || 0).toLocaleString()}원</span>
+                                </div>
+                                <div style={{ fontSize: '0.9rem', color: '#718096', display: 'flex', gap: '0.5rem' }}>
+                                    <span>{item.purchase_store_name || '매입처미정'}</span>
+                                    <span style={{ color: '#cbd5e0' }}>|</span>
+                                    <span>{item.purchase_date || '-'}</span>
+                                </div>
+                            </div>
+
+                            {/* Drag Handle (Right) - Hamburger Icon */}
+                            <div
+                                className="touch-none no-select"
+                                style={{
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                    padding: '0 0.5rem', cursor: 'grab', touchAction: 'none',
+                                    outline: 'none', WebkitTapHighlightColor: 'transparent', // Explicitly kill focus ring
+                                    height: '50px', width: '50px' // Larger tap target
+                                }}
+                                onTouchStart={(e) => onTouchStart(e, index, item)}
+                            >
+                                <span style={{ fontSize: '1.5rem', color: '#718096', fontWeight: 'bold' }}>≡</span>
+                            </div>
+                        </div>
+                    ) : (
+                        // NORMAL MODE: Detailed Layout
+                        <>
+                            {isChecked && (
+                                <div style={{
+                                    position: 'absolute',
+                                    top: '10px',
+                                    right: '10px',
+                                    backgroundColor: '#48bb78',
+                                    color: 'white',
+                                    borderRadius: '50%',
+                                    width: '24px',
+                                    height: '24px',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    fontSize: '0.9rem',
+                                    fontWeight: 'bold',
+                                    zIndex: 5
+                                }}>✓</div>
+                            )}
+                            <div className="scanner-card-header" style={{ paddingBottom: '0.25rem' }}>
+                                <div style={{ flex: 1 }}>
+                                    <div className="product-name" style={{ color: '#2d3748', fontSize: '1.05rem', marginBottom: '0.2rem', fontWeight: 600 }}>
+                                        {item.product_name} {item.product_weight ? `${parseFloat(item.product_weight)}kg` : ''} {item.sender} {item.grade ? `(${item.grade})` : ''} <span style={{ color: '#e53e3e' }}>{formatQty(systemQty)}개</span> <span style={{ color: '#718096', fontSize: '0.9rem', fontWeight: 400 }}>{parseFloat(item.unit_cost || 0).toLocaleString()}원</span>
+                                    </div>
+                                    <div className="sender-info" style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '0.5rem', fontSize: '0.9rem', color: '#718096' }}>
+                                        <span>{item.purchase_store_name || '매입처미정'}</span>
+                                        <span style={{ color: '#cbd5e0' }}>|</span>
+                                        <span>{item.purchase_date || '-'}</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="scanner-controls" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '0.25rem', gap: '1rem' }}>
+                                <div style={{ textAlign: 'center', minWidth: '60px' }}>
+                                    <div style={{ fontSize: '0.75rem', color: '#a0aec0' }}>전산재고</div>
+                                    <div style={{ fontSize: '1.2rem', fontWeight: 700, color: '#4a5568' }}>{formatQty(systemQty)}</div>
+                                </div>
+
+                                <div style={{ display: 'flex', flex: 1, alignItems: 'center', gap: '5px', justifyContent: 'flex-end' }}>
+                                    <button
+                                        className="btn btn-outline-secondary"
+                                        style={{ height: '45px', fontSize: '1.2rem', width: '45px', flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                                        onClick={() => onAdjustQty(item, -1)}
+                                        disabled={audit.status !== 'IN_PROGRESS'}
+                                    >-</button>
+
+                                    <div style={{ position: 'relative', flex: 1 }}>
+                                        <input
+                                            type="number"
+                                            className="qty-input"
+                                            style={{ width: '100%', height: '45px', fontSize: '1.4rem', textAlign: 'center', fontWeight: 'bold' }}
+                                            value={Math.floor(item.actual_quantity)}
+                                            onChange={e => onHandleQtyChange(item.id, e.target.value)}
+                                            disabled={audit.status !== 'IN_PROGRESS'}
+                                            step="1"
+                                        />
+                                    </div>
+
+                                    <button
+                                        className="btn btn-outline-secondary"
+                                        style={{ height: '45px', fontSize: '1.2rem', width: '45px', flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                                        onClick={() => onAdjustQty(item, 1)}
+                                        disabled={audit.status !== 'IN_PROGRESS'}
+                                    >+</button>
+
+                                    <button
+                                        style={{
+                                            height: '45px',
+                                            width: '60px',
+                                            flex: 'none',
+                                            fontSize: '0.9rem',
+                                            fontWeight: 600,
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            backgroundColor: isChecked ? '#48bb78' : 'white',
+                                            color: isChecked ? 'white' : '#718096',
+                                            border: isChecked ? '1px solid #48bb78' : '1px solid #a0aec0',
+                                            borderRadius: '0.25rem',
+                                            marginLeft: '0.5rem'
+                                        }}
+                                        onClick={() => onHandleCheck(item)}
+                                        disabled={audit.status !== 'IN_PROGRESS'}
+                                    >
+                                        {isChecked ? '완료' : '확인'}
+                                    </button>
+                                </div>
+                            </div>
+
+                            {hasDiff && (
+                                <div style={{ marginTop: '0.75rem', display: 'flex', justifyContent: 'center' }}>
+                                    <span className={`diff-badge ${actualQty > systemQty ? 'diff-positive' : 'diff-negative'}`}>
+                                        오차: {actualQty - systemQty > 0 ? '+' : ''}{formatQty(actualQty - systemQty)}
+                                    </span>
+                                </div>
+                            )}
+                        </>
+                    )
+                }
+            </div>
+        );
+    });
+
+    // Main Component
     return (
-        <div className="scanner-layout" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+        <div className="scanner-layout" style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
             <div className="white-ribbon" style={{
-                position: 'sticky',
-                top: 0,
+                flex: 'none', // Prevent shrinking
+                position: 'relative', // Changed from sticky to relative for better container isolation
                 zIndex: 10,
-                marginBottom: '1rem',
+                marginBottom: '0.5rem',
                 padding: '0.75rem',
                 backgroundColor: 'white',
                 borderRadius: '8px',
@@ -343,197 +555,69 @@ const AuditScanner = ({ audit, items, onUpdate, isSaving, onRefresh, reorderMode
             </div>
 
 
+            {/* List Container - Scroll Isolated */}
+            <div
+                ref={listRef}
+                style={{
+                    flex: 1,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '0.75rem',
+                    paddingBottom: '1rem',
+                    overflowY: 'auto',
+                    overscrollBehavior: 'none', // Prevents pull-to-refresh / rubberbanding
+                    WebkitOverflowScrolling: 'touch',
+                    contain: 'content' // Optimizes rendering
+                }}>
+                {filteredItems.map((item, index) => (
+                    <AuditScannerItem
+                        key={item.id}
+                        item={item}
+                        index={filteredItems.indexOf(item)} // Use calculated index
+                        draggingId={draggingId}
+                        dropTarget={dropTarget}
+                        reorderMode={reorderMode}
+                        audit={audit}
+                        onAdjustQty={adjustQty}
+                        onHandleQtyChange={handleQtyChange}
+                        onHandleCheck={handleCheck}
+                        onTouchStart={handleTouchStart}
+                        setItemRef={(idx, el) => itemRefs.current[idx] = el}
+                        formatQty={formatQty}
+                    />
+                ))}
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', paddingBottom: '1rem' }}>
-                {filteredItems.map(item => {
-                    const systemQty = parseFloat(item.system_quantity);
-                    const actualQty = parseFloat(item.actual_quantity);
-                    const isConfirmed = actualQty === systemQty;
-                    const hasDiff = actualQty !== systemQty;
-                    const isChecked = !!item.is_checked;
-
-                    const isDraggingThis = draggingId === item.id;
-                    const isDropTarget = dropTarget === filteredItems.indexOf(item); // Highlight Check
-
-                    return (
-                        <div
-                            key={item.id}
-                            ref={el => itemRefs.current[filteredItems.indexOf(item)] = el}
-                            data-index={filteredItems.indexOf(item)}
-                            className={`scanner-card ${hasDiff ? 'has-diff' : ''}`}
-                            style={{
-                                border: isChecked ? '2px solid #48bb78' : isDropTarget ? '3px solid #3182ce' : '1px solid #e2e8f0', // Blue border for target
-                                backgroundColor: isChecked ? '#f0fff4' : isDropTarget ? '#ebf8ff' : 'white',
-                                position: 'relative',
-                                opacity: isDraggingThis ? 0.3 : 1, // Visual ghost
-                                transform: isDraggingThis ? 'scale(0.95)' : isDropTarget ? 'scale(1.02)' : 'none',
-                                transition: isDraggingThis ? 'none' : 'transform 0.1s',
-                                zIndex: isDropTarget ? 10 : 1
-                            }}
-                        >
-                            {/* Conditional Rendering based on Reorder Mode */}
-                            {
-                                reorderMode ? (
-                                    // REORDER MODE: Simplified Layout
-                                    <div style={{ display: 'flex', alignItems: 'center', padding: '0.5rem', gap: '0.75rem' }}>
-                                        {/* Simplified Content (Left) */}
-                                        <div style={{ flex: 1 }}>
-                                            <div style={{ fontSize: '1.05rem', color: '#2d3748', fontWeight: 600, marginBottom: '0.1rem' }}>
-                                                {item.product_name} {item.product_weight ? `${parseFloat(item.product_weight)}kg` : ''} {item.sender} {item.grade ? `(${item.grade})` : ''} <span style={{ color: '#e53e3e' }}>{formatQty(item.actual_quantity)}개</span> <span style={{ color: '#718096', fontWeight: 400, fontSize: '0.9rem' }}>{parseFloat(item.unit_cost || 0).toLocaleString()}원</span>
-                                            </div>
-                                            <div style={{ fontSize: '0.9rem', color: '#718096', display: 'flex', gap: '0.5rem' }}>
-                                                <span>{item.purchase_store_name || '매입처미정'}</span>
-                                                <span style={{ color: '#cbd5e0' }}>|</span>
-                                                <span>{item.purchase_date || '-'}</span>
-                                            </div>
-                                        </div>
-
-                                        {/* Drag Handle (Right) - Hamburger Icon */}
-                                        <div
-                                            style={{
-                                                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                                padding: '0 0.5rem', cursor: 'grab', touchAction: 'none'
-                                            }}
-                                            onTouchStart={(e) => handleTouchStart(e, filteredItems.indexOf(item), item)}
-                                        >
-                                            <span style={{ fontSize: '1.5rem', color: '#718096', fontWeight: 'bold' }}>≡</span>
-                                        </div>
-                                    </div>
-                                ) : (
-                                    // NORMAL MODE: Detailed Layout
-                                    <>
-                                        {isChecked && (
-                                            <div style={{
-                                                position: 'absolute',
-                                                top: '10px',
-                                                right: '10px',
-                                                backgroundColor: '#48bb78',
-                                                color: 'white',
-                                                borderRadius: '50%',
-                                                width: '24px',
-                                                height: '24px',
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                justifyContent: 'center',
-                                                fontSize: '0.9rem',
-                                                fontWeight: 'bold',
-                                                zIndex: 5
-                                            }}>✓</div>
-                                        )}
-                                        <div className="scanner-card-header" style={{ paddingBottom: '0.25rem' }}>
-                                            <div style={{ flex: 1 }}>
-                                                <div className="product-name" style={{ color: '#2d3748', fontSize: '1.05rem', marginBottom: '0.2rem', fontWeight: 600 }}>
-                                                    {item.product_name} {item.product_weight ? `${parseFloat(item.product_weight)}kg` : ''} {item.sender} {item.grade ? `(${item.grade})` : ''} <span style={{ color: '#e53e3e' }}>{formatQty(systemQty)}개</span> <span style={{ color: '#718096', fontSize: '0.9rem', fontWeight: 400 }}>{parseFloat(item.unit_cost || 0).toLocaleString()}원</span>
-                                                </div>
-                                                <div className="sender-info" style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '0.5rem', fontSize: '0.9rem', color: '#718096' }}>
-                                                    <span>{item.purchase_store_name || '매입처미정'}</span>
-                                                    <span style={{ color: '#cbd5e0' }}>|</span>
-                                                    <span>{item.purchase_date || '-'}</span>
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        <div className="scanner-controls" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '0.25rem', gap: '1rem' }}>
-                                            <div style={{ textAlign: 'center', minWidth: '60px' }}>
-                                                <div style={{ fontSize: '0.75rem', color: '#a0aec0' }}>전산재고</div>
-                                                <div style={{ fontSize: '1.2rem', fontWeight: 700, color: '#4a5568' }}>{formatQty(systemQty)}</div>
-                                            </div>
-
-                                            <div style={{ display: 'flex', flex: 1, alignItems: 'center', gap: '5px', justifyContent: 'flex-end' }}>
-                                                <button
-                                                    className="btn btn-outline-secondary"
-                                                    style={{ height: '45px', fontSize: '1.2rem', width: '45px', flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                                                    onClick={() => adjustQty(item, -1)}
-                                                    disabled={audit.status !== 'IN_PROGRESS'}
-                                                >-</button>
-
-                                                <div style={{ position: 'relative', flex: 1 }}>
-                                                    <input
-                                                        type="number"
-                                                        className="qty-input"
-                                                        style={{ width: '100%', height: '45px', fontSize: '1.4rem', textAlign: 'center', fontWeight: 'bold' }}
-                                                        value={Math.floor(item.actual_quantity)}
-                                                        onChange={e => handleQtyChange(item.id, e.target.value)}
-                                                        disabled={audit.status !== 'IN_PROGRESS'}
-                                                        step="1"
-                                                    />
-                                                </div>
-
-                                                <button
-                                                    className="btn btn-outline-secondary"
-                                                    style={{ height: '45px', fontSize: '1.2rem', width: '45px', flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                                                    onClick={() => adjustQty(item, 1)}
-                                                    disabled={audit.status !== 'IN_PROGRESS'}
-                                                >+</button>
-
-                                                <button
-                                                    style={{
-                                                        height: '45px',
-                                                        width: '60px',
-                                                        flex: 'none',
-                                                        fontSize: '0.9rem',
-                                                        fontWeight: 600,
-                                                        display: 'flex',
-                                                        alignItems: 'center',
-                                                        justifyContent: 'center',
-                                                        backgroundColor: isChecked ? '#48bb78' : 'white',
-                                                        color: isChecked ? 'white' : '#718096',
-                                                        border: isChecked ? '1px solid #48bb78' : '1px solid #a0aec0',
-                                                        borderRadius: '0.25rem',
-                                                        marginLeft: '0.5rem'
-                                                    }}
-                                                    onClick={() => handleCheck(item)}
-                                                    disabled={audit.status !== 'IN_PROGRESS'}
-                                                >
-                                                    {isChecked ? '완료' : '확인'}
-                                                </button>
-                                            </div>
-                                        </div>
-
-                                        {hasDiff && (
-                                            <div style={{ marginTop: '0.75rem', display: 'flex', justifyContent: 'center' }}>
-                                                <span className={`diff-badge ${actualQty > systemQty ? 'diff-positive' : 'diff-negative'}`}>
-                                                    오차: {actualQty - systemQty > 0 ? '+' : ''}{formatQty(actualQty - systemQty)}
-                                                </span>
-                                            </div>
-                                        )}
-                                    </>
-                                )
-                            }
-                        </div>
-                    );
-                })}
-            </div>
-
-            {
-                filteredItems.length === 0 && (
+                {filteredItems.length === 0 && (
                     <div style={{ textAlign: 'center', padding: '3rem', color: '#a0aec0' }}>
                         검색 결과가 없습니다.
                     </div>
-                )
-            }
+                )}
+            </div>
+
             {/* Drag Overlay Portal (Inline) */}
             {
                 draggingId && dragOverlayStyle && draggingItemContent && (
-                    <div style={{
-                        position: 'fixed',
-                        top: dragOverlayStyle.top + dragOverlayStyle.yOffset,
-                        left: dragOverlayStyle.left,
-                        width: dragOverlayStyle.width,
-                        height: dragOverlayStyle.height,
-                        zIndex: 9999,
-                        pointerEvents: 'none', // Allow touch events to pass through
-                        backgroundColor: 'white',
-                        boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
-                        border: '2px solid #3182ce',
-                        borderRadius: '0.25rem',
-                        opacity: 0.95,
-                        transform: 'scale(1.02)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        padding: '0.5rem',
-                        gap: '0.75rem'
-                    }}>
+                    <div
+                        ref={dragOverlayRef} // Attach Ref
+                        style={{
+                            position: 'fixed',
+                            top: dragOverlayStyle.top, // yOffset is handled by transform now
+                            left: dragOverlayStyle.left,
+                            width: dragOverlayStyle.width,
+                            height: dragOverlayStyle.height,
+                            zIndex: 9999,
+                            pointerEvents: 'none', // Allow touch events to pass through
+                            backgroundColor: 'white',
+                            boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
+                            border: '2px solid #3182ce',
+                            borderRadius: '0.25rem',
+                            opacity: 0.95,
+                            display: 'flex',
+                            alignItems: 'center',
+                            padding: '0.5rem',
+                            gap: '0.75rem',
+                            willChange: 'transform' // Optimize for animation
+                        }}>
                         {/* Simplified Content */}
                         <div style={{ flex: 1 }}>
                             <div style={{ fontSize: '1.05rem', color: '#2d3748', fontWeight: 600, marginBottom: '0.1rem' }}>
@@ -555,8 +639,6 @@ const AuditScanner = ({ audit, items, onUpdate, isSaving, onRefresh, reorderMode
                         </div>
                     </div>
                 )}
-
-            {/* Drag Overlay Portal (Inline) */}
         </div >
     );
 };

@@ -56,6 +56,14 @@
   - 프로토타이핑 단계를 제외한 최종 코드(Commit)에는 `style={{ ... }}` 객체 사용을 엄격히 금지합니다 (동적 값 제어 제외).
   - 반드시 `TradePanel.css` 또는 컴포넌트 전용 CSS 파일의 클래스를 사용하십시오.
 
+#### D. 모바일 드래그 앤 드롭 표준 (Mobile Drag & Drop Standards)
+모바일 환경에서 리스트 재정렬 기능을 구현할 때는 다음 패턴을 **의무적**으로 준수해야 합니다.
+1. **Stable Callbacks**: `removeEventListener` 실패로 인한 드롭 버그를 방지하기 위해 `touchMove/End` 핸들러는 반드시 `useCallback(fn, [])`으로 생성하여, 컴포넌트 생명주기 내내 동일한 참조를 유지해야 합니다.
+2. **Ref State Access**: 핸들러 내부에서는 `useState` 값 대신 `useRef`로 관리되는 최신 값을 참조해야 합니다.
+3. **Direct DOM Manipulation**: 드래그 중인 요소(Overlay)의 위치는 React State가 아닌 `ref.style.transform`을 직접 수정하여 60fps 성능을 보장해야 합니다.
+4. **Cached Rects**: `getBoundingClientRect` 호출은 드래그 시작 시점에 한 번만 수행하여 캐싱하고, 이동 중에는 캐시된 좌표로 충돌을 계산해야 합니다.
+5. **Browser Blockers**: `touchstart`에서 `e.preventDefault()`(스크롤 방지), `contextmenu` 전역 차단, CSS `.touch-none`, `.no-select`를 필수 적용해야 합니다.
+
 ### 3.3 아키텍처 가이드라인
 
 #### Front-end

@@ -23,8 +23,8 @@ router.get('/', async (req, res) => {
         pi.remaining_quantity,
         pi.unit_price,
         pi.total_weight,
-        pi.shipper_location,
-        pi.sender,
+        td.shipper_location,
+        td.sender,
         pi.status,
         pi.created_at,
         p.product_name,
@@ -287,10 +287,11 @@ router.get('/transactions', async (req, res) => {
         pi.unit_price,
         pi.company_id,
         c.company_name,
-        pi.shipper_location,
-        pi.sender,
+        td.shipper_location,
+        td.sender,
         tm.trade_number,
         tm.id as trade_master_id,
+        ip.id as production_id, -- [NEW] Production ID linked to Output Inventory
         pi.created_at as detail_date,
         w.name as warehouse_name
       FROM purchase_inventory pi
@@ -299,6 +300,7 @@ router.get('/transactions', async (req, res) => {
       JOIN trade_details td ON pi.trade_detail_id = td.id
       JOIN trade_masters tm ON td.trade_master_id = tm.id
       LEFT JOIN warehouses w ON pi.warehouse_id = w.id
+      LEFT JOIN inventory_productions ip ON ip.output_inventory_id = pi.id -- [NEW] Join to get Production ID
       WHERE 1=1 ${productFilter} ${dateFilter}
     `;
 
@@ -341,10 +343,12 @@ router.get('/transactions', async (req, res) => {
         td_sale.unit_price,
         tm_sale.company_id,
         c.company_name,
-        pi.shipper_location as shipper_location,
-        pi.sender as sender,
+        td_source.shipper_location as shipper_location,
+        td_source.sender as sender,
+        tm_sale.trade_number,
         tm_sale.trade_number,
         tm_sale.id as trade_master_id,
+        NULL as production_id, -- [NEW]
         tm_source.id as source_trade_id,     -- [NEW] Origin Trade ID
         tm_source.trade_number as source_trade_number, -- [NEW] Origin Trade Number
         spm.matched_at as detail_date,
@@ -403,10 +407,11 @@ router.get('/transactions', async (req, res) => {
         pi.unit_price,
         pi.company_id,
         c.company_name,
-        pi.shipper_location as shipper_location,
-        pi.sender as sender,
+        td_source.shipper_location as shipper_location,
+        td_source.sender as sender,
         CONCAT('PROD-', ip.id) as trade_number,
         NULL as trade_master_id,
+        ip.id as production_id, -- [NEW] Production ID
         tm_source.id as source_trade_id,     -- [NEW] Source Trade ID
         tm_source.trade_number as source_trade_number, -- [NEW]
         ip.created_at as detail_date,
@@ -464,9 +469,10 @@ router.get('/transactions', async (req, res) => {
         pi.company_id,
         c.company_name,
         CONCAT('To: ', w_to.name) as shipper_location, -- Destination as Location
-        pi.sender as sender,
+        td_source.sender as sender,
         CONCAT('TRANS-', wt.id) as trade_number,
         NULL as trade_master_id,
+        NULL as production_id, -- [NEW]
         tm_source.id as source_trade_id,     -- [NEW] Source Trade ID
         tm_source.trade_number as source_trade_number, -- [NEW]
         wt.created_at as detail_date,
@@ -523,11 +529,12 @@ router.get('/transactions', async (req, res) => {
         pi.unit_price,
         pi.company_id,
         c.company_name,
-        pi.shipper_location as shipper_location,
-        pi.sender as sender,
+        td_source.shipper_location as shipper_location,
+        td_source.sender as sender,
         ia.reason as adjustment_reason,
         CONCAT('ADJ-', ia.id) as trade_number,
         NULL as trade_master_id,
+        NULL as production_id, -- [NEW]
         tm_source.id as source_trade_id,
         tm_source.trade_number as source_trade_number,
         ia.adjusted_at as detail_date,
@@ -655,8 +662,8 @@ router.get('/available/:productId', async (req, res) => {
         pi.original_quantity,
         pi.remaining_quantity,
         pi.unit_price,
-        pi.shipper_location,
-        pi.sender,
+        td.shipper_location,
+        td.sender,
         c.company_name,
         tm.trade_number
       FROM purchase_inventory pi

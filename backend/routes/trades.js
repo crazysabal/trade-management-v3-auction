@@ -263,22 +263,23 @@ router.delete('/:id', async (req, res) => {
     if (tradeType === 'PURCHASE') {
       const [matchedItems] = await connection.query(
         `SELECT 
-           p.product_name, 
-           p.grade,
-           p.weight as product_weight,
-           spm.matched_quantity,
-           tm_sale.trade_number as sale_trade_number,
-           tm_sale.trade_date as sale_date,
-           c.company_name as customer_name
-         FROM trade_details td
-         JOIN purchase_inventory pi ON td.id = pi.trade_detail_id
-         JOIN sale_purchase_matching spm ON pi.id = spm.purchase_inventory_id
-         JOIN products p ON td.product_id = p.id
-         JOIN trade_details td_sale ON spm.sale_detail_id = td_sale.id
-         JOIN trade_masters tm_sale ON td_sale.trade_master_id = tm_sale.id
-         JOIN companies c ON tm_sale.company_id = c.id
-         WHERE td.trade_master_id = ?
-         ORDER BY tm_sale.trade_date DESC, tm_sale.trade_number`,
+             td.seq_no,
+             p.product_name, 
+             p.grade,
+             p.weight as product_weight,
+             spm.matched_quantity,
+             tm_sale.trade_number as sale_trade_number,
+             tm_sale.trade_date as sale_date,
+             c.company_name as customer_name
+           FROM trade_details td
+           JOIN purchase_inventory pi ON td.id = pi.trade_detail_id
+           JOIN sale_purchase_matching spm ON pi.id = spm.purchase_inventory_id
+           JOIN products p ON td.product_id = p.id
+           JOIN trade_details td_sale ON spm.sale_detail_id = td_sale.id
+           JOIN trade_masters tm_sale ON td_sale.trade_master_id = tm_sale.id
+           JOIN companies c ON tm_sale.company_id = c.id
+           WHERE td.trade_master_id = ?
+           ORDER BY td.seq_no ASC, tm_sale.trade_date DESC`,
         [req.params.id]
       );
 
@@ -301,6 +302,7 @@ router.delete('/:id', async (req, res) => {
                 weightStr = ` ${Number.isInteger(weight) ? Math.floor(weight) : weight}kg`;
               }
               return {
+                seqNo: item.seq_no,
                 productName: `${item.product_name}${weightStr}${item.grade ? ` (${item.grade})` : ''}`,
                 saleTradeNumber: item.sale_trade_number,
                 saleDate: item.sale_date ? item.sale_date.toString().split('T')[0] : '-',

@@ -964,10 +964,12 @@ function TradePanel({
     if (e.key === 'Enter' || e.key === 'Tab') {
       e.preventDefault();
       if (isPurchase) {
-        if (shipperLocationRefs.current[index]) {
-          shipperLocationRefs.current[index].focus();
+        // Purchase: Unit Price -> Owner (Sender)
+        if (senderRefs.current[index]) {
+          senderRefs.current[index].focus();
         }
       } else {
+        // Sale: Unit Price -> Notes
         if (notesRefs.current[index]) {
           notesRefs.current[index].focus();
         }
@@ -975,16 +977,18 @@ function TradePanel({
     }
   };
 
-  const handleShipperLocationKeyDown = (e, index) => {
+  const handleSenderKeyDown = (e, index) => {
+    // Owner (Sender) -> Location
     if (e.key === 'Enter' || e.key === 'Tab') {
       e.preventDefault();
-      if (senderRefs.current[index]) {
-        senderRefs.current[index].focus();
+      if (shipperLocationRefs.current[index]) {
+        shipperLocationRefs.current[index].focus();
       }
     }
   };
 
-  const handleSenderKeyDown = (e, index) => {
+  const handleShipperLocationKeyDown = (e, index) => {
+    // Location -> Notes
     if (e.key === 'Enter' || e.key === 'Tab') {
       e.preventDefault();
       if (notesRefs.current[index]) {
@@ -2310,28 +2314,51 @@ function TradePanel({
                   maxHeight: '250px',
                   overflowY: 'auto'
                 }}>
-                  {matchingInfoModal.data.items.map((item, idx) => (
-                    <div
-                      key={idx}
-                      style={{
-                        padding: '0.75rem',
-                        backgroundColor: 'white',
-                        borderRadius: '6px',
-                        marginBottom: idx < matchingInfoModal.data.items.length - 1 ? '0.5rem' : 0,
-                        borderLeft: '3px solid #3498db'
-                      }}
-                    >
-                      <div style={{ fontWeight: '600', color: '#2c3e50', marginBottom: '0.25rem' }}>
-                        📦 {item.productName} - {item.matchedQuantity}개
+                  {matchingInfoModal.data.items
+                    .sort((a, b) => {
+                      // 1. 재고 순번 (seqNo) 오름차순
+                      const seqDiff = (a.seqNo || 0) - (b.seqNo || 0);
+                      if (seqDiff !== 0) return seqDiff;
+                      // 2. 날짜 내림차순 (최신순)
+                      const dateDiff = new Date(b.saleDate) - new Date(a.saleDate);
+                      if (dateDiff !== 0) return dateDiff;
+                      // 3. 품목명 오름차순
+                      return (a.productName || '').localeCompare(b.productName || '');
+                    })
+                    .map((item, idx) => (
+                      <div
+                        key={idx}
+                        style={{
+                          padding: '0.75rem',
+                          backgroundColor: 'white',
+                          borderRadius: '6px',
+                          marginBottom: idx < matchingInfoModal.data.items.length - 1 ? '0.5rem' : 0,
+                          borderLeft: '3px solid #3498db'
+                        }}
+                      >
+                        <div style={{ fontWeight: '600', color: '#2c3e50', marginBottom: '0.25rem' }}>
+                          <span style={{
+                            display: 'inline-block',
+                            padding: '2px 6px',
+                            borderRadius: '4px',
+                            backgroundColor: '#ecf0f1',
+                            color: '#7f8c8d',
+                            fontSize: '0.8rem',
+                            marginRight: '6px',
+                            verticalAlign: 'middle'
+                          }}>
+                            No.{item.seqNo}
+                          </span>
+                          {item.productName} - {item.matchedQuantity}개
+                        </div>
+                        <div style={{ fontSize: '0.85rem', color: '#666' }}>
+                          → {item.saleDate} / {item.saleTradeNumber}
+                        </div>
+                        <div style={{ fontSize: '0.85rem', color: '#666' }}>
+                          → 거래처: {item.customerName}
+                        </div>
                       </div>
-                      <div style={{ fontSize: '0.85rem', color: '#666' }}>
-                        → {item.saleDate} / {item.saleTradeNumber}
-                      </div>
-                      <div style={{ fontSize: '0.85rem', color: '#666' }}>
-                        → 거래처: {item.customerName}
-                      </div>
-                    </div>
-                  ))}
+                    ))}
                 </div>
 
                 <p style={{
@@ -2579,12 +2606,25 @@ function TradePanel({
                 <div style={{
                   fontSize: '1.1rem',
                   fontWeight: '700',
-                  color: '#3498db'
+                  color: '#7f8c8d'
                 }}>
-                  {inventoryInputModal.inventory?.product_name || '품목명'}
-                  <span style={{ fontSize: '0.9rem', color: '#7f8c8d', marginLeft: '0.5rem', fontWeight: 'normal' }}>
-                    {inventoryInputModal.inventory?.sender ? `(${inventoryInputModal.inventory.sender})` : ''}
-                  </span>
+                  {(() => {
+                    const inv = inventoryInputModal.inventory || {};
+                    const weight = inv.weight || inv.product_weight;
+                    const weightText = weight ? ` ${parseFloat(weight)}kg` : '';
+                    const senderText = inv.sender ? ` ${inv.sender}` : '';
+                    const gradeText = inv.grade ? ` (${inv.grade})` : '';
+
+                    return (
+                      <>
+                        {inv.product_name || '품목명'}
+                        <span style={{ fontWeight: '500' }}>{weightText}</span>
+                        <span style={{ fontSize: '1.1rem', color: '#3498db', marginLeft: '0.5rem', fontWeight: 'normal' }}>
+                          {senderText}{gradeText}
+                        </span>
+                      </>
+                    );
+                  })()}
                 </div>
               </div>
 
@@ -2592,28 +2632,28 @@ function TradePanel({
               <div style={{
                 display: 'flex',
                 justifyContent: 'space-between',
-                marginBottom: '1.5rem',
+                marginBottom: '1rem',
                 backgroundColor: '#f8f9fa',
                 padding: '1rem',
                 borderRadius: '8px'
               }}>
                 <div style={{ textAlign: 'center', flex: 1 }}>
-                  <div style={{ fontSize: '0.85rem', color: '#7f8c8d', marginBottom: '0.25rem' }}>재고 잔량</div>
-                  <div style={{ fontWeight: '700', color: '#27ae60' }}>
+                  <div style={{ fontSize: '1.0rem', color: '#7f8c8d', marginBottom: '0.25rem' }}>재고 잔량</div>
+                  <div style={{ fontWeight: '700', fontSize: '1.2rem', color: '#27ae60' }}>
                     {inventoryInputModal.maxQuantity}
                   </div>
                 </div>
                 <div style={{ width: '1px', backgroundColor: '#e0e0e0' }}></div>
                 <div style={{ textAlign: 'center', flex: 1 }}>
-                  <div style={{ fontSize: '0.85rem', color: '#7f8c8d', marginBottom: '0.25rem' }}>기준 단가</div>
-                  <div style={{ fontWeight: '700' }}>
+                  <div style={{ fontSize: '1.0rem', color: '#7f8c8d', marginBottom: '0.25rem' }}>기준 단가</div>
+                  <div style={{ fontWeight: '700', fontSize: '1.2rem' }}>
                     {formatCurrency(inventoryInputModal.inventory?.unit_price || 0)}원
                   </div>
                 </div>
               </div>
 
               {/* 입력 폼 */}
-              <div style={{ display: 'flex', gap: '1rem', marginBottom: '1.5rem' }}>
+              <div style={{ display: 'flex', gap: '0.8rem', marginBottom: '1rem' }}>
                 <div style={{ flex: 1 }}>
                   <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.5rem', fontWeight: '600' }}>수량</label>
                   <input
@@ -2623,14 +2663,18 @@ function TradePanel({
                       const val = e.target.value.replace(/[^0-9.]/g, '');
                       setInventoryInputModal(prev => ({ ...prev, quantity: val }));
                     }}
-                    className="form-control modal-input-highlight"
+                    className="modal-input-highlight"
                     style={{
                       width: '100%',
-                      padding: '0.8rem',
-                      fontSize: '1.1rem',
+                      padding: '0.5rem',
+                      height: '45px',
+                      fontSize: '1.2rem',
+                      fontWeight: '800',
                       textAlign: 'right',
-                      borderRadius: '6px',
-                      boxSizing: 'border-box'
+                      borderRadius: '8px',
+                      border: '1px solid #ddd',
+                      boxSizing: 'border-box',
+                      color: '#2980b9'
                     }}
                     autoFocus
                     onFocus={(e) => e.target.select()}
@@ -2655,14 +2699,18 @@ function TradePanel({
                       const val = e.target.value.replace(/[^0-9]/g, '');
                       setInventoryInputModal(prev => ({ ...prev, unitPrice: val }));
                     }}
-                    className="form-control modal-input-highlight"
+                    className="modal-input-highlight"
                     style={{
                       width: '100%',
-                      padding: '0.8rem',
-                      fontSize: '1.1rem',
+                      padding: '0.5rem',
+                      height: '45px',
+                      fontSize: '1.2rem',
+                      fontWeight: '800',
                       textAlign: 'right',
-                      borderRadius: '6px',
-                      boxSizing: 'border-box'
+                      borderRadius: '8px',
+                      border: '1px solid #ddd',
+                      boxSizing: 'border-box',
+                      color: '#2c3e50'
                     }}
                     onFocus={(e) => e.target.select()}
                     onKeyDown={(e) => {
@@ -2684,7 +2732,7 @@ function TradePanel({
                 <button
                   onClick={handleInventoryInputConfirm}
                   className="modal-btn modal-btn-primary"
-                  style={{ flex: 2 }}
+                  style={{ flex: 1 }}
                 >
                   추가하기
                 </button>

@@ -193,7 +193,7 @@ const AuditSession = ({ auditId, onBack, isMobile }) => {
                     )}
                 </div>
 
-                <div style={{ flex: 1, overflowY: 'auto', paddingBottom: '20px' }}>
+                <div style={{ flex: 1, overflow: 'hidden', position: 'relative' }}>
                     <AuditScanner {...sessionProps} />
                 </div>
 

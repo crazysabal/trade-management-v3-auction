@@ -102,3 +102,35 @@
     padding: 0.3rem 0.8rem;
     font-size: 0.9rem;
 }
+
+/* Mobile Specific Styles */
+@media (max-width: 768px) {
+    .company-form .form-row {
+        grid-template-columns: 1fr !important;
+        gap: 0.8rem !important;
+    }
+
+    /* Keep Label on Left side as per user request */
+    .company-form .form-group>label {
+        text-align: left !important;
+        margin-bottom: 0;
+        width: 90px !important;
+        /* Increased to 90px to prevent wrapping */
+        min-width: 90px !important;
+        margin-right: 0.5rem;
+    }
+
+    /* Horizontal layout for form groups */
+    .company-form .form-group {
+        flex-direction: row !important;
+        align-items: center !important;
+    }
+
+    .company-form input,
+    .company-form select,
+    .company-form textarea {
+        flex: 1 !important;
+        /* Take remaining space */
+        width: auto !important;
+    }
+}

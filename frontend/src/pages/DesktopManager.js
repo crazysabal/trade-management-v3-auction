@@ -22,6 +22,7 @@ import InventoryAuditPage from './InventoryAuditPage';
 import CompanyBalances from './CompanyBalances';
 import ExpenseList from './ExpenseList';
 import SettlementPage from './SettlementPage';
+import SettlementHistory from './SettlementHistory'; // [New]
 import Statistics from './Statistics';
 import Settings from './Settings';
 import WarehouseManagement from './WarehouseManagement';
@@ -106,6 +107,12 @@ const DesktopManager = () => {
 
     // 앱 실행 (윈도우 열기)
     const launchApp = useCallback((appType, props = {}) => {
+        // [NEW] Dashboard Home Action -> Close All Windows (Mobile Friendly)
+        if (appType === 'DASHBOARD') {
+            closeAll();
+            return;
+        }
+
         // 이미 열린 단일 인스턴스 앱 확인 (설정, 통계 등은 하나만)
         const alwaysSingleInstanceApps = [
             'SETTINGS', 'STATISTICS' // 이 앱들은 설정과 무관하게 항상 하나만
@@ -168,6 +175,7 @@ const DesktopManager = () => {
             case 'COMPANY_BALANCES': title = '거래처 잔고'; icon = '💰'; break;
             case 'EXPENSES': title = '지출 내역'; icon = '💸'; break;
             case 'SETTLEMENT': title = '정산 리포트'; icon = '📈'; break;
+            case 'SETTLEMENT_HISTORY': title = '정산 이력 조회'; icon = '📜'; size = { width: 900, height: 600 }; break;
             case 'STATISTICS': title = '통계'; icon = '📉'; break;
             case 'SETTINGS': title = '시스템 설정'; icon = '⚙️'; size = { width: 800, height: 600 }; break;
             case 'WAREHOUSES': title = '창고 관리'; icon = '🏭'; size = { width: 900, height: 600 }; break;
@@ -198,7 +206,7 @@ const DesktopManager = () => {
             }
         }
 
-        setWindows(prev => [...prev, {
+        const newWindow = {
             id: newId,
             type: appType,
             zIndex: newZIndex,
@@ -208,7 +216,15 @@ const DesktopManager = () => {
             icon,
             componentProps: props,
             isMinimized: false
-        }]);
+        };
+
+        setWindows(prev => {
+            // [NEW] Mobile Single Window Policy: Close others
+            if (isMobile) {
+                return [newWindow];
+            }
+            return [...prev, newWindow];
+        });
     }, [windows, maxZIndex, isMobile, windowMode]);
 
     const closeWindow = (id) => {
@@ -356,6 +372,7 @@ const DesktopManager = () => {
             case 'COMPANY_BALANCES': return <CompanyBalances isWindow={true} {...componentProps} />;
             case 'EXPENSES': return <ExpenseList isWindow={true} {...componentProps} />;
             case 'SETTLEMENT': return <SettlementPage isWindow={true} {...componentProps} />;
+            case 'SETTLEMENT_HISTORY': return <SettlementHistory isWindow={true} onOpenDetail={(item) => launchApp('SETTLEMENT', { initialHistory: item })} {...componentProps} />;
             case 'STATISTICS': return <Statistics isWindow={true} {...componentProps} />;
             case 'SETTINGS': return <Settings isWindow={true} windowMode={windowMode} setWindowMode={handleSetWindowMode} {...componentProps} />;
             case 'WAREHOUSES': return <WarehouseManagement isWindow={true} {...componentProps} />;

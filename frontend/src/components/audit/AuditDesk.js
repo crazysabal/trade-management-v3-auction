@@ -188,6 +188,80 @@ const AuditDesk = ({ audit, items, onUpdate, isSaving, reorderMode, setReorderMo
         await handleAutoSave(currentItems);
     };
 
+    // --- Touch Support for Mobile DnD ---
+    const touchAnimationFrame = useRef(null);
+
+    const handleTouchStart = (e, item) => {
+        if (!canReorder) return;
+        // CRITICAL: Prevent default browser actions (scroll, selection, zoom, context menu)
+        // This stops the "blue border" / text selection and rubber-band scrolling.
+        if (e.cancelable) e.preventDefault();
+        e.stopPropagation();
+
+        setDraggedId(item.id);
+        draggedIdRef.current = item.id;
+
+        const row = e.target.closest('tr');
+        if (row) {
+            dragNode.current = row;
+            row.style.opacity = '0.5';
+            row.style.backgroundColor = '#edf2f7'; // Visual feedback
+        }
+
+        document.body.style.overflow = 'hidden'; // Lock global scroll redundancy
+    };
+
+    const handleTouchMove = (e) => {
+        if (e.cancelable) e.preventDefault(); // Stop scrolling completely
+        e.stopPropagation();
+
+        if (touchAnimationFrame.current) return; // Throttle
+
+        touchAnimationFrame.current = requestAnimationFrame(() => {
+            const touch = e.touches[0];
+            const element = document.elementFromPoint(touch.clientX, touch.clientY);
+
+            if (element && draggedIdRef.current) {
+                const row = element.closest('tr');
+                if (row && row.dataset.id) {
+                    const targetId = row.dataset.id;
+                    if (targetId && String(targetId) !== String(draggedIdRef.current)) {
+                        const targetItem = itemsRef.current.find(i => String(i.id) === String(targetId));
+                        if (targetItem) {
+                            handleDragEnter(null, targetItem);
+                        }
+                    }
+                }
+            }
+            touchAnimationFrame.current = null;
+        });
+    };
+
+    const handleTouchEnd = async (e) => {
+        if (e.cancelable) e.preventDefault();
+        e.stopPropagation();
+
+        if (touchAnimationFrame.current) {
+            cancelAnimationFrame(touchAnimationFrame.current);
+            touchAnimationFrame.current = null;
+        }
+
+        document.body.style.overflow = ''; // Restore scroll
+
+        if (dragNode.current) {
+            dragNode.current.style.opacity = '1';
+            dragNode.current.style.backgroundColor = '';
+        }
+
+        const currentItems = itemsRef.current;
+        setDraggedId(null);
+        setDragOverId(null);
+        draggedIdRef.current = null;
+        dragNode.current = null;
+
+        await handleAutoSave(currentItems);
+    };
+
 
 
     // Condition to enable reordering (DnD handles and column)
@@ -278,16 +352,31 @@ const AuditDesk = ({ audit, items, onUpdate, isSaving, reorderMode, setReorderMo
                                     // But we need onDragEnter for the target
                                     onDragEnter={(e) => handleDragEnter(e, item)}
                                     onDragOver={(e) => e.preventDefault()}
-                                    className={`${diff !== 0 ? 'has-diff' : ''} ${item.is_checked ? 'is-checked' : ''} ${isDragOver ? 'drag-over' : ''}`}
+                                    className={`${diff !== 0 ? 'has-diff' : ''} ${item.is_checked ? 'is-checked' : ''} ${isDragOver ? 'drag-over' : ''} no-select`}
+                                    data-id={item.id}
                                     style={{
                                         opacity: isDragging ? 0.4 : 1,
                                         backgroundColor: item.is_checked ? '#f0fff4' : 'inherit',
-                                        transition: 'background-color 0.2s'
+                                        transition: 'background-color 0.2s',
+                                        // CRITICAL: Prevent the dragged item from blocking elementFromPoint
+                                        pointerEvents: isDragging ? 'none' : 'auto'
                                     }}
                                 >
                                     {canReorder && (
                                         <td
-                                            style={{ textAlign: 'center', cursor: 'grab', color: '#718096', fontSize: '1.2rem', userSelect: 'none' }}
+                                            className="no-select touch-none"
+                                            style={{
+                                                textAlign: 'center',
+                                                cursor: 'grab',
+                                                color: '#718096',
+                                                fontSize: '1.2rem',
+                                                width: '40px',
+                                                // Ensure pointer events are captured by the handle initially
+                                                pointerEvents: 'auto'
+                                            }}
+                                            onTouchStart={(e) => handleTouchStart(e, item)}
+                                            onTouchMove={handleTouchMove}
+                                            onTouchEnd={handleTouchEnd}
                                         >
                                             ≡
                                         </td>

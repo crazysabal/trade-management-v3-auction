@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { purchaseInventoryAPI, warehousesAPI } from '../services/api'; // Use centralized API services
+import { purchaseInventoryAPI, warehousesAPI, inventoryAdjustmentAPI } from '../services/api'; // Use centralized API services
 import ConfirmModal from '../components/ConfirmModal';
 import TradeDetailModal from '../components/TradeDetailModal';
+import ProductionDetailModal from '../components/ProductionDetailModal';
 import './InventoryHistory.css';
 
 const InventoryHistory = ({ onOpenTrade }) => {
@@ -10,6 +11,8 @@ const InventoryHistory = ({ onOpenTrade }) => {
     const [loading, setLoading] = useState(false);
     const [messageModal, setMessageModal] = useState({ isOpen: false, title: '', message: '' });
     const [detailModal, setDetailModal] = useState({ isOpen: false, tradeId: null });
+    const [prodDetailModal, setProdDetailModal] = useState({ isOpen: false, productionId: null });
+    const [confirmAction, setConfirmAction] = useState(null); // Function to execute on confirm
 
     // Filters
     const [startDate, setStartDate] = useState(new Date(new Date().setMonth(new Date().getMonth() - 1)).toISOString().split('T')[0]);
@@ -41,9 +44,26 @@ const InventoryHistory = ({ onOpenTrade }) => {
                     // 2. Sort by Detail Date (Entry Time)
                     const dDateA = a.detail_date || '';
                     const dDateB = b.detail_date || '';
-                    if (dDateA !== dDateB) {
-                        return dDateB.localeCompare(dDateA);
+                    // Convert to timestamps for accurate comparison
+                    const timeA = new Date(dDateA).getTime();
+                    const timeB = new Date(dDateB).getTime();
+                    if (timeA !== timeB) {
+                        return timeB - timeA;
                     }
+
+                    // 2.5 Tie-breaker: Transaction Type Priority (Result > Ingredient)
+                    // We want PRODUCTION_IN (Result) to appear ABOVE PRODUCTION_OUT (Ingredient) in Descending list
+                    // So PRODUCTION_IN should be considered "Newer/Larger"
+                    const typePriority = {
+                        'PRODUCTION_IN': 2,
+                        'PRODUCTION_OUT': 1
+                    };
+                    const pA = typePriority[a.transaction_type] || 0;
+                    const pB = typePriority[b.transaction_type] || 0;
+                    if (pA !== pB) {
+                        return pB - pA;
+                    }
+
                     // 3. Tie-breaker: ID
                     return (b.id || 0) - (a.id || 0);
                 });
@@ -137,6 +157,32 @@ const InventoryHistory = ({ onOpenTrade }) => {
         if (type && onOpenTrade) {
             onOpenTrade(type, item.trade_master_id);
         }
+    };
+
+    const handleCancelAdjustment = (item) => {
+        setConfirmAction(() => async () => {
+            try {
+                await inventoryAdjustmentAPI.cancel(item.reference_id);
+                fetchHistory();
+                setConfirmAction(null);
+            } catch (error) {
+                console.error('조정 취소 실패', error);
+                // Alert is sufficient, confirmAction stays null for the error modal
+                setConfirmAction(null); // Clear action first
+                setTimeout(() => {
+                    setMessageModal({
+                        isOpen: true,
+                        title: '오류',
+                        message: error.response?.data?.message || '조정 취소 중 오류가 발생했습니다.'
+                    });
+                }, 100);
+            }
+        });
+        setMessageModal({
+            isOpen: true,
+            title: '조정 취소',
+            message: '정말로 이 재고 조정을 취소하시겠습니까?\n취소 시 재고 수량이 원복됩니다.'
+        });
     };
 
     return (
@@ -237,6 +283,7 @@ const InventoryHistory = ({ onOpenTrade }) => {
                             <th>거래처</th>
                             <th>출하주</th>
                             <th>전표번호</th>
+                            <th>비고</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -263,8 +310,21 @@ const InventoryHistory = ({ onOpenTrade }) => {
                                         {item.grade ? ` (${item.grade})` : ''}
                                     </td>
                                     <td>
-                                        <strong style={{ color: ['IN', 'PURCHASE', 'PRODUCTION_IN', 'TRANSFER_IN'].includes(item.transaction_type) ? '#2ecc71' : (Number(item.quantity) > 0 ? '#2ecc71' : '#e74c3c') }}>
-                                            {Number(item.quantity) > 0 ? '+' : ''}{formatNumber(item.quantity)}
+                                        <strong style={{ color: ['IN', 'PURCHASE', 'PRODUCTION_IN', 'TRANSFER_IN', 'ADJUST'].includes(item.transaction_type) && Number(item.quantity) > 0 ? '#2ecc71' : '#e74c3c' }}>
+                                            {/* Logic for Sign */}
+                                            {(() => {
+                                                const qty = Number(item.quantity);
+                                                // 1. Outgoing types (always negative)
+                                                if (['SALE', 'OUT', 'PRODUCTION_OUT', 'TRANSFER_OUT'].includes(item.transaction_type)) {
+                                                    return `-${formatNumber(Math.abs(qty))}`;
+                                                }
+                                                // 2. Incoming types (always positive)
+                                                if (['IN', 'PURCHASE', 'PRODUCTION_IN', 'TRANSFER_IN'].includes(item.transaction_type)) {
+                                                    return `+${formatNumber(Math.abs(qty))}`;
+                                                }
+                                                // 3. Adjust (signed)
+                                                return (qty > 0 ? '+' : '') + formatNumber(qty);
+                                            })()}
                                         </strong>
                                     </td>
                                     <td style={{ color: '#7f8c8d' }}>
@@ -275,24 +335,22 @@ const InventoryHistory = ({ onOpenTrade }) => {
                                     </td>
                                     <td>
                                         {item.sender || '-'}
-                                        {item.transaction_type === 'TRANSFER_OUT' && (
-                                            <div style={{ fontSize: '0.8em', color: '#7950f2' }}>
-                                                {item.shipper_location}
-                                            </div>
-                                        )}
                                     </td>
                                     <td>
                                         <span
-                                            className={item.trade_master_id ? 'trade-link' : ''}
+                                            className={item.trade_master_id || item.production_id ? 'trade-link' : ''}
                                             style={{
                                                 fontFamily: 'monospace',
                                                 fontSize: '0.9em',
-                                                cursor: item.trade_master_id ? 'pointer' : 'default',
-                                                color: item.trade_master_id ? '#339af0' : 'inherit', // Blue color like TradeList
-                                                textDecoration: item.trade_master_id ? 'none' : 'none' // Remove underline to match TradeList style if desired, or keep it. TradeList uses no underline but blue color.
+                                                cursor: (item.trade_master_id || item.production_id) ? 'pointer' : 'default',
+                                                color: (item.trade_master_id || item.production_id) ? '#339af0' : 'inherit', // Blue color like TradeList
+                                                textDecoration: (item.trade_master_id || item.production_id) ? 'none' : 'none'
                                             }}
                                             onClick={(e) => {
-                                                if (item.trade_master_id) {
+                                                if (item.production_id) {
+                                                    e.stopPropagation();
+                                                    setProdDetailModal({ isOpen: true, productionId: item.production_id });
+                                                } else if (item.trade_master_id) {
                                                     e.stopPropagation();
                                                     setDetailModal({ isOpen: true, tradeId: item.trade_master_id });
                                                 }
@@ -316,6 +374,37 @@ const InventoryHistory = ({ onOpenTrade }) => {
                                                 </span>
                                             </div>
                                         )}
+
+                                        {/* Adjustment Cancel Button */}
+                                        {item.transaction_type === 'ADJUST' && (
+                                            <div style={{ marginTop: '4px' }}>
+                                                <button
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        handleCancelAdjustment(item);
+                                                    }}
+                                                    style={{
+                                                        backgroundColor: '#ff6b6b',
+                                                        color: 'white',
+                                                        border: 'none',
+                                                        borderRadius: '4px',
+                                                        padding: '2px 6px',
+                                                        fontSize: '0.75rem',
+                                                        cursor: 'pointer'
+                                                    }}
+                                                >
+                                                    ❌ 취소
+                                                </button>
+                                            </div>
+                                        )}
+                                    </td>
+                                    <td style={{ color: '#868e96', fontSize: '0.9em' }}>
+                                        {item.transaction_type === 'ADJUST' ? item.adjustment_reason : item.notes}
+                                        {item.transaction_type === 'TRANSFER_OUT' && (
+                                            <div style={{ color: '#7950f2' }}>
+                                                {item.shipper_location}
+                                            </div>
+                                        )}
                                     </td>
                                 </tr>
                             ))
@@ -333,12 +422,17 @@ const InventoryHistory = ({ onOpenTrade }) => {
             <ConfirmModal
                 isOpen={messageModal.isOpen}
                 onClose={() => setMessageModal({ ...messageModal, isOpen: false })}
-                onConfirm={() => setMessageModal({ ...messageModal, isOpen: false })}
+                onConfirm={() => {
+                    if (confirmAction) {
+                        confirmAction();
+                    }
+                    setMessageModal({ ...messageModal, isOpen: false });
+                }}
                 title={messageModal.title}
                 message={messageModal.message}
-                type="alert"
+                type={confirmAction ? "confirm" : "alert"}
                 confirmText="확인"
-                showCancel={false}
+                showCancel={!!confirmAction}
             />
 
             <TradeDetailModal
@@ -346,7 +440,13 @@ const InventoryHistory = ({ onOpenTrade }) => {
                 onClose={() => setDetailModal({ isOpen: false, tradeId: null })}
                 tradeId={detailModal.tradeId}
             />
-        </div>
+
+            <ProductionDetailModal
+                isOpen={prodDetailModal.isOpen}
+                onClose={() => setProdDetailModal({ isOpen: false, productionId: null })}
+                productionId={prodDetailModal.productionId}
+            />
+        </div >
     );
 };
 

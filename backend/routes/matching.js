@@ -210,9 +210,10 @@ router.post('/', async (req, res) => {
 
     // 1. 매출 상세 정보 조회
     const [saleDetails] = await connection.query(`
-      SELECT td.*, tm.trade_type 
+      SELECT td.*, tm.trade_type, p.product_name, p.weight, p.grade
       FROM trade_details td
       JOIN trade_masters tm ON td.trade_master_id = tm.id
+      JOIN products p ON td.product_id = p.id
       WHERE td.id = ?
     `, [sale_detail_id]);
 
@@ -261,8 +262,10 @@ router.post('/', async (req, res) => {
 
       // 매입 재고 확인
       const [inventory] = await connection.query(`
-        SELECT * FROM purchase_inventory 
-        WHERE id = ? AND status = 'AVAILABLE'
+        SELECT pi.*, p.product_name, p.weight, p.grade
+        FROM purchase_inventory pi
+        JOIN products p ON pi.product_id = p.id
+        WHERE pi.id = ? AND pi.status = 'AVAILABLE'
         FOR UPDATE
       `, [purchase_inventory_id]);
 
@@ -284,12 +287,15 @@ router.post('/', async (req, res) => {
         });
       }
 
-      // 품목 일치 확인
-      if (inventory[0].product_id !== saleDetails[0].product_id) {
+      // 품목 일치 확인 (이름 + 중량) - 등급 무관
+      const isNameMatch = inventory[0].product_name === saleDetails[0].product_name;
+      const isWeightMatch = parseFloat(inventory[0].weight || 0) === parseFloat(saleDetails[0].weight || 0);
+
+      if (!isNameMatch || !isWeightMatch) {
         await connection.rollback();
         return res.status(400).json({
           success: false,
-          message: '매출 품목과 매입 품목이 일치하지 않습니다.'
+          message: '매출 품목과 매입 품목(이름/중량)이 일치하지 않습니다.'
         });
       }
 
@@ -643,9 +649,10 @@ router.post('/trade', async (req, res) => {
 
       // 매출 상세 정보 조회
       const [saleDetails] = await connection.query(`
-        SELECT td.*, tm.trade_type 
+        SELECT td.*, tm.trade_type, p.product_name, p.weight, p.grade
         FROM trade_details td
         JOIN trade_masters tm ON td.trade_master_id = tm.id
+        JOIN products p ON td.product_id = p.id
         WHERE td.id = ? AND tm.id = ?
       `, [sale_detail_id, trade_master_id]);
 
@@ -653,12 +660,11 @@ router.post('/trade', async (req, res) => {
         await connection.rollback();
         return res.status(404).json({
           success: false,
-          message: `매출 상세(ID: ${sale_detail_id})를 찾을 수 없습니다.`
+          message: `매출 상세를 찾을 수 없습니다.`
         });
       }
 
       const saleQuantity = parseFloat(saleDetails[0].quantity);
-      const productId = saleDetails[0].product_id;
 
       // 기존 매칭 수량 조회
       const [existingMatching] = await connection.query(`
@@ -693,8 +699,10 @@ router.post('/trade', async (req, res) => {
 
         // 매입 재고 확인
         const [inventory] = await connection.query(`
-          SELECT * FROM purchase_inventory 
-          WHERE id = ? AND status = 'AVAILABLE'
+          SELECT pi.*, p.product_name, p.weight, p.grade
+          FROM purchase_inventory pi
+          JOIN products p ON pi.product_id = p.id
+          WHERE pi.id = ? AND pi.status = 'AVAILABLE'
           FOR UPDATE
         `, [purchase_inventory_id]);
 
@@ -716,12 +724,15 @@ router.post('/trade', async (req, res) => {
           });
         }
 
-        // 품목 일치 확인
-        if (inventory[0].product_id !== productId) {
+        // 품목 일치 확인 (이름 + 중량) - 등급 무관
+        const isNameMatch = inventory[0].product_name === saleDetails[0].product_name;
+        const isWeightMatch = parseFloat(inventory[0].weight || 0) === parseFloat(saleDetails[0].weight || 0);
+
+        if (!isNameMatch || !isWeightMatch) {
           await connection.rollback();
           return res.status(400).json({
             success: false,
-            message: '매출 품목과 매입 품목이 일치하지 않습니다.'
+            message: '매출 품목과 매입 품목(이름/중량)이 일치하지 않습니다.'
           });
         }
 
@@ -840,8 +851,8 @@ router.get('/trade/:trade_master_id/inventory', async (req, res) => {
           spm.matched_quantity,
           pi.purchase_date,
           pi.unit_price as purchase_unit_price,
-          pi.shipper_location,
-          pi.sender,
+          td.shipper_location,
+          td.sender,
           p.product_name,
           p.grade,
           p.weight as product_weight,
@@ -878,8 +889,8 @@ router.get('/trade/:trade_master_id/inventory', async (req, res) => {
         pi.original_quantity,
         pi.remaining_quantity,
         pi.unit_price,
-        pi.shipper_location,
-        pi.sender,
+        td.shipper_location,
+        td.sender,
         p.product_name,
         p.grade,
         p.weight as product_weight,

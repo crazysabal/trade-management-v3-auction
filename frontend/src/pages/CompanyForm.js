@@ -45,6 +45,18 @@ function CompanyForm({ id: propId, onSuccess, onCancel }) {
     showCancel: false
   });
 
+  const aliasInputRef = React.useRef(null);
+
+  useEffect(() => {
+    // 모달이 열릴 때 (마운트 될 때) 포커스
+    const timer = setTimeout(() => {
+      if (aliasInputRef.current) {
+        aliasInputRef.current.focus();
+      }
+    }, 100);
+    return () => clearTimeout(timer);
+  }, []);
+
   useEffect(() => {
     if (isEdit) {
       loadCompany();
@@ -99,12 +111,12 @@ function CompanyForm({ id: propId, onSuccess, onCancel }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    if (!formData.company_name) {
+    if (!formData.alias) {
       setModal({
         isOpen: true,
         type: 'warning',
         title: '입력 오류',
-        message: '거래처명은 필수입니다.',
+        message: '거래처 명(별칭)은 필수입니다.',
         confirmText: '확인',
         showCancel: false,
         onConfirm: () => { }
@@ -112,9 +124,15 @@ function CompanyForm({ id: propId, onSuccess, onCancel }) {
       return;
     }
 
+    // 필수값이 아닌 '사업자 명'이 비어있으면 '거래처 명(별칭)'으로 자동 채움
+    const finalData = {
+      ...formData,
+      company_name: formData.company_name || formData.alias
+    };
+
     try {
       if (isEdit) {
-        await companyAPI.update(id, formData);
+        await companyAPI.update(id, finalData);
         setModal({
           isOpen: true,
           type: 'success',
@@ -125,7 +143,7 @@ function CompanyForm({ id: propId, onSuccess, onCancel }) {
           onConfirm: () => handleSuccess({ ...formData, id })
         });
       } else {
-        await companyAPI.create(formData);
+        await companyAPI.create(finalData);
         setModal({
           isOpen: true,
           type: 'success',
@@ -154,7 +172,7 @@ function CompanyForm({ id: propId, onSuccess, onCancel }) {
 
   return (
     <div className="company-form" style={{ maxWidth: '100% ', margin: '0 auto', height: isModalMode ? '100%' : 'auto', overflowY: isModalMode ? 'auto' : 'visible' }}>
-      <div className="page-header" style={{ marginBottom: '1rem' }}>
+      <div className="page-header" style={{ marginBottom: '1rem', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
         <h1 className="page-title" style={{ fontSize: '1.5rem', margin: 0 }}>🏢 {isEdit ? '거래처 수정' : '거래처 등록'}</h1>
       </div>
 
@@ -169,13 +187,15 @@ function CompanyForm({ id: propId, onSuccess, onCancel }) {
 
         <div className="form-row">
           <div className="form-group">
-            <label>거래처 명</label>
+            <label className="required">거래처 명(별칭)</label>
             <input
               type="text"
               name="alias"
+              ref={aliasInputRef}
               value={formData.alias || ''}
               onChange={handleChange}
-              placeholder="거래처 명"
+              placeholder="자주 사용하는 거래처 명"
+              required
             />
           </div>
           <div className="form-group">
@@ -200,13 +220,13 @@ function CompanyForm({ id: propId, onSuccess, onCancel }) {
 
         <div className="form-row">
           <div className="form-group">
-            <label className="required">사업자 명</label>
+            <label>사업자 명</label>
             <input
               type="text"
               name="company_name"
               value={formData.company_name}
               onChange={handleChange}
-              required
+              placeholder="사업자등록증 상호 (선택)"
             />
           </div>
           <div className="form-group">

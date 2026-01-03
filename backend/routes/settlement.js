@@ -27,12 +27,24 @@ router.get('/summary', async (req, res) => {
         `, [startDate, endDate]);
 
         // 2. 매출원가 (COGS)
-        // trade_details의 purchase_price * quantity
-        // purchase_price가 NULL이면 0으로 처리 (User Warning 사항)
+        // trade_details의 purchase_price는 캐시 컬럼으로, 매칭 시 업데이트되지만 누락될 가능성 있음.
+        // 따라서 sale_purchase_matching 테이블의 실제 매칭 기록을 1순위로 조회하고, 없을 경우 purchase_price를 참조함.
         const [cogsResult] = await db.query(`
             SELECT 
-                COALESCE(SUM(td.purchase_price * td.quantity), 0) as total_cogs,
-                COALESCE(SUM(CASE WHEN td.purchase_price IS NULL OR td.purchase_price = 0 THEN 1 ELSE 0 END), 0) as zero_cost_items
+                COALESCE(SUM(
+                    COALESCE(
+                        (SELECT SUM(spm.matched_quantity * pi.unit_price)
+                         FROM sale_purchase_matching spm
+                         JOIN purchase_inventory pi ON spm.purchase_inventory_id = pi.id
+                         WHERE spm.sale_detail_id = td.id),
+                        td.purchase_price * td.quantity,
+                        0
+                    )
+                ), 0) as total_cogs,
+                COALESCE(SUM(CASE 
+                    WHEN (SELECT COUNT(*) FROM sale_purchase_matching spm WHERE spm.sale_detail_id = td.id) = 0 
+                         AND (td.purchase_price IS NULL OR td.purchase_price = 0) 
+                    THEN 1 ELSE 0 END), 0) as zero_cost_items
             FROM trade_details td
             JOIN trade_masters tm ON td.trade_master_id = tm.id
             WHERE tm.trade_type = 'SALE'
@@ -49,14 +61,63 @@ router.get('/summary', async (req, res) => {
             WHERE expense_date BETWEEN ? AND ?
         `, [startDate, endDate]);
 
+        // [NEW] 4. Cash Flow (Period-Specific)
+        const [receiptResult] = await db.query(`
+            SELECT COALESCE(SUM(amount), 0) as total
+            FROM payment_transactions
+            WHERE transaction_type = 'RECEIPT' AND transaction_date BETWEEN ? AND ?
+        `, [startDate, endDate]);
+
+        const [paymentResult] = await db.query(`
+            SELECT COALESCE(SUM(amount), 0) as total
+            FROM payment_transactions
+            WHERE transaction_type = 'PAYMENT' AND transaction_date BETWEEN ? AND ?
+        `, [startDate, endDate]);
+
+        const [cashExpenseResult] = await db.query(`
+            SELECT COALESCE(SUM(amount), 0) as total
+            FROM expenses
+            WHERE expense_date BETWEEN ? AND ?
+        `, [startDate, endDate]);
+
+        // [NEW] 5. Period Purchase Cost (For Asset Flow Equation)
+        const [purchaseResult] = await db.query(`
+            SELECT COALESCE(SUM(total_amount), 0) as total
+            FROM trade_masters
+            WHERE trade_type = 'PURCHASE' AND trade_date BETWEEN ? AND ? AND status != 'CANCELLED'
+        `, [startDate, endDate]);
+
+        // inventory_adjustments table: adjusted_at (timestamp) used for filtering
+        // Join purchase_inventory to get unit_price
+        const [adjResult] = await db.query(`
+            SELECT 
+                COALESCE(SUM(ia.quantity_change * pi.unit_price), 0) as total_val
+            FROM inventory_adjustments ia
+            JOIN purchase_inventory pi ON ia.purchase_inventory_id = pi.id
+            WHERE DATE(ia.adjusted_at) BETWEEN ? AND ?
+        `, [startDate, endDate]);
+
         const revenue = parseFloat(revenueResult[0].total_revenue || 0);
         const cogs = parseFloat(cogsResult[0].total_cogs || 0);
         const expenses = parseFloat(expensesResult[0].total_expenses || 0);
+        const periodPurchase = parseFloat(purchaseResult[0].total || 0);
+
+        // Cash Flow values
+        const cashFlow = {
+            inflow: parseFloat(receiptResult[0].total || 0),
+            outflow: parseFloat(paymentResult[0].total || 0),
+            outflow: parseFloat(paymentResult[0].total || 0),
+            expense: parseFloat(cashExpenseResult[0].total || 0)
+        };
+
+        const adjustmentValue = parseFloat(adjResult[0].total_val || 0);
+        // adjustmentValue is usually negative for loss.
+        // Net Profit = Gross Profit - Expenses + Adjustment (if negative, it reduces profit)
 
         // 매출총이익
         const grossProfit = revenue - cogs;
-        // 영업이익 (순이익)
-        const netProfit = grossProfit - expenses;
+        // 영업이익 (순이익) -> Adjusted Net Profit
+        const netProfit = grossProfit - expenses + adjustmentValue;
 
         res.json({
             success: true,
@@ -67,11 +128,56 @@ router.get('/summary', async (req, res) => {
                 grossProfit,
                 expenses,
                 netProfit,
+                inventoryLoss: adjustmentValue, // Return raw value (negative for loss)
+                periodPurchase, // [NEW]
                 counts: {
                     trades: revenueResult[0].trade_count,
                     zeroCostItems: cogsResult[0].zero_cost_items, // 원가 0원인 항목 수 (리스크 지표)
                     expenses: expensesResult[0].expense_count
-                }
+                },
+                cashFlow, // [NEW] Period Cash Flow
+                cashFlowDetails: await (async () => {
+                    // 1. Fetch Method Map
+                    const [methods] = await db.query('SELECT code, name FROM payment_methods');
+                    const methodMap = methods.reduce((acc, m) => { acc[m.code] = m.name; return acc; }, {});
+
+                    // 2. Fetch Aggregates (Group by Code)
+                    const [rows] = await db.query(`
+                        SELECT 
+                            transaction_type, 
+                            payment_method, 
+                            COALESCE(SUM(amount), 0) as total
+                        FROM payment_transactions
+                        WHERE transaction_date BETWEEN ? AND ?
+                        GROUP BY transaction_type, payment_method
+                    `, [startDate, endDate]);
+
+                    // 3. Map Code to Name
+                    return rows.map(r => ({
+                        transaction_type: r.transaction_type,
+                        payment_method: methodMap[r.payment_method] || r.payment_method || '미지정',
+                        total: r.total
+                    }));
+                })(),
+                expenseDetails: await (async () => {
+                    // (Reuse Map if possible, but fetching again is cheap/safe context)
+                    const [methods] = await db.query('SELECT code, name FROM payment_methods');
+                    const methodMap = methods.reduce((acc, m) => { acc[m.code] = m.name; return acc; }, {});
+
+                    const [rows] = await db.query(`
+                        SELECT 
+                            payment_method,
+                            COALESCE(SUM(amount), 0) as total
+                        FROM expenses
+                        WHERE expense_date BETWEEN ? AND ?
+                        GROUP BY payment_method
+                    `, [startDate, endDate]);
+
+                    return rows.map(r => ({
+                        payment_method: methodMap[r.payment_method] || r.payment_method || '미지정',
+                        total: r.total
+                    }));
+                })()
             }
         });
 
@@ -123,9 +229,14 @@ router.get('/assets', async (req, res) => {
         // (이건 옵션으로 제공하거나 생략 가능. 여기서는 정보 제공용으로 계산)
         const [cashFlowResult] = await db.query(`
             SELECT
-                (SELECT COALESCE(SUM(amount), 0) FROM payment_transactions WHERE transaction_type = 'RECEIPT') -
-                (SELECT COALESCE(SUM(amount), 0) FROM payment_transactions WHERE transaction_type = 'PAYMENT') -
-                (SELECT COALESCE(SUM(amount), 0) FROM expenses) as estimated_cash
+                (SELECT COALESCE(SUM(amount), 0) FROM payment_transactions WHERE transaction_type = 'RECEIPT') as total_receipts,
+                (SELECT COALESCE(SUM(amount), 0) FROM payment_transactions WHERE transaction_type = 'PAYMENT') as total_payments,
+                (SELECT COALESCE(SUM(amount), 0) FROM expenses) as total_expenses,
+                (
+                    (SELECT COALESCE(SUM(amount), 0) FROM payment_transactions WHERE transaction_type = 'RECEIPT') -
+                    (SELECT COALESCE(SUM(amount), 0) FROM payment_transactions WHERE transaction_type = 'PAYMENT') -
+                    (SELECT COALESCE(SUM(amount), 0) FROM expenses)
+                ) as estimated_cash
         `); // expenses 테이블은 별도이므로 차감 필요
 
         // expenses 테이블의 지출도 차감해야 함.
@@ -137,7 +248,13 @@ router.get('/assets', async (req, res) => {
                 inventoryValue: parseFloat(inventoryResult[0].total_inventory_value || 0),
                 receivables: parseFloat(receivableResult[0].total_receivables || 0),
                 payables: parseFloat(payableResult[0].total_payables || 0),
-                estimatedCash: parseFloat(cashFlowResult[0].estimated_cash || 0)
+                estimatedCash: parseFloat(cashFlowResult[0].estimated_cash || 0),
+                // Detailed Cash Flow Components
+                cashFlow: {
+                    inflow: parseFloat(cashFlowResult[0].total_receipts || 0),
+                    outflow: parseFloat(cashFlowResult[0].total_payments || 0),
+                    expense: parseFloat(cashFlowResult[0].total_expenses || 0)
+                }
             }
         });
 
@@ -247,7 +364,14 @@ router.get('/closing/:date', async (req, res) => {
                 system_cash_balance: systemCashBalance,
                 actual_cash_balance: 0,
                 difference: 0,
-                closing_note: ''
+                closing_note: '',
+
+                // [NEW] Cash Flow Breakdown (Cumulative)
+                cashFlow: {
+                    inflow: parseFloat(receiptRows[0].total || 0),
+                    outflow: parseFloat(paymentRows[0].total || 0),
+                    expense: parseFloat(expenseRows[0].total || 0)
+                }
             }
         });
 
@@ -256,6 +380,172 @@ router.get('/closing/:date', async (req, res) => {
         res.status(500).json({ success: false, message: '서버 오류가 발생했습니다.' });
     }
 });
+
+/**
+ * 마감 이력 목록 조회
+ * GET /api/settlement/history
+ * Query: type ('daily' | 'period')
+ */
+/**
+ * 마지막 마감일 조회
+ * GET /api/settlement/last-closed
+ */
+router.get('/last-closed', async (req, res) => {
+    try {
+        const [rows] = await db.query(`
+            SELECT * FROM period_closings ORDER BY end_date DESC LIMIT 1
+        `);
+
+        if (rows.length === 0) {
+            return res.json({ success: true, lastDate: null, lastInventory: 0 });
+        }
+
+        res.json({
+            success: true,
+            lastDate: rows[0].end_date,
+            lastInventory: rows[0].today_inventory || 0
+        });
+    } catch (error) {
+        console.error('마지막 마감일 조회 오류:', error);
+        res.status(500).json({ false: false, message: '서버 오류' });
+    }
+});
+
+/**
+ * 마감 이력 조회 (Unified)
+ * GET /api/settlement/history
+ */
+router.get('/history', async (req, res) => {
+    try {
+        const { startDate, endDate } = req.query;
+        let query = 'SELECT * FROM period_closings';
+        const params = [];
+
+        if (startDate && endDate) {
+            query += ' WHERE start_date >= ? AND end_date <= ?';
+            params.push(startDate, endDate);
+        }
+
+        query += ' ORDER BY start_date DESC';
+
+        // Use limit only if no filter
+        if (!startDate || !endDate) {
+            query += ' LIMIT 60';
+        }
+
+        const [rows] = await db.query(query, params);
+        res.json({ success: true, data: rows });
+    } catch (error) {
+        console.error('마감 이력 조회 오류:', error);
+        res.status(500).json({ success: false, message: '서버 오류가 발생했습니다.' });
+    }
+});
+
+// [MIGRATION] Add missing columns if they don't exist
+(async () => {
+    const columns = [
+        'ADD COLUMN prev_inventory DECIMAL(15,2) DEFAULT 0',
+        'ADD COLUMN purchase_cost DECIMAL(15,2) DEFAULT 0',
+        'ADD COLUMN today_inventory DECIMAL(15,2) DEFAULT 0',
+        'ADD COLUMN system_cash DECIMAL(15,2) DEFAULT 0',
+        'ADD COLUMN actual_cash DECIMAL(15,2) DEFAULT 0',
+        'ADD COLUMN cash_inflow DECIMAL(15,2) DEFAULT 0',
+        'ADD COLUMN cash_outflow DECIMAL(15,2) DEFAULT 0',
+        'ADD COLUMN cash_expense DECIMAL(15,2) DEFAULT 0',
+        'ADD COLUMN inventory_loss DECIMAL(15,2) DEFAULT 0'
+    ];
+    for (const col of columns) {
+        try {
+            await db.query(`ALTER TABLE period_closings ${col}`);
+        } catch (e) {
+            // Ignore (Duplicate column)
+        }
+    }
+})();
+
+/**
+ * 정산 마감 (Unified)
+ * POST /api/settlement/close
+ */
+router.post('/close', async (req, res) => {
+    const { startDate, endDate, summaryData, note } = req.body;
+    try {
+        await db.query(`
+            INSERT INTO period_closings 
+            (
+                start_date, end_date, revenue, cogs, gross_profit, expenses, net_profit, note, closed_at,
+                prev_inventory, purchase_cost, today_inventory,
+                system_cash, actual_cash, cash_inflow, cash_outflow, cash_expense, inventory_loss
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW(), ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON DUPLICATE KEY UPDATE
+            revenue = VALUES(revenue),
+            cogs = VALUES(cogs),
+            gross_profit = VALUES(gross_profit),
+            expenses = VALUES(expenses),
+            net_profit = VALUES(net_profit),
+            note = VALUES(note),
+            closed_at = NOW(),
+            prev_inventory = VALUES(prev_inventory),
+            purchase_cost = VALUES(purchase_cost),
+            today_inventory = VALUES(today_inventory),
+            system_cash = VALUES(system_cash),
+            actual_cash = VALUES(actual_cash),
+            cash_inflow = VALUES(cash_inflow),
+            cash_outflow = VALUES(cash_outflow),
+            cash_expense = VALUES(cash_expense),
+            inventory_loss = VALUES(inventory_loss)
+        `, [
+            startDate, endDate,
+            summaryData.revenue, summaryData.cogs, summaryData.grossProfit,
+            summaryData.expenses, summaryData.netProfit,
+            note || '',
+            // New Fields
+            summaryData.prev_inventory_value || 0,
+            summaryData.today_purchase_cost || 0,
+            summaryData.today_inventory_value || 0,
+            summaryData.system_cash_balance || 0,
+            summaryData.actual_cash_balance || 0,
+            summaryData.cash_inflow || 0,
+            summaryData.cash_outflow || 0,
+            summaryData.cash_expense || 0,
+            summaryData.inventoryLoss || 0
+        ]);
+
+        res.json({ success: true, message: '정산이 완료되었습니다.' });
+
+    } catch (error) {
+        console.error('정산 저장 오류:', error);
+        res.status(500).json({ success: false, message: '서버 오류가 발생했습니다.' });
+    }
+});
+
+/**
+ * 최신 정산 취소 (마지막 정산 건만 삭제 가능)
+ * DELETE /api/settlement/last
+ */
+router.delete('/last', async (req, res) => {
+    try {
+        // 1. 가장 최근 정산 건 확인
+        const [rows] = await db.query(`SELECT id, end_date FROM period_closings ORDER BY end_date DESC LIMIT 1`);
+        if (rows.length === 0) {
+            return res.status(404).json({ success: false, message: '삭제할 정산 내역이 없습니다.' });
+        }
+
+        const lastId = rows[0].id;
+
+        // 2. 삭제 수행
+        await db.query(`DELETE FROM period_closings WHERE id = ?`, [lastId]);
+
+        res.json({ success: true, message: '최근 정산이 취소되었습니다.' });
+
+    } catch (error) {
+        console.error('정산 취소 오류:', error);
+        res.status(500).json({ success: false, message: '서버 오류가 발생했습니다.' });
+    }
+});
+
+
 
 /**
  * 일일 시재 마감 저장 (Upsert)
@@ -369,8 +659,8 @@ router.post('/audit', async (req, res) => {
             // 1. Inventory Adjustment 기록
             await connection.query(`
                 INSERT INTO inventory_adjustments 
-                (purchase_inventory_id, adjustment_date, adjustment_type, quantity, reason, notes, created_by)
-                VALUES (?, CURDATE(), ?, ?, 'AUDIT', ?, 'system')
+                (purchase_inventory_id, adjustment_type, quantity_change, reason, notes, created_by)
+                VALUES (?, ?, ?, 'AUDIT', ?, 'system')
             `, [
                 item.id,
                 diff > 0 ? 'INCREASE' : 'DECREASE',

@@ -327,16 +327,20 @@ function MatchingPage() {
   // 드래그 오버 핸들러 (드롭 허용)
   const handleDragOver = (e, saleItem) => {
     e.preventDefault();
-    // 왼쪽에서 품목이 선택되어 있고, 선택된 품목과 동일한 경우에만 드롭 허용
-    if (selectedSaleItem &&
-      selectedSaleItem.sale_detail_id === saleItem.sale_detail_id &&
-      draggedInventory &&
-      draggedInventory.product_id === saleItem.product_id) {
-      e.dataTransfer.dropEffect = 'copy';
-      setDropTargetItem(saleItem.sale_detail_id);
-    } else {
-      e.dataTransfer.dropEffect = 'none';
+
+    if (draggedInventory) {
+      // 이름과 중량이 같은지 확인 (등급 무관)
+      const isNameMatch = draggedInventory.product_name === saleItem.product_name;
+      const isWeightMatch = parseFloat(draggedInventory.product_weight || 0) === parseFloat(saleItem.product_weight || 0);
+
+      if (isNameMatch && isWeightMatch) {
+        e.dataTransfer.dropEffect = 'copy';
+        setDropTargetItem(saleItem.sale_detail_id);
+        return;
+      }
     }
+
+    e.dataTransfer.dropEffect = 'none';
   };
 
   // 드래그 리브 핸들러
@@ -351,35 +355,21 @@ function MatchingPage() {
 
     if (!draggedInventory) return;
 
-    // 왼쪽에서 품목이 선택되어 있는지 확인
-    if (!selectedSaleItem) {
-      setModal({
-        isOpen: true, type: 'warning', title: '품목 미선택',
-        message: '먼저 왼쪽에서 매칭할 매출 품목을 선택해주세요.',
-        confirmText: '확인', showCancel: false, onConfirm: () => { }
-      });
-      return;
-    }
+    // 품목 일치 확인 (이름 + 중량)
+    const isNameMatch = draggedInventory.product_name === saleItem.product_name;
+    const isWeightMatch = parseFloat(draggedInventory.product_weight || 0) === parseFloat(saleItem.product_weight || 0);
 
-    // 선택된 품목과 드롭 대상이 동일한지 확인
-    if (selectedSaleItem.sale_detail_id !== saleItem.sale_detail_id) {
-      setModal({
-        isOpen: true, type: 'warning', title: '대상 불일치',
-        message: '선택된 매출 품목에만 드롭할 수 있습니다.',
-        confirmText: '확인', showCancel: false, onConfirm: () => { }
-      });
-      return;
-    }
-
-    // 품목 일치 확인
-    if (draggedInventory.product_id !== saleItem.product_id) {
+    if (!isNameMatch || !isWeightMatch) {
       setModal({
         isOpen: true, type: 'warning', title: '품목 불일치',
-        message: '동일한 품목만 매칭할 수 있습니다.',
+        message: '품목명과 중량이 동일한 경우에만 매칭할 수 있습니다.',
         confirmText: '확인', showCancel: false, onConfirm: () => { }
       });
       return;
     }
+
+    // 드롭 시 해당 품목을 자동으로 선택 상태로 변경
+    setSelectedSaleItem(saleItem);
 
     // 재고 잔량 확인
     const usedQty = getUsedQuantityForInventory(draggedInventory.id);
@@ -441,8 +431,6 @@ function MatchingPage() {
           inventory: inv
         }));
       }
-
-      // 메인 데이터는 모달 닫을 때 새로고침하므로 여기서는 생략 (깜박임 방지)
 
     } catch (error) {
       setModal({
@@ -624,24 +612,65 @@ function MatchingPage() {
     }
   };
 
-  const getSortedInventoryForModal = () => {
-    if (!matchingModal.items || matchingModal.items.length === 0) return matchingModal.inventory;
-    const productIds = matchingModal.items.map(item => item.product_id);
-    return [...matchingModal.inventory].sort((a, b) => {
-      const aMatch = productIds.includes(a.product_id);
-      const bMatch = productIds.includes(b.product_id);
-      if (aMatch && !bMatch) return -1;
-      if (!aMatch && bMatch) return 1;
-      return new Date(a.purchase_date) - new Date(b.purchase_date);
-    });
+  // ... (중략) ...
+
+  const getMatchingStatus = (inv) => {
+    // 선택된 매출 품목이 있을 때만 상세 비교
+    if (!selectedSaleItem) {
+      return null;
+    }
+
+    // 이름과 중량 비교
+    const isNameMatch = inv.product_name === selectedSaleItem.product_name;
+    const isWeightMatch = parseFloat(inv.product_weight || 0) === parseFloat(selectedSaleItem.product_weight || 0);
+
+    if (!isNameMatch || !isWeightMatch) return null;
+
+    // 등급 비교
+    const isGradeMatch = (inv.grade || '') === (selectedSaleItem.grade || '');
+
+    return isGradeMatch ? 'PERFECT' : 'PARTIAL';
   };
 
-  const isMatchingProduct = (invProductId) => {
-    // 선택된 매출 품목이 있을 때만 추천 표시
-    if (!selectedSaleItem) {
-      return false;
-    }
-    return selectedSaleItem.product_id === invProductId;
+  const getSortedInventoryForModal = () => {
+    if (!matchingModal.items || matchingModal.items.length === 0) return matchingModal.inventory;
+
+    return [...matchingModal.inventory].sort((a, b) => {
+      let aScore = 0;
+      let bScore = 0;
+
+      if (selectedSaleItem) {
+        // 선택된 항목이 있을 경우: 완벽(2) > 부분(1) > 없음(0)
+        const aStatus = getMatchingStatus(a);
+        const bStatus = getMatchingStatus(b);
+
+        if (aStatus === 'PERFECT') aScore = 2;
+        else if (aStatus === 'PARTIAL') aScore = 1;
+
+        if (bStatus === 'PERFECT') bScore = 2;
+        else if (bStatus === 'PARTIAL') bScore = 1;
+
+      } else {
+        // 선택된 항목이 없을 경우: 리스트 내 어떤 것과도 매칭되면(1) > 없음(0)
+        // 여기서는 등급 구분 없이 이름+중량 매칭 여부만 확인
+        const isAMatch = matchingModal.items.some(item =>
+          item.product_name === a.product_name &&
+          parseFloat(item.product_weight || 0) === parseFloat(a.product_weight || 0)
+        );
+        const isBMatch = matchingModal.items.some(item =>
+          item.product_name === b.product_name &&
+          parseFloat(item.product_weight || 0) === parseFloat(b.product_weight || 0)
+        );
+
+        if (isAMatch) aScore = 1;
+        if (isBMatch) bScore = 1;
+      }
+
+      if (aScore !== bScore) return bScore - aScore; // 높은 점수 우선
+
+      // 점수가 같으면 매입일 오름차순 (오래된 재고 우선)
+      return new Date(a.purchase_date) - new Date(b.purchase_date);
+    });
   };
 
   const getStatusBadge = (status) => {
@@ -1165,27 +1194,35 @@ function MatchingPage() {
                         </thead>
                         <tbody>
                           {getSortedInventoryForModal().map((inv, index) => {
-                            const isMatching = isMatchingProduct(inv.product_id);
+                            const matchStatus = getMatchingStatus(inv);
                             const effectiveRemaining = parseFloat(inv.remaining_quantity);
 
-                            // 출하주 정보 조합
-                            const shipperInfo = inv.sender || '-';
+                            // 출하주 정보 조합 (출하지 / 출하주)
+                            const shipperInfo = [inv.shipper_location, inv.sender].filter(Boolean).join(' / ') || '-';
+
+                            // 행 스타일: 매칭 상태에 따라 배경색 미세 조정
+                            let rowClass = matchStatus ? 'matching-row' : '';
+                            if (matchStatus === 'PARTIAL') rowClass = 'matching-row-partial';
 
                             return (
                               <tr
                                 key={inv.id}
-                                className={isMatching ? 'matching-row' : ''}
+                                className={rowClass}
                                 draggable={effectiveRemaining > 0}
                                 onDragStart={(e) => handleDragStart(e, inv)}
                                 onDragEnd={handleDragEnd}
-                                style={{ cursor: effectiveRemaining > 0 ? 'grab' : 'default' }}
+                                style={{
+                                  cursor: effectiveRemaining > 0 ? 'grab' : 'default',
+                                  backgroundColor: matchStatus === 'PERFECT' ? '#f0fdf4' : (matchStatus === 'PARTIAL' ? '#fefce8' : 'inherit')
+                                }}
                                 title={effectiveRemaining > 0 ? '드래그하여 매출 품목에 매칭' : '잔량 없음'}
                               >
                                 <td className="text-center">{index + 1}</td>
                                 <td style={{ whiteSpace: 'nowrap' }}>
                                   <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                    {isMatching && <span className="badge badge-success" style={{ fontSize: '0.6rem', padding: '1px 4px' }}>추천</span>}
-                                    <span style={{ fontWeight: isMatching ? '600' : '400' }}>{inv.product_name}</span>
+                                    {matchStatus === 'PERFECT' && <span className="badge badge-success" style={{ fontSize: '0.6rem', padding: '1px 4px' }}>추천</span>}
+                                    {matchStatus === 'PARTIAL' && <span className="badge badge-warning" style={{ fontSize: '0.6rem', padding: '1px 4px', backgroundColor: '#eab308', color: 'white' }}>유사</span>}
+                                    <span style={{ fontWeight: matchStatus ? '600' : '400' }}>{inv.product_name}</span>
                                   </div>
                                 </td>
                                 <td className="text-right" style={{ fontSize: '0.9rem', whiteSpace: 'nowrap' }}>
@@ -1370,7 +1407,7 @@ function MatchingPage() {
                       <div className="matching-card-info">
                         <div className="matching-card-row">
                           <span className="matching-card-label">출하주</span>
-                          <span className="matching-card-value">{m.sender || '-'}</span>
+                          <span className="matching-card-value">{[m.shipper_location, m.sender].filter(Boolean).join(' / ') || '-'}</span>
                         </div>
                         <div className="matching-card-row">
                           <span className="matching-card-label">수량</span>

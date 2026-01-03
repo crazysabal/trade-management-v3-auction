@@ -206,6 +206,7 @@ export const inventoryTransferAPI = {
 
 export const inventoryAdjustmentAPI = {
   create: (data) => api.post('/inventory-adjustment', data),
+  cancel: (id) => api.delete(`/inventory-adjustment/${id}`),
 };
 
 export const inventoryProductionAPI = {
