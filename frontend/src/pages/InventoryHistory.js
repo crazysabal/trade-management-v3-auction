@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { purchaseInventoryAPI, warehousesAPI, inventoryAdjustmentAPI } from '../services/api'; // Use centralized API services
+import { purchaseInventoryAPI, warehousesAPI, inventoryAdjustmentAPI, inventoryTransferAPI, inventoryProductionAPI } from '../services/api'; // Use centralized API services
 import ConfirmModal from '../components/ConfirmModal';
 import TradeDetailModal from '../components/TradeDetailModal';
 import ProductionDetailModal from '../components/ProductionDetailModal';
@@ -9,7 +9,7 @@ const InventoryHistory = ({ onOpenTrade }) => {
     const [history, setHistory] = useState([]);
     const [warehouses, setWarehouses] = useState([]);
     const [loading, setLoading] = useState(false);
-    const [messageModal, setMessageModal] = useState({ isOpen: false, title: '', message: '' });
+    const [messageModal, setMessageModal] = useState({ isOpen: false, title: '', message: '', content: null });
     const [detailModal, setDetailModal] = useState({ isOpen: false, tradeId: null });
     const [prodDetailModal, setProdDetailModal] = useState({ isOpen: false, productionId: null });
     const [confirmAction, setConfirmAction] = useState(null); // Function to execute on confirm
@@ -91,7 +91,7 @@ const InventoryHistory = ({ onOpenTrade }) => {
             case 'PURCHASE': return '매입 입고';
             case 'SALE': return '매출 출고';
             case 'PRODUCTION_IN': return '생산 입고';
-            case 'PRODUCTION_OUT': return '생산 투입';
+            case 'PRODUCTION_OUT': return '생산 출고';
             case 'IN': return '입고';
             case 'OUT': return '출고';
             case 'TRANSFER_IN': return '창고 입고';
@@ -187,6 +187,134 @@ const InventoryHistory = ({ onOpenTrade }) => {
             isOpen: true,
             title: '조정 취소',
             message: '정말로 이 재고 조정을 취소하시겠습니까?\n취소 시 재고 수량이 원복됩니다.'
+        });
+    };
+
+    // Custom Card Renderer for Confirmation
+    const renderCancelCard = (item, typeStr) => {
+        return (
+            <div style={{
+                border: '1px solid #e9ecef',
+                borderRadius: '8px',
+                padding: '24px',
+                backgroundColor: 'white',
+                boxShadow: '0 2px 4px rgba(0,0,0,0.02)'
+            }}>
+                <h3 style={{
+                    textAlign: 'center',
+                    fontSize: '1.2rem',
+                    fontWeight: 'bold',
+                    margin: '0 0 24px 0',
+                    color: '#343a40'
+                }}>
+                    {item.product_name} {item.product_weight ? `${Number(item.product_weight)}kg` : ''} {item.grade ? `(${item.grade})` : ''}
+                </h3>
+
+                <div style={{ fontSize: '0.95rem', color: '#495057', lineHeight: '1.8' }}>
+                    <div style={{ display: 'flex', marginBottom: '8px' }}>
+                        <span style={{ width: '80px', color: '#868e96' }}>생산자</span>
+                        <span style={{ fontWeight: '500' }}>{item.sender || '-'}</span>
+                    </div>
+                    <div style={{ display: 'flex', marginBottom: '8px' }}>
+                        <span style={{ width: '80px', color: '#868e96' }}>매입처</span>
+                        <span style={{ fontWeight: '500' }}>{item.company_name || '-'}</span>
+                    </div>
+                    <div style={{ display: 'flex', marginBottom: '8px' }}>
+                        <span style={{ width: '80px', color: '#868e96' }}>보관</span>
+                        <span style={{ fontWeight: '500' }}>{item.warehouse_name || '-'}</span>
+                    </div>
+                    <div style={{
+                        marginTop: '16px',
+                        paddingTop: '16px',
+                        borderTop: '1px solid #f1f3f5',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        color: '#868e96',
+                        fontSize: '0.9rem'
+                    }}>
+                        <span>매입일: {item.transaction_date}</span>
+                        <span>단가: {item.unit_price ? formatNumber(item.unit_price) : 0}원</span>
+                    </div>
+                </div>
+
+                <div style={{
+                    marginTop: '20px',
+                    paddingTop: '20px',
+                    borderTop: '1px dashed #dee2e6',
+                    textAlign: 'center'
+                }}>
+                    <span style={{ fontSize: '1rem', color: '#495057', marginRight: '8px' }}>
+                        {typeStr} 수량
+                    </span>
+                    <strong style={{ fontSize: '1.5rem', color: '#20c997' }}>
+                        {formatNumber(item.quantity)}
+                    </strong>
+                </div>
+            </div>
+        );
+    };
+
+    const handleCancelTransfer = (item) => {
+        setConfirmAction(() => async () => {
+            try {
+                await inventoryTransferAPI.cancel(item.reference_id);
+                fetchHistory(); // Refresh list
+                setConfirmAction(null);
+                setMessageModal({
+                    isOpen: true,
+                    title: '성공',
+                    message: '재고 이동이 취소되었습니다.'
+                });
+            } catch (error) {
+                console.error('이동 취소 실패', error);
+                setConfirmAction(null);
+                setTimeout(() => {
+                    setMessageModal({
+                        isOpen: true,
+                        title: '오류',
+                        message: error.response?.data?.message || '이동 취소 중 오류가 발생했습니다.'
+                    });
+                }, 100);
+            }
+        });
+        setMessageModal({
+            isOpen: true,
+            title: '이동 취소 확인',
+            message: '', // use custom content
+            content: renderCancelCard(item, '이동 취소')
+        });
+    };
+
+    const handleCancelProduction = (item) => {
+        setConfirmAction(() => async () => {
+            try {
+                // Must use production_id (job id), not reference_id (ingredient row id)
+                await inventoryProductionAPI.cancel(item.production_id);
+                fetchHistory();
+                setConfirmAction(null);
+                setMessageModal({
+                    isOpen: true,
+                    title: '성공',
+                    message: '생산 작업이 취소되었습니다.'
+                });
+            } catch (error) {
+                console.error('생산 취소 실패', error);
+                setConfirmAction(null);
+                setTimeout(() => {
+                    setMessageModal({
+                        isOpen: true,
+                        title: '오류',
+                        message: error.response?.data?.message || '생산 취소 중 오류가 발생했습니다.'
+                    });
+                }, 100);
+            }
+        });
+        setMessageModal({
+            isOpen: true,
+            title: '생산 작업 취소',
+            message: '',
+            content: renderCancelCard(item, '생산 취소')
         });
     };
 
@@ -363,6 +491,34 @@ const InventoryHistory = ({ onOpenTrade }) => {
                                         >
                                             {item.trade_number || '-'}
                                         </span>
+                                        {/* Cancel Button (Inline) */}
+                                        {(item.transaction_type === 'ADJUST' || ['TRANSFER_IN', 'TRANSFER_OUT', 'PRODUCTION_IN', 'PRODUCTION_OUT'].includes(item.transaction_type)) && (
+                                            <button
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    if (item.transaction_type === 'ADJUST') {
+                                                        handleCancelAdjustment(item);
+                                                    } else if (['PRODUCTION_IN', 'PRODUCTION_OUT'].includes(item.transaction_type)) {
+                                                        handleCancelProduction(item);
+                                                    } else {
+                                                        handleCancelTransfer(item);
+                                                    }
+                                                }}
+                                                style={{
+                                                    marginLeft: '6px',
+                                                    backgroundColor: '#ff6b6b',
+                                                    color: 'white',
+                                                    border: 'none',
+                                                    borderRadius: '4px',
+                                                    padding: '2px 6px',
+                                                    fontSize: '0.75rem',
+                                                    cursor: 'pointer',
+                                                    verticalAlign: 'middle'
+                                                }}
+                                            >
+                                                취소
+                                            </button>
+                                        )}
                                         {/* [NEW] Source Trade Link */}
                                         {item.source_trade_id && (
                                             <div style={{ fontSize: '0.75rem', marginTop: '2px', color: '#6c757d' }}>
@@ -380,28 +536,7 @@ const InventoryHistory = ({ onOpenTrade }) => {
                                             </div>
                                         )}
 
-                                        {/* Adjustment Cancel Button */}
-                                        {item.transaction_type === 'ADJUST' && (
-                                            <div style={{ marginTop: '4px' }}>
-                                                <button
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        handleCancelAdjustment(item);
-                                                    }}
-                                                    style={{
-                                                        backgroundColor: '#ff6b6b',
-                                                        color: 'white',
-                                                        border: 'none',
-                                                        borderRadius: '4px',
-                                                        padding: '2px 6px',
-                                                        fontSize: '0.75rem',
-                                                        cursor: 'pointer'
-                                                    }}
-                                                >
-                                                    ❌ 취소
-                                                </button>
-                                            </div>
-                                        )}
+
                                     </td>
                                     <td style={{ color: '#868e96', fontSize: '0.9em' }}>
                                         {item.transaction_type === 'ADJUST' ? item.adjustment_reason : item.notes}
@@ -427,18 +562,15 @@ const InventoryHistory = ({ onOpenTrade }) => {
             <ConfirmModal
                 isOpen={messageModal.isOpen}
                 onClose={() => setMessageModal({ ...messageModal, isOpen: false })}
-                onConfirm={() => {
-                    if (confirmAction) {
-                        confirmAction();
-                    }
-                    setMessageModal({ ...messageModal, isOpen: false });
-                }}
+                onConfirm={confirmAction || (() => setMessageModal(prev => ({ ...prev, isOpen: false })))}
                 title={messageModal.title}
                 message={messageModal.message}
                 type={confirmAction ? "confirm" : "alert"}
                 confirmText="확인"
                 showCancel={!!confirmAction}
-            />
+            >
+                {messageModal.content}
+            </ConfirmModal>
 
             <TradeDetailModal
                 isOpen={detailModal.isOpen}

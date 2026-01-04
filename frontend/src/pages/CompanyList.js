@@ -22,13 +22,17 @@ const CompanyRow = memo(function CompanyRow({
   onToggleActive,
   onDelete,
   onEdit,
-  getTypeBadge
+  getTypeBadge,
+  canReorder, // [NEW]
+  onTouchStart // [NEW]
 }) {
+  const [isHandleHovered, setIsHandleHovered] = useState(false);
+
   return (
     <tr
-      draggable={true}
-      onDragStart={onDragStart}
-      onDragEnter={onDragEnter}
+      draggable={canReorder && isHandleHovered}
+      onDragStart={canReorder ? onDragStart : undefined}
+      onDragEnter={canReorder ? onDragEnter : undefined}
       onDragOver={(e) => e.preventDefault()}
       className={`${isDragOver ? 'drag-over' : ''} ${!company.is_active ? 'inactive-row' : ''}`}
       style={{
@@ -44,7 +48,15 @@ const CompanyRow = memo(function CompanyRow({
           style={{ width: '16px', height: '16px', accentColor: '#e74c3c', cursor: 'pointer' }}
         />
       </td>
-      <td className="drag-handle">☰</td>
+      {/* [CHANGED] 정렬 가능할 때만 핸들 표시 & 터치 이벤트 연결 */}
+      <td
+        className={`drag-handle ${canReorder ? 'cursor-grab' : 'cursor-not-allowed opacity-30'}`}
+        onTouchStart={canReorder ? onTouchStart : undefined}
+        onMouseEnter={() => setIsHandleHovered(true)}
+        onMouseLeave={() => setIsHandleHovered(false)}
+      >
+        {canReorder ? '☰' : '•'}
+      </td>
 
       <td className={`ellipsis ${company.alias ? '' : 'text-muted'}`} title={company.alias}>{company.alias || '-'}</td>
       <td className="ellipsis" title={company.company_name}>{company.company_name}</td>
@@ -254,9 +266,9 @@ function CompanyList({ isWindow }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // 의존성 배열 비움 (최초 1회만 실행)
 
-  const loadCompanies = async () => {
+  const loadCompanies = async (silent = false) => {
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       // 필터 없이 전체 데이터를 가져옴 (is_active 파라미터도 빼거나 전체를 의미하게 보냄)
       // 백엔드가 필터 없이 요청하면 전체를 준다고 가정 (보통 그렇습니다)
       const response = await companyAPI.getAll({});
@@ -277,7 +289,7 @@ function CompanyList({ isWindow }) {
         onConfirm: () => { }
       });
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
@@ -335,7 +347,7 @@ function CompanyList({ isWindow }) {
             showCancel: false,
             onConfirm: () => { }
           });
-          loadCompanies();
+          loadCompanies(true); // Silent reload to preserve scroll
         } catch (error) {
           console.error('거래처 삭제 오류:', error);
           setModal({
@@ -413,7 +425,7 @@ function CompanyList({ isWindow }) {
 
           setSelectedIds([]);
           setIsSelectMode(false);
-          loadCompanies();
+          loadCompanies(true); // Silent reload
         } catch (error) {
           console.error('다중 삭제 오류:', error);
           setModal({
@@ -597,6 +609,10 @@ function CompanyList({ isWindow }) {
     if (hadDrag && !pendingReorder.current) {
       pendingReorder.current = true;
       try {
+        // [CHANGED] 원본 데이터 순서도 동기화 (수정 시 원복 방지)
+        // 정렬은 전체 목록일 때만 가능하므로 companies와 originalCompanies는 동일 집합임
+        setOriginalCompanies([...companiesRef.current]);
+
         const items = companiesRef.current.map((company, index) => ({
           id: company.id,
           sort_order: index + 1
@@ -687,6 +703,9 @@ function CompanyList({ isWindow }) {
 
     // Save Reorder
     try {
+      // [CHANGED] 원본 데이터 순서도 동기화 (수정 시 원복 방지)
+      setOriginalCompanies([...latestCompanies.current]);
+
       const items = latestCompanies.current.map((company, index) => ({
         id: company.id,
         sort_order: index + 1
@@ -872,6 +891,39 @@ function CompanyList({ isWindow }) {
     }
   };
 
+  // 엑셀 내보내기 [NEW]
+  const handleExportExcel = async () => {
+    try {
+      if (confirm('현재 목록을 엑셀로 내보내시겠습니까?')) {
+        const response = await companyAPI.exportExcel(filters);
+
+        // Blob 다운로드 처리
+        const url = window.URL.createObjectURL(new Blob([response.data]));
+        const link = document.createElement('a');
+        link.href = url;
+
+        // 파일명 설정 (헤더에서 추출 또는 기본값)
+        let fileName = `companies_${new Date().toISOString().slice(0, 10)}.xlsx`;
+        const contentDisposition = response.headers['content-disposition'];
+        if (contentDisposition) {
+          const matches = contentDisposition.match(/filename="?([^"]+)"?/);
+          if (matches && matches[1]) {
+            fileName = matches[1];
+          }
+        }
+
+        link.setAttribute('download', fileName);
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.URL.revokeObjectURL(url);
+      }
+    } catch (error) {
+      console.error('엑셀 다운로드 오류:', error);
+      alert('엑셀 다운로드 중 오류가 발생했습니다.');
+    }
+  };
+
   // 행 선택 토글
   const handleRowSelect = (index) => {
     setSelectedRows(prev =>
@@ -900,6 +952,23 @@ function CompanyList({ isWindow }) {
 
 
 
+  // 선택 삭제
+  const handleDeleteSelected = async () => {
+    if (selectedIds.length === 0) return;
+
+    if (confirm(`선택한 ${selectedIds.length}개의 거래처를 삭제하시겠습니까?`)) {
+      try {
+        await Promise.all(selectedIds.map(id => companyAPI.delete(id)));
+        setSelectedIds([]);
+        loadCompanies(true); // Silent reload
+        // alert('삭제되었습니다.'); // 불필요한 알림 제거 (자동 갱신됨)
+      } catch (error) {
+        console.error('일괄 삭제 오류:', error);
+        alert('삭제 중 오류가 발생했습니다.');
+      }
+    }
+  };
+
   return (
     <div className={`company-list-wrapper ${isWindow ? 'is-window' : ''}`}>
       {!isWindow && (
@@ -907,8 +976,6 @@ function CompanyList({ isWindow }) {
           <h1 className="page-title company-title">🏢 거래처 관리</h1>
         </div>
       )}
-
-
 
       <div className="search-filter-container">
 
@@ -922,7 +989,7 @@ function CompanyList({ isWindow }) {
           <div style={{ flex: 1, minWidth: 0 }}>
             <input
               type="text"
-              placeholder="거래처명, 대표자 검색..."
+              placeholder="🔍 거래처명, 대표자, 사업자번호, 별칭 등..."
               value={filters.search}
               onChange={handleSearchChange}
               style={{
@@ -939,6 +1006,28 @@ function CompanyList({ isWindow }) {
 
           {/* 3. 등록 (Register) */}
           <div style={{ display: 'flex', gap: '0.5rem' }}>
+            {selectedIds.length > 0 && (
+              <button
+                onClick={handleDeleteSelected}
+                className="btn btn-danger"
+                style={{
+                  whiteSpace: 'nowrap',
+                  height: '38px',
+                  padding: '0 0.75rem',
+                  fontSize: '0.9rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  backgroundColor: '#e74c3c',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: 'pointer'
+                }}
+              >
+                삭제 ({selectedIds.length})
+              </button>
+            )}
             <button
               onClick={handleCreate}
               className="btn btn-primary"
@@ -956,13 +1045,22 @@ function CompanyList({ isWindow }) {
               + 등록
             </button>
             {!isMobile && (
-              <button
-                onClick={() => setShowUploadModal(true)}
-                className="btn btn-success"
-                style={{ height: '38px', padding: '0 0.75rem', whiteSpace: 'nowrap' }}
-              >
-                📥 엑셀
-              </button>
+              <>
+                <button
+                  onClick={handleExportExcel}
+                  className="btn btn-secondary"
+                  style={{ height: '38px', padding: '0 0.75rem', whiteSpace: 'nowrap', marginRight: '0.5rem' }}
+                >
+                  📤 내보내기
+                </button>
+                <button
+                  onClick={() => setShowUploadModal(true)}
+                  className="btn btn-success"
+                  style={{ height: '38px', padding: '0 0.75rem', whiteSpace: 'nowrap' }}
+                >
+                  📥 가져오기
+                </button>
+              </>
             )}
           </div>
         </div>
@@ -970,120 +1068,138 @@ function CompanyList({ isWindow }) {
 
       </div>
 
-      <div className="table-container">
-        {isMobile ? (
-          <div className="mobile-company-list">
-            {companies.length === 0 ? (
-              <div className="text-center p-3 text-muted">등록된 거래처가 없습니다.</div>
-            ) : (
-              companies.map((company, index) => (
-                <div
-                  key={company.id}
-                  className={`company-card ${draggedId === company.id ? 'dragging' : ''} ${!company.is_active ? 'inactive' : ''}`}
-                  style={{ opacity: draggedId === company.id ? 0.3 : 1 }}
-                >
-                  <div className="card-row-content" style={{ display: 'flex', alignItems: 'center', padding: '0.4rem', gap: '0' }}>
+      {/* 정렬 가능 여부 (모든 필터가 해제된 상태여야 함) */}
+      {(() => {
+        const canReorder = !filters.search.trim() && filters.company_type === 'all' && filters.is_active === 'all' && !isSelectMode;
 
-                    {/* 1. Name (Flex Grow - Left aligned) */}
-                    <div style={{ flex: 1, minWidth: 0, paddingRight: '0.5rem' }}>
-                      <span className="company-alias" style={{ fontWeight: '600', fontSize: '1rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block' }}>
-                        {company.alias || company.company_name}
-                      </span>
-                    </div>
-
-                    {/* 2. Type (Fixed Width - Centered) - "구분" 컬럼 효과 */}
-                    <div style={{ width: '85px', display: 'flex', justifyContent: 'center', flexShrink: 0, whiteSpace: 'nowrap' }}>
-                      {getTypeBadge(company.company_type_flag)}
-                    </div>
-
-                    {/* 3. Status (Fixed Width - Centered) */}
-                    <div style={{ width: '60px', display: 'flex', justifyContent: 'center', flexShrink: 0 }}>
-                      <span
-                        className={`status-badge ${company.is_active ? 'active' : 'inactive'}`}
-                        onClick={(e) => { e.stopPropagation(); handleToggleActive(company); }}
-                        style={{ fontSize: '0.8rem', whiteSpace: 'nowrap' }}
-                      >
-                        {company.is_active ? '사용' : '미사용'}
-                      </span>
-                    </div>
-
-                    {/* 4. Edit (Fixed Width) */}
-                    <div style={{ width: '50px', display: 'flex', justifyContent: 'center', flexShrink: 0 }}>
-                      <button
-                        onClick={(e) => { e.stopPropagation(); handleEdit(company); }}
-                        className="btn btn-sm btn-primary"
-                        style={{ padding: '0.2rem 0.5rem', fontSize: '0.8rem' }}
-                      >
-                        수정
-                      </button>
-                    </div>
-
-                    {/* 5. Handle (Fixed Width) */}
+        return (
+          <div className="table-container">
+            {isMobile ? (
+              <div className="mobile-company-list">
+                {companies.length === 0 ? (
+                  <div className="text-center p-3 text-muted">등록된 거래처가 없습니다.</div>
+                ) : (
+                  companies.map((company, index) => (
                     <div
-                      className="drag-handle touch-none no-select"
-                      onTouchStart={(e) => handleTouchStart(e, index, company)}
-                      style={{ width: '40px', display: 'flex', justifyContent: 'center', fontSize: '1.2rem', color: '#999', cursor: 'grab', flexShrink: 0 }}
+                      key={company.id}
+                      className={`company-card ${draggedId === company.id ? 'dragging' : ''} ${!company.is_active ? 'inactive' : ''}`}
+                      style={{ opacity: draggedId === company.id ? 0.3 : 1 }}
                     >
-                      ≡
+                      <div className="card-row-content" style={{ display: 'flex', alignItems: 'center', padding: '0.4rem', gap: '0' }}>
+
+                        {/* 1. Name (Flex Grow - Left aligned) */}
+                        <div style={{ flex: 1, minWidth: 0, paddingRight: '0.5rem' }}>
+                          <span className="company-alias" style={{ fontWeight: '600', fontSize: '1rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block' }}>
+                            {company.alias || company.company_name}
+                          </span>
+                        </div>
+
+                        {/* 2. Type (Fixed Width - Centered) - "구분" 컬럼 효과 */}
+                        <div style={{ width: '85px', display: 'flex', justifyContent: 'center', flexShrink: 0, whiteSpace: 'nowrap' }}>
+                          {getTypeBadge(company.company_type_flag)}
+                        </div>
+
+                        {/* 3. Status (Fixed Width - Centered) */}
+                        <div style={{ width: '60px', display: 'flex', justifyContent: 'center', flexShrink: 0 }}>
+                          <span
+                            className={`status-badge ${company.is_active ? 'active' : 'inactive'}`}
+                            onClick={(e) => { e.stopPropagation(); handleToggleActive(company); }}
+                            style={{ fontSize: '0.8rem', whiteSpace: 'nowrap' }}
+                          >
+                            {company.is_active ? '사용' : '미사용'}
+                          </span>
+                        </div>
+
+                        {/* 4. Edit (Fixed Width) */}
+                        <div style={{ width: '50px', display: 'flex', justifyContent: 'center', flexShrink: 0 }}>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); handleEdit(company); }}
+                            className="btn btn-sm btn-primary"
+                            style={{ padding: '0.2rem 0.5rem', fontSize: '0.8rem' }}
+                          >
+                            수정
+                          </button>
+                        </div>
+
+                        {/* 5. Handle (Fixed Width) - [CHANGED] 조건부 표시 */}
+                        <div
+                          className={`drag-handle touch-none no-select ${canReorder ? '' : 'opacity-30'}`}
+                          onTouchStart={(e) => canReorder && handleTouchStart(e, index, company)}
+                          style={{
+                            width: '40px',
+                            display: 'flex',
+                            justifyContent: 'center',
+                            fontSize: '1.2rem',
+                            color: '#999',
+                            cursor: canReorder ? 'grab' : 'not-allowed',
+                            flexShrink: 0
+                          }}
+                        >
+                          {canReorder ? '≡' : '•'}
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                </div>
-              ))
+                  ))
+                )}
+              </div>
+            ) : (
+              <table>
+                <thead>
+                  <tr>
+                    <th style={{ width: '40px', textAlign: 'center' }}>
+                      <input
+                        type="checkbox"
+                        onChange={handleSelectAll}
+                        checked={companies.length > 0 && selectedIds.length === companies.length}
+                        style={{ width: '16px', height: '16px', accentColor: '#e74c3c', cursor: 'pointer' }}
+                      />
+                    </th>
+                    <th style={{ width: '40px' }}></th>
+                    <th>거래처 명</th>
+                    <th>사업자 명</th>
+                    <th>사업자번호</th>
+                    <th>대표자</th>
+                    <th>구분</th>
+                    <th className="text-center">전자계산서</th>
+                    <th className="text-center">사용여부</th>
+                    {!isSelectMode && <th className="text-center" style={{ minWidth: '120px' }}>액션</th>}
+                  </tr>
+                </thead>
+                <tbody>
+                  {companies.length === 0 ? (
+                    <tr>
+                      <td colSpan="10" className="text-center">등록된 거래처가 없습니다.</td>
+                    </tr>
+                  ) : (
+                    companies.map((company, index) => (
+                      <CompanyRow
+                        key={company.id}
+                        company={company}
+                        index={index}
+                        isSelectMode={isSelectMode}
+                        isSelected={selectedIds.includes(company.id)}
+                        isDragOver={dragOverId === company.id}
+                        canReorder={canReorder} // [NEW] - CompanyRow에 전달
+                        onDragStart={(e) => canReorder && handleDragStart(e, company)}
+                        onDragEnter={(e) => canReorder && handleDragEnter(e, company)}
+                        onTouchStart={(e) => canReorder && handleTouchStart(e, index, company)} // [NEW]
+                        onCheckboxToggle={() => handleCheckboxToggle(company.id)}
+                        onToggleCompanyType={() => handleToggleCompanyType(company)}
+                        onToggleETaxInvoice={() => handleToggleETaxInvoice(company)}
+                        onToggleActive={() => handleToggleActive(company)}
+                        onDelete={() => handleDelete(company.id, company.company_name)}
+                        onEdit={handleEdit}
+                        getTypeBadge={getTypeBadge}
+                      />
+                    ))
+                  )}
+                </tbody>
+              </table>
             )}
           </div>
-        ) : (
-          <table>
-            <thead>
-              <tr>
-                <th style={{ width: '40px', textAlign: 'center' }}>
-                  <input
-                    type="checkbox"
-                    onChange={handleSelectAll}
-                    checked={companies.length > 0 && selectedIds.length === companies.length}
-                    style={{ width: '16px', height: '16px', accentColor: '#e74c3c', cursor: 'pointer' }}
-                  />
-                </th>
-                <th style={{ width: '40px' }}></th>
-                <th>거래처 명</th>
-                <th>사업자 명</th>
-                <th>사업자번호</th>
-                <th>대표자</th>
-                <th>구분</th>
-                <th className="text-center">전자계산서</th>
-                <th className="text-center">사용여부</th>
-                {!isSelectMode && <th className="text-center" style={{ minWidth: '120px' }}>액션</th>}
-              </tr>
-            </thead>
-            <tbody>
-              {companies.length === 0 ? (
-                <tr>
-                  <td colSpan="10" className="text-center">등록된 거래처가 없습니다.</td>
-                </tr>
-              ) : (
-                companies.map((company, index) => (
-                  <CompanyRow
-                    key={company.id}
-                    company={company}
-                    index={index}
-                    isSelectMode={isSelectMode}
-                    isSelected={selectedIds.includes(company.id)}
-                    isDragOver={dragOverId === company.id}
-                    onDragStart={(e) => handleDragStart(e, company)}
-                    onDragEnter={(e) => handleDragEnter(e, company)}
-                    onCheckboxToggle={() => handleCheckboxToggle(company.id)}
-                    onToggleCompanyType={() => handleToggleCompanyType(company)}
-                    onToggleETaxInvoice={() => handleToggleETaxInvoice(company)}
-                    onToggleActive={() => handleToggleActive(company)}
-                    onDelete={() => handleDelete(company.id, company.company_name)}
-                    onEdit={handleEdit}
-                    getTypeBadge={getTypeBadge}
-                  />
-                ))
-              )}
-            </tbody>
-          </table>
-        )}
-      </div>
+        );
+      })()}
+
 
       {/* 엑셀 업로드 모달 - Portal로 body에 렌더링 */}
       {

@@ -575,7 +575,7 @@ function AuctionImportV2({ isWindow }) {
             {step === 1 && (
                 <div className="card">
                     <h2 className="card-title">낙찰 내역 크롤링</h2>
-                    <div className="form-row" style={{ display: 'flex', alignItems: 'flex-end', gap: '1rem' }}>
+                    <div className="form-row" style={{ display: 'flex', alignItems: 'flex-end', gap: '0.5rem' }}>
                         <div className="form-group" style={{ width: '350px', flex: 'none', textAlign: 'left' }}>
                             <label className="required" style={{ whiteSpace: 'nowrap' }}>경매 계정</label>
                             <SearchableSelect

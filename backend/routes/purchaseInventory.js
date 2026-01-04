@@ -35,11 +35,11 @@ router.get('/', async (req, res) => {
         tm.trade_number,
         tm.id as trade_master_id
       FROM purchase_inventory pi
-      JOIN products p ON pi.product_id = p.id
-      JOIN companies c ON pi.company_id = c.id
-      JOIN warehouses w ON pi.warehouse_id = w.id
-      JOIN trade_details td ON pi.trade_detail_id = td.id
-      JOIN trade_masters tm ON td.trade_master_id = tm.id
+      LEFT JOIN products p ON pi.product_id = p.id
+      LEFT JOIN companies c ON pi.company_id = c.id
+      LEFT JOIN warehouses w ON pi.warehouse_id = w.id
+      LEFT JOIN trade_details td ON pi.trade_detail_id = td.id
+      LEFT JOIN trade_masters tm ON td.trade_master_id = tm.id
       WHERE 1=1
     `;
     const params = [];
@@ -81,7 +81,9 @@ router.get('/', async (req, res) => {
       params.push(end_date);
     }
 
-    query += ' ORDER BY COALESCE(pi.display_order, 0) ASC, p.product_name ASC, pi.purchase_date ASC';
+    // [CHANGED] 정렬 기준 변경: 1순위 사용자 지정(display_order), 2순위 등록순(id)
+    // 품목명 가나다순(product_name) 강제 정렬 제거
+    query += ' ORDER BY COALESCE(pi.display_order, 2147483647) ASC, pi.id ASC';
 
     const [rows] = await db.query(query, params);
 
@@ -410,7 +412,7 @@ router.get('/transactions', async (req, res) => {
         c.company_name,
         td_source.shipper_location as shipper_location,
         td_source.sender as sender,
-        CONCAT('PROD-', ip.id) as trade_number,
+        COALESCE(tm_out.trade_number, CONCAT('PROD-', ip.id)) as trade_number,
         NULL as trade_master_id,
         ip.id as production_id, -- [NEW] Production ID
         tm_source.id as source_trade_id,     -- [NEW] Source Trade ID
@@ -420,11 +422,15 @@ router.get('/transactions', async (req, res) => {
       FROM inventory_production_ingredients ipi
       JOIN inventory_productions ip ON ipi.production_id = ip.id
       JOIN purchase_inventory pi ON ipi.used_inventory_id = pi.id
-      JOIN products p ON pi.product_id = p.id
-      JOIN companies c ON pi.company_id = c.id
+      LEFT JOIN products p ON pi.product_id = p.id
+      LEFT JOIN companies c ON pi.company_id = c.id
       LEFT JOIN trade_details td_source ON pi.trade_detail_id = td_source.id
       LEFT JOIN trade_masters tm_source ON td_source.trade_master_id = tm_source.id
       LEFT JOIN warehouses w ON pi.warehouse_id = w.id
+      -- [NEW] Join to get consistent Trade Number from Output Item
+      LEFT JOIN purchase_inventory pi_out ON ip.output_inventory_id = pi_out.id
+      LEFT JOIN trade_details td_out ON pi_out.trade_detail_id = td_out.id
+      LEFT JOIN trade_masters tm_out ON td_out.trade_master_id = tm_out.id
       WHERE 1=1 ${prodProductFilter} ${prodDateFilter}
     `;
 
@@ -471,7 +477,7 @@ router.get('/transactions', async (req, res) => {
         c.company_name,
         CONCAT('To: ', w_to.name) as shipper_location, -- Destination as Location
         td_source.sender as sender,
-        CONCAT('TRANS-', wt.id) as trade_number,
+        CONCAT('TRANS-', DATE_FORMAT(wt.transfer_date, '%Y%m%d'), '-', wt.id) as trade_number,
         NULL as trade_master_id,
         NULL as production_id, -- [NEW]
         tm_source.id as source_trade_id,     -- [NEW] Source Trade ID
@@ -518,12 +524,12 @@ router.get('/transactions', async (req, res) => {
     }
 
     const transInQuery = `
-      SELECT 
-        'TRANSFER_IN' as transaction_type,
-        DATE(wt.transfer_date) as transaction_date,
-        wt.id as reference_id,
-        wt.purchase_inventory_id as lot_id,
-        wt.product_id,
+        SELECT 
+          'TRANSFER_IN' as transaction_type,
+          DATE(wt.transfer_date) as transaction_date,
+          wt.id as reference_id,
+          COALESCE(wt.new_inventory_id, wt.purchase_inventory_id) as lot_id,
+          wt.product_id,
         p.product_name,
         p.weight as product_weight,
         p.grade,
@@ -533,7 +539,7 @@ router.get('/transactions', async (req, res) => {
         c.company_name,
         CONCAT('From: ', w_from.name) as shipper_location, -- Source as Location
         td_source.sender as sender,
-        CONCAT('TRANS-', wt.id) as trade_number,
+        CONCAT('TRANS-', DATE_FORMAT(wt.transfer_date, '%Y%m%d'), '-', wt.id) as trade_number,
         NULL as trade_master_id,
         NULL as production_id,
         tm_source.id as source_trade_id,
@@ -616,16 +622,80 @@ router.get('/transactions', async (req, res) => {
 
 
 
-    // 합치고 정렬
-    const allRows = [...inRows, ...outRows, ...prodRows, ...transOutRows, ...transInRows, ...adjRows].sort((a, b) => {
-      // 날짜 기준 정렬, 같으면 상세 시간 기준
+    // [FIX] Adjust Purchase Quantity to exclude Merged/Transferred-In amounts
+    // Because original_quantity includes merged amounts, showing it as 'Purchase' double counts the 'Transfer In' event.
+    const transferInSumByLot = {};
+    transInRows.forEach(r => {
+      // Use the Lot ID correctly (which has been resolved to purchase_inventory_id or new_inventory_id)
+      // Wait, transInRows 'lot_id' is already aliased in the query?
+      // Let's check the query result structure. The query alias is 'lot_id'.
+      // But transInRows comes from db.query.
+      // The query above used `COALESCE(...) as lot_id`.
+      // So we can use r.lot_id.
+      const key = r.lot_id;
+      transferInSumByLot[key] = (transferInSumByLot[key] || 0) + parseFloat(r.quantity);
+    });
+
+    let allRows = [...inRows, ...outRows, ...prodRows, ...transOutRows, ...transInRows, ...adjRows];
+
+    // Adjust Genesis events
+    allRows = allRows.map(row => {
+      if (['PURCHASE', 'IN', 'PRODUCTION_IN'].includes(row.transaction_type)) {
+        const deduction = transferInSumByLot[row.lot_id] || 0;
+        if (deduction > 0) {
+          // Return new object to avoid mutating original valid rows if reused? (Though safe here)
+          return { ...row, quantity: parseFloat(row.quantity) - deduction };
+        }
+      }
+      return row;
+    }).filter(row => {
+      // Remove Genesis events that became <= 0 (e.g. pure split/transfer result)
+      if (['PURCHASE', 'IN', 'PRODUCTION_IN'].includes(row.transaction_type)) {
+        return row.quantity > 0;
+      }
+      return true;
+    });
+
+    // 합치고 정렬 - [IMPROVED] Robust Sorting for Running Balance
+    allRows.sort((a, b) => {
+      // 1. Transaction Date (Ascending)
       const dateA = new Date(a.transaction_date);
       const dateB = new Date(b.transaction_date);
       if (dateA.getTime() !== dateB.getTime()) {
         return dateA - dateB;
       }
-      const timeDiff = new Date(a.detail_date) - new Date(b.detail_date);
-      if (timeDiff !== 0) return timeDiff;
+
+      // 2. Detail Date / Timestamp (Ascending)
+      const timeA = new Date(a.detail_date).getTime();
+      const timeB = new Date(b.detail_date).getTime();
+      if (timeA !== timeB) return timeA - timeB;
+
+      // 3. Transaction Type Priority (Genesis events first)
+      // PURCHASE/IN/PRODUCTION_IN should happen before OUT/SALE/TRANSFER
+      const getPriority = (type) => {
+        if (['PURCHASE', 'IN', 'PRODUCTION_IN'].includes(type)) return 0;
+        if (['TRANSFER_OUT'].includes(type)) return 1; // Out before In (Ship then Receive)
+        if (['TRANSFER_IN', 'ADJUST'].includes(type)) return 2;
+        return 5;
+      };
+
+      // Let's stick to a simpler logic: IN types < OUT types for same timestamp to avoid negative dips if possible?
+      // No, strictly chronological is best. If times are equal, Purchase must remain first.
+      const pA = getPriority(a.transaction_type);
+      const pB = getPriority(b.transaction_type);
+
+      if (pA !== pB) {
+        return pA - pB;
+      }
+
+      // However, we want strict stability.
+      // If we rely on Reference ID, Purchase (low ID) vs Transfer (high ID) works.
+
+      // 4. Reference ID / Tie-breaker (Ascending)
+      // This ensures TRANS-174 comes before TRANS-175
+      if (a.reference_id !== b.reference_id) {
+        return (a.reference_id || 0) - (b.reference_id || 0);
+      }
 
       return (a.trade_number || '').localeCompare(b.trade_number || '');
     });

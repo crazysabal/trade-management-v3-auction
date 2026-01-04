@@ -212,7 +212,7 @@ const TradeController = {
             if (tradeType === 'PURCHASE') {
                 // 기존 상세 및 재고/매칭 정보 조회
                 const [existingRows] = await connection.query(
-                    `SELECT td.id as detail_id, td.product_id, pi.id as inventory_id, 
+                    `SELECT td.id as detail_id, td.product_id, td.quantity as trade_quantity, pi.id as inventory_id, 
                      pi.original_quantity, pi.remaining_quantity,
                      COALESCE(SUM(spm.matched_quantity), 0) as matched_quantity
                      FROM trade_details td
@@ -223,22 +223,29 @@ const TradeController = {
                     [tradeId]
                 );
 
-                existingRows.forEach(row => existingInventoryMap.set(String(row.detail_id), row));
+                existingRows.forEach(row => {
+                    const key = String(row.detail_id);
+                    if (!existingInventoryMap.has(key)) {
+                        existingInventoryMap.set(key, []);
+                    }
+                    existingInventoryMap.get(key).push(row);
+                });
 
                 // A. 유효성 검사 루프
                 // A-1. 삭제된 항목 검사 (입력에 없는 기존 항목)
                 const inputIds = new Set(details.filter(d => d.id).map(d => String(d.id)));
-                for (const [detailId, row] of existingInventoryMap) {
+                for (const [detailId, rows] of existingInventoryMap) {
                     if (!inputIds.has(detailId)) {
-                        if (parseFloat(row.matched_quantity) > 0) {
-                            await connection.rollback();
-                            // 추가 정보 조회를 위해 product_id로 이름 찾기 (existingRows에는 product_name이 없음)
-                            // 하지만 에러 메시지 퀄리티를 위해... 일단 ID와 수량이라도 표시
-                            throw {
-                                status: 400,
-                                message: `이미 출고(매칭)된 내역이 있는 품목은 삭제할 수 없습니다.\n(Item ID: ${detailId}, Matched: ${row.matched_quantity})`,
-                                data: { matched_quantity: row.matched_quantity, detailId }
-                            };
+                        // 삭제하려는 항목의 모든 재고(분할 포함)에 대해 매칭 검사
+                        for (const row of rows) {
+                            if (parseFloat(row.matched_quantity) > 0) {
+                                await connection.rollback();
+                                throw {
+                                    status: 400,
+                                    message: `이미 출고(매칭)된 내역이 있는 품목은 삭제할 수 없습니다.\n(Item ID: ${detailId}, Matched: ${row.matched_quantity})`,
+                                    data: { matched_quantity: row.matched_quantity, detailId }
+                                };
+                            }
                         }
                     }
                 }
@@ -246,21 +253,36 @@ const TradeController = {
                 // A-2. 수정된 항목 검사
                 for (const newDetail of details) {
                     if (newDetail.id) {
-                        const existing = existingInventoryMap.get(String(newDetail.id));
-                        if (existing) {
-                            // 품목 변경 불가 (매칭된 경우)
-                            if (String(existing.product_id) !== String(newDetail.product_id) && parseFloat(existing.matched_quantity) > 0) {
-                                await connection.rollback();
-                                throw { status: 400, message: '이미 매칭된 내역이 있는 품목은 다른 품목으로 변경할 수 없습니다.' };
-                            }
+                        const existingList = existingInventoryMap.get(String(newDetail.id));
+                        if (existingList) {
+                            const isSplit = existingList.length > 1;
+                            const tradeQty = parseFloat(existingList[0].trade_quantity);
+                            const newQty = parseFloat(newDetail.quantity);
 
-                            // 수량 감소 제한
-                            if (parseFloat(newDetail.quantity) < parseFloat(existing.matched_quantity)) {
+                            // 분할된 재고(이동 등)가 있는 경우 수량/중량 변경 제한
+                            if (isSplit && Math.abs(tradeQty - newQty) > 0.0001) {
                                 await connection.rollback();
                                 throw {
                                     status: 400,
-                                    message: `수량을 이미 매칭된 수량(${existing.matched_quantity})보다 적게 수정할 수 없습니다.`
+                                    message: '창고 이동 등으로 분할된 재고는 전표에서 수량을 변경할 수 없습니다.\n이동 내역을 취소하거나 먼저 복원해주세요.'
                                 };
+                            }
+
+                            for (const existing of existingList) {
+                                // 품목 변경 불가 (매칭된 경우)
+                                if (String(existing.product_id) !== String(newDetail.product_id) && parseFloat(existing.matched_quantity) > 0) {
+                                    await connection.rollback();
+                                    throw { status: 400, message: '이미 매칭된 내역이 있는 품목은 다른 품목으로 변경할 수 없습니다.' };
+                                }
+
+                                // 수량 감소 제한 (단일 재고인 경우 검사, 분할인 경우 위에서 수량 변경 막음)
+                                if (!isSplit && parseFloat(newDetail.quantity) < parseFloat(existing.matched_quantity)) {
+                                    await connection.rollback();
+                                    throw {
+                                        status: 400,
+                                        message: `수량을 이미 매칭된 수량(${existing.matched_quantity})보다 적게 수정할 수 없습니다.`
+                                    };
+                                }
                             }
                         }
                     }
@@ -402,26 +424,24 @@ const TradeController = {
 
                 // 삭제 대상 처리 (Delete missing items)
                 const inputIdsStep8 = new Set(details.filter(d => d.id).map(d => String(d.id)));
-                for (const [detailId, row] of existingInventoryMap) {
+                for (const [detailId, rows] of existingInventoryMap) {
                     if (!inputIdsStep8.has(detailId)) {
-                        // 이미 3번 단계에서 매칭 여부 검증함. 
-                        // purchase_inventory 삭제 (CASCADE로 삭제될 수 있지만 명시적 삭제 권장)
-                        await connection.query('DELETE FROM purchase_inventory WHERE id = ?', [row.inventory_id]);
+                        // 삭제: 모든 연결된 재고 삭제
+                        for (const row of rows) {
+                            await connection.query('DELETE FROM purchase_inventory WHERE id = ?', [row.inventory_id]);
+                        }
                         await connection.query('DELETE FROM trade_details WHERE id = ?', [detailId]);
                     }
                 }
 
-                // Upsert 루프 (Debug Log Added)
-                // console.log('Existing Keys:', Array.from(existingInventoryMap.keys())); 
+                // Upsert 루프
                 for (let i = 0; i < details.length; i++) {
                     const detail = details[i];
-                    // console.log(`Step 8 Item ${i}: ID=${detail.id}, Type=${typeof detail.id}, InMap=${existingInventoryMap.has(String(detail.id))}`);
 
                     if (detail.id && existingInventoryMap.has(String(detail.id))) {
                         // UPDATE
-                        const existing = existingInventoryMap.get(String(detail.id));
-                        const matchedQty = parseFloat(existing.matched_quantity) || 0;
-                        const newQty = parseFloat(detail.quantity);
+                        const existingList = existingInventoryMap.get(String(detail.id));
+                        const isSplit = existingList.length > 1;
 
                         await connection.query(
                             `UPDATE trade_details SET
@@ -436,29 +456,52 @@ const TradeController = {
                                 detail.auction_price || detail.unit_price || 0,
                                 detail.notes || '', detail.shipper_location || null,
                                 detail.sender_name || detail.sender || null,
-                                detail.purchase_price !== undefined ? detail.purchase_price : (existing.purchase_price || null),
+                                detail.purchase_price !== undefined ? detail.purchase_price : (existingList[0].purchase_price || null),
                                 detail.id
                             ]
                         );
 
-                        // Purchase Inventory 업데이트
-                        // 남은 수량 재계산 = (새 수량 - 이미 매칭된 수량)
-                        const newRemaining = newQty - matchedQty;
-                        const newUniqueStatus = newRemaining <= 0 ? 'DEPLETED' : 'AVAILABLE';
+                        // Purchase Inventory 업데이트 (Linked List 전체 업데이트)
+                        for (const existing of existingList) {
+                            if (isSplit) {
+                                // 분할된 경우: 수량/중량은 변경 불가(위에서 검증됨), 메타데이터만 업데이트
+                                await connection.query(
+                                    `UPDATE purchase_inventory SET
+                                      product_id = ?, 
+                                      unit_price = ?,
+                                      shipper_location = ?, sender = ?
+                                      WHERE id = ?`,
+                                    [
+                                        detail.product_id,
+                                        detail.unit_price,
+                                        detail.shipper_location || null, detail.sender_name || detail.sender || null,
+                                        existing.inventory_id
+                                    ]
+                                );
+                            } else {
+                                // 단일 재고: 수량 등 전체 업데이트
+                                const matchedQty = parseFloat(existing.matched_quantity) || 0;
+                                const newQty = parseFloat(detail.quantity);
+                                const newRemaining = newQty - matchedQty;
+                                const newUniqueStatus = newRemaining <= 0 ? 'DEPLETED' : 'AVAILABLE';
 
-                        await connection.query(
-                            `UPDATE purchase_inventory SET
-                              product_id = ?, 
-                              original_quantity = ?, remaining_quantity = ?, 
-                              unit_price = ?, status = ?
-                              WHERE id = ?`,
-                            [
-                                detail.product_id,
-                                newQty, newRemaining,
-                                detail.unit_price, newUniqueStatus,
-                                existing.inventory_id
-                            ]
-                        );
+                                await connection.query(
+                                    `UPDATE purchase_inventory SET
+                                      product_id = ?, 
+                                      original_quantity = ?, remaining_quantity = ?, 
+                                      unit_price = ?, status = ?,
+                                      shipper_location = ?, sender = ?
+                                      WHERE id = ?`,
+                                    [
+                                        detail.product_id,
+                                        newQty, newRemaining,
+                                        detail.unit_price, newUniqueStatus,
+                                        detail.shipper_location || null, detail.sender_name || detail.sender || null,
+                                        existing.inventory_id
+                                    ]
+                                );
+                            }
+                        }
 
                     } else {
                         // INSERT (New Item)
@@ -477,10 +520,7 @@ const TradeController = {
                                 detail.sender_name || detail.sender || null, detail.purchase_price || null
                             ]
                         );
-                        const newDetailId = detailResult.insertId;
-
-                        // Purchase Inventory creation is handled by 'after_trade_detail_insert' trigger.
-                        // Do NOT manually insert here to avoid duplicates.
+                        // Trigger handles inventory creation
                     }
                 }
 

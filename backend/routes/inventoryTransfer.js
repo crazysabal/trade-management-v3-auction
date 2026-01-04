@@ -56,9 +56,12 @@ router.post('/', async (req, res) => {
             LIMIT 1
         `, [to_warehouse_id, sourceItem.trade_detail_id, sourceItem.unit_price, sourceItem.company_id, sourceItem.product_id]);
 
+    let newInventoryId = null;
+
     if (existingRows.length > 0) {
       // 병합 (Merge)
       const targetItem = existingRows[0];
+      newInventoryId = targetItem.id;
       const addedWeight = (sourceItem.total_weight / sourceItem.original_quantity) * moveQty;
 
       await connection.query(`
@@ -72,7 +75,7 @@ router.post('/', async (req, res) => {
 
     } else {
       // 신규 생성 (New Lot)
-      await connection.query(`
+      const [insertResult] = await connection.query(`
                 INSERT INTO purchase_inventory (
                     trade_detail_id, product_id, company_id, warehouse_id, purchase_date,
                     original_quantity, remaining_quantity, unit_price, total_weight,
@@ -85,24 +88,26 @@ router.post('/', async (req, res) => {
         to_warehouse_id,
         sourceItem.purchase_date,
         moveQty,
-        moveQty,
+        moveQty, // remaining = moveQty (Split)
         sourceItem.unit_price,
         (sourceItem.total_weight / sourceItem.original_quantity) * moveQty,
         sourceItem.shipper_location,
         sourceItem.sender,
         nextDisplayOrder
       ]);
+      newInventoryId = insertResult.insertId;
     }
 
     // 4. 이동 이력 기록
     await connection.query(`
       INSERT INTO warehouse_transfers (
-        transfer_date, product_id, purchase_inventory_id, from_warehouse_id, to_warehouse_id,
+        transfer_date, product_id, purchase_inventory_id, new_inventory_id, from_warehouse_id, to_warehouse_id,
         quantity, weight, notes, created_by
-      ) VALUES (CURDATE(), ?, ?, ?, ?, ?, ?, ?, 'system')
+      ) VALUES (CURDATE(), ?, ?, ?, ?, ?, ?, ?, ?, 'system')
     `, [
       sourceItem.product_id,
       purchase_inventory_id,
+      newInventoryId,
       sourceItem.warehouse_id,
       to_warehouse_id,
       moveQty,
@@ -120,6 +125,96 @@ router.post('/', async (req, res) => {
     await connection.rollback();
     console.error('재고 이동 오류:', error);
     res.status(500).json({ success: false, message: error.message || '서버 오류가 발생했습니다.' });
+  } finally {
+    connection.release();
+  }
+});
+
+// 재고 이동 취소
+router.delete('/:id', async (req, res) => {
+  const connection = await db.getConnection();
+  try {
+    await connection.beginTransaction();
+    const transferId = req.params.id;
+
+    // 1. 이동 기록 조회 (Lock)
+    const [transfers] = await connection.query(
+      `SELECT * FROM warehouse_transfers WHERE id = ? FOR UPDATE`,
+      [transferId]
+    );
+
+    if (transfers.length === 0) {
+      throw new Error('이동 내역을 찾을 수 없습니다.');
+    }
+
+    const transfer = transfers[0];
+    const { purchase_inventory_id: fromId, new_inventory_id: toId, quantity, weight } = transfer;
+
+    // 2. 대상 재고(To Lot) 조회 및 유효성 검사
+    // 대상 재고가 현재 남아있어야 취소 가능 (이미 팔렸거나 다시 이동했으면 불가)
+    const [toLots] = await connection.query(
+      `SELECT * FROM purchase_inventory WHERE id = ? FOR UPDATE`,
+      [toId]
+    );
+
+    if (toLots.length === 0) {
+      // 대상 재고가 아예 삭제됨? (논리적으로 발생하기 힘듬, 보통 DEPLETED로 남음)
+      throw new Error('이동된 대상 재고 정보를 찾을 수 없습니다.');
+    }
+
+    const toLot = toLots[0];
+
+    // 유효성 체크: 되돌릴 수량이 남아있는가?
+    // 실수 오차 고려하여 epsilon 사용
+    if (parseFloat(toLot.remaining_quantity) < parseFloat(quantity) - 0.0001) {
+      throw new Error('이동된 재고가 이미 소진되거나 타 창고로 이동되어 취소할 수 없습니다.');
+    }
+
+    // 3. 재고 원복 (Reverse Operation)
+
+    // 3-A. 대상 창고(To)에서 차감
+    // original_quantity도 줄여야 함 (이동 시 늘어났거나 생성되었으므로)
+    // 만약 이게 New Lot이었다면 original도 0, remaining도 0이 되어 DEPLETED 상태가 됨.
+    await connection.query(`
+            UPDATE purchase_inventory 
+            SET remaining_quantity = remaining_quantity - ?,
+                original_quantity = original_quantity - ?,
+                total_weight = total_weight - ?,
+                status = CASE WHEN remaining_quantity - ? <= 0.0001 THEN 'DEPLETED' ELSE status END
+            WHERE id = ?
+        `, [quantity, quantity, weight, quantity, toId]);
+
+
+    // 3-B. 원본 창고(From)로 반환
+    // 원본 재고가 존재해야 함.
+    const [fromLots] = await connection.query(
+      `SELECT id FROM purchase_inventory WHERE id = ? FOR UPDATE`,
+      [fromId]
+    );
+
+    if (fromLots.length === 0) {
+      // 원본이 삭제됨? (매우 드문 케이스, 보통 보존됨)
+      throw new Error('복구할 원본 재고 레코드를 찾을 수 없습니다.');
+    }
+
+    await connection.query(`
+            UPDATE purchase_inventory 
+            SET remaining_quantity = remaining_quantity + ?,
+                status = 'AVAILABLE'
+            WHERE id = ?
+        `, [quantity, fromId]);
+
+
+    // 4. 이동 기록 삭제
+    await connection.query(`DELETE FROM warehouse_transfers WHERE id = ?`, [transferId]);
+
+    await connection.commit();
+    res.json({ success: true, message: '재고 이동이 취소되었습니다.' });
+
+  } catch (error) {
+    await connection.rollback();
+    console.error('재고 이동 취소 오류:', error);
+    res.status(400).json({ success: false, message: error.message || '취소 중 오류가 발생했습니다.' });
   } finally {
     connection.release();
   }

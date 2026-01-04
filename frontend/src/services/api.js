@@ -45,6 +45,7 @@ export const companyAPI = {
   update: (id, data) => api.put(`/companies/${id}`, data),
   delete: (id) => api.delete(`/companies/${id}`),
   reorder: (data) => api.put('/companies/reorder', data),
+  exportExcel: (params) => api.get('/companies/export-excel', { params, responseType: 'blob' }),
   uploadPreview: (formData) => api.post('/companies/upload-preview', formData, {
     headers: { 'Content-Type': 'multipart/form-data' }
   }),
@@ -201,6 +202,7 @@ export const warehousesAPI = {
 // 재고 이동 API
 export const inventoryTransferAPI = {
   transfer: (data) => api.post('/inventory/transfer', data),
+  cancel: (id) => api.delete(`/inventory/transfer/${id}`),
 };
 
 

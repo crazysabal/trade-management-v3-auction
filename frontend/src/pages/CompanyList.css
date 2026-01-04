@@ -47,6 +47,12 @@
 .company-list-wrapper.is-window .search-filter-container {
     padding: 0.75rem !important;
     margin-bottom: 0.75rem !important;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background-color: #ffffff;
+    /* Sticky header needs background */
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
 }
 
 /* --- Mobile Card View --- */
