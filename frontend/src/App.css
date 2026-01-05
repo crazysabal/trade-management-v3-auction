@@ -317,11 +317,12 @@ tbody tr.drag-over {
 }
 
 .form-group {
-  display: flex;
-  flex-direction: row;
-  /* 가로 배치 */
-  align-items: center;
-  /* 수직 중앙 정렬 */
+  display: flex !important;
+  /* Force flexbox */
+  flex-direction: row !important;
+  /* Force horizontal */
+  align-items: center !important;
+  /* Force vertical centering */
 }
 
 .form-group>label {
@@ -332,255 +333,113 @@ tbody tr.drag-over {
   margin-right: 1rem;
   font-weight: 500;
   color: #555;
-  text-align: right;
-  /* 라벨 텍스트 우측 정렬 */
+  text-align: left;
+  /* [CHANGED] Right -> Left as per user standard */
 }
 
+/* [RESTORED & UPGRADED] Global Form Controls */
 .form-group input,
 .form-group select,
 .form-group textarea {
   flex: 1;
-  /* 남은 공간 차지 */
-  padding: 0.7rem;
-  border: 1px solid #ddd;
-  border-radius: 4px;
+  padding: 0.75rem;
+  border: 1px solid #e2e8f0;
+  /* Premium: Softer border */
+  border-radius: 6px;
+  /* Premium: More rounded */
   font-size: 1rem;
   font-family: inherit;
-}
-
-/* 모바일 모드에서는 다시 위아래 배치 */
-@media (max-width: 768px) {
-  .form-group {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .form-group>label {
-    width: auto;
-    text-align: left;
-    margin-bottom: 0.5rem;
-    margin-right: 0;
-  }
+  transition: border-color 0.2s, box-shadow 0.2s;
+  /* Premium: Smooth transition */
 }
 
 .form-group input:focus,
 .form-group select:focus,
 .form-group textarea:focus {
   outline: none;
-  border-color: #3498db;
-  box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1);
+  border-color: #3182ce;
+  /* Premium: Blue focus */
+  box-shadow: 0 0 0 3px rgba(49, 130, 206, 0.1);
 }
 
-.required::after {
-  content: ' *';
-  color: #e74c3c;
-}
-
-.form-actions {
-  display: flex;
-  gap: 1rem;
-  justify-content: flex-end;
-  margin-top: 2rem;
-  padding-top: 1.5rem;
-  border-top: 1px solid #eee;
-}
-
-/* 뱃지 */
-.badge {
-  display: inline-block;
-  padding: 0.3rem 0.6rem;
-  border-radius: 4px;
-  font-size: 0.85rem;
-  font-weight: 500;
-}
-
-.badge-success {
-  background-color: #d4edda;
-  color: #155724;
-}
-
-.badge-warning {
-  background-color: #fff3cd;
-  color: #856404;
-}
-
-.badge-danger {
-  background-color: #f8d7da;
-  color: #721c24;
-}
-
-.badge-info {
-  background-color: #d1ecf1;
-  color: #0c5460;
-}
-
-.badge-secondary {
-  background-color: #e2e3e5;
-  color: #383d41;
-}
-
-/* 대시보드 통계 카드 */
-.stats-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-  gap: 1.5rem;
-  margin-bottom: 2rem;
-}
-
-/* 대시보드 전용 통계 그리드 - 반응형 */
-.dashboard-stats-grid {
-  display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  gap: 1rem;
-  margin-bottom: 1.5rem;
-}
-
-@media (max-width: 1400px) {
-  .dashboard-stats-grid {
-    grid-template-columns: repeat(3, 1fr);
-  }
-}
-
-@media (max-width: 1100px) {
-  .dashboard-stats-grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
-}
-
+/* Mobile Layout Fallback */
 @media (max-width: 768px) {
-  .dashboard-stats-grid {
-    grid-template-columns: 1fr;
+  .form-group {
+    flex-direction: column !important;
+    /* Override desktop !important */
+    align-items: stretch !important;
+  }
+
+  .form-group>label {
+    width: auto !important;
+    text-align: left !important;
+    margin-bottom: 0.5rem !important;
+    margin-right: 0 !important;
   }
 }
 
-.stat-card {
+/* [NEW] Standardized Modal Structure (Promoted from UserManagement) */
+.styled-modal {
   background: white;
-  padding: 1.5rem;
-  border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  border-left: 4px solid #3498db;
-}
-
-.stat-card h3 {
-  color: #7f8c8d;
-  font-size: 0.9rem;
-  margin-bottom: 0.5rem;
-  text-transform: uppercase;
-}
-
-.stat-card .stat-value {
-  font-size: 2rem;
-  font-weight: bold;
-  color: #2c3e50;
-}
-
-/* 로딩 */
-.loading {
-  text-align: center;
-  padding: 3rem;
-  color: #7f8c8d;
-}
-
-.loading-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: rgba(255, 255, 255, 0.9);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 9999;
-}
-
-.loading-content {
-  text-align: center;
-  padding: 2rem 3rem;
-  background: white;
+  padding: 0;
   border-radius: 12px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
-}
-
-.loading-content p {
-  margin-top: 1rem;
-  font-size: 1.1rem;
-  color: #374151;
-}
-
-.spinner {
-  width: 50px;
-  height: 50px;
-  border: 4px solid #e5e7eb;
-  border-top-color: #3b82f6;
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-  margin: 0 auto;
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-/* 에러 메시지 */
-.error-message {
-  background-color: #f8d7da;
-  color: #721c24;
-  padding: 1rem;
-  border-radius: 4px;
-  margin-bottom: 1rem;
-  border: 1px solid #f5c6cb;
-}
-
-/* 성공 메시지 */
-.success-message {
-  background-color: #d4edda;
-  color: #155724;
-  padding: 1rem;
-  border-radius: 4px;
-  margin-bottom: 1rem;
-  border: 1px solid #c3e6cb;
-}
-
-/* 커스텀 모달 */
-.modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100vw;
-  height: 100vh;
-  background-color: rgba(0, 0, 0, 0.5);
+  width: 90%;
+  max-width: 450px;
+  /* Slightly wider default */
+  max-height: 90vh;
   display: flex;
-  justify-content: center;
+  flex-direction: column;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  overflow: hidden;
+  animation: slideIn 0.2s ease-out;
+}
+
+.modal-header {
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid #e2e8f0;
+  display: flex;
+  justify-content: space-between;
   align-items: center;
-  z-index: 10000;
-  animation: fadeIn 0.2s ease-out;
+  background-color: white;
 }
 
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-  }
-
-  to {
-    opacity: 1;
-  }
+.modal-header h3 {
+  margin: 0;
+  font-size: 1.25rem;
+  color: #2d3748;
+  font-weight: 600;
 }
 
-@keyframes slideIn {
-  from {
-    opacity: 0;
-    transform: translate(-50%, -50%) scale(0.9);
-  }
-
-  to {
-    opacity: 1;
-    transform: translate(-50%, -50%) scale(1);
-  }
+.modal-body {
+  padding: 1.5rem;
+  overflow-y: auto;
 }
 
+.modal-footer {
+  padding: 0.75rem 1.5rem;
+  background-color: #f8fafc;
+  border-top: 1px solid #e2e8f0;
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+}
+
+.close-btn {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  color: #718096;
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+  transition: color 0.2s;
+}
+
+.close-btn:hover {
+  color: #2d3748;
+}
+
+/* Existing .modal-container support (Legacy/Alerts) */
 .modal-container {
   position: fixed;
   top: 50%;
@@ -592,11 +451,8 @@ tbody tr.drag-over {
   max-width: 400px;
   width: 90%;
   max-height: 90vh;
-  /* 화면 높이 제한 */
   display: flex;
-  /* Flexbox 사용 */
   flex-direction: column;
-  /* 수직 정렬 */
   text-align: center;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
   animation: slideIn 0.3s ease-out;
@@ -640,17 +496,27 @@ tbody tr.drag-over {
 .modal-buttons {
   display: flex;
   gap: 0.75rem;
-  justify-content: center;
+  /* justify-content: center; REMOVED to allow flex-grow */
+  width: 100%;
+  /* Ensure full width */
 }
 
 .modal-btn {
-  padding: 0.75rem 1.5rem;
+  padding: 0 1.5rem;
   border-radius: 8px;
   font-size: 1rem;
   font-weight: 500;
   cursor: pointer;
   border: none;
-  min-width: 100px;
+  /* min-width: 100px; REMOVED */
+  flex: 1;
+  /* Match UserManagement 50:50 style */
+  height: 48px;
+  /* Match UserManagement height */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
 }
 
 .modal-btn-cancel {
@@ -2005,21 +1871,22 @@ table .input-styled {
   background-color: #e5e7eb !important;
   /* 호버 시 조금 더 진한 회색 */
 }
+
 /* ==================== Global Mobile DnD Utilities ==================== */
 /* Promoted from InventoryAudit.css for system-wide reuse */
 .no-select {
-    user-select: none !important;
-    -webkit-user-select: none !important;
-    -moz-user-select: none !important;
-    -ms-user-select: none !important;
-    outline: none !important;
-    -webkit-tap-highlight-color: transparent !important;
+  user-select: none !important;
+  -webkit-user-select: none !important;
+  -moz-user-select: none !important;
+  -ms-user-select: none !important;
+  outline: none !important;
+  -webkit-tap-highlight-color: transparent !important;
 }
 
 .touch-none {
-    touch-action: none !important;
+  touch-action: none !important;
 }
 
 .no-tap-highlight {
-    -webkit-tap-highlight-color: transparent !important;
+  -webkit-tap-highlight-color: transparent !important;
 }

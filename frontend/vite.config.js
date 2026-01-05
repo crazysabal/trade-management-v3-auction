@@ -16,6 +16,7 @@ export default defineConfig({
     server: {
         host: true, // Listen on all network interfaces
         port: 3000,
+        allowedHosts: ['www.itsabal.com', 'itsabal.com', 'localhost'], // Allow external domains
         open: false, // Launcher handles browser opening via BROWSER=none but better to be explicit
         proxy: {
             '/api': {

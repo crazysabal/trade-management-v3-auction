@@ -1,4 +1,4 @@
-# 통합 개발 가이드라인 (Unified Development Guidelines) v2.0
+# 통합 개발 가이드라인 (Unified Development Guidelines) v2.1
 
 ## 1. 핵심 행동 수칙 (Critical Core Rules)
 이 섹션의 규칙은 프로젝트의 최우선 순위이며, 어떤 상황에서도 타협할 수 없습니다.
@@ -37,32 +37,46 @@
 - **Legacy Layout Stability**: 새로운 기능을 추가하거나 버그를 수정할 때, 기존의 잘 잡힌 레이아웃(수평 폼, 컨트롤 높이 등)을 훼손해서는 안 됩니다.
 - **Simulation**: CSS 클래스나 스타일을 변경하기 전, 주변 요소의 정렬이나 크기에 미칠 영향을 먼저 Sequential Thinking으로 시뮬레이션하십시오.
 
-#### A. 모달 동작 (Modal Behavior)
+#### A. 모달 및 삭제 동작 (Modal & Deletion Protocols)
 - **닫기 메커니즘**: ESC 키 지원 필수 (`stopPropagation` 포함), 배경 클릭 닫기 비활성화.
-- **[New] 맥락 인지형 삭제 (Context-Aware Safe Deletion)**:
-  - 모든 파괴적 작업(삭제)의 확인 모달에는 반드시 **"무엇을"** 삭제하는지 명시해야 합니다.
-  - **Bad**: "정말 삭제하시겠습니까?"
-  - **Good**: "12월 25일 '삼성전자'와의 매입 전표를 삭제하시겠습니까?"
-  - 대상 식별 정보(이름, 날짜, 금액 등)가 없는 일반적인 메시지는 사용을 금지합니다.
+- **[Critical] 맥락 인지형 안전 삭제 (Context-Aware Safe Deletion)**:
+  - **Guarded Deletion**: 삭제 대상에 종속된 데이터(예: 재고가 있는 창고, 결제된 전표)가 존재하면 삭제를 **원천 차단**하거나, **경고와 함께 종속 내역**을 명시해야 합니다.
+  - **Context-Aware Message**:
+    - **Bad**: "정말 삭제하시겠습니까?"
+    - **Good**: "12월 25일 '삼성전자'와의 매입 전표(관련 재고 포함)를 삭제하시겠습니까?"
+  - 대상 식별 정보 없이 단순한 확인 메시지는 금지합니다.
 
 #### B. 데이터 표시 표준 (Data Formatting)
 - **포맷**: `${품목명} ${중량}kg (${등급})` 형식 준수. 중량의 불필요한 소수점 제거.
 - **용어**: 라벨은 한국어 사용 ("입고일자" -> "매입 일자").
+- **[New] 날짜 표시 (Date Formatting)**:
+  - **Compact View** (리스트/카드): `MM-DD` (예: `12-25`)
+  - **Detail View** (상세/수정): `YYYY-MM-DD`
+  - **Input**: 모바일 호환성을 위해 `<input type="date">` 또는 전용 Picker 사용.
 
-#### C. 스타일링 표준
+#### C. 스타일링 및 UX 패턴 (Styling & UX Patterns)
 - **폰트 크기**: 업무용 `0.9rem`, 목록 `0.85rem`~`0.9rem`.
 - **페이지 헤더**: `App.css`의 `.page-header`, `.page-title` 클래스 사용.
 - **[Critical] 인라인 스타일 금지 (Inline Style Ban)**:
-  - 프로토타이핑 단계를 제외한 최종 코드(Commit)에는 `style={{ ... }}` 객체 사용을 엄격히 금지합니다 (동적 값 제어 제외).
-  - 반드시 `TradePanel.css` 또는 컴포넌트 전용 CSS 파일의 클래스를 사용하십시오.
+  - 최종 코드에는 `style={{ ... }}` 객체 사용을 엄격히 금지합니다 (동적 값 제어 제외).
+  - 반드시 CSS 파일의 클래스를 사용하십시오.
+- **[New] Sticky & Silent Interaction**:
+  - **Sticky Header**: 리스트 필터/헤더는 스크롤 시 상단 고정(`sticky`).
+  - **Silent Reload**: 데이터 리패치 시 스크롤 위치 유지 필수.
 
 #### D. 모바일 드래그 앤 드롭 표준 (Mobile Drag & Drop Standards)
-모바일 환경에서 리스트 재정렬 기능을 구현할 때는 다음 패턴을 **의무적**으로 준수해야 합니다.
-1. **Stable Callbacks**: `removeEventListener` 실패로 인한 드롭 버그를 방지하기 위해 `touchMove/End` 핸들러는 반드시 `useCallback(fn, [])`으로 생성하여, 컴포넌트 생명주기 내내 동일한 참조를 유지해야 합니다.
-2. **Ref State Access**: 핸들러 내부에서는 `useState` 값 대신 `useRef`로 관리되는 최신 값을 참조해야 합니다.
-3. **Direct DOM Manipulation**: 드래그 중인 요소(Overlay)의 위치는 React State가 아닌 `ref.style.transform`을 직접 수정하여 60fps 성능을 보장해야 합니다.
-4. **Cached Rects**: `getBoundingClientRect` 호출은 드래그 시작 시점에 한 번만 수행하여 캐싱하고, 이동 중에는 캐시된 좌표로 충돌을 계산해야 합니다.
-5. **Browser Blockers**: `touchstart`에서 `e.preventDefault()`(스크롤 방지), `contextmenu` 전역 차단, CSS `.touch-none`, `.no-select`를 필수 적용해야 합니다.
+1. **Stable Callbacks**: `touchMove/End`는 `useCallback(fn, [])`으로 참조 유지.
+2. **Ref State Access**: `useState` 대신 `useRef`로 최신 값 참조.
+3. **Direct DOM Manipulation**: 드래그 요소는 `ref.style.transform` 직접 수정 (60fps).
+4. **Cached Rects**: `getBoundingClientRect`는 드래그 시작 시 캐싱.
+5. **Browser Blockers**: `e.preventDefault()`, `.touch-none`, `.no-select` 필수 적용.
+
+#### E. [New] 모바일 최적화 및 밀도 (Mobile Optimization & Density)
+- **Standard 35 (Balanced High-Visibility)**:
+  - 입력 필드 최소 높이 **1.2rem** (터치 영역 확보).
+  - 주요 액션 버튼 비율 **5:5** 또는 **Full Width**.
+- **Single Window Policy**: 모바일에서는 한 번에 하나의 메인 작업창만 유지 (중첩 지양).
+- **Columnar Flattened Card**: 모바일 리스트는 테이블 대신 **열(Column) 형태 카드** 레이아웃 적용.
 
 ### 3.3 아키텍처 가이드라인
 
@@ -70,11 +84,11 @@
 - **모달 스타일 재사용**: `TradeDetailModal`, `ConfirmModal` 등의 표준 패턴을 재사용합니다.
 
 #### Back-end (API)
-- **안정성**: `LEFT JOIN` 권장.
+- **안정성**: `LEFT JOIN` 권장 (누락 방지).
 - **라우팅**: 고정 경로를 파라미터 경로보다 먼저 정의.
 
 ## 4. 트러블슈팅 및 보고 (Troubleshooting & Reporting)
 
 ### 4.1 환경적 요인 보고 프로토콜 (Environmental Issue Protocol)
-- **유령 버그 대응**: 코드베이스 전수 조사(Grep 등) 후에도 원인이 발견되지 않는 현상(예: 비프음)은 **"환경/하드웨어 요인(Environment Factor)"**으로 분류합니다.
-- **조치**: 무리한 코드 수정보다는 터미널, 브라우저, OS 설정을 점검하도록 사용자에게 제안합니다.
+- **유령 버그 대응**: 코드/데이터 전수 조사 후에도 원인 미발견 시 **"환경/하드웨어 요인(Environment Factor)"**으로 분류.
+- **조치**: 무리한 코드 수정 지양, 사용자에게 환경 점검(브라우저/OS/캐시) 제안.

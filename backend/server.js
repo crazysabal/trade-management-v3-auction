@@ -51,6 +51,8 @@ app.use('/api/expenses', expenseRouter);
 app.use('/api/expense-categories', expenseCategoryRouter);
 app.use('/api/settlement', settlementRouter);
 app.use('/api/inventory-audit', inventoryAuditRouter);
+app.use('/api/auth', require('./routes/auth')); // 인증 라우터 추가
+app.use('/api/users', require('./routes/users')); // 사용자 관리 라우터 추가
 
 // 헬스체크
 app.get('/api/health', (req, res) => {

@@ -31,6 +31,7 @@ import CompanyInfo from './CompanyInfo';
 import MessageTestPage from './MessageTestPage';
 import AuctionImportV2 from './AuctionImportV2';
 import AuctionAccounts from './AuctionAccounts';
+import UserManagement from './UserManagement';
 
 /**
  * DesktopManager
@@ -182,6 +183,7 @@ const DesktopManager = () => {
             case 'EXPENSE_CATEGORIES': title = '지출 항목 관리'; icon = '🏷️'; size = { width: 800, height: 600 }; break;
             case 'COMPANY_INFO': title = '본사 정보'; icon = 'ℹ️'; size = { width: 600, height: 500 }; break;
             case 'MESSAGE_TEST': title = '시스템 테스트'; icon = '🧪'; break;
+            case 'USER_MANAGEMENT': title = '사용자/직원 관리'; icon = '👥'; size = { width: 1000, height: 750 }; break;
             default: title = appType; icon = '📱';
         }
         // [DEBUG] Append App Type for User Identification
@@ -379,6 +381,7 @@ const DesktopManager = () => {
             case 'EXPENSE_CATEGORIES': return <ExpenseCategoryManagement isWindow={true} {...componentProps} />;
             case 'COMPANY_INFO': return <CompanyInfo isWindow={true} {...componentProps} />;
             case 'MESSAGE_TEST': return <MessageTestPage isWindow={true} {...componentProps} />;
+            case 'USER_MANAGEMENT': return <UserManagement isWindow={true} {...componentProps} />;
             default: return <div>Unknown App: {type}</div>;
         }
     };

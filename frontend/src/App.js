@@ -41,6 +41,11 @@ import SettlementPage from './pages/SettlementPage';
 
 import Navbar from './components/Navbar';
 
+// Auth
+import { AuthProvider } from './context/AuthContext';
+import LoginPage from './pages/LoginPage';
+import PrivateRoute from './components/PrivateRoute';
+
 function AppContent() {
   const location = useLocation();
   const isPopup = location.pathname.startsWith('/popup');
@@ -55,19 +60,25 @@ function AppContent() {
     )
   }
 
-  // 모든 메인 경로는 DesktopManager가 처리 (Web OS)
   return (
     <div className="App">
-      <DesktopManager />
+      <Routes>
+        <Route path="/login" element={<LoginPage />} />
+        <Route element={<PrivateRoute />}>
+          <Route path="/*" element={<DesktopManager />} />
+        </Route>
+      </Routes>
     </div>
   );
 }
 
 function App() {
   return (
-    <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-      <AppContent />
-    </Router>
+    <AuthProvider>
+      <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+        <AppContent />
+      </Router>
+    </AuthProvider>
   );
 }
 

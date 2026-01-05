@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { settingsAPI } from '../services/api';
-import './Settings.css'; // 스타일 파일 별도 생성 필요
+// import UserManagement from './UserManagement'; // Separated to standalone menu
+// import './Settings.css'; // Assuming styling is handled in global or not needed if file missing
 
 const Settings = ({ ...rest }) => {
     const [activeTab, setActiveTab] = useState('payment'); // 'general', 'payment'
@@ -27,7 +28,6 @@ const Settings = ({ ...rest }) => {
         setLoading(true);
         try {
             const response = await settingsAPI.getPaymentMethods();
-            console.log('결제 방법 응답:', response.data);
             if (response.data.success) {
                 setPaymentMethods(response.data.data);
             } else {
@@ -82,12 +82,13 @@ const Settings = ({ ...rest }) => {
     const handleEdit = (method) => {
         setIsEditing(true);
         setEditId(method.id);
-        setFormData({
+        const methodData = {
             code: method.code,
             name: method.name,
             sort_order: method.sort_order,
-            is_active: method.is_active === 1
-        });
+            is_active: method.is_active === 1 || method.is_active === true
+        };
+        setFormData(methodData);
     };
 
     const resetForm = () => {
@@ -109,17 +110,12 @@ const Settings = ({ ...rest }) => {
     const handleDragStart = (e, id) => {
         setDragId(id);
         e.dataTransfer.effectAllowed = 'move';
-        // 고스트 이미지 설정 (선택 사항)
     };
 
     const handleDragOver = (e, id) => {
         e.preventDefault(); // 필수: drop 허용
         if (dragId === id) return;
         setDragOverId(id);
-    };
-
-    const handleDragLeave = (e) => {
-        // 관련된 타겟이 아닐 때만 초기화하면 좋지만, 간단히 구현
     };
 
     const handleDrop = async (e, targetId) => {
@@ -150,7 +146,6 @@ const Settings = ({ ...rest }) => {
         try {
             await settingsAPI.reorderPaymentMethods(reorderedData);
             showStatus('success', '순서가 변경되었습니다.');
-            // 서버 데이터와 동기화 (sort_order 확정)
             fetchPaymentMethods();
         } catch (error) {
             console.error('순서 변경 오류:', error);
@@ -189,7 +184,6 @@ const Settings = ({ ...rest }) => {
             </div>
 
             <div className="settings-content">
-
                 {activeTab === 'general' && (
                     <div className="general-settings">
                         <div className="settings-section">

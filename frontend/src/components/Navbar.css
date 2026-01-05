@@ -168,15 +168,19 @@
     }
 
     .navbar-logo {
-        margin-left: 20px;
+        margin-left: 60px;
+        /* 햄버거 메뉴 공간 확보 */
     }
 
     .menu-icon {
         display: block;
         position: absolute;
-        top: 0;
-        right: 0;
-        transform: translate(-100%, 60%);
+        top: 50%;
+        /* Vertically center */
+        left: 20px;
+        /* Align with left padding */
+        transform: translateY(-50%);
+        /* Adjust for height */
         font-size: 1.8rem;
         cursor: pointer;
         color: #fff;

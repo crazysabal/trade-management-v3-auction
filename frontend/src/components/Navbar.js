@@ -1,8 +1,13 @@
 import React, { useState } from 'react';
+import { useAuth } from '../context/AuthContext';
 import './Navbar.css';
+import ConfirmModal from './ConfirmModal';
 
 const Navbar = ({ onLaunchApp }) => {
+    const { user } = useAuth();
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+    // [NEW] Logout Confirmation Modal State
+    const [isLogoutConfirmOpen, setIsLogoutConfirmOpen] = useState(false);
 
     // 드롭다운 메뉴 상태 관리
     const [activeDropdown, setActiveDropdown] = useState(null);
@@ -45,11 +50,66 @@ const Navbar = ({ onLaunchApp }) => {
         closeMobileMenu();
     };
 
+    const handleLogout = () => {
+        // Simple logout mechanism
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        window.location.href = '/login';
+    };
+
     return (
         <nav className="navbar">
             <div className="navbar-container">
                 <div className="navbar-logo" onClick={() => handleLaunch('DASHBOARD')}>
                     📊 거래명세서 관리
+                </div>
+
+                {/* [NEW] Logout Button (Visible on Desktop) */}
+                <div className="navbar-actions" style={{ position: 'absolute', right: '2rem', top: '50%', transform: 'translateY(-50%)', display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                    {/* [NEW] User Display */}
+                    {user && (
+                        <div style={{ color: 'white', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            <span>👤 {user.username}</span>
+                            <span style={{
+                                fontSize: '0.7rem',
+                                padding: '2px 6px',
+                                borderRadius: '4px',
+                                background: user.role === 'admin' ? '#ef4444' : '#3b82f6',
+                                fontWeight: 'bold'
+                            }}>
+                                {user.role === 'admin' ? 'ADMIN' : 'USER'}
+                            </span>
+                        </div>
+                    )}
+                    <button
+                        onClick={() => setIsLogoutConfirmOpen(true)}
+                        style={{
+                            background: 'transparent',
+                            border: '1px solid rgba(255,255,255,0.3)',
+                            color: 'white',
+                            padding: '0.4rem 0.8rem',
+                            borderRadius: '4px',
+                            cursor: 'pointer',
+                            fontSize: '0.85rem',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '0.5rem'
+                        }}
+                    >
+                        🔒 로그아웃
+                    </button>
+
+                    {/* Logout Confirmation Modal */}
+                    <ConfirmModal
+                        isOpen={isLogoutConfirmOpen}
+                        onClose={() => setIsLogoutConfirmOpen(false)}
+                        onConfirm={handleLogout}
+                        title="로그아웃"
+                        message="정말 로그아웃 하시겠습니까?"
+                        type="warning"
+                        confirmText="로그아웃"
+                        cancelText="취소"
+                    />
                 </div>
 
                 <div className={`menu-icon ${isMobileMenuOpen ? 'active' : ''}`} onClick={toggleMobileMenu}>
@@ -208,6 +268,7 @@ const Navbar = ({ onLaunchApp }) => {
                             <li><span onClick={() => handleLaunch('SETTINGS')}>시스템 설정</span></li>
 
                             <li><span onClick={() => handleLaunch('COMPANY_INFO')}>본사 정보</span></li>
+                            <li><span onClick={() => handleLaunch('USER_MANAGEMENT')}>사용자/직원 관리</span></li>
                             <li><span onClick={() => handleLaunch('MESSAGE_TEST')}>시스템 테스트</span></li>
                         </ul>
                     </li>
