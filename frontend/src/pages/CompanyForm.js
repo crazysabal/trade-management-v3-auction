@@ -15,7 +15,6 @@ function CompanyForm({ id: propId, onSuccess, onCancel, isModal: propIsModal }) 
 
   const [formData, setFormData] = useState({
     company_code: '',
-    company_code: '',
     company_name: '',
     business_name: '', // [NEW] 사업자명
     business_number: '',

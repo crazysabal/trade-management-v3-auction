@@ -50,7 +50,7 @@
 }
 
 .btn-new-settle {
-    font-size: 0.8rem;
+    font-size: 0.9rem;
     padding: 0.4rem 0.8rem;
     background: #2563eb;
     color: white;
@@ -113,7 +113,7 @@
 }
 
 .date-field label {
-    font-size: 0.75rem;
+    font-size: 0.9rem;
     color: #64748b;
     font-weight: 600;
 }
@@ -273,7 +273,7 @@
 
 .comparison-note {
     margin-top: 1rem;
-    font-size: 0.8rem;
+    font-size: 0.9rem;
     color: #64748b;
     text-align: right;
     border-top: 1px dashed #e2e8f0;
@@ -290,7 +290,7 @@
 .flow-sub-row {
     display: flex;
     justify-content: space-between;
-    font-size: 0.85rem;
+    font-size: 0.9rem;
     color: #64748b;
     padding: 2px 0;
 }
@@ -407,7 +407,7 @@
 .hist-info {
     display: flex;
     justify-content: space-between;
-    font-size: 0.85rem;
+    font-size: 0.9rem;
     color: #64748b;
 }
 
@@ -538,7 +538,7 @@
 }
 
 .pnl-box .lbl {
-    font-size: 0.85rem;
+    font-size: 0.9rem;
     color: #64748b;
     margin-bottom: 0.5rem;
 }
@@ -693,7 +693,7 @@
 }
 
 .notice {
-    font-size: 0.8rem;
+    font-size: 0.9rem;
     color: #64748b;
     margin-top: 1rem;
     text-align: center;

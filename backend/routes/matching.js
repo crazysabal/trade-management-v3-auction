@@ -95,8 +95,8 @@ router.get('/all-sales', async (req, res) => {
         tm.trade_date,
         tm.total_amount,
         tm.company_id,
-        c.company_name as customer_name,
-        c.alias,
+        c.business_name as customer_name, -- [Changed] company_name -> business_name (법인명)
+        c.company_name,                   -- [Changed] alias -> company_name (별칭)
         COUNT(td.id) as item_count,
         SUM(td.quantity) as total_quantity,
         SUM(CASE WHEN td.matching_status = 'MATCHED' THEN td.quantity ELSE 0 END) as matched_quantity,
@@ -122,7 +122,7 @@ router.get('/all-sales', async (req, res) => {
       WHERE tm.trade_type = 'SALE'
         AND tm.trade_date >= ?
         AND tm.trade_date <= ?
-      GROUP BY tm.id, tm.trade_number, tm.trade_date, tm.total_amount, tm.company_id, c.company_name, c.alias
+      GROUP BY tm.id, tm.trade_number, tm.trade_date, tm.total_amount, tm.company_id, c.business_name, c.company_name
       ORDER BY tm.trade_date DESC, tm.id DESC
     `, [filterStartDate, filterEndDate]);
 
@@ -856,8 +856,8 @@ router.get('/trade/:trade_master_id/inventory', async (req, res) => {
           p.product_name,
           p.grade,
           p.weight as product_weight,
-          c.company_name as purchase_company,
-          c.alias
+          c.business_name as purchase_company,
+          c.company_name as alias
         FROM sale_purchase_matching spm
         JOIN purchase_inventory pi ON spm.purchase_inventory_id = pi.id
         JOIN products p ON pi.product_id = p.id
@@ -895,8 +895,8 @@ router.get('/trade/:trade_master_id/inventory', async (req, res) => {
         p.grade,
         p.weight as product_weight,
         tm.trade_number,
-        c.company_name,
-        c.alias
+        c.business_name as company_name,
+        c.company_name as alias
       FROM purchase_inventory pi
       JOIN products p ON pi.product_id = p.id
       JOIN trade_details td ON pi.trade_detail_id = td.id

@@ -14,6 +14,13 @@ import InventoryAdjustmentModal from '../components/InventoryAdjustmentModal';
 import InventoryPrintModal from '../components/InventoryPrintModal';
 import TradePrintModal from '../components/TradePrintModal';
 import ProductionDetailModal from '../components/ProductionDetailModal';
+import MatchingHistoryModal from '../components/MatchingHistoryModal';
+
+// 유틸리티 함수 (Mock용)
+const formatProductName = (item) => item ? `${item.product_name} ${item.product_weight}kg (${item.grade})` : '';
+const formatNumber = (num) => new Intl.NumberFormat().format(num || 0);
+const formatCurrency = (num) => new Intl.NumberFormat('ko-KR', { style: 'currency', currency: 'KRW' }).format(num || 0);
+const formatDateShort = (date) => date ? date.substring(5, 10) : '';
 
 function MessageTestPage() {
     const [modal, setModal] = useState({
@@ -41,6 +48,7 @@ function MessageTestPage() {
     const [inventoryPrintModalOpen, setInventoryPrintModalOpen] = useState(false);
     const [tradePrintModalOpen, setTradePrintModalOpen] = useState(false);
     const [productionDetailModalOpen, setProductionDetailModalOpen] = useState(false);
+    const [matchingHistoryModalOpen, setMatchingHistoryModalOpen] = useState(false);
 
     const closeModal = () => {
         setModal(prev => ({ ...prev, isOpen: false }));
@@ -315,6 +323,18 @@ function MessageTestPage() {
                         Open Adjustment
                     </button>
                 </div>
+
+                {/* Matching History */}
+                <div style={styles.card}>
+                    <h3>매칭 내역 (Premium)</h3>
+                    <p>MESSAGE_TEST 매칭 결과</p>
+                    <button
+                        style={{ ...styles.button, backgroundColor: '#2563eb' }}
+                        onClick={() => setMatchingHistoryModalOpen(true)}
+                    >
+                        Open Matching History
+                    </button>
+                </div>
             </div>
 
             <h2 style={{ fontSize: '1.2rem', marginBottom: '1rem', color: '#555', marginTop: '3rem' }}>4. 인쇄 및 상세 (Print & Details)</h2>
@@ -355,6 +375,7 @@ function MessageTestPage() {
                     </button>
                 </div>
             </div>
+
 
             <div style={styles.infoBox}>
                 <strong>💡 참고:</strong>
@@ -542,6 +563,37 @@ function MessageTestPage() {
                 isOpen={productionDetailModalOpen}
                 onClose={() => setProductionDetailModalOpen(false)}
                 productionId={1}
+            />
+
+            {/* Matching History Modal Test */}
+            <MatchingHistoryModal
+                isOpen={matchingHistoryModalOpen}
+                onClose={() => setMatchingHistoryModalOpen(false)}
+                saleItem={{
+                    product_name: '귤',
+                    product_weight: 5,
+                    grade: 'M',
+                    quantity: 32
+                }}
+                matchings={[
+                    {
+                        matching_id: 1,
+                        sender: '제주조합_위미신례 / 은혜',
+                        matched_quantity: 32,
+                        purchase_unit_price: 29000,
+                        purchase_date: '2026-01-06',
+                        company_name: '대구중앙청과(주)'
+                    }
+                ]}
+                onCancelMatching={(id) => {
+                    console.log('Cancel Matching:', id);
+                    setMatchingHistoryModalOpen(false);
+                    showModal('info', '취소 요청', `매칭 ID ${id} 취소 요청됨 (테스트)`);
+                }}
+                formatProductName={formatProductName}
+                formatNumber={formatNumber}
+                formatCurrency={formatCurrency}
+                formatDateShort={formatDateShort}
             />
         </div >
     );

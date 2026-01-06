@@ -102,7 +102,7 @@ function ConfirmModal({
 
   // Portal을 사용하여 body에 직접 렌더링 (부모 CSS 영향 받지 않음)
   return createPortal(
-    <div className="modal-overlay" style={{ zIndex: 9999 }}>
+    <div className="modal-overlay" style={{ zIndex: 11000 }}>
 
       <div
         className={fullContent ? "styled-modal" : "modal-container"}

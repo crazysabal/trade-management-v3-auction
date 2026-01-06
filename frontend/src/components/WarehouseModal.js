@@ -69,7 +69,7 @@ const WarehouseModal = ({ isOpen, onClose, onSubmit, initialData }) => {
     if (!isOpen) return null;
 
     return createPortal(
-        <div className="modal-overlay" style={{ zIndex: 1100 }}>
+        <div className="modal-overlay" style={{ zIndex: 10100 }}>
             <div
                 className="styled-modal"
                 style={{

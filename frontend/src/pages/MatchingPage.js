@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { matchingAPI } from '../services/api';
 import { Link } from 'react-router-dom';
 import ConfirmModal from '../components/ConfirmModal';
+import MatchingHistoryModal from '../components/MatchingHistoryModal';
 
 function MatchingPage() {
   // 조회 조건
@@ -704,7 +705,7 @@ function MatchingPage() {
         .matching-page table th,
         .matching-page table td {
           padding: 0.5rem 0.5rem !important;
-          font-size: 0.85rem;
+          font-size: 0.9rem;
         }
         .matching-page table th {
           white-space: nowrap;
@@ -797,7 +798,7 @@ function MatchingPage() {
                             color: '#fff',
                             padding: '2px 6px',
                             borderRadius: '10px',
-                            fontSize: '0.75rem'
+                            fontSize: '0.8rem'
                           }}>
                             {dateData.unmatchedCount}
                           </span>
@@ -911,7 +912,7 @@ function MatchingPage() {
             </div>
           )}
 
-          <div style={{ padding: '0.5rem 0.8rem', borderTop: '1px solid #eee', backgroundColor: '#f8f9fa', fontSize: '0.85rem', color: '#7f8c8d' }}>
+          <div style={{ padding: '0.5rem 0.8rem', borderTop: '1px solid #eee', backgroundColor: '#f8f9fa', fontSize: '0.9rem', color: '#7f8c8d' }}>
             💡 전표를 더블클릭하면 매칭 작업을 할 수 있습니다.
           </div>
         </div >
@@ -1183,7 +1184,6 @@ function MatchingPage() {
                           <tr>
                             <th style={{ width: '30px' }}>No</th>
                             <th style={{ whiteSpace: 'nowrap' }}>품목</th>
-                            <th className="text-right" style={{ whiteSpace: 'nowrap', width: '60px' }}>중량</th>
                             <th style={{ whiteSpace: 'nowrap' }}>출하주</th>
                             <th className="text-center" style={{ whiteSpace: 'nowrap', width: '50px' }}>등급</th>
                             <th className="text-right" style={{ width: '60px', whiteSpace: 'nowrap' }}>잔량</th>
@@ -1197,8 +1197,8 @@ function MatchingPage() {
                             const matchStatus = getMatchingStatus(inv);
                             const effectiveRemaining = parseFloat(inv.remaining_quantity);
 
-                            // 출하주 정보 조합 (출하지 / 출하주)
-                            const shipperInfo = [inv.shipper_location, inv.sender].filter(Boolean).join(' / ') || '-';
+                            // 출하주 정보 (출하주만 표시)
+                            const shipperInfo = inv.sender || '-';
 
                             // 행 스타일: 매칭 상태에 따라 배경색 미세 조정
                             let rowClass = matchStatus ? 'matching-row' : '';
@@ -1220,15 +1220,14 @@ function MatchingPage() {
                                 <td className="text-center">{index + 1}</td>
                                 <td style={{ whiteSpace: 'nowrap' }}>
                                   <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                    {matchStatus === 'PERFECT' && <span className="badge badge-success" style={{ fontSize: '0.6rem', padding: '1px 4px' }}>추천</span>}
-                                    {matchStatus === 'PARTIAL' && <span className="badge badge-warning" style={{ fontSize: '0.6rem', padding: '1px 4px', backgroundColor: '#eab308', color: 'white' }}>유사</span>}
-                                    <span style={{ fontWeight: matchStatus ? '600' : '400' }}>{inv.product_name}</span>
+                                    {matchStatus === 'PERFECT' && <span style={{ fontSize: '0.75rem', padding: '2px 6px', fontWeight: '600', borderRadius: '4px', backgroundColor: '#22c55e', color: 'white' }}>추천</span>}
+                                    {matchStatus === 'PARTIAL' && <span style={{ fontSize: '0.75rem', padding: '2px 6px', fontWeight: '600', borderRadius: '4px', backgroundColor: '#eab308', color: 'white' }}>유사</span>}
+                                    <span style={{ fontWeight: matchStatus ? '600' : '400' }}>
+                                      {inv.product_name} {inv.product_weight ? `${parseFloat(inv.product_weight)}kg` : ''}
+                                    </span>
                                   </div>
                                 </td>
-                                <td className="text-right" style={{ fontSize: '0.9rem', whiteSpace: 'nowrap' }}>
-                                  {inv.product_weight ? `${parseFloat(inv.product_weight)}kg` : '-'}
-                                </td>
-                                <td style={{ fontSize: '0.85rem', whiteSpace: 'nowrap' }}>{shipperInfo}</td>
+                                <td style={{ fontSize: '0.9rem', whiteSpace: 'nowrap' }}>{shipperInfo}</td>
                                 <td className="text-center" style={{ fontSize: '0.9rem', whiteSpace: 'nowrap' }}>{inv.grade || '-'}</td>
                                 <td className="text-right" style={{
                                   color: effectiveRemaining > 0 ? '#27ae60' : '#e74c3c',
@@ -1240,7 +1239,7 @@ function MatchingPage() {
                                   {formatCurrency(inv.unit_price)}
                                 </td>
                                 <td style={{ fontSize: '0.9rem', whiteSpace: 'nowrap' }}>{inv.company_name}</td>
-                                <td style={{ fontSize: '0.85rem', whiteSpace: 'nowrap' }}>{formatDateShort(inv.purchase_date)}</td>
+                                <td style={{ fontSize: '0.9rem', whiteSpace: 'nowrap' }}>{formatDateShort(inv.purchase_date)}</td>
                               </tr>
                             );
                           })}
@@ -1297,7 +1296,7 @@ function MatchingPage() {
                 <div className="qty-input-row">
                   <span className="qty-input-label">출하주</span>
                   <span className="qty-input-value">
-                    {[qtyInputModal.inventory?.shipper_location, qtyInputModal.inventory?.sender].filter(Boolean).join(' / ') || '-'}
+                    {qtyInputModal.inventory?.sender || '-'}
                   </span>
                 </div>
                 <div className="qty-input-row">
@@ -1374,94 +1373,17 @@ function MatchingPage() {
       }
 
       {/* 기존 매칭 내역 모달 */}
-      {
-        matchingHistoryModal.isOpen && createPortal(
-          <div className="modal-overlay">
-            <div
-              className="matching-history-modal"
-              onClick={(e) => e.stopPropagation()}
-            >
-              {/* 아이콘 */}
-              <div className="matching-history-modal-icon">
-                <span>📋</span>
-              </div>
-
-              {/* 제목 */}
-              <h2 className="matching-history-modal-title">매칭 내역</h2>
-
-              {/* 부제목 */}
-              <p className="matching-history-modal-subtitle">
-                {formatProductName(matchingHistoryModal.saleItem)}
-                <br />
-                <span style={{ fontSize: '0.85rem' }}>총 수량: {formatNumber(matchingHistoryModal.saleItem?.quantity)}</span>
-              </p>
-
-              {/* 매칭 내역 목록 */}
-              {matchingHistoryModal.matchings.length === 0 ? (
-                <div className="matching-history-empty">저장된 매칭 내역이 없습니다.</div>
-              ) : (
-                <div className="matching-history-list">
-                  {matchingHistoryModal.matchings.map((m) => (
-                    <div key={m.matching_id} className="matching-history-card">
-                      {/* 정보 영역 */}
-                      <div className="matching-card-info">
-                        <div className="matching-card-row">
-                          <span className="matching-card-label">출하주</span>
-                          <span className="matching-card-value">{[m.shipper_location, m.sender].filter(Boolean).join(' / ') || '-'}</span>
-                        </div>
-                        <div className="matching-card-row">
-                          <span className="matching-card-label">수량</span>
-                          <span className="matching-card-value highlight">{formatNumber(m.matched_quantity)}</span>
-                        </div>
-                        <div className="matching-card-row">
-                          <span className="matching-card-label">단가</span>
-                          <span className="matching-card-value">{formatCurrency(m.purchase_unit_price)}</span>
-                        </div>
-                        <div className="matching-card-row">
-                          <span className="matching-card-label">매입일</span>
-                          <span className="matching-card-value">{formatDateShort(m.purchase_date)}</span>
-                          <span className="company-badge">{m.company_name || m.purchase_company}</span>
-                        </div>
-                      </div>
-
-                      {/* 취소 버튼 */}
-                      <button
-                        className="matching-card-cancel-btn"
-                        onClick={() => confirmCancelMatching(m.matching_id)}
-                      >
-                        취소
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {/* 합계 정보 */}
-              {matchingHistoryModal.matchings.length > 0 && (
-                <div className="matching-history-info" style={{ marginBottom: '1.5rem' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ color: '#6b7280' }}>저장된 매칭 합계</span>
-                    <strong style={{ color: '#3b82f6' }}>
-                      {formatNumber(matchingHistoryModal.matchings.reduce((sum, m) => sum + parseFloat(m.matched_quantity), 0))}
-                    </strong>
-                  </div>
-                </div>
-              )}
-
-              {/* 버튼 */}
-              <div className="matching-history-modal-buttons">
-                <button
-                  className="modal-btn modal-btn-cancel"
-                  onClick={closeMatchingHistoryModal}
-                >
-                  닫기
-                </button>
-              </div>
-            </div>
-          </div>,
-          document.body
-        )
-      }
+      <MatchingHistoryModal
+        isOpen={matchingHistoryModal.isOpen}
+        onClose={closeMatchingHistoryModal}
+        saleItem={matchingHistoryModal.saleItem}
+        matchings={matchingHistoryModal.matchings}
+        onCancelMatching={confirmCancelMatching}
+        formatProductName={formatProductName}
+        formatNumber={formatNumber}
+        formatCurrency={formatCurrency}
+        formatDateShort={formatDateShort}
+      />
     </div >
   );
 }
