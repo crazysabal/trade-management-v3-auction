@@ -261,9 +261,10 @@ const InventoryTransferManagement = () => {
             const targetString = `
                 ${item.product_name || ''}
                 ${item.grade || ''}
-                ${Number(item.product_weight) || ''}
+                ${Number(item.product_weight) || ''} ${Number(item.product_weight) > 0 ? Number(item.product_weight) + 'kg' : ''}
                 ${item.sender || ''}
                 ${item.company_name || ''}
+                ${item.business_name || ''}
                 ${Number(item.remaining_quantity) || ''}
                 ${Number(item.unit_price) || ''}
                 ${item.purchase_date || ''}
@@ -388,7 +389,7 @@ const InventoryTransferManagement = () => {
 
                                                 <div className="card-sub-info" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '4px', borderTop: '1px solid #f0f0f0', paddingTop: '4px' }}>
                                                     <div style={{ display: 'flex', gap: '8px', fontSize: '0.8rem', color: '#7f8c8d', alignItems: 'center', lineHeight: '1' }}>
-                                                        <span>{item.company_name || '-'}</span>
+                                                        <span title={item.business_name}>{item.company_name || '-'}</span>
                                                         <span style={{ fontSize: '0.7rem', color: '#bdc3c7' }}>|</span>
                                                         <span>{item.purchase_date}</span>
                                                     </div>

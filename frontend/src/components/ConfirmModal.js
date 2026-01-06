@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
 import { createPortal } from 'react-dom';
+import { useModalDraggable } from '../hooks/useModalDraggable';
 
 /**
  * 커스텀 확인/알림 모달 컴포넌트
@@ -30,8 +31,12 @@ function ConfirmModal({
   maxWidth,
   hideHeader = false, // 헤더 숨김 옵션 추가
   padding, // 커스텀 패딩 옵션 추가
-  icon // 커스텀 아이콘 옵션 추가
+  icon, // 커스텀 아이콘 옵션 추가
+  fullContent = false, // 전체 영역 사용 옵션 (wrapper 제거)
+  width // 커스텀 너비 옵션 추가
 }) {
+  const { handleMouseDown, draggableStyle } = useModalDraggable(isOpen, { isCentered: !fullContent });
+
   // ESC 키로 닫기
   useEffect(() => {
     const handleEsc = (e) => {
@@ -97,42 +102,57 @@ function ConfirmModal({
 
   // Portal을 사용하여 body에 직접 렌더링 (부모 CSS 영향 받지 않음)
   return createPortal(
-    <div className="modal-overlay" style={{ zIndex: 100002 }}>
+    <div className="modal-overlay" style={{ zIndex: 9999 }}>
 
       <div
-        className="modal-container"
+        className={fullContent ? "styled-modal" : "modal-container"}
         style={{
+          ...(width ? { width } : {}),
           ...(maxWidth ? { maxWidth } : {}),
-          ...(typeof padding !== 'undefined' ? { padding } : {})
+          ...(typeof padding !== 'undefined' ? { padding } : {}),
+          ...(fullContent ? { position: 'relative', top: 'auto', left: 'auto', transform: 'none' } : {}),
+          ...draggableStyle
         }}
         onClick={(e) => e.stopPropagation()}
       >
         {/* 헤더 (아이콘 + 제목) - hideHeader가 false일 때만 표시 */}
         {!hideHeader && (
-          <>
+          <div
+            onMouseDown={handleMouseDown}
+            className="draggable-header"
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center'
+            }}
+          >
             {/* 아이콘 */}
             <div
-              className="modal-icon"
+              className="modal-icon drag-pointer-none"
               style={{ backgroundColor: config.iconBg }}
             >
               <span style={{ fontSize: '2rem' }}>{icon || config.icon}</span>
             </div>
 
             {/* 제목 */}
-            <h2 className="modal-title">{title}</h2>
-          </>
+            <h2 className="modal-title drag-pointer-none">{title}</h2>
+          </div>
         )}
+
+        {/* If header hidden, maybe allow drag from top area? 
+            For now, only draggable if header shown to keep it simple and consistent.
+        */}
 
         {/* 메시지 또는 자식 컴포넌트 */}
         {children ? (
-          <div className="modal-custom-content">{children}</div>
+          fullContent ? children : <div className="modal-custom-content">{children}</div>
         ) : (
           <p className="modal-message" style={{ whiteSpace: 'pre-wrap', wordBreak: 'keep-all', lineHeight: '1.6' }}>{message}</p>
         )}
 
         {/* 버튼 */}
         {(showConfirm || showCancel) && (
-          <div className="modal-buttons">
+          <div className="modal-buttons justify-center">
             {showCancel && (
               <button
                 className="modal-btn modal-btn-cancel"

@@ -14,7 +14,6 @@ import InventoryList from './InventoryList';
 import InventoryTransferManagement from './InventoryTransferManagement';
 import InventoryProductionManagement from './InventoryProductionManagement';
 import MatchingPage from './MatchingPage';
-import InventoryProductionHistory from './InventoryProductionHistory'; // [New]
 import InventoryHistory from './InventoryHistory';
 import InventoryAuditPage from './InventoryAuditPage';
 
@@ -363,7 +362,6 @@ const DesktopManager = () => {
             case 'INVENTORY_LIST': return <InventoryList isWindow={true} {...componentProps} />;
             case 'INVENTORY_TRANSFER': return <InventoryTransferManagement isWindow={true} {...componentProps} />;
             case 'INVENTORY_PRODUCTION': return <InventoryProductionManagement isWindow={true} {...componentProps} />;
-            case 'INVENTORY_PRODUCTION_HISTORY': return <InventoryProductionHistory isWindow={true} {...componentProps} />;
             case 'INVENTORY_HISTORY': return <InventoryHistory isWindow={true} {...componentProps} />;
             case 'INVENTORY_AUDIT': return <InventoryAuditPage isWindow={true} {...componentProps} />;
 

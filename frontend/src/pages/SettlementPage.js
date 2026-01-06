@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { format, parseISO, addDays, differenceInDays, startOfDay, startOfMonth, endOfMonth } from 'date-fns';
-import { ko } from 'date-fns/locale';
 import './SettlementPage.css';
 import ConfirmModal from '../components/ConfirmModal';
 
@@ -365,10 +364,18 @@ const SettlementPage = ({ isWindow, initialHistory }) => {
               <label>마감 기준일</label>
               <input
                 type="date"
-                value={mode === 'new' ? format(targetEndDate, 'yyyy-MM-dd') : (selectedHistory ? format(parseISO(selectedHistory.end_date), 'yyyy-MM-dd') : '')}
+                value={targetEndDate ? format(targetEndDate, 'yyyy-MM-dd') : ''}
                 onChange={(e) => mode === 'new' && setTargetEndDate(parseISO(e.target.value))}
                 min={format(nextStartDate, 'yyyy-MM-dd')}
                 disabled={mode === 'view'}
+                style={{
+                  width: '100%',
+                  padding: '0.4rem',
+                  border: '1px solid #ddd',
+                  borderRadius: '4px',
+                  backgroundColor: mode === 'view' ? '#f5f5f5' : 'white',
+                  height: '36px'
+                }}
               />
             </div>
             <div className="info-txt">

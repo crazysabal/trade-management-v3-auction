@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { warehousesAPI, inventoryTransferAPI } from '../services/api';
 import SearchableSelect from './SearchableSelect';
+import { useModalDraggable } from '../hooks/useModalDraggable';
 
 const StockTransferModal = ({ isOpen, onClose, inventory, inventoryList = [], onSuccess, defaultToWarehouseId }) => {
     const [warehouses, setWarehouses] = useState([]);
@@ -10,6 +11,7 @@ const StockTransferModal = ({ isOpen, onClose, inventory, inventoryList = [], on
     const [notes, setNotes] = useState('');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
+    const { handleMouseDown, draggableStyle } = useModalDraggable(isOpen);
 
     const quantityInputRef = React.useRef(null);
     const isBulk = inventoryList.length > 1;
@@ -152,94 +154,96 @@ const StockTransferModal = ({ isOpen, onClose, inventory, inventoryList = [], on
     if (!isOpen || (!inventory && !isBulk)) return null;
 
     return createPortal(
-        <div className="stock-transfer-modal-overlay" style={{
-            position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-            backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1100
-        }}>
-            <div className="stock-transfer-modal-container" onClick={e => e.stopPropagation()} style={{
-                backgroundColor: 'white', borderRadius: '8px', padding: '1.5rem', width: '400px', maxWidth: '90%',
-                position: 'relative', top: 'auto', left: 'auto', transform: 'none',
-                boxShadow: '0 4px 6px rgba(0,0,0,0.1)'
-            }}>
-                <h3 style={{ marginTop: 0, color: '#2c3e50' }}>
-                    {isBulk ? `📦 일괄 재고 이동 (${targetItems.length}건)` : '📦 재고 이동'}
-                </h3>
-
-                <div style={{ marginBottom: '1rem', padding: '0.75rem', backgroundColor: '#f8f9fa', borderRadius: '6px', maxHeight: '150px', overflowY: 'auto' }}>
-                    {isBulk ? (
-                        <ul style={{ margin: 0, paddingLeft: '1.2rem', fontSize: '0.9rem', color: '#34495e' }}>
-                            {targetItems.map(item => (
-                                <li key={item.id}>
-                                    {item.product_name} {Number(item.product_weight) > 0 ? `${Number(item.product_weight)}kg` : ''} {item.sender} {item.grade} ({Number(item.remaining_quantity)}개)
-                                </li>
-                            ))}
-                        </ul>
-                    ) : (
-                        <>
-                            <div style={{ fontWeight: '600', color: '#34495e' }}>{inventory.product_name}</div>
-                            <div style={{ fontSize: '0.9rem', color: '#7f8c8d' }}>
-                                현재 창고: {inventory.warehouse_name || '미지정'} | 잔여: {Number(inventory.remaining_quantity)}
-                            </div>
-                        </>
-                    )}
+        <div className="modal-overlay" style={{ zIndex: 1100 }}>
+            <div
+                className="styled-modal"
+                onClick={e => e.stopPropagation()}
+                style={draggableStyle}
+            >
+                <div
+                    className="modal-header draggable-header"
+                    onMouseDown={handleMouseDown}
+                >
+                    <h3 className="drag-pointer-none">
+                        {isBulk ? `📦 일괄 재고 이동 (${targetItems.length}건)` : '📦 재고 이동'}
+                    </h3>
+                    <button className="close-btn drag-pointer-auto" onClick={onClose}>&times;</button>
                 </div>
 
-                {error && (
-                    <div style={{ padding: '0.5rem', backgroundColor: '#fee2e2', color: '#dc2626', borderRadius: '4px', marginBottom: '1rem', fontSize: '0.9rem' }}>
-                        {error}
+                <div className="modal-body">
+                    <div style={{ marginBottom: '1.5rem', padding: '1rem', backgroundColor: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0', maxHeight: '150px', overflowY: 'auto' }}>
+                        {isBulk ? (
+                            <ul style={{ margin: 0, paddingLeft: '1.2rem', fontSize: '0.9rem', color: '#475569' }}>
+                                {targetItems.map(item => (
+                                    <li key={item.id} style={{ marginBottom: '0.25rem' }}>
+                                        {item.product_name} {Number(item.product_weight) > 0 ? `${Number(item.product_weight)}kg` : ''} {item.sender} {item.grade} ({Number(item.remaining_quantity)}개)
+                                    </li>
+                                ))}
+                            </ul>
+                        ) : (
+                            <>
+                                <div style={{ fontWeight: '600', color: '#1e293b', marginBottom: '0.25rem' }}>{inventory.product_name}</div>
+                                <div style={{ fontSize: '0.9rem', color: '#64748b' }}>
+                                    현재 창고: {inventory.warehouse_name || '미지정'} | 잔여: {Number(inventory.remaining_quantity)}
+                                </div>
+                            </>
+                        )}
                     </div>
-                )}
 
-                <div className="form-group" style={{ marginBottom: '1rem' }}>
-                    <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500' }}>이동할 창고</label>
-                    <SearchableSelect
-                        options={warehouses.map(w => ({ value: w.id, label: w.name }))}
-                        value={toWarehouseId}
-                        onChange={o => setToWarehouseId(o ? o.value : '')}
-                        placeholder="창고 선택..."
-                    />
+                    {error && (
+                        <div style={{ padding: '0.75rem', backgroundColor: '#fee2e2', color: '#dc2626', borderRadius: '6px', marginBottom: '1rem', fontSize: '0.9rem', display: 'flex', alignItems: 'center' }}>
+                            ⚠️ {error}
+                        </div>
+                    )}
+
+                    <div className="form-group">
+                        <label>이동할 창고</label>
+                        <SearchableSelect
+                            options={warehouses.map(w => ({ value: w.id, label: w.name }))}
+                            value={toWarehouseId}
+                            onChange={o => setToWarehouseId(o ? o.value : '')}
+                            placeholder="창고 선택..."
+                        />
+                    </div>
+
+                    <div className="form-group">
+                        <label>이동 수량</label>
+                        <input
+                            ref={quantityInputRef}
+                            type="text"
+                            value={quantity}
+                            disabled={isBulk}
+                            onChange={e => {
+                                if (isBulk) return;
+                                const val = e.target.value.replace(/[^0-9.]/g, '');
+                                const parts = val.split('.');
+                                if (parts.length > 2) return;
+                                const intPart = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+                                const formatted = parts.length > 1 ? `${intPart}.${parts[1]}` : intPart;
+                                setQuantity(formatted);
+                            }}
+                            placeholder="수량 입력"
+                            onKeyDown={e => {
+                                if (e.key === 'Enter') handleSubmit();
+                            }}
+                            style={isBulk ? { backgroundColor: '#f1f5f9', color: '#94a3b8' } : {}}
+                        />
+                    </div>
+
+                    <div className="form-group">
+                        <label>비고</label>
+                        <input
+                            type="text"
+                            value={notes}
+                            onChange={e => setNotes(e.target.value)}
+                            placeholder="이동 사유 등..."
+                        />
+                    </div>
                 </div>
 
-                <div className="form-group" style={{ marginBottom: '1rem' }}>
-                    <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500' }}>이동 수량</label>
-                    <input
-                        ref={quantityInputRef}
-                        type="text"
-                        value={quantity}
-                        disabled={isBulk}
-                        onChange={e => {
-                            if (isBulk) return;
-                            const val = e.target.value.replace(/[^0-9.]/g, '');
-                            const parts = val.split('.');
-                            if (parts.length > 2) return; // 점 두개 이상 방지
-                            const intPart = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-                            const formatted = parts.length > 1 ? `${intPart}.${parts[1]}` : intPart;
-                            setQuantity(formatted);
-                        }}
-                        style={{ width: '100%', padding: '0.6rem', border: '1px solid #ddd', borderRadius: '4px', backgroundColor: isBulk ? '#f1f2f6' : 'white' }}
-                        placeholder="수량 입력"
-                        onKeyDown={e => {
-                            if (e.key === 'Enter') {
-                                handleSubmit();
-                            }
-                        }}
-                    />
-                </div>
-
-                <div className="form-group" style={{ marginBottom: '1.5rem' }}>
-                    <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500' }}>비고</label>
-                    <input
-                        type="text"
-                        value={notes}
-                        onChange={e => setNotes(e.target.value)}
-                        style={{ width: '100%', padding: '0.6rem', border: '1px solid #ddd', borderRadius: '4px' }}
-                        placeholder="이동 사유 등..."
-                    />
-                </div>
-
-                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem' }}>
-                    <button onClick={onClose} className="btn btn-secondary">취소</button>
-                    <button onClick={handleSubmit} className="btn btn-primary" disabled={loading}>
+                <div className="modal-footer">
+                    <button className="modal-btn modal-btn-cancel" onClick={onClose}>취소</button>
+                    <button className="modal-btn modal-btn-primary" onClick={handleSubmit} disabled={loading}>
                         {loading ? '처리 중...' : '이동 실행'}
                     </button>
                 </div>

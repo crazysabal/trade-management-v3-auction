@@ -3,6 +3,8 @@ import ReactDOM from 'react-dom'; // [PORTAL] Required for MDI Modal Standard
 import axios from 'axios';
 import './UserManagement.css';
 import ConfirmModal from '../components/ConfirmModal';
+import UserFormModal from '../components/UserFormModal';
+import { useModalDraggable } from '../hooks/useModalDraggable';
 
 const UserManagement = () => {
     const [activeTab, setActiveTab] = useState('users'); // 'users', 'history'
@@ -13,8 +15,10 @@ const UserManagement = () => {
     const [isAddModalOpen, setIsAddModalOpen] = useState(false);
     const [isResetModalOpen, setIsResetModalOpen] = useState(false);
 
+    // Draggable for Reset Password Modal
+    const { handleMouseDown: handleResetDrag, draggableStyle: resetDragStyle } = useModalDraggable(isResetModalOpen);
+
     // Forms
-    const [newUser, setNewUser] = useState({ username: '', password: '', role: 'user' });
     const [resetTarget, setResetTarget] = useState({ id: null, username: '', newPassword: '' });
 
     const [error, setError] = useState('');
@@ -70,21 +74,7 @@ const UserManagement = () => {
         }
     };
 
-    const handleAddUser = async (e) => {
-        e.preventDefault();
-        setError('');
 
-        try {
-            await axios.post('/api/users', newUser);
-            setSuccessMsg('사용자가 추가되었습니다.');
-            setIsAddModalOpen(false);
-            setNewUser({ username: '', password: '', role: 'user' });
-            fetchUsers();
-            setTimeout(() => setSuccessMsg(''), 3000);
-        } catch (err) {
-            setError(err.response?.data?.message || '사용자 추가 실패');
-        }
-    };
 
     // [New] Delete Confirmation State
     const [deleteTarget, setDeleteTarget] = useState({ id: null, username: '' });
@@ -256,83 +246,32 @@ const UserManagement = () => {
                 )}
             </div>
 
-            {/* Add User Modal - Portaled */}
-            {isAddModalOpen && renderModal(
-                <div className="modal-overlay" onClick={() => setIsAddModalOpen(false)} style={{ zIndex: 9999 }}>{/* Enhanced z-index for portal */}
-                    <div className="styled-modal um-modal" onClick={e => e.stopPropagation()}>
-                        <div className="modal-header">
-                            <h3>사용자 추가</h3>
-                            <button className="close-btn" onClick={() => setIsAddModalOpen(false)}>×</button>
-                        </div>
-                        <form onSubmit={handleAddUser}>
-                            <div className="modal-body">
-                                {error && <p className="error-text">{error}</p>}
-                                <div className="form-group">
-                                    <label>아이디</label>
-                                    <input
-                                        type="text"
-                                        className="form-input"
-                                        value={newUser.username}
-                                        onChange={e => setNewUser({ ...newUser, username: e.target.value })}
-                                        required
-                                        placeholder="사용자 ID"
-                                        autoComplete="off"
-                                    />
-                                </div>
-                                <div className="form-group">
-                                    <label>비밀번호</label>
-                                    <input
-                                        type="password"
-                                        className="form-input"
-                                        value={newUser.password}
-                                        onChange={e => setNewUser({ ...newUser, password: e.target.value })}
-                                        required
-                                        placeholder="비밀번호"
-                                        autoComplete="new-password"
-                                    />
-                                </div>
-                                <div className="form-group">
-                                    <label>권한</label>
-                                    <div className="radio-group">
-                                        <label>
-                                            <input
-                                                type="radio"
-                                                name="role"
-                                                value="user"
-                                                checked={newUser.role === 'user'}
-                                                onChange={e => setNewUser({ ...newUser, role: e.target.value })}
-                                            />
-                                            일반 직원
-                                        </label>
-                                        <label>
-                                            <input
-                                                type="radio"
-                                                name="role"
-                                                value="admin"
-                                                checked={newUser.role === 'admin'}
-                                                onChange={e => setNewUser({ ...newUser, role: e.target.value })}
-                                            />
-                                            관리자
-                                        </label>
-                                    </div>
-                                </div>
-                            </div>
-                            <div className="modal-footer">
-                                <button type="button" className="cancel-btn" onClick={() => setIsAddModalOpen(false)}>취소</button>
-                                <button type="submit" className="confirm-btn primary">추가하기</button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            )}
+            {/* Add User Modal - Extracted */}
+            <UserFormModal
+                isOpen={isAddModalOpen}
+                onClose={() => setIsAddModalOpen(false)}
+                onSuccess={() => {
+                    setSuccessMsg('사용자가 추가되었습니다.');
+                    fetchUsers();
+                    setTimeout(() => setSuccessMsg(''), 3000);
+                }}
+            />
 
             {/* Reset Password Modal - Portaled */}
             {isResetModalOpen && renderModal(
                 <div className="modal-overlay" onClick={() => setIsResetModalOpen(false)} style={{ zIndex: 9999 }}>{/* Enhanced z-index for portal */}
-                    <div className="styled-modal um-modal" onClick={e => e.stopPropagation()}>
-                        <div className="modal-header">
-                            <h3>비밀번호 변경</h3>
-                            <button className="close-btn" onClick={() => setIsResetModalOpen(false)}>×</button>
+                    <div
+                        className="styled-modal um-modal"
+                        onClick={e => e.stopPropagation()}
+                        style={resetDragStyle}
+                    >
+                        <div
+                            className="modal-header"
+                            onMouseDown={handleResetDrag}
+                            style={{ cursor: 'grab' }}
+                        >
+                            <h3 style={{ pointerEvents: 'none' }}>비밀번호 변경</h3>
+                            <button className="close-btn" onClick={() => setIsResetModalOpen(false)} style={{ pointerEvents: 'auto' }}>×</button>
                         </div>
                         <form onSubmit={handleResetPassword}>
                             <div className="modal-body">
@@ -355,8 +294,8 @@ const UserManagement = () => {
                                 </div>
                             </div>
                             <div className="modal-footer">
-                                <button type="button" className="cancel-btn" onClick={() => setIsResetModalOpen(false)}>취소</button>
-                                <button type="submit" className="confirm-btn primary">변경하기</button>
+                                <button type="button" className="modal-btn modal-btn-cancel" onClick={() => setIsResetModalOpen(false)}>취소</button>
+                                <button type="submit" className="modal-btn modal-btn-primary">변경하기</button>
                             </div>
                         </form>
                     </div>

@@ -121,16 +121,28 @@ const InventoryQuickView = ({ inventoryAdjustments = {}, refreshKey, onInventory
         if (!searchTerm) {
             setFilteredInventory(adjustedInventory);
         } else {
-            const terms = searchTerm.toLowerCase().split(/\s+/).filter(t => t.length > 0);
+            const keywords = searchTerm.toLowerCase().split(/\s+/).filter(t => t.length > 0);
             const filtered = adjustedInventory.filter(item => {
-                const searchTarget = `
-                    ${item.product_name || ''} 
-                    ${item.sender || ''} 
-                    ${item.warehouse_name || ''} 
-                    ${item.grade || ''}
-                    ${item.company_name || ''}
-                `.toLowerCase();
-                return terms.every(term => searchTarget.includes(term));
+                const weight = item.weight || item.product_weight; // InventoryQuickView uses 'weight' or 'product_weight'
+                const weightStr = weight ? Number(weight) + 'kg' : '';
+
+                // InventoryHistory.js와 동일한 로직 적용
+                const primaryText = `${item.product_name || ''} ${weightStr} ${item.grade || ''} ${item.company_name || ''} ${item.sender || ''}`.toLowerCase();
+                const secondaryText = `${item.warehouse_name || ''} ${formatDateShort(item.purchase_date)}`.toLowerCase(); // QuickView has limited fields compared to History
+
+                return keywords.every(kw => {
+                    // 1. 핵심 검색 대상(품목명, 거래처, 출하주 등)은 항상 부분 일치 허용
+                    if (primaryText.includes(kw)) return true;
+
+                    // 2. 부가 필드(창고, 날짜 등)는 키워드가 짧을 경우 단어 시작 매칭으로 오탐 방지
+                    if (kw.length <= 2) {
+                        const wordsForStrictCheck = secondaryText.split(/[\s,()\[\]\-_]+/);
+                        return wordsForStrictCheck.some(word => word.startsWith(kw));
+                    }
+
+                    // 3. 키워드가 길면 모든 필드에서 자유로운 부분 일치 허용
+                    return secondaryText.includes(kw);
+                });
             });
             setFilteredInventory(filtered);
         }
@@ -164,7 +176,7 @@ const InventoryQuickView = ({ inventoryAdjustments = {}, refreshKey, onInventory
             // parseFloat를 사용하여 불필요한 소수점 0 제거 (5.00 -> 5, 5.50 -> 5.5)
             parts.push(`${parseFloat(weight)}kg`);
         }
-        if (item.grade) parts.push(`(${item.grade})`);
+        if (item.grade) { /* 등급은 별도 컬럼으로 분리됨 */ }
         return parts.join(' ');
     };
 
@@ -201,8 +213,9 @@ const InventoryQuickView = ({ inventoryAdjustments = {}, refreshKey, onInventory
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
                         <thead style={{ position: 'sticky', top: 0, backgroundColor: '#f8f9fa', zIndex: 1 }}>
                             <tr style={{ backgroundColor: '#34495e', color: 'white' }}>
-                                <th style={{ padding: '0.6rem 0.5rem', textAlign: 'left', whiteSpace: 'nowrap' }}>품목</th>
+                                <th style={{ padding: '0.6rem 0.5rem', textAlign: 'left', whiteSpace: 'nowrap' }}>품목명</th>
                                 <th style={{ padding: '0.6rem 0.5rem', textAlign: 'left', whiteSpace: 'nowrap' }}>출하주</th>
+                                <th style={{ padding: '0.6rem 0.5rem', textAlign: 'center', whiteSpace: 'nowrap' }}>등급</th>
                                 <th style={{ padding: '0.6rem 0.5rem', textAlign: 'right', whiteSpace: 'nowrap', width: '50px' }}>잔량</th>
                                 <th style={{ padding: '0.6rem 0.5rem', textAlign: 'right', whiteSpace: 'nowrap', width: '60px' }}>단가</th>
                                 <th style={{ padding: '0.6rem 0.5rem', textAlign: 'left', whiteSpace: 'nowrap' }}>매입처</th>
@@ -229,6 +242,9 @@ const InventoryQuickView = ({ inventoryAdjustments = {}, refreshKey, onInventory
                                         </td>
                                         <td style={{ padding: '0.5rem', whiteSpace: 'nowrap', color: '#666' }}>
                                             {item.sender || '-'}
+                                        </td>
+                                        <td style={{ padding: '0.5rem', textAlign: 'center', whiteSpace: 'nowrap', color: '#666' }}>
+                                            {item.grade || '-'}
                                         </td>
                                         <td style={{
                                             padding: '0.5rem',

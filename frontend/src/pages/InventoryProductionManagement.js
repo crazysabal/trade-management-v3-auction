@@ -767,140 +767,123 @@ const InventoryProductionManagement = () => {
             {/* Input Modal */}
             {
                 inputModal.isOpen && createPortal(
-                    <div className="modal-overlay" onClick={() => setInputModal({ isOpen: false, inventory: null, quantity: '', maxQuantity: 0 })}>
+                    <div className="modal-overlay" style={{ zIndex: 1200 }}>
                         <div
                             className="qty-input-modal"
                             style={{
-                                minWidth: '350px',
-                                maxWidth: '400px',
+                                minWidth: '400px',
+                                maxWidth: '95%',
                                 backgroundColor: 'white',
-                                padding: '1.5rem',
                                 borderRadius: '12px',
-                                boxShadow: '0 10px 25px rgba(0,0,0,0.2)'
+                                boxShadow: '0 10px 25px rgba(0,0,0,0.2)',
+                                overflow: 'hidden'
                             }}
                             onClick={(e) => e.stopPropagation()}
                         >
-                            <h3 style={{ margin: '0 0 1rem 0', color: '#2c3e50', textAlign: 'center', fontSize: '1.2rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '8px', color: '#3498db' }}>
-                                    <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
-                                    <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
-                                    <line x1="12" y1="22.08" x2="12" y2="12"></line>
-                                </svg>
-                                작업 수량 입력
-                            </h3>
-
-                            <div style={{
-                                marginBottom: '1rem',
-                                padding: '1.2rem',
-                                backgroundColor: '#fff',
-                                borderRadius: '12px',
-                                border: '1px solid #e0e0e0',
-                                boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.03)'
-                            }}>
-                                <div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#2c3e50', marginBottom: '1rem', textAlign: 'center' }}>
-                                    {inputModal.inventory?.product_name}
-                                    {Number(inputModal.inventory?.product_weight) > 0 && ` ${Number(inputModal.inventory?.product_weight)}kg`}
-                                    {inputModal.inventory?.grade && ` (${inputModal.inventory?.grade})`}
-                                </div>
-
-                                <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '8px', fontSize: '0.95rem' }}>
-
-                                    <div style={{ display: 'flex', alignItems: 'center', color: '#555' }}>
-                                        <span style={{ color: '#888', marginRight: '6px', minWidth: '50px' }}>생산자:</span>
-                                        <strong>{inputModal.inventory?.sender}</strong>
-                                    </div>
-
-                                    <div style={{ display: 'flex', alignItems: 'center', color: '#555' }}>
-                                        <span style={{ color: '#888', marginRight: '6px', minWidth: '50px' }}>매입처:</span>
-                                        {inputModal.inventory?.company_name}
-                                    </div>
-
-                                    <div style={{ display: 'flex', alignItems: 'center', color: '#555' }}>
-                                        <span style={{ color: '#888', marginRight: '6px', minWidth: '50px' }}>보관:</span>
-                                        {inputModal.inventory?.warehouse_name}
-                                    </div>
-
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '4px', borderTop: '1px solid #eee', paddingTop: '8px' }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', color: '#555' }}>
-                                            <span style={{ color: '#888', marginRight: '6px' }}>매입일:</span>
-                                            {inputModal.inventory?.purchase_date}
-                                        </div>
-
-                                        <div style={{ display: 'flex', alignItems: 'center', color: '#555' }}>
-                                            <span style={{ color: '#888', marginRight: '6px' }}>단가:</span>
-                                            {Number(inputModal.inventory?.unit_price).toLocaleString()}원
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div style={{ marginTop: '1rem', paddingTop: '0.8rem', borderTop: '1px dashed #ddd', textAlign: 'center' }}>
-                                    <span style={{ color: '#888', marginRight: '8px', fontSize: '0.9rem' }}>현재 잔고</span>
-                                    <strong style={{ color: '#27ae60', fontSize: '1.2rem' }}>{Number(inputModal.maxQuantity).toLocaleString()}</strong>
-                                </div>
+                            <div className="modal-header" style={{ padding: '0.75rem 1rem', borderBottom: '1px solid #e5e7eb', background: '#f8fafc' }}>
+                                <h3 style={{ margin: 0, fontSize: '1.1rem', color: '#1e293b', display: 'flex', alignItems: 'center' }}>
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '8px', color: '#3498db' }}>
+                                        <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+                                        <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
+                                        <line x1="12" y1="22.08" x2="12" y2="12"></line>
+                                    </svg>
+                                    작업 수량 입력
+                                </h3>
+                                <button className="close-btn" onClick={() => setInputModal({ isOpen: false, inventory: null, quantity: '', maxQuantity: 0 })}>&times;</button>
                             </div>
 
-                            <div style={{ marginBottom: '1.5rem' }}>
-                                <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold', color: '#555' }}>투입 수량</label>
-                                <input
-                                    type="text"
-                                    onFocus={(e) => e.target.select()}
-                                    value={inputModal.quantity ? Number(inputModal.quantity.replace(/,/g, '')).toLocaleString() : ''}
-                                    onChange={(e) => {
-                                        const val = e.target.value.replace(/,/g, '');
-                                        if (val === '' || /^\d+$/.test(val)) {
-                                            setInputModal(prev => ({ ...prev, quantity: val }));
-                                        }
-                                    }}
-                                    onKeyDown={(e) => {
-                                        if (e.key === 'Enter') handleInputConfirm();
-                                        if (e.key === 'Escape') setInputModal({ isOpen: false, inventory: null, quantity: '', maxQuantity: 0 });
-                                    }}
-                                    autoFocus
-                                    style={{
-                                        width: '100%',
-                                        padding: '0.8rem',
-                                        fontSize: '1.2rem',
-                                        border: '2px solid #3498db',
-                                        borderRadius: '8px',
-                                        textAlign: 'center',
-                                        fontWeight: 'bold',
-                                        boxSizing: 'border-box'
-                                    }}
-                                />
-                            </div>
+                            <div className="modal-body" style={{ padding: '1.25rem' }}>
+                                <div style={{
+                                    marginBottom: '1rem',
+                                    padding: '1.2rem',
+                                    backgroundColor: '#fff',
+                                    borderRadius: '12px',
+                                    border: '1px solid #e0e0e0',
+                                    boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.03)'
+                                }}>
+                                    <div style={{ fontSize: '1.1rem', fontWeight: 'bold', color: '#2c3e50', marginBottom: '1rem', textAlign: 'center' }}>
+                                        {inputModal.inventory?.product_name}
+                                        {Number(inputModal.inventory?.product_weight) > 0 && ` ${Number(inputModal.inventory?.product_weight)}kg`}
+                                        {inputModal.inventory?.grade && ` (${inputModal.inventory?.grade})`}
+                                    </div>
 
-                            <div style={{ display: 'flex', gap: '0.5rem' }}>
-                                <button
-                                    onClick={() => setInputModal({ isOpen: false, inventory: null, quantity: '', maxQuantity: 0 })}
-                                    style={{
-                                        flex: 1,
-                                        padding: '0.8rem',
-                                        backgroundColor: '#95a5a6',
-                                        color: 'white',
-                                        border: 'none',
-                                        borderRadius: '6px',
-                                        fontSize: '1rem',
-                                        cursor: 'pointer'
-                                    }}
-                                >
-                                    취소
-                                </button>
-                                <button
-                                    onClick={handleInputConfirm}
-                                    style={{
-                                        flex: 1,
-                                        padding: '0.8rem',
-                                        backgroundColor: '#3498db',
-                                        color: 'white',
-                                        border: 'none',
-                                        borderRadius: '6px',
-                                        fontSize: '1rem',
-                                        cursor: 'pointer',
-                                        fontWeight: 'bold'
-                                    }}
-                                >
-                                    추가
-                                </button>
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '8px', fontSize: '0.9rem' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', color: '#555' }}>
+                                            <span style={{ color: '#888', marginRight: '6px', minWidth: '50px' }}>생산자:</span>
+                                            <strong>{inputModal.inventory?.sender}</strong>
+                                        </div>
+                                        <div style={{ display: 'flex', alignItems: 'center', color: '#555' }}>
+                                            <span style={{ color: '#888', marginRight: '6px', minWidth: '50px' }}>매입처:</span>
+                                            {inputModal.inventory?.company_name}
+                                        </div>
+                                        <div style={{ display: 'flex', alignItems: 'center', color: '#555' }}>
+                                            <span style={{ color: '#888', marginRight: '6px', minWidth: '50px' }}>보관:</span>
+                                            {inputModal.inventory?.warehouse_name}
+                                        </div>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '4px', borderTop: '1px solid #eee', paddingTop: '8px' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', color: '#555' }}>
+                                                <span style={{ color: '#888', marginRight: '6px' }}>매입일:</span>
+                                                {inputModal.inventory?.purchase_date}
+                                            </div>
+                                            <div style={{ display: 'flex', alignItems: 'center', color: '#555' }}>
+                                                <span style={{ color: '#888', marginRight: '6px' }}>단가:</span>
+                                                {Number(inputModal.inventory?.unit_price).toLocaleString()}원
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div style={{ marginTop: '1rem', paddingTop: '0.8rem', borderTop: '1px dashed #ddd', textAlign: 'center' }}>
+                                        <span style={{ color: '#888', marginRight: '8px', fontSize: '0.85rem' }}>현재 잔고</span>
+                                        <strong style={{ color: '#27ae60', fontSize: '1.1rem' }}>{Number(inputModal.maxQuantity).toLocaleString()}</strong>
+                                    </div>
+                                </div>
+
+                                <div style={{ marginBottom: '1.25rem' }}>
+                                    <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold', color: '#555', fontSize: '0.9rem' }}>투입 수량</label>
+                                    <input
+                                        type="text"
+                                        onFocus={(e) => e.target.select()}
+                                        value={inputModal.quantity ? Number(inputModal.quantity.replace(/,/g, '')).toLocaleString() : ''}
+                                        onChange={(e) => {
+                                            const val = e.target.value.replace(/,/g, '');
+                                            if (val === '' || /^\d+$/.test(val)) {
+                                                setInputModal(prev => ({ ...prev, quantity: val }));
+                                            }
+                                        }}
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter') handleInputConfirm();
+                                            if (e.key === 'Escape') setInputModal({ isOpen: false, inventory: null, quantity: '', maxQuantity: 0 });
+                                        }}
+                                        autoFocus
+                                        style={{
+                                            width: '100%',
+                                            padding: '0.8rem',
+                                            fontSize: '1.2rem',
+                                            border: '2px solid #3498db',
+                                            borderRadius: '8px',
+                                            textAlign: 'center',
+                                            fontWeight: 'bold',
+                                            boxSizing: 'border-box'
+                                        }}
+                                    />
+                                </div>
+
+                                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                    <button
+                                        onClick={() => setInputModal({ isOpen: false, inventory: null, quantity: '', maxQuantity: 0 })}
+                                        className="btn btn-secondary"
+                                        style={{ flex: 1, padding: '0.75rem' }}
+                                    >
+                                        취소
+                                    </button>
+                                    <button
+                                        onClick={handleInputConfirm}
+                                        className="btn btn-primary"
+                                        style={{ flex: 1, padding: '0.75rem', fontWeight: 'bold' }}
+                                    >
+                                        추가
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     </div>,

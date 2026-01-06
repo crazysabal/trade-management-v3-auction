@@ -32,6 +32,7 @@ router.get('/', async (req, res) => {
         p.sort_order,
         p.weight as product_weight,
         c.company_name,
+        c.business_name,
         tm.trade_number,
         tm.id as trade_master_id
       FROM purchase_inventory pi

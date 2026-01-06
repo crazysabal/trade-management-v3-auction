@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { expenseAPI, expenseCategoryAPI, settingsAPI } from '../services/api';
 import ConfirmModal from '../components/ConfirmModal'; // ConfirmModal 추가
-import '../components/TradePanel.css'; // Modal styles recycled
+import { useModalDraggable } from '../hooks/useModalDraggable';
+
 
 export default function ExpenseFormModalComponent({ isOpen, onClose, initialData, onSuccess }) {
     const [formData, setFormData] = useState({
@@ -13,6 +14,7 @@ export default function ExpenseFormModalComponent({ isOpen, onClose, initialData
     });
     const [categories, setCategories] = useState([]);
     const [paymentMethods, setPaymentMethods] = useState([]);
+    const { handleMouseDown, draggableStyle } = useModalDraggable(isOpen);
 
     // 알림 모달 상태
     const [confirmModal, setConfirmModal] = useState({
@@ -103,84 +105,94 @@ export default function ExpenseFormModalComponent({ isOpen, onClose, initialData
         setConfirmModal(prev => ({ ...prev, isOpen: false }));
     };
 
+    // ESC handling
+    useEffect(() => {
+        const handleEsc = (e) => {
+            if (e.key === 'Escape' && isOpen) {
+                e.preventDefault();
+                e.stopPropagation();
+                onClose();
+            }
+        };
+        window.addEventListener('keydown', handleEsc);
+        return () => window.removeEventListener('keydown', handleEsc);
+    }, [isOpen, onClose]);
+
     if (!isOpen) return null;
 
     return (
         <>
-            <div className="modal-overlay" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0, 0, 0, 0.5)', position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 1000 }}>
-                <div className="modal-content" style={{ backgroundColor: '#fff', borderRadius: '8px', boxShadow: '0 4px 20px rgba(0,0,0,0.15)', width: '500px', maxWidth: '90%', padding: '1.5rem', position: 'relative' }}>
-                    <div className="modal-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', borderBottom: '1px solid #eee', paddingBottom: '1rem' }}>
-                        <h3 style={{ margin: 0, fontSize: '1.25rem', color: '#2c3e50', fontWeight: '600' }}>{initialData ? '지출 내역 수정' : '지출 내역 등록'}</h3>
-                        <button
-                            onClick={onClose}
-                            style={{ background: 'none', border: 'none', fontSize: '1.5rem', lineHeight: '1', color: '#95a5a6', cursor: 'pointer', padding: '0' }}
-                        >
-                            &times;
-                        </button>
+            <div className="modal-overlay">
+                <div
+                    className="styled-modal"
+                    style={{ width: '500px', ...draggableStyle }}
+                    onClick={e => e.stopPropagation()}
+                >
+                    <div
+                        className="modal-header"
+                        onMouseDown={handleMouseDown}
+                        style={{ cursor: 'grab' }}
+                    >
+                        <h3 style={{ pointerEvents: 'none' }}>💸 {initialData ? '지출 내역 수정' : '새 지출 내역 등록'}</h3>
+                        <button className="close-btn" onClick={onClose} style={{ pointerEvents: 'auto' }}>&times;</button>
                     </div>
+
                     <div className="modal-body">
-                        <form onSubmit={handleSubmit}>
-                            <div className="form-group" style={{ marginBottom: '1rem' }}>
-                                <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500', color: '#34495e' }}>날짜</label>
+                        <form id="expense-form" onSubmit={handleSubmit}>
+                            <div className="form-group">
+                                <label>지출 일자</label>
                                 <input
                                     type="date"
-                                    className="trade-input"
                                     value={formData.expense_date}
                                     onChange={(e) => setFormData({ ...formData, expense_date: e.target.value })}
                                     required
-                                    style={{ width: '100%', padding: '0.5rem', height: '38px' }}
                                 />
                             </div>
-                            <div className="form-group" style={{ marginBottom: '1rem' }}>
-                                <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500', color: '#34495e' }}>항목</label>
+
+                            <div className="form-group">
+                                <label>계정 과목</label>
                                 <select
-                                    className="trade-input"
                                     value={formData.category_id}
                                     onChange={(e) => setFormData({ ...formData, category_id: e.target.value })}
                                     required
-                                    style={{ width: '100%', padding: '0.5rem', height: '38px' }}
                                 >
-                                    <option value="">선택하세요</option>
-                                    {Array.isArray(categories) && categories.map(c => (
-                                        <option key={c.id} value={c.id}>{c.name}</option>
+                                    <option value="">(선택)</option>
+                                    {categories.map(cat => (
+                                        <option key={cat.id} value={cat.id}>{cat.name || cat.category_name}</option>
                                     ))}
                                 </select>
                             </div>
-                            <div className="form-group" style={{ marginBottom: '1rem' }}>
-                                <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500', color: '#34495e' }}>금액</label>
+
+                            <div className="form-group">
+                                <label>금액</label>
                                 <input
                                     type="text"
-                                    className="trade-input"
                                     value={formData.amount ? Number(formData.amount).toLocaleString() : ''}
                                     onChange={(e) => {
                                         const val = e.target.value.replace(/,/g, '');
-                                        if (!isNaN(val)) {
-                                            setFormData({ ...formData, amount: val });
-                                        }
+                                        if (!isNaN(val)) setFormData({ ...formData, amount: val });
                                     }}
                                     required
                                     placeholder="0"
-                                    style={{ width: '100%', padding: '0.5rem', height: '38px', textAlign: 'right' }}
+                                    style={{ textAlign: 'right' }}
                                 />
                             </div>
-                            <div className="form-group" style={{ marginBottom: '1rem' }}>
-                                <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500', color: '#34495e' }}>적요 (내용)</label>
+
+                            <div className="form-group">
+                                <label>적요 (내용)</label>
                                 <input
                                     type="text"
-                                    className="trade-input"
                                     value={formData.description}
                                     onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                                     placeholder="지출 상세 내용"
-                                    style={{ width: '100%', padding: '0.5rem', height: '38px' }}
                                 />
                             </div>
-                            <div className="form-group" style={{ marginBottom: '1.5rem' }}>
-                                <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500', color: '#34495e' }}>결제 수단</label>
+
+                            <div className="form-group">
+                                <label>결제 수단</label>
                                 <select
-                                    className="trade-input"
                                     value={formData.payment_method}
                                     onChange={(e) => setFormData({ ...formData, payment_method: e.target.value })}
-                                    style={{ width: '100%', padding: '0.5rem', height: '38px' }}
                                 >
                                     {paymentMethods.length > 0 ? (
                                         paymentMethods.map(pm => (
@@ -195,43 +207,12 @@ export default function ExpenseFormModalComponent({ isOpen, onClose, initialData
                                     )}
                                 </select>
                             </div>
-                            <div className="modal-footer" style={{ marginTop: '2rem', paddingTop: '1rem', borderTop: '1px solid #eee', textAlign: 'right', display: 'block' }}>
-                                <button
-                                    type="button"
-                                    className="btn btn-secondary"
-                                    onClick={onClose}
-                                    style={{
-                                        padding: '0.4rem 1.2rem',
-                                        fontSize: '0.9rem',
-                                        width: 'auto',
-                                        minWidth: '0',
-                                        display: 'inline-flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        flex: 'none'
-                                    }}
-                                >
-                                    취소
-                                </button>
-                                <button
-                                    type="submit"
-                                    className="btn btn-primary"
-                                    style={{
-                                        padding: '0.4rem 1.2rem',
-                                        fontSize: '0.9rem',
-                                        width: 'auto',
-                                        minWidth: '0',
-                                        display: 'inline-flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        flex: 'none',
-                                        marginLeft: '0.5rem'
-                                    }}
-                                >
-                                    저장
-                                </button>
-                            </div>
                         </form>
+                    </div>
+
+                    <div className="modal-footer">
+                        <button className="modal-btn modal-btn-cancel" onClick={onClose}>취소</button>
+                        <button className="modal-btn modal-btn-primary" type="submit" form="expense-form">저장</button>
                     </div>
                 </div>
             </div>
@@ -244,7 +225,7 @@ export default function ExpenseFormModalComponent({ isOpen, onClose, initialData
                 title={confirmModal.title}
                 message={confirmModal.message}
                 type={confirmModal.type}
-                showCancel={false} // 알림용이라 취소 버튼 숨김
+                showCancel={false}
                 confirmText="확인"
             />
         </>

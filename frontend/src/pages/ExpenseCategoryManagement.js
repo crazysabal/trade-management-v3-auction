@@ -23,6 +23,19 @@ const ExpenseCategoryManagement = () => {
         fetchCategories();
     }, []);
 
+    // ESC handling
+    useEffect(() => {
+        const handleEsc = (e) => {
+            if (e.key === 'Escape' && isModalOpen) {
+                e.preventDefault();
+                e.stopPropagation();
+                closeModal();
+            }
+        };
+        window.addEventListener('keydown', handleEsc);
+        return () => window.removeEventListener('keydown', handleEsc);
+    }, [isModalOpen]);
+
     const fetchCategories = async () => {
         setLoading(true);
         try {
@@ -308,95 +321,34 @@ const ExpenseCategoryManagement = () => {
 
             {/* Modal */}
             {isModalOpen && (
-                <div className="modal-overlay" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-                    <div className="modal-content" style={{
-                        backgroundColor: '#fff',
-                        borderRadius: '8px',
-                        boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
-                        width: '400px',
-                        maxWidth: '90%',
-                        padding: '1.5rem',
-                        position: 'relative'
-                    }}>
-                        <div className="modal-header" style={{
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            alignItems: 'center',
-                            marginBottom: '1.5rem',
-                            borderBottom: '1px solid #eee',
-                            paddingBottom: '1rem'
-                        }}>
-                            <h3 style={{ margin: 0, fontSize: '1.25rem', color: '#2c3e50', fontWeight: '600' }}>
-                                {modalData.id ? '항목 수정' : '새 항목 추가'}
-                            </h3>
-                            <button
-                                onClick={closeModal}
-                                style={{
-                                    background: 'none',
-                                    border: 'none',
-                                    fontSize: '1.5rem',
-                                    lineHeight: '1',
-                                    color: '#95a5a6',
-                                    cursor: 'pointer',
-                                    padding: '0'
-                                }}
-                            >
-                                &times;
-                            </button>
+                <div className="modal-overlay">
+                    <div className="styled-modal" style={{ width: '400px' }} onClick={e => e.stopPropagation()}>
+                        <div className="modal-header">
+                            <h3>💸 {modalData.id ? '항목 수정' : '새 항목 추가'}</h3>
+                            <button className="close-btn" onClick={closeModal}>&times;</button>
                         </div>
+
                         <div className="modal-body">
-                            <form onSubmit={handleSave}>
-                                <div className="form-group" style={{ marginBottom: '1.5rem' }}>
-                                    <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500', color: '#34495e' }}>항목명</label>
+                            <form id="category-form" onSubmit={handleSave}>
+                                <div className="form-group">
+                                    <label style={{ width: '80px', minWidth: '80px' }}>항목명</label>
                                     <input
                                         type="text"
-                                        className="trade-input"
                                         value={modalData.name}
                                         onChange={(e) => setModalData({ ...modalData, name: e.target.value })}
                                         placeholder="예: 식대, 교통비"
                                         required
                                         autoFocus
-                                        style={{ width: '100%' }}
                                     />
                                 </div>
-
-                                <div className="modal-footer" style={{ marginTop: '2rem', paddingTop: '1rem', borderTop: '1px solid #eee', textAlign: 'right', display: 'block' }}>
-                                    <button
-                                        type="button"
-                                        className="btn btn-secondary"
-                                        onClick={closeModal}
-                                        style={{
-                                            padding: '0.4rem 1.2rem',
-                                            fontSize: '0.9rem',
-                                            width: 'auto',
-                                            minWidth: '0',
-                                            display: 'inline-flex',
-                                            alignItems: 'center',
-                                            justifyContent: 'center',
-                                            flex: 'none'
-                                        }}
-                                    >
-                                        취소
-                                    </button>
-                                    <button
-                                        type="submit"
-                                        className="btn btn-primary"
-                                        style={{
-                                            padding: '0.4rem 1.2rem',
-                                            fontSize: '0.9rem',
-                                            width: 'auto',
-                                            minWidth: '0',
-                                            display: 'inline-flex',
-                                            alignItems: 'center',
-                                            justifyContent: 'center',
-                                            flex: 'none',
-                                            marginLeft: '8px'
-                                        }}
-                                    >
-                                        저장
-                                    </button>
-                                </div>
                             </form>
+                        </div>
+
+                        <div className="modal-footer">
+                            <button className="modal-btn modal-btn-cancel" onClick={closeModal}>취소</button>
+                            <button className="modal-btn modal-btn-primary" type="submit" form="category-form">
+                                저장
+                            </button>
                         </div>
                     </div>
                 </div>

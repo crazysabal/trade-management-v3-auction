@@ -5,8 +5,8 @@ import Select from 'react-select';
 const customStyles = {
   control: (base, state) => ({
     ...base,
-    minHeight: '36px',
-    height: '36px',
+    minHeight: '40px',
+    height: '40px',
     backgroundColor: state.isDisabled ? '#f1f5f9' : '#fff', // Disabled Background
     borderColor: state.isFocused ? '#4a90d9' : '#ddd',
     borderRadius: '4px',
@@ -19,7 +19,7 @@ const customStyles = {
   valueContainer: (base) => ({
     ...base,
     padding: '0 10px',
-    height: '34px',
+    height: '38px',
     display: 'flex',
     alignItems: 'center'
   }),

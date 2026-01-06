@@ -58,8 +58,8 @@ const CompanyRow = memo(function CompanyRow({
         {canReorder ? '☰' : '•'}
       </td>
 
-      <td className={`ellipsis ${company.alias ? '' : 'text-muted'}`} title={company.alias}>{company.alias || '-'}</td>
-      <td className="ellipsis" title={company.company_name}>{company.company_name}</td>
+      <td className={`ellipsis ${company.company_name ? '' : 'text-muted'}`} title={company.company_name}>{company.company_name || '-'}</td>
+      <td className="ellipsis" title={company.business_name}>{company.business_name || '-'}</td>
       <td>{company.business_number}</td>
       <td className="ellipsis" title={company.ceo_name}>{company.ceo_name}</td>
       <td
@@ -144,7 +144,7 @@ const filterCompanies = (companies, filters) => {
       const searchableText = [
         company.company_name?.toLowerCase() || '',
         company.company_code?.toLowerCase() || '',
-        company.alias?.toLowerCase() || '',
+        company.business_name?.toLowerCase() || '', // [CHANGED] alias -> business_name
         company.ceo_name?.toLowerCase() || '',
         company.business_number || '',
         typeText,
@@ -777,10 +777,12 @@ function CompanyList({ isWindow }) {
 
       const response = await companyAPI.uploadPreview(formData);
 
-      // 별칭이 없으면 사업자 명으로 자동 채움, 전자계산서 발행(true) 자동 설정
+      // 별칭(company_name)이 없으면 사업자 명(business_name)으로 자동 채움
+      // [CHANGED] 로직 수정: company_name은 별칭, business_name은 법인명
       const companies = response.data.data.companies.map(c => ({
         ...c,
-        alias: c.alias || c.company_name,
+        company_name: c.company_name || c.alias || c.business_name, // 호환성: alias가 오면 company_name으로
+        business_name: c.business_name || c.company_name, // 없으면 서로 채워줌
         e_tax_invoice: true
       }));
 
@@ -892,36 +894,55 @@ function CompanyList({ isWindow }) {
   };
 
   // 엑셀 내보내기 [NEW]
-  const handleExportExcel = async () => {
-    try {
-      if (confirm('현재 목록을 엑셀로 내보내시겠습니까?')) {
-        const response = await companyAPI.exportExcel(filters);
+  const handleExportExcel = () => {
+    setModal({
+      isOpen: true,
+      type: 'confirm',
+      title: '엑셀 내보내기',
+      message: '현재 목록을 엑셀로 내보내시겠습니까?',
+      confirmText: '내보내기',
+      showCancel: true,
+      onConfirm: async () => {
+        try {
+          const response = await companyAPI.exportExcel(filters);
 
-        // Blob 다운로드 처리
-        const url = window.URL.createObjectURL(new Blob([response.data]));
-        const link = document.createElement('a');
-        link.href = url;
+          // Blob 다운로드 처리
+          const url = window.URL.createObjectURL(new Blob([response.data]));
+          const link = document.createElement('a');
+          link.href = url;
 
-        // 파일명 설정 (헤더에서 추출 또는 기본값)
-        let fileName = `companies_${new Date().toISOString().slice(0, 10)}.xlsx`;
-        const contentDisposition = response.headers['content-disposition'];
-        if (contentDisposition) {
-          const matches = contentDisposition.match(/filename="?([^"]+)"?/);
-          if (matches && matches[1]) {
-            fileName = matches[1];
+          // 파일명 설정 (헤더에서 추출 또는 기본값)
+          let fileName = `companies_${new Date().toISOString().slice(0, 10)}.xlsx`;
+          const contentDisposition = response.headers['content-disposition'];
+          if (contentDisposition) {
+            const matches = contentDisposition.match(/filename="?([^"]+)"?/);
+            if (matches && matches[1]) {
+              fileName = matches[1];
+            }
           }
-        }
 
-        link.setAttribute('download', fileName);
-        document.body.appendChild(link);
-        link.click();
-        link.remove();
-        window.URL.revokeObjectURL(url);
+          link.setAttribute('download', fileName);
+          document.body.appendChild(link);
+          link.click();
+          link.remove();
+          window.URL.revokeObjectURL(url);
+
+          // 성공 후 모달 닫기
+          setModal(prev => ({ ...prev, isOpen: false }));
+        } catch (error) {
+          console.error('엑셀 다운로드 오류:', error);
+          setModal({
+            isOpen: true,
+            type: 'warning',
+            title: '다운로드 실패',
+            message: '엑셀 다운로드 중 오류가 발생했습니다.',
+            confirmText: '확인',
+            showCancel: false,
+            onConfirm: () => { }
+          });
+        }
       }
-    } catch (error) {
-      console.error('엑셀 다운로드 오류:', error);
-      alert('엑셀 다운로드 중 오류가 발생했습니다.');
-    }
+    });
   };
 
   // 행 선택 토글
@@ -1438,15 +1459,18 @@ function CompanyList({ isWindow }) {
         title={editModal.companyId ? "거래처 수정" : "거래처 등록"}
         showConfirm={false}
         showCancel={false}
+        width="90%"
         maxWidth="1000px"
         hideHeader={true} // 모달 헤더 숨김 (내부 폼 타이틀 사용)
-        padding="1rem" // 패딩 축소
+        padding="0" // Remove padding to allow footer background to touch edges
+        fullContent={true} // Skip modal-custom-content wrapper
       >
         {editModal.isOpen && (
           <CompanyForm
             id={editModal.companyId}
             onSuccess={handleEditSuccess}
             onCancel={closeEditModal}
+            isModal={true}
           />
         )}
       </ConfirmModal>

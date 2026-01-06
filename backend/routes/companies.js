@@ -110,31 +110,29 @@ router.get('/export-excel', async (req, res) => {
     excelRows.push(headers);
 
     // Row 5~: 데이터
-    rows.forEach((item, index) => {
-      excelRows.push([
-        index + 1,                                  // 순번
-        item.business_number,                       // 거래처등록번호
-        "",                                         // 종사업장번호 (Empty)
-        item.company_name,                          // 거래처 상호
-        item.ceo_name,                              // 대표자명
-        item.address,                               // 사업자주소
-        item.company_type,                          // 업태
-        item.company_category,                      // 종목
-        "",                                         // 부서명 (Empty)
-        item.contact_person,                        // 성명 (담당자)
-        item.phone,                                 // 전화번호
-        item.contact_phone,                         // 휴대전화번호
-        item.fax,                                   // 팩스번호
-        item.email,                                 // 이메일주소
-        item.notes,                                 // 비고
-        "",                                         // 구분 (이전 위치: 비워둠)
-        item.created_at ? new Date(item.created_at).toISOString().slice(0, 10) : "", // 등록일자
-        item.alias || "",                           // 거래처 별칭 [NEW]
-        item.company_type_flag === 'CUSTOMER' ? '매출처' : (item.company_type_flag === 'SUPPLIER' ? '매입처' : '매입/매출'), // 매입/매출 구분
-        item.e_tax_invoice ? "발행" : "미발행",     // 전자계산서 (발행 여부)
-        item.is_active ? "사용" : "미사용"          // 사용여부
-      ]);
-    });
+    excelRows.push([
+      index + 1,                                  // 순번
+      item.business_number,                       // 거래처등록번호
+      "",                                         // 종사업장번호 (Empty)
+      item.business_name,                         // 거래처 상호 (법인명) [CHANGED]
+      item.ceo_name,                              // 대표자명
+      item.address,                               // 사업자주소
+      item.company_type,                          // 업태
+      item.company_category,                      // 종목
+      "",                                         // 부서명 (Empty)
+      item.contact_person,                        // 성명 (담당자)
+      item.phone,                                 // 전화번호
+      item.contact_phone,                         // 휴대전화번호
+      item.fax,                                   // 팩스번호
+      item.email,                                 // 이메일주소
+      item.notes,                                 // 비고
+      "",                                         // 구분 (이전 위치: 비워둠)
+      item.created_at ? new Date(item.created_at).toISOString().slice(0, 10) : "", // 등록일자
+      item.company_name || "",                    // 거래처 별칭 (시스템상 company_name) [CHANGED]
+      item.company_type_flag === 'CUSTOMER' ? '매출처' : (item.company_type_flag === 'SUPPLIER' ? '매입처' : '매입/매출'), // 매입/매출 구분
+      item.e_tax_invoice ? "발행" : "미발행",     // 전자계산서 (발행 여부)
+      item.is_active ? "사용" : "미사용"          // 사용여부
+    ]);
 
     const workbook = xlsx.utils.book_new();
     const worksheet = xlsx.utils.aoa_to_sheet(excelRows); // json_to_sheet 대신 aoa_to_sheet 사용
@@ -263,7 +261,7 @@ async function generateCompanyCode() {
 router.post('/', async (req, res) => {
   try {
     const {
-      company_name, alias, business_number, ceo_name,
+      company_name, business_name, business_number, ceo_name, // [CHANGED] alias 제거, business_name 추가
       company_type, company_category, address, phone, fax, email,
       contact_person, contact_phone, company_type_flag, notes,
       bank_name, account_number, account_holder, e_tax_invoice
@@ -273,13 +271,14 @@ router.post('/', async (req, res) => {
     const company_code = await generateCompanyCode();
 
     // 별칭(거래처명) 중복 체크
-    if (alias) {
+    // [CHANGED] 이제 company_name이 별칭임
+    if (company_name) {
       const [existingAlias] = await db.query(
-        'SELECT id FROM companies WHERE alias = ?',
-        [alias]
+        'SELECT id FROM companies WHERE company_name = ?',
+        [company_name]
       );
       if (existingAlias.length > 0) {
-        return res.status(400).json({ success: false, message: `이미 사용 중인 거래처 명(별칭)입니다: ${alias}` });
+        return res.status(400).json({ success: false, message: `이미 사용 중인 거래처 명(별칭)입니다: ${company_name}` });
       }
     }
 
@@ -287,15 +286,16 @@ router.post('/', async (req, res) => {
     const [maxOrder] = await db.query('SELECT MAX(sort_order) as max_order FROM companies');
     const sort_order = (maxOrder[0].max_order || 0) + 1;
 
+    // [CHANGED] INSERT 쿼리 수정 (business_name 추가, alias 제거)
     const [result] = await db.query(
       `INSERT INTO companies (
-        company_code, company_name, alias, business_number, ceo_name,
+        company_code, company_name, business_name, business_number, ceo_name,
         company_type, company_category, address, phone, fax, email,
         contact_person, contact_phone, company_type_flag, notes,
         bank_name, account_number, account_holder, e_tax_invoice, sort_order
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
-        company_code, company_name, alias, business_number, ceo_name,
+        company_code, company_name, business_name, business_number, ceo_name,
         company_type, company_category, address, phone, fax, email,
         contact_person, contact_phone, company_type_flag || 'BOTH', notes,
         bank_name, account_number, account_holder, e_tax_invoice ? 1 : 0,
@@ -374,7 +374,7 @@ router.get('/export-excel', async (req, res) => {
         index + 1,                                  // 순번
         item.business_number,                       // 거래처등록번호
         "",                                         // 종사업장번호 (Empty)
-        item.company_name,                          // 거래처 상호
+        item.business_name,                         // 거래처 상호 (법인명) [CHANGED]
         item.ceo_name,                              // 대표자명
         item.address,                               // 사업자주소
         item.company_type,                          // 업태
@@ -388,7 +388,7 @@ router.get('/export-excel', async (req, res) => {
         item.notes,                                 // 비고
         item.company_type_flag === 'CUSTOMER' ? '매출처' : (item.company_type_flag === 'SUPPLIER' ? '매입처' : '매입/매출'), // 구분
         item.created_at ? new Date(item.created_at).toISOString().slice(0, 10) : "", // 등록일자
-        item.alias || "",                           // 거래처 별칭 [NEW]
+        item.company_name || "",                    // 거래처 별칭 (시스템상 company_name) [CHANGED]
         ""                                          // 구분 (마지막 컬럼 - 용도 불명확하므로 빈값)
       ]);
     });
@@ -483,8 +483,10 @@ router.post('/upload-preview', upload.single('file'), async (req, res) => {
     // 헤더 매핑 (엑셀 컬럼명 -> DB 컬럼명) - 다양한 형식 지원
     const headerMapping = {
       // 기본 형식
-      '거래처명': 'company_name',
-      '별칭': 'alias',
+      '거래처명': 'company_name', // 별칭
+      '별칭': 'company_name',     // 별칭 (호환성)
+      '사업자명': 'business_name',
+      '상호': 'business_name',
       '사업자번호': 'business_number',
       '대표자': 'ceo_name',
       '업태': 'company_type',
@@ -501,7 +503,7 @@ router.post('/upload-preview', upload.single('file'), async (req, res) => {
       '계좌번호': 'account_number',
       '예금주': 'account_holder',
       // 대구청과 형식
-      '거래처상호': 'company_name',
+      '거래처상호': 'business_name', // [CHANGED] 상호는 법인명이므로 business_name
       '거래처등록번호': 'business_number',
       '대표자명': 'ceo_name',
       '사업자주소': 'address',
@@ -510,8 +512,8 @@ router.post('/upload-preview', upload.single('file'), async (req, res) => {
       '성명': 'contact_person',
       '휴대전화번호': 'contact_phone',
       // 내보내기 양식 호환
-      '거래처 상호': 'company_name',
-      '거래처 별칭': 'alias',
+      '거래처 상호': 'business_name', // [CHANGED]
+      '거래처 별칭': 'company_name',  // [CHANGED]
       '매입/매출 구분': 'company_type_flag',
       '전자계산서': 'e_tax_invoice',
       '사용여부': 'is_active'
@@ -606,15 +608,16 @@ router.post('/bulk-import', async (req, res) => {
 
         await db.query(
           `INSERT INTO companies (
-            company_code, company_name, alias, business_number, ceo_name,
+            company_code, company_name, business_name, business_number, ceo_name,
             company_type, company_category, address, phone, fax, email,
             contact_person, contact_phone, company_type_flag, notes,
             bank_name, account_number, account_holder, e_tax_invoice, is_active, sort_order
           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             company_code,
-            company.company_name || '',
-            company.alias || company.company_name || '',
+            company_code,
+            company.company_name || '', // 별칭
+            company.business_name || company.company_name || '', // 법인명 (없으면 별칭으로 채움) [CHANGED]
             company.business_number || '',
             company.ceo_name || '',
             company.company_type || '',
@@ -688,7 +691,7 @@ router.put('/reorder', async (req, res) => {
 router.put('/:id', async (req, res) => {
   try {
     const {
-      company_code, company_name, alias, business_number, ceo_name,
+      company_code, company_name, business_name, business_number, ceo_name, // [CHANGED] alias -> business_name (의미상 분리)
       company_type, company_category, address, phone, fax, email,
       contact_person, contact_phone, company_type_flag, notes, is_active,
       bank_name, account_number, account_holder, e_tax_invoice
@@ -704,26 +707,26 @@ router.put('/:id', async (req, res) => {
     }
 
     // 별칭(거래처명) 중복 체크 (자기 자신 제외)
-    if (alias) {
+    if (company_name) {
       const [existingAlias] = await db.query(
-        'SELECT id FROM companies WHERE alias = ? AND id != ?',
-        [alias, req.params.id]
+        'SELECT id FROM companies WHERE company_name = ? AND id != ?',
+        [company_name, req.params.id]
       );
       if (existingAlias.length > 0) {
-        return res.status(400).json({ success: false, message: `이미 사용 중인 거래처 명(별칭)입니다: ${alias}` });
+        return res.status(400).json({ success: false, message: `이미 사용 중인 거래처 명(별칭)입니다: ${company_name}` });
       }
     }
 
     const [result] = await db.query(
       `UPDATE companies SET
-        company_code = ?, company_name = ?, alias = ?, business_number = ?, ceo_name = ?,
+        company_code = ?, company_name = ?, business_name = ?, business_number = ?, ceo_name = ?,
         company_type = ?, company_category = ?, address = ?, phone = ?, fax = ?,
         email = ?, contact_person = ?, contact_phone = ?, company_type_flag = ?,
         notes = ?, is_active = ?,
         bank_name = ?, account_number = ?, account_holder = ?, e_tax_invoice = ?
       WHERE id = ?`,
       [
-        company_code, company_name, alias, business_number, ceo_name,
+        company_code, company_name, business_name, business_number, ceo_name,
         company_type, company_category, address, phone, fax, email,
         contact_person, contact_phone, company_type_flag, notes, is_active,
         bank_name, account_number, account_holder, e_tax_invoice ? 1 : 0,

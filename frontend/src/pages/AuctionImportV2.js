@@ -717,9 +717,8 @@ function AuctionImportV2({ isWindow }) {
                                     <SearchableSelect
                                         options={companies.map(c => ({
                                             value: c.id,
-                                            label: c.alias || c.company_name,
-                                            // subLabel: c.company_name,
-                                            data: { subLabel: c.company_name, code: c.code }
+                                            label: c.company_name, // [CHANGED] 별칭 (company_name)
+                                            data: { subLabel: c.business_name, code: c.code } // [CHANGED] 법인명 (business_name)
                                         }))}
                                         value={importConfig.supplier_id}
                                         onChange={o => setImportConfig({ ...importConfig, supplier_id: o ? o.value : '' })}

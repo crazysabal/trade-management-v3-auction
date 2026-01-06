@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { tradeAPI, paymentAPI } from '../services/api';
+import { useModalDraggable } from '../hooks/useModalDraggable';
 
 /**
  * 전표 상세 보기 모달 컴포넌트
@@ -15,6 +16,7 @@ function TradeDetailModal({ isOpen, onClose, tradeId }) {
   const [trade, setTrade] = useState(null);
   const [error, setError] = useState(null);
   const [companySummary, setCompanySummary] = useState(null);
+  const { handleMouseDown, draggableStyle } = useModalDraggable(isOpen);
 
   // 전표 상세 조회
   useEffect(() => {
@@ -128,14 +130,18 @@ function TradeDetailModal({ isOpen, onClose, tradeId }) {
   const isPurchase = trade?.trade_type === 'PURCHASE';
 
   return createPortal(
-    <div className="modal-overlay">
+    <div className="modal-overlay" style={{ zIndex: 1100 }}>
       <div
         className="trade-detail-modal"
         onClick={(e) => e.stopPropagation()}
+        style={draggableStyle}
       >
         {/* 헤더 */}
-        <div className="trade-detail-modal-header">
-          <div className="trade-detail-modal-header-left">
+        <div
+          className="trade-detail-modal-header draggable-header"
+          onMouseDown={handleMouseDown}
+        >
+          <div className="trade-detail-modal-header-left drag-pointer-none">
             <h2 style={{ display: 'flex', alignItems: 'center' }}>
               <span>📋 전표 상세</span>
               {trade && (
@@ -166,7 +172,7 @@ function TradeDetailModal({ isOpen, onClose, tradeId }) {
             )}
           </div>
           <button
-            className="trade-detail-modal-close"
+            className="trade-detail-modal-close drag-pointer-auto"
             onClick={onClose}
           >
             ×

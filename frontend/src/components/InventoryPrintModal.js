@@ -1,6 +1,7 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import html2canvas from 'html2canvas';
+import { useModalDraggable } from '../hooks/useModalDraggable';
 
 const InventoryPrintModal = ({ isOpen, onClose, inventory, warehouses }) => {
     const printRef = useRef(null);
@@ -10,6 +11,7 @@ const InventoryPrintModal = ({ isOpen, onClose, inventory, warehouses }) => {
     const [showRemarks, setShowRemarks] = useState(() => localStorage.getItem('inv_showRemarks') !== 'false'); // Default true checking string 'false'
     const [showDate, setShowDate] = useState(() => localStorage.getItem('inv_showDate') === 'true'); // Default false
     const [useSmartRatio, setUseSmartRatio] = useState(() => localStorage.getItem('inv_useSmartRatio') === 'true'); // Default false
+    const { handleMouseDown, draggableStyle } = useModalDraggable(isOpen);
 
     // Save Settings
     useEffect(() => {
@@ -156,28 +158,33 @@ const InventoryPrintModal = ({ isOpen, onClose, inventory, warehouses }) => {
                     maxHeight: '98vh',
                     display: 'flex',
                     flexDirection: 'column',
-                    boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)'
+                    boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+                    ...draggableStyle
                 }}
             >
                 {/* Header */}
-                <div style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    padding: '1rem 1.5rem',
-                    borderBottom: '1px solid #e2e8f0',
-                    backgroundColor: '#f8fafc',
-                    flexWrap: 'wrap', // Allow wrapping if screen is too narrow
-                    gap: '10px'
-                }}>
+                <div
+                    onMouseDown={handleMouseDown}
+                    style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        padding: '1rem 1.5rem',
+                        borderBottom: '1px solid #e2e8f0',
+                        backgroundColor: '#f8fafc',
+                        flexWrap: 'wrap', // Allow wrapping if screen is too narrow
+                        gap: '10px',
+                        cursor: 'grab'
+                    }}
+                >
                     {/* Left Group: Title + Controls */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '20px', flexWrap: 'wrap' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '20px', flexWrap: 'wrap', pointerEvents: 'none' }}>
                         <h2 style={{ margin: 0, fontSize: '1.25rem', color: '#1e293b' }}>
                             🖨️ 재고 목록
                         </h2>
 
                         {/* Layout Selection */}
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', borderLeft: '1px solid #cbd5e1', paddingLeft: '15px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', borderLeft: '1px solid #cbd5e1', paddingLeft: '15px', pointerEvents: 'auto' }}>
                             <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer', fontSize: '0.9rem' }}>
                                 <input
                                     type="radio"
@@ -203,7 +210,7 @@ const InventoryPrintModal = ({ isOpen, onClose, inventory, warehouses }) => {
                         </div>
 
                         {/* Options */}
-                        <div style={{ display: 'flex', gap: '15px', alignItems: 'center', borderLeft: '1px solid #cbd5e1', paddingLeft: '15px' }}>
+                        <div style={{ display: 'flex', gap: '15px', alignItems: 'center', borderLeft: '1px solid #cbd5e1', paddingLeft: '15px', pointerEvents: 'auto' }}>
                             <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer', fontSize: '0.9rem' }}>
                                 <input
                                     type="checkbox"
@@ -240,7 +247,7 @@ const InventoryPrintModal = ({ isOpen, onClose, inventory, warehouses }) => {
                     </div>
 
                     {/* Right Group: Buttons */}
-                    <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                    <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', pointerEvents: 'auto' }}>
                         {/* Zoom Controls */}
                         <div style={{ display: 'flex', alignItems: 'center', backgroundColor: '#fff', borderRadius: '6px', border: '1px solid #cbd5e1', marginRight: '1rem' }}>
                             <button

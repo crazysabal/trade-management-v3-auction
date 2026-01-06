@@ -1,54 +1,9 @@
-
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { categoryAPI } from '../../services/api';
+import { useModalDraggable } from '../../hooks/useModalDraggable';
 
 // Reusing ModalShell pattern (Ideally extract to common)
-const ModalShell = ({ isOpen, onClose, title, children }) => {
-    useEffect(() => {
-        if (isOpen) {
-            const previousActiveElement = document.activeElement;
-            const handleKeyDown = (e) => {
-                if (e.key === 'Escape') {
-                    e.stopPropagation();
-                    onClose();
-                }
-            };
-            document.addEventListener('keydown', handleKeyDown);
-            return () => {
-                document.removeEventListener('keydown', handleKeyDown);
-                if (previousActiveElement?.focus) previousActiveElement.focus();
-            };
-        }
-    }, [isOpen, onClose]);
-
-    if (!isOpen) return null;
-
-    return createPortal(
-        <div style={{
-            position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-            backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000
-        }} onClick={(e) => {
-            // if (e.target === e.currentTarget) onClose();
-            e.stopPropagation();
-        }}>
-            <div style={{
-                backgroundColor: 'white', borderRadius: '12px', width: '90%', maxWidth: '400px',
-                display: 'flex', flexDirection: 'column', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)'
-            }}>
-                <div style={{ padding: '1.25rem', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 'bold' }}>{title}</h3>
-                    <button onClick={onClose} style={{ border: 'none', background: 'none', fontSize: '1.5rem', cursor: 'pointer', color: '#64748b' }}>&times;</button>
-                </div>
-                <div style={{ padding: '1.5rem' }}>
-                    {children}
-                </div>
-            </div>
-        </div>,
-        document.body
-    );
-};
-
 const CategoryInputModal = ({ isOpen, onClose, onSuccess, initialData, parentId }) => {
     // Fix: check for ID to determine if it's an edit operations
     const isEdit = !!(initialData && initialData.id);
@@ -56,6 +11,7 @@ const CategoryInputModal = ({ isOpen, onClose, onSuccess, initialData, parentId 
         category_name: '',
         parent_id: null
     });
+    const { handleMouseDown, draggableStyle } = useModalDraggable(isOpen);
 
     useEffect(() => {
         if (isOpen) {
@@ -73,6 +29,21 @@ const CategoryInputModal = ({ isOpen, onClose, onSuccess, initialData, parentId 
             }
         }
     }, [isOpen, initialData, isEdit, parentId]);
+
+    // ESC handling
+    useEffect(() => {
+        const handleEsc = (e) => {
+            if (e.key === 'Escape' && isOpen) {
+                e.preventDefault();
+                e.stopPropagation();
+                onClose();
+            }
+        };
+        window.addEventListener('keydown', handleEsc);
+        return () => window.removeEventListener('keydown', handleEsc);
+    }, [isOpen, onClose]);
+
+    if (!isOpen) return null;
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -106,60 +77,46 @@ const CategoryInputModal = ({ isOpen, onClose, onSuccess, initialData, parentId 
     };
     const labelStyle = { display: 'block', fontSize: '0.9rem', fontWeight: '600', marginBottom: '0.3rem', color: '#334155' };
 
-    return (
-        <ModalShell isOpen={isOpen} onClose={onClose} title={isEdit ? '분류 수정' : '분류 추가'}>
-            <form onSubmit={handleSubmit}>
-                <div>
-                    <label style={labelStyle}>분류명</label>
-                    <input
-                        type="text"
-                        value={formData.category_name}
-                        onChange={e => setFormData({ ...formData, category_name: e.target.value })}
-                        style={inputStyle}
-                        placeholder="분류명을 입력하세요"
-                        autoFocus
-                    />
+    return createPortal(
+        <div className="modal-overlay">
+            <div
+                className="styled-modal"
+                style={{ width: '400px', ...draggableStyle }}
+                onClick={e => e.stopPropagation()}
+            >
+                <div
+                    className="modal-header draggable-header"
+                    onMouseDown={handleMouseDown}
+                >
+                    <h3 className="drag-pointer-none">📁 {isEdit ? '분류 수정' : '분류 추가'}</h3>
+                    <button className="close-btn drag-pointer-auto" onClick={onClose}>&times;</button>
                 </div>
 
-                <div style={{ padding: '1rem 0 0', borderTop: '1px solid #eee', textAlign: 'right', display: 'block', marginTop: '1rem' }}>
-                    <button type="button" onClick={onClose} style={{
-                        padding: '0.4rem 1.2rem',
-                        fontSize: '0.9rem',
-                        borderRadius: '6px',
-                        border: '1px solid #cbd5e1',
-                        backgroundColor: 'white',
-                        cursor: 'pointer',
-                        width: 'auto',
-                        minWidth: '0',
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        flex: 'none'
-                    }}>
-                        취소
-                    </button>
-                    <button type="submit" style={{
-                        padding: '0.4rem 1.2rem',
-                        fontSize: '0.9rem',
-                        borderRadius: '6px',
-                        border: 'none',
-                        backgroundColor: '#3b82f6',
-                        color: 'white',
-                        fontWeight: 'bold',
-                        cursor: 'pointer',
-                        width: 'auto',
-                        minWidth: '0',
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        flex: 'none',
-                        marginLeft: '0.5rem'
-                    }}>
+                <div className="modal-body">
+                    <form id="category-form" onSubmit={handleSubmit}>
+                        <div className="form-group">
+                            <label style={{ width: '80px', minWidth: '80px' }}>분류명</label>
+                            <input
+                                type="text"
+                                value={formData.category_name}
+                                onChange={e => setFormData({ ...formData, category_name: e.target.value })}
+                                placeholder="분류명을 입력하세요"
+                                autoFocus
+                                required
+                            />
+                        </div>
+                    </form>
+                </div>
+
+                <div className="modal-footer">
+                    <button className="modal-btn modal-btn-cancel" onClick={onClose}>취소</button>
+                    <button className="modal-btn modal-btn-primary" type="submit" form="category-form">
                         {isEdit ? '수정' : '등록'}
                     </button>
                 </div>
-            </form>
-        </ModalShell>
+            </div>
+        </div>,
+        document.body
     );
 };
 

@@ -125,21 +125,24 @@ const InventoryHistory = ({ onOpenTrade }) => {
         const keywords = searchTerm.toLowerCase().split(/\s+/).filter(k => k.length > 0);
 
         return history.filter(item => {
-            // Combine all searchable fields into a single string for checking
-            const searchableText = `
-                ${item.transaction_date || ''}
-                ${getTypeLabel(item.transaction_type)}
-                ${item.warehouse_name || ''}
-                ${item.product_name || ''}
-                ${item.grade || ''}
-                ${item.company_name || ''}
-                ${item.sender || ''}
-                ${item.shipper_location || ''}
-                ${item.trade_number || ''}
-            `.toLowerCase();
+            const primaryText = `${item.product_name || ''} ${item.product_weight ? Number(item.product_weight) + 'kg' : ''} ${item.grade || ''} ${item.company_name || ''} ${item.sender || ''}`.toLowerCase();
+            const secondaryText = `${item.warehouse_name || ''} ${item.shipper_location || ''} ${item.trade_number || ''} ${item.transaction_date || ''} ${getTypeLabel(item.transaction_type)}`.toLowerCase();
 
-            // Check if ALL keywords are present in the searchable text (AND condition)
-            return keywords.every(keyword => searchableText.includes(keyword));
+            // 모든 키워드가 항목 내에 존재해야 함 (AND 조건)
+            return keywords.every(kw => {
+                // 1. 핵심 검색 대상(품목명, 거래처, 출하주 등)은 항상 부분 일치 허용
+                if (primaryText.includes(kw)) return true;
+
+                // 2. 부가 필드(창고, 산지 위치 등)는 키워드가 짧을 경우 단어 시작 매칭으로 오탐 방지
+                if (kw.length <= 2) {
+                    const wordsForStrictCheck = secondaryText.split(/[\s,()\[\]\-_]+/);
+                    return wordsForStrictCheck.some(word => word.startsWith(kw)) ||
+                        (item.trade_number && item.trade_number.toLowerCase().includes(kw));
+                }
+
+                // 3. 키워드가 길면 모든 필드에서 자유로운 부분 일치 허용
+                return secondaryText.includes(kw);
+            });
         });
     };
 
@@ -336,31 +339,23 @@ const InventoryHistory = ({ onOpenTrade }) => {
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px', width: '100%' }}>
                     {/* 기간 선택 */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                        <input
-                            type="date"
-                            value={startDate}
-                            onChange={(e) => setStartDate(e.target.value)}
-                            style={{
-                                padding: '4px 8px',
-                                border: '1px solid #ddd',
-                                borderRadius: '4px',
-                                fontSize: '0.9rem',
-                                color: '#495057'
-                            }}
-                        />
-                        <span style={{ color: '#868e96' }}>~</span>
-                        <input
-                            type="date"
-                            value={endDate}
-                            onChange={(e) => setEndDate(e.target.value)}
-                            style={{
-                                padding: '4px 8px',
-                                border: '1px solid #ddd',
-                                borderRadius: '4px',
-                                fontSize: '0.9rem',
-                                color: '#495057'
-                            }}
-                        />
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', backgroundColor: 'white', padding: '2px 8px', borderRadius: '4px', border: '1px solid #ddd' }}>
+                            <input
+                                type="date"
+                                value={startDate}
+                                onChange={(e) => setStartDate(e.target.value)}
+                                className="history-date-picker"
+                                style={{ padding: '4px 8px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '0.9rem' }}
+                            />
+                            <span style={{ color: '#868e96' }}>~</span>
+                            <input
+                                type="date"
+                                value={endDate}
+                                onChange={(e) => setEndDate(e.target.value)}
+                                className="history-date-picker"
+                                style={{ padding: '4px 8px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '0.9rem' }}
+                            />
+                        </div>
                     </div>
 
                     {/* 구분선 */}
@@ -411,10 +406,11 @@ const InventoryHistory = ({ onOpenTrade }) => {
                             <th>구분</th>
                             <th>창고</th>
                             <th>품목명</th>
+                            <th>출하주</th>
+                            <th>등급</th>
                             <th>수량</th>
                             <th>잔고</th>
                             <th>거래처</th>
-                            <th>출하주</th>
                             <th>전표번호</th>
                             <th>비고</th>
                         </tr>
@@ -440,7 +436,12 @@ const InventoryHistory = ({ onOpenTrade }) => {
                                     <td>
                                         {item.product_name}
                                         {item.product_weight ? ` ${Number(item.product_weight)}kg` : ''}
-                                        {item.grade ? ` (${item.grade})` : ''}
+                                    </td>
+                                    <td>
+                                        {item.sender || '-'}
+                                    </td>
+                                    <td>
+                                        {item.grade || '-'}
                                     </td>
                                     <td>
                                         <strong style={{ color: ['IN', 'PURCHASE', 'PRODUCTION_IN', 'TRANSFER_IN', 'ADJUST'].includes(item.transaction_type) && Number(item.quantity) > 0 ? '#2ecc71' : '#e74c3c' }}>
@@ -465,9 +466,6 @@ const InventoryHistory = ({ onOpenTrade }) => {
                                     </td>
                                     <td>
                                         {item.company_name || '-'}
-                                    </td>
-                                    <td>
-                                        {item.sender || '-'}
                                     </td>
                                     <td>
                                         <span

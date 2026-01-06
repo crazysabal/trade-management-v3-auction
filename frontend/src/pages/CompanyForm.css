@@ -1,45 +1,70 @@
 /* CompanyForm.css */
 
+/* Remove horizontal padding from the main modal body wrapper */
+.company-form.modal-mode .modal-body {
+    padding: 1.5rem !important;
+}
+
 /* Override global spacing for a tighter form */
 .company-form .form-row {
-    gap: 0.4rem !important;
-    /* Force override App.css default of 1.5rem */
-    margin-bottom: 0.4rem !important;
-    /* Enforce 2 columns by increasing min-width (approx 900px available / 2 = 450px) */
-    grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)) !important;
+    gap: 0.7rem !important;
+    /* Increased from 0.4rem for better readability */
+    margin-bottom: 0.7rem !important;
+    /* Enforce 2 columns for better layout on standard modal widths */
+    grid-template-columns: repeat(2, 1fr) !important;
+    padding: 0;
+    /* REMOVED horizontal padding to touch edges */
 }
 
 .company-form .form-group {
     margin-bottom: 0;
     /* Clear any default margin */
+    width: 100% !important;
+    /* Ensure group stretches to grid cell width */
 }
 
-/* Relies on App.css for text-align: left */
-.company-form .form-group>label {
-    /* text-align: right !important; REMOVED */
+/* Force all controls to fill available space next to label */
+.company-form .form-group input,
+.company-form .form-group select,
+.company-form .form-group textarea,
+.company-form .form-group .trade-select-container {
+    flex: 1 !important;
+    width: 100% !important;
+    max-width: none !important;
 }
 
-/* Force left alignment for all inputs as requested */
-/* Force left alignment and reduce height for all inputs */
-.company-form input,
-.company-form select,
-.company-form textarea {
-    text-align: left !important;
-    padding: 0.5rem 0.75rem !important;
-    /* Redcued padding */
-    font-size: 0.9rem !important;
-    height: auto !important;
+/* Full span utility for 2-column grid */
+.company-form .full-span {
+    grid-column: span 2 !important;
 }
 
-/* Section Header Styles */
+/* Align top utility for textareas */
+.company-form .align-top {
+    align-items: flex-start !important;
+}
+
+.company-form .align-top label {
+    margin-top: 0.6rem;
+    /* Align label with first line of textarea */
+}
+
+
+
+
+
+/* Section Header Styles - Full Width Pattern */
 .section-header {
-    margin-bottom: 0.4rem;
-    padding: 0.3rem 0.5rem;
-    border-radius: 8px;
-    border-left-width: 4px;
+    margin-bottom: 1rem;
+    padding: 0.5rem 1rem;
+    /* Small internal padding for title */
+    border-radius: 0;
+    /* Full width edge-to-edge */
+    border-left-width: 6px;
     border-left-style: solid;
     display: flex;
     align-items: center;
+    width: 100%;
+    box-sizing: border-box;
 }
 
 .section-title {

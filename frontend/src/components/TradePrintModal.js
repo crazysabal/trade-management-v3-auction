@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import html2canvas from 'html2canvas';
 import { tradeAPI, companyInfoAPI, paymentAPI } from '../services/api';
+import { useModalDraggable } from '../hooks/useModalDraggable';
 
 /**
 /**
@@ -65,6 +66,7 @@ function TradePrintModal({ isOpen, onClose, tradeId }) {
     return saved ? parseFloat(saved) : 1;
   }); // 확대/축소 상태
   const printRef = useRef(null);
+  const { handleMouseDown, draggableStyle } = useModalDraggable(isOpen);
 
   // 줌 레벨 저장
   useEffect(() => {
@@ -742,22 +744,27 @@ function TradePrintModal({ isOpen, onClose, tradeId }) {
           maxHeight: '98vh',
           display: 'flex',
           flexDirection: 'column',
-          boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)'
+          boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+          ...draggableStyle
         }}
       >
         {/* 헤더 */}
-        <div style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          padding: '1rem 1.5rem',
-          borderBottom: '1px solid #e2e8f0',
-          backgroundColor: '#f8fafc'
-        }}>
-          <h2 style={{ margin: 0, fontSize: '1.25rem', color: '#1e293b' }}>
+        <div
+          onMouseDown={handleMouseDown}
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            padding: '1rem 1.5rem',
+            borderBottom: '1px solid #e2e8f0',
+            backgroundColor: '#f8fafc',
+            cursor: 'grab'
+          }}
+        >
+          <h2 style={{ margin: 0, fontSize: '1.25rem', color: '#1e293b', pointerEvents: 'none' }}>
             🖨️ 전표 출력 미리보기
           </h2>
-          <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+          <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', pointerEvents: 'auto' }}>
             {/* 확대/축소 컨트롤 */}
             <div style={{ display: 'flex', alignItems: 'center', backgroundColor: '#fff', borderRadius: '6px', border: '1px solid #cbd5e1', marginRight: '1rem' }}>
               <button

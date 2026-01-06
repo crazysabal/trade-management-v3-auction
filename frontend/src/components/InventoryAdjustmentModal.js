@@ -1,11 +1,26 @@
 import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
+import { useModalDraggable } from '../hooks/useModalDraggable';
 
 const InventoryAdjustmentModal = ({ isOpen, onClose, inventory, onConfirm }) => {
     const [adjustmentType, setAdjustmentType] = useState('DISPOSAL'); // DISPOSAL, LOSS, CORRECTION
     const [quantity, setQuantity] = useState('');
     const [reason, setReason] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const { handleMouseDown, draggableStyle } = useModalDraggable(isOpen);
+
+    // ESC handling
+    React.useEffect(() => {
+        const handleEsc = (e) => {
+            if (e.key === 'Escape' && isOpen) {
+                e.preventDefault();
+                e.stopPropagation();
+                onClose();
+            }
+        };
+        window.addEventListener('keydown', handleEsc);
+        return () => window.removeEventListener('keydown', handleEsc);
+    }, [isOpen, onClose]);
 
     if (!isOpen || !inventory) return null;
 
@@ -46,85 +61,89 @@ const InventoryAdjustmentModal = ({ isOpen, onClose, inventory, onConfirm }) => 
     };
 
     return createPortal(
-        <div style={{
-            position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-            backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 1100,
-            display: 'flex', justifyContent: 'center', alignItems: 'center'
-        }}>
-            <div style={{
-                backgroundColor: 'white', padding: '20px', borderRadius: '8px',
-                width: '400px', boxShadow: '0 4px 6px rgba(0,0,0,0.1)'
-            }}>
-                <h3 style={{ marginTop: 0, color: '#e74c3c' }}>📉 재고 조정/폐기</h3>
-
-                <div style={{ marginBottom: '15px', padding: '10px', backgroundColor: '#f8f9fa', borderRadius: '4px' }}>
-                    <strong>{inventory.product_name}</strong> ({inventory.grade})<br />
-                    현재 잔고: <span style={{ color: '#2980b9', fontWeight: 'bold' }}>{inventory.remaining_quantity}</span> 개
+        <div className="modal-overlay" style={{ zIndex: 1100 }}>
+            <div
+                className="styled-modal"
+                style={{
+                    maxWidth: '450px',
+                    ...draggableStyle
+                }}
+                onClick={e => e.stopPropagation()}
+            >
+                <div
+                    className="modal-header draggable-header"
+                    onMouseDown={handleMouseDown}
+                >
+                    <h3 className="drag-pointer-none" style={{ margin: 0, color: '#e74c3c' }}>📉 재고 조정/폐기</h3>
+                    <button className="close-btn drag-pointer-auto" onClick={onClose}>×</button>
                 </div>
 
-                <form onSubmit={handleSubmit}>
-                    <div style={{ marginBottom: '15px' }}>
-                        <label style={{ display: 'block', marginBottom: '5px', fontSize: '0.9rem' }}>조정 유형</label>
-                        <select
-                            value={adjustmentType}
-                            onChange={(e) => setAdjustmentType(e.target.value)}
-                            style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
-                        >
-                            <option value="DISPOSAL">폐기 (Disposal)</option>
-                            <option value="LOSS">분실 (Loss)</option>
-                            <option value="CORRECTION">수량 정정 (Correction)</option>
-                        </select>
+                <div className="modal-body">
+                    <div style={{ marginBottom: '1.5rem', padding: '1rem', backgroundColor: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                        <div style={{ fontSize: '0.95rem', color: '#1e293b', marginBottom: '0.25rem' }}>
+                            <strong>{inventory.product_name}</strong> ({inventory.grade})
+                        </div>
+                        <div style={{ fontSize: '0.9rem', color: '#64748b' }}>
+                            현재 잔고: <span style={{ color: '#2563eb', fontWeight: 'bold' }}>{inventory.remaining_quantity}</span> 개
+                        </div>
                     </div>
 
-                    <div style={{ marginBottom: '15px' }}>
-                        <label style={{ display: 'block', marginBottom: '5px', fontSize: '0.9rem' }}>차감 수량</label>
-                        <input
-                            type="number"
-                            step="0.01"
-                            value={quantity}
-                            onChange={(e) => setQuantity(e.target.value)}
-                            placeholder="줄어들 수량 입력 (예: 2)"
-                            style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
-                            max={inventory.remaining_quantity}
-                        />
-                    </div>
+                    <form id="adjustment-form" onSubmit={handleSubmit}>
+                        <div className="form-group">
+                            <label>조정 유형</label>
+                            <select
+                                value={adjustmentType}
+                                onChange={(e) => setAdjustmentType(e.target.value)}
+                            >
+                                <option value="DISPOSAL">폐기 (Disposal)</option>
+                                <option value="LOSS">분실 (Loss)</option>
+                                <option value="CORRECTION">수량 정정 (Correction)</option>
+                            </select>
+                        </div>
 
-                    <div style={{ marginBottom: '15px' }}>
-                        <label style={{ display: 'block', marginBottom: '5px', fontSize: '0.9rem' }}>사유</label>
-                        <input
-                            type="text"
-                            value={reason}
-                            onChange={(e) => setReason(e.target.value)}
-                            placeholder="예: 부패, 파손 등"
-                            style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
-                        />
-                    </div>
+                        <div className="form-group">
+                            <label>차감 수량</label>
+                            <input
+                                type="number"
+                                step="0.01"
+                                value={quantity}
+                                onChange={(e) => setQuantity(e.target.value)}
+                                placeholder="차감할 수량 입력"
+                                max={inventory.remaining_quantity}
+                                required
+                            />
+                        </div>
 
-                    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
-                        <button
-                            type="button"
-                            onClick={onClose}
-                            style={{ padding: '8px 16px', border: '1px solid #ddd', backgroundColor: 'white', borderRadius: '4px', cursor: 'pointer' }}
-                        >
-                            취소
-                        </button>
-                        <button
-                            type="submit"
-                            disabled={isSubmitting}
-                            style={{
-                                padding: '8px 16px',
-                                border: 'none',
-                                backgroundColor: '#e74c3c',
-                                color: 'white',
-                                borderRadius: '4px',
-                                cursor: isSubmitting ? 'not-allowed' : 'pointer',
-                                opacity: isSubmitting ? 0.7 : 1
-                            }}
-                        >
-                            {isSubmitting ? '처리 중...' : '조정 실행'}
-                        </button>
-                    </div>
-                </form>
+                        <div className="form-group">
+                            <label>사유</label>
+                            <input
+                                type="text"
+                                value={reason}
+                                onChange={(e) => setReason(e.target.value)}
+                                placeholder="예: 부패, 파손 등"
+                            />
+                        </div>
+                    </form>
+                </div>
+
+                <div className="modal-footer">
+                    <button
+                        type="button"
+                        className="modal-btn modal-btn-cancel"
+                        onClick={onClose}
+                    >
+                        취소
+                    </button>
+                    <button
+                        type="submit"
+                        form="adjustment-form"
+                        className="modal-btn modal-btn-primary"
+                        disabled={isSubmitting}
+                        style={{ backgroundColor: '#e74c3c' }}
+                    >
+                        {isSubmitting ? '처리 중...' : '조정 실행'}
+                    </button>
+                </div>
             </div>
         </div>,
         document.body

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { paymentAPI } from '../services/api';
+import { useModalDraggable } from '../hooks/useModalDraggable';
 
 /**
  * 입금/출금 설정 공통 모달
@@ -32,6 +33,7 @@ const PaymentModal = ({
   // 미결제 전표 목록
   const [unpaidTrades, setUnpaidTrades] = useState([]);
   const [loadingTrades, setLoadingTrades] = useState(false);
+  const { handleMouseDown, draggableStyle } = useModalDraggable(isOpen);
 
   // 모달 열릴 때 초기화 및 미결제 전표 로드
   useEffect(() => {
@@ -58,263 +60,152 @@ const PaymentModal = ({
   const loadUnpaidTrades = async () => {
     if (!companyId) return;
 
-    setLoadingTrades(true);
     try {
-      const tradeType = isPurchase ? 'PURCHASE' : 'SALE';
-      const response = await paymentAPI.getUnpaidTrades(companyId, tradeType);
+      setLoadingTrades(true);
+      // tradeType은 반대로 조회 (매출 전표 결제면 SALE, 매입 전표 결제면 PURCHASE)
+      const type = isPurchase ? 'PURCHASE' : 'SALE';
+      const response = await paymentAPI.getUnpaidTrades(companyId, type);
       setUnpaidTrades(response.data.data || []);
-    } catch (error) {
-      console.error('미결제 전표 조회 오류:', error);
+    } catch (err) {
+      console.error('미결제 전표 조회 오류:', err);
       setUnpaidTrades([]);
+    } finally {
+      setLoadingTrades(false);
     }
-    setLoadingTrades(false);
   };
 
-  // 금액 입력 핸들러
-  const handleAmountChange = (e) => {
-    const rawValue = e.target.value.replace(/[^\d]/g, '');
-    const numericValue = parseInt(rawValue) || 0;
-    setPayment(prev => ({
-      ...prev,
-      amount: rawValue,
-      displayAmount: numericValue > 0 ? formatCurrency(numericValue) : ''
-    }));
-  };
-
-  // 전액 입력
-  const handleFullPayment = () => {
-    if (!companySummary?.final_balance) return;
-    const fullAmount = companySummary.final_balance;
-    setPayment(prev => ({
-      ...prev,
-      amount: String(fullAmount),
-      displayAmount: formatCurrency(fullAmount)
-    }));
-  };
-
-  // 숫자 포맷
-  const formatCurrency = (value) => {
-    if (!value && value !== 0) return '';
-    return new Intl.NumberFormat('ko-KR').format(value);
-  };
-
-  // FIFO 자동 배분 계산
+  // FIFO 정산 로직 시뮬레이션
   const fifoAllocation = useMemo(() => {
-    const amount = parseInt(payment.amount) || 0;
-    if (amount === 0 || unpaidTrades.length === 0) {
-      return {
-        allocations: unpaidTrades.map(t => ({ ...t, allocatedAmount: 0, status: 'pending' })),
-        totalAllocated: 0,
-        balanceAfter: companySummary?.final_balance || 0,
-        paidCount: 0,
-        partialCount: 0
-      };
-    }
-
+    const amount = parseFloat(payment.amount) || 0;
     let remaining = amount;
-    let paidCount = 0;
-    let partialCount = 0;
-
     const allocations = unpaidTrades.map(trade => {
       const unpaid = parseFloat(trade.unpaid_amount) || 0;
-
-      if (remaining <= 0) {
-        return { ...trade, allocatedAmount: 0, status: 'pending' };
-      }
-
       const allocated = Math.min(remaining, unpaid);
       remaining -= allocated;
 
-      let status = 'pending';
-      if (allocated >= unpaid) {
-        status = 'paid';
-        paidCount++;
-      } else if (allocated > 0) {
-        status = 'partial';
-        partialCount++;
-      }
-
-      return { ...trade, allocatedAmount: allocated, status };
+      return {
+        ...trade,
+        allocatedAmount: allocated,
+        status: allocated >= unpaid ? 'paid' : (allocated > 0 ? 'partial' : 'pending')
+      };
     });
 
     return {
       allocations,
       totalAllocated: amount - remaining,
-      balanceAfter: (companySummary?.final_balance || 0) - amount,
-      paidCount,
-      partialCount
+      extraAmount: remaining,
+      paidCount: allocations.filter(a => a.status === 'paid').length,
+      partialCount: allocations.filter(a => a.status === 'partial').length
     };
-  }, [payment.amount, unpaidTrades, companySummary]);
+  }, [payment.amount, unpaidTrades]);
 
-  // 확인 버튼 클릭
+  const handleAmountChange = (e) => {
+    const val = e.target.value.replace(/[^0-9]/g, '');
+    const numVal = parseInt(val || '0', 10);
+
+    setPayment(prev => ({
+      ...prev,
+      amount: numVal,
+      displayAmount: numVal === 0 ? '' : numVal.toLocaleString()
+    }));
+  };
+
   const handleConfirm = () => {
-    onConfirm({
-      amount: payment.amount,
-      displayAmount: payment.displayAmount,
-      payment_method: payment.payment_method,
-      notes: payment.notes
-    });
+    onConfirm(payment);
   };
 
-  // 삭제 버튼 클릭
-  const handleDelete = () => {
-    onConfirm({
-      amount: '',
-      displayAmount: '',
-      payment_method: '계좌이체',
-      notes: ''
-    });
-  };
-
-  // 취소 버튼 클릭
   const handleCancel = () => {
     onClose();
   };
 
+  const handleDelete = () => {
+    onConfirm({ amount: 0, displayAmount: '', payment_method: '', notes: '' });
+  };
+
+  const formatCurrency = (val) => {
+    return new Intl.NumberFormat('ko-KR').format(val || 0);
+  };
+
   if (!isOpen) return null;
 
-  const transactionLabel = isPurchase ? '출금' : '입금';
-  const balanceLabel = isPurchase ? '미지급금' : '미수금';
-  const headerColor = isPurchase ? '#3498db' : '#27ae60';
-  const icon = isPurchase ? '💸' : '💰';
+  const modalTitle = isPurchase ? '💸 출금(결제) 설정' : '💰 입금(수금) 설정';
 
   return createPortal(
-    <div className="modal-overlay">
+    <div className="modal-overlay" style={{ zIndex: 1100 }}>
       <div
-        className="modal-container"
-        style={{ maxWidth: '700px', maxHeight: '90vh', overflow: 'auto', padding: '1.5rem' }}
+        className="styled-modal"
+        style={{
+          width: '550px',
+          maxHeight: '90vh',
+          display: 'flex',
+          flexDirection: 'column',
+          ...draggableStyle
+        }}
         onClick={(e) => e.stopPropagation()}
       >
-        {/* 거래처명 강조 헤더 */}
-        <div style={{
-          backgroundColor: headerColor,
-          color: 'white',
-          padding: '1rem 1.5rem',
-          margin: '-1.5rem -1.5rem 1.5rem -1.5rem',
-          borderRadius: '12px 12px 0 0',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '1rem'
-        }}>
-          <span style={{ fontSize: '2rem' }}>{icon}</span>
-          <div>
-            <div style={{ fontSize: '0.9rem', opacity: 0.9 }}>
-              {transactionLabel} 설정
-            </div>
-            <div style={{ fontSize: '1.4rem', fontWeight: '700' }}>
-              {companyName}
-            </div>
-          </div>
+        <div
+          className="modal-header draggable-header"
+          onMouseDown={handleMouseDown}
+        >
+          <h3 className="drag-pointer-none">{modalTitle}</h3>
+          <button className="close-btn drag-pointer-auto" onClick={handleCancel}>&times;</button>
         </div>
 
-        {/* 현재 잔액 및 입금 후 잔액 표시 */}
-        {companySummary && (
+        <div className="modal-body" style={{ overflowY: 'auto' }}>
           <div style={{
-            marginBottom: '1rem',
             padding: '1rem',
-            backgroundColor: '#f8f9fa',
+            backgroundColor: '#f8fafc',
             borderRadius: '8px',
-            display: 'grid',
-            gridTemplateColumns: '1fr 1fr 1fr',
-            gap: '1rem',
-            textAlign: 'center'
+            border: '1px solid #e2e8f0',
+            marginBottom: '1rem'
           }}>
-            <div>
-              <div style={{ color: '#7f8c8d', fontSize: '0.85rem', marginBottom: '4px' }}>
-                현재 {balanceLabel}
-              </div>
-              <div style={{ fontWeight: '700', fontSize: '1.1rem', color: '#2c3e50' }}>
-                {formatCurrency(companySummary.final_balance)}원
-              </div>
+            <div style={{ display: 'flex', marginBottom: '0.5rem' }}>
+              <span style={{ width: '80px', color: '#64748b' }}>거래처:</span>
+              <span style={{ fontWeight: '600' }}>{companyName}</span>
             </div>
-            <div>
-              <div style={{ color: '#7f8c8d', fontSize: '0.85rem', marginBottom: '4px' }}>
-                {transactionLabel} 금액
-              </div>
-              <div style={{ fontWeight: '700', fontSize: '1.1rem', color: '#3498db' }}>
-                {payment.amount ? formatCurrency(payment.amount) + '원' : '-'}
-              </div>
+            <div style={{ display: 'flex', marginBottom: '0.5rem' }}>
+              <span style={{ width: '80px', color: '#64748b' }}>거래일:</span>
+              <span>{tradeDate}</span>
             </div>
-            <div>
-              <div style={{ color: '#7f8c8d', fontSize: '0.85rem', marginBottom: '4px' }}>
-                {transactionLabel} 후 잔액
-              </div>
-              <div style={{
-                fontWeight: '700',
-                fontSize: '1.1rem',
-                color: fifoAllocation.balanceAfter <= 0 ? '#27ae60' : '#e74c3c'
-              }}>
-                {payment.amount ? formatCurrency(Math.max(0, fifoAllocation.balanceAfter)) + '원' : '-'}
-              </div>
+            <div style={{ display: 'flex' }}>
+              <span style={{ width: '80px', color: '#64748b' }}>전잔고:</span>
+              <span style={{ fontWeight: '600', color: '#c62828' }}>
+                {formatCurrency(companySummary?.previous_balance)}원
+              </span>
             </div>
           </div>
-        )}
 
-        <div style={{ textAlign: 'left' }}>
-          {/* 기본 정보 입력 */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
             <div className="form-group">
-              <label>거래일자</label>
+              <label>{isPurchase ? '출금액' : '입금액'}</label>
               <input
-                type="date"
-                value={tradeDate}
-                disabled
-                style={{ backgroundColor: '#f5f5f5' }}
+                type="text"
+                className="form-input"
+                style={{ fontSize: '1.2rem', fontWeight: '700', textAlign: 'right', color: '#1565c0' }}
+                value={payment.displayAmount}
+                onChange={handleAmountChange}
+                placeholder="0"
+                autoFocus
               />
             </div>
-
             <div className="form-group">
-              <label className="required">금액</label>
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <input
-                  type="text"
-                  value={payment.displayAmount}
-                  onChange={handleAmountChange}
-                  placeholder="0"
-                  style={{ textAlign: 'right', flex: 1 }}
-                  autoFocus
-                />
-                {companySummary && companySummary.final_balance > 0 && (
-                  <button
-                    type="button"
-                    onClick={handleFullPayment}
-                    style={{
-                      padding: '8px 12px',
-                      backgroundColor: '#27ae60',
-                      color: 'white',
-                      border: 'none',
-                      borderRadius: '6px',
-                      cursor: 'pointer',
-                      whiteSpace: 'nowrap',
-                      fontSize: '0.85rem'
-                    }}
-                  >
-                    전액
-                  </button>
-                )}
-              </div>
-            </div>
-          </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
-            <div className="form-group">
-              <label>결제방법</label>
+              <label>결제 수단</label>
               <select
+                className="form-select"
                 value={payment.payment_method}
                 onChange={(e) => setPayment(prev => ({ ...prev, payment_method: e.target.value }))}
               >
-                <option value="현금">현금</option>
                 <option value="계좌이체">계좌이체</option>
+                <option value="현금">현금</option>
                 <option value="카드">카드</option>
-                <option value="어음">어음</option>
                 <option value="기타">기타</option>
               </select>
             </div>
-
-            <div className="form-group">
-              <label>비고</label>
+            <div className="form-group" style={{ gridColumn: 'span 2' }}>
+              <label>메모</label>
               <input
                 type="text"
+                className="form-input"
                 value={payment.notes}
                 onChange={(e) => setPayment(prev => ({ ...prev, notes: e.target.value }))}
                 placeholder="메모"
@@ -453,8 +344,8 @@ const PaymentModal = ({
           </div>
         </div>
 
-        <div className="modal-buttons" style={{ marginTop: '1.5rem', display: 'flex', justifyContent: 'space-between' }}>
-          <div>
+        <div className="modal-buttons" style={{ marginTop: '1.5rem', display: 'flex', borderTop: '1px solid #eee', padding: '1rem 0' }}>
+          <div style={{ flex: 1 }}>
             {/* 기존에 설정된 입출금이 있을 때만 삭제 버튼 표시 */}
             {initialPayment.amount && parseFloat(initialPayment.amount) !== 0 && (
               <button
@@ -462,7 +353,10 @@ const PaymentModal = ({
                 style={{
                   backgroundColor: '#e74c3c',
                   color: 'white',
-                  border: 'none'
+                  border: 'none',
+                  padding: '0.6rem 1.2rem',
+                  borderRadius: '6px',
+                  cursor: 'pointer'
                 }}
                 onClick={handleDelete}
               >
@@ -474,12 +368,29 @@ const PaymentModal = ({
             <button
               className="modal-btn modal-btn-cancel"
               onClick={handleCancel}
+              style={{
+                padding: '0.6rem 1.2rem',
+                backgroundColor: '#94a3b8',
+                color: 'white',
+                border: 'none',
+                borderRadius: '6px',
+                cursor: 'pointer'
+              }}
             >
               취소
             </button>
             <button
               className="modal-btn modal-btn-primary"
               onClick={handleConfirm}
+              style={{
+                padding: '0.6rem 1.2rem',
+                backgroundColor: '#3b82f6',
+                color: 'white',
+                border: 'none',
+                borderRadius: '6px',
+                cursor: 'pointer',
+                fontWeight: '600'
+              }}
             >
               확인
             </button>
@@ -492,14 +403,3 @@ const PaymentModal = ({
 };
 
 export default PaymentModal;
-
-
-
-
-
-
-
-
-
-
-

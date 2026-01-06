@@ -200,7 +200,6 @@ const Navbar = ({ onLaunchApp }) => {
                             <li><span onClick={() => handleLaunch('INVENTORY_QUICK')}>재고 현황 (Quick)</span></li>
                             <li><span onClick={() => handleLaunch('INVENTORY_TRANSFER')}>재고 이동</span></li>
                             <li><span onClick={() => handleLaunch('INVENTORY_PRODUCTION')}>재고 작업</span></li>
-                            <li><span onClick={() => handleLaunch('INVENTORY_PRODUCTION_HISTORY')}>재고 작업 이력</span></li>
                             <li><span onClick={() => handleLaunch('MATCHING')}>마감 (매칭)</span></li>
                             <li><span onClick={() => handleLaunch('INVENTORY_HISTORY')}>재고 이력</span></li>
                             <li><span onClick={() => handleLaunch('INVENTORY_AUDIT')}>재고 실사</span></li>

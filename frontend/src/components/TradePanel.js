@@ -1,15 +1,13 @@
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { tradeAPI, companyAPI, productAPI, paymentAPI, settingsAPI, warehousesAPI } from '../services/api';
-import './TradePanel.css'; // 스타일 분리
-import SearchableSelect from './SearchableSelect';
-import TradeDeleteConfirmModal from './TradeDeleteConfirmModal';
+import { tradeAPI, companyAPI, productAPI, paymentAPI, settingsAPI, warehousesAPI, companyInfoAPI, purchaseInventoryAPI, matchingAPI } from '../services/api';
 import ConfirmModal from './ConfirmModal';
+import TradePrintModal from './TradePrintModal';
+import './TradePanel.css';
+import TradeDeleteConfirmModal from './TradeDeleteConfirmModal';
+import SearchableSelect from './SearchableSelect';
+import { useModalDraggable } from '../hooks/useModalDraggable';
 
-/**
- * TradePanel - 단일 전표 패널 컴포넌트
- * 기존 TradeForm.js와 동일한 UI 구성
- */
 function TradePanel({
   tradeType = 'SALE',
   panelId,
@@ -27,9 +25,7 @@ function TradePanel({
 }) {
   const isPurchase = tradeType === 'PURCHASE';
 
-
-
-  // 모바일 감지
+  // Draggable hooks for inline modals (initialized later after state definitions)
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
 
   useEffect(() => {
@@ -119,6 +115,12 @@ function TradePanel({
     maxQuantity: 0,
     dropIndex: null // 드롭된 위치
   });
+
+  // Draggable hooks for inline modals
+  const { handleMouseDown: handlePaymentDrag, draggableStyle: paymentDragStyle } = useModalDraggable(!!addPaymentModal.isOpen || !!editingPayment || !!editingPendingPayment);
+  const { handleMouseDown: handleMatchingDrag, draggableStyle: matchingDragStyle } = useModalDraggable(!!matchingInfoModal.isOpen, { isCentered: true });
+  // 재고 드롭 모달 중앙 정렬을 위해 isCentered: true 옵션 추가
+  const { handleMouseDown: handleInventoryDrag, draggableStyle: inventoryDragStyle } = useModalDraggable(!!inventoryInputModal.isOpen, { isCentered: true });
 
   // 모달
   const [modal, setModal] = useState({
@@ -738,7 +740,7 @@ function TradePanel({
     const price = parseFloat(unitPrice) || 0;
 
     // DEBUG: 값 확인
-    // showModal('info', 'DEBUG', `입력값: ${qty} (Type: ${typeof qty})\n최대값: ${maxQuantity} (Type: ${typeof maxQuantity})`);
+    // showModal('info', 'DEBUG', `입력값: ${ qty } (Type: ${ typeof qty }) \n최대값: ${ maxQuantity } (Type: ${ typeof maxQuantity })`);
 
     // 만약 maxQuantity가 undefined면 0으로 취급하여 검증
     const limit = maxQuantity ?? 0;
@@ -1164,7 +1166,7 @@ function TradePanel({
         }
 
         if (!shouldPrint) {
-          showModal('success', '저장 완료', `전표가 ${isEdit ? '수정' : '등록'}되었습니다.`);
+          showModal('success', '저장 완료', `전표가 ${isEdit ? '수정' : '등록'} 되었습니다.`);
         }
 
         // 저장 후 전표 다시 로드
@@ -1282,9 +1284,11 @@ function TradePanel({
   const companyOptions = useMemo(() => {
     return companies.map(company => ({
       value: company.id,
-      label: company.alias || company.company_name,
-      // subLabel: company.company_name, // 표시 안함
-      data: { subLabel: company.company_name, code: company.code } // 검색 필터용 데이터
+      // [CHANGED] 별칭 (사업자명) 형태로 표시
+      label: company.business_name && company.business_name !== company.company_name
+        ? `${company.company_name} (${company.business_name})`
+        : company.company_name,
+      data: { subLabel: company.business_name, code: company.company_code } // 검색 필터용 데이터 (business_name 추가)
     }));
   }, [companies]);
 
@@ -1297,10 +1301,10 @@ function TradePanel({
     });
 
     return sorted.map(product => {
-      const weightStr = product.weight ? `${parseFloat(product.weight)}kg` : '';
+      const weightStr = product.weight ? `${parseFloat(product.weight)} kg` : '';
       return {
         value: product.id,
-        label: `${product.product_name}${weightStr ? ` ${weightStr}` : ''}${product.grade ? ` (${product.grade})` : ''}`
+        label: `${product.product_name}${weightStr ? ` ${weightStr}` : ''}${product.grade ? ` (${product.grade})` : ''} `
       };
     });
   }, [products]);
@@ -1336,7 +1340,7 @@ function TradePanel({
 
   // 폰트 스케일에 따른 크기 계산 헬퍼
   // 고정 폰트 크기 (전표 목록과 동일하게 0.8rem 기준)
-  const fs = (size) => `${(size * 0.85).toFixed(2)}rem`;
+  const fs = (size) => `${(size * 0.85).toFixed(2)} rem`;
 
   return (
     <div className="trade-panel" style={{
@@ -1355,7 +1359,7 @@ function TradePanel({
         {/* 기본 정보 카드 */}
         <div className="card" style={{ marginBottom: '0.5rem', padding: '9px', flexShrink: 0, backgroundColor: cardColor }}>
           <div className="trade-form-row">
-            <div className="trade-form-group trade-date-group" style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '8px', height: '32px' }}>
+            <div className="trade-form-group trade-date-group" style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '8px', height: '36px' }}>
               {/* <label className="trade-label required" style={{ marginBottom: 0, whiteSpace: 'nowrap' }}>거래일자</label> */}
               <div className="trade-input-wrapper" style={{ flex: 1, height: '100%' }}>
                 <button
@@ -1369,10 +1373,9 @@ function TradePanel({
                   type="date"
                   value={master.trade_date}
                   onChange={(e) => handleDateInputChange(e.target.value)}
-                  className={`trade-date-input ${master.trade_date !== new Date().toLocaleDateString('en-CA') ? 'is-not-today' : ''}`}
+                  className={`trade-date-input ${master.trade_date !== formatLocalDate(new Date()) ? 'is-not-today' : ''}`}
                   required
                   style={{ flex: 1, height: '100%' }}
-                // disabled={isViewMode} // 거래처 선택 상태에서도 날짜 변경 가능하도록 수정
                 />
                 <button
                   type="button"
@@ -1383,7 +1386,7 @@ function TradePanel({
                 >▶</button>
               </div>
             </div>
-            <div className="trade-form-group" style={{ flex: 1, display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '8px', height: '32px' }}>
+            <div className="trade-form-group" style={{ flex: 1, display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '8px', height: '36px' }}>
               {/* <label className="trade-label required" style={{ marginBottom: 0, whiteSpace: 'nowrap' }}>거래처</label> */}
               <div style={{ flex: 1, height: '100%' }}>
                 <SearchableSelect
@@ -1394,9 +1397,9 @@ function TradePanel({
                   placeholder="거래처 선택..."
                   noOptionsMessage="거래처 없음"
                   styles={{
-                    control: (base) => ({ ...base, minHeight: '32px', height: '32px' }),
-                    valueContainer: (base) => ({ ...base, height: '30px', padding: '0 8px' }),
-                    indicatorsContainer: (base) => ({ ...base, height: '30px' }),
+                    control: (base) => ({ ...base, minHeight: '36px', height: '36px' }),
+                    valueContainer: (base) => ({ ...base, height: '34px', padding: '0 8px' }),
+                    indicatorsContainer: (base) => ({ ...base, height: '34px' }),
                     menuPortal: (base) => ({ ...base, zIndex: 99999 })
                   }}
                   menuPortalTarget={document.body}
@@ -1404,7 +1407,7 @@ function TradePanel({
               </div>
             </div>
             {isPurchase && (
-              <div className="trade-form-group" style={{ width: '180px', display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '8px', height: '32px' }}>
+              <div className="trade-form-group" style={{ width: '180px', display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '8px', height: '36px' }}>
                 {/* <label className="trade-label" style={{ marginBottom: 0, whiteSpace: 'nowrap' }}>입고 창고</label> */}
                 <div style={{ flex: 1, height: '100%' }}>
                   <SearchableSelect
@@ -1416,9 +1419,9 @@ function TradePanel({
                     placeholder="기본 창고"
                     isDisabled={!master.company_id || isViewMode}
                     styles={{
-                      control: (base) => ({ ...base, minHeight: '32px', height: '32px' }),
-                      valueContainer: (base) => ({ ...base, height: '30px', padding: '0 8px' }),
-                      indicatorsContainer: (base) => ({ ...base, height: '30px' }),
+                      control: (base) => ({ ...base, minHeight: '36px', height: '36px' }),
+                      valueContainer: (base) => ({ ...base, height: '34px', padding: '0 8px' }),
+                      indicatorsContainer: (base) => ({ ...base, height: '34px' }),
                       menuPortal: (base) => ({ ...base, zIndex: 99999 })
                     }}
                     menuPortalTarget={document.body}
@@ -1561,7 +1564,7 @@ function TradePanel({
                       }}
                       onDragEnd={handleDragEnd}
                       onClick={() => setSelectedRowIndex(index)}
-                      className={`trade-table-row ${selectedRowIndex === index ? 'selected' : ''} ${draggedIndex === index ? 'is-dragging' : ''} ${dragOverIndex === index ? 'is-over' : ''}`}
+                      className={`trade - table - row ${selectedRowIndex === index ? 'selected' : ''} ${draggedIndex === index ? 'is-dragging' : ''} ${dragOverIndex === index ? 'is-over' : ''} `}
                       style={{ transition: 'background-color 0.15s' }}
                     >
                       <td>
@@ -1724,7 +1727,7 @@ function TradePanel({
               <div className="balance-list">
                 <div className="balance-item header">
                   <span className="font-medium text-blue">금일 합계</span>
-                  <span className={`font-bold ${isPurchase ? 'text-red' : 'text-blue'}`}>
+                  <span className={`font - bold ${isPurchase ? 'text-red' : 'text-blue'} `}>
                     {formatCurrency(currentTodayTotal)}원
                   </span>
                 </div>
@@ -1768,7 +1771,7 @@ function TradePanel({
                 const balanceClass = displayBalance > 0 ? 'positive' : displayBalance < 0 ? 'negative' : 'zero';
 
                 return (
-                  <div className={`balance-box ${balanceClass}`}>
+                  <div className={`balance - box ${balanceClass} `}>
                     <span className="balance-box-label">
                       잔고{pendingTotal > 0 ? ' (예정)' : ''}
                     </span>
@@ -1812,11 +1815,11 @@ function TradePanel({
 
                       // 유형별 스타일
                       return (
-                        <div key={`${payment.id}-${linkType}`} className={`payment-item ${linkType}`}>
+                        <div key={`${payment.id} -${linkType} `} className={`payment - item ${linkType} `}>
                           <div className="flex-1">
                             <div className="payment-detail-row">
                               {formatCurrency(displayAmount)}원
-                              <span className={`payment-badge ${linkType}`}>
+                              <span className={`payment - badge ${linkType} `}>
                                 {linkType === 'direct' ? '직접' : linkType === 'allocated' ? '배분' : '수금/지급'}
                               </span>
                               <span style={{
@@ -1996,16 +1999,19 @@ function TradePanel({
             <div
               className="modal-container"
               tabIndex={-1}
+              onMouseDown={handlePaymentDrag}
               style={{
+                ...paymentDragStyle,
                 maxWidth: '400px',
                 padding: '1.5rem',
                 backgroundColor: '#fff',
                 borderRadius: '12px',
                 boxShadow: '0 10px 40px rgba(0,0,0,0.2)',
-                outline: 'none'
+                outline: 'none',
+                cursor: 'grab'
               }}
             >
-              <h3 style={{ margin: '0 0 1rem 0', color: '#2c3e50' }}>
+              <h3 style={{ margin: '0 0 1rem 0', color: '#2c3e50', pointerEvents: 'none' }}>
                 {isPurchase ? '💸 출금' : '💰 입금'} 추가
               </h3>
 
@@ -2020,7 +2026,7 @@ function TradePanel({
                     const inputValue = e.target.value;
                     const isNegative = inputValue.startsWith('-');
                     const numericPart = inputValue.replace(/[^0-9]/g, '');
-                    const rawValue = isNegative && numericPart ? `-${numericPart}` : numericPart;
+                    const rawValue = isNegative && numericPart ? `- ${numericPart} ` : numericPart;
                     const displayValue = numericPart
                       ? (isNegative ? '-' : '') + new Intl.NumberFormat('ko-KR').format(parseInt(numericPart))
                       : (isNegative ? '-' : '');
@@ -2132,16 +2138,19 @@ function TradePanel({
             <div
               className="modal-container"
               tabIndex={-1}
+              onMouseDown={handlePaymentDrag}
               style={{
+                ...paymentDragStyle,
                 backgroundColor: 'white',
                 borderRadius: '8px',
                 maxWidth: '400px',
                 width: '90%',
                 padding: '1.5rem',
-                outline: 'none'
+                outline: 'none',
+                cursor: 'grab'
               }}
             >
-              <h3 style={{ margin: '0 0 1rem 0', color: '#2c3e50' }}>
+              <h3 style={{ margin: '0 0 1rem 0', color: '#2c3e50', pointerEvents: 'none' }}>
                 {isPurchase ? '💸 출금' : '💰 입금'} 수정
               </h3>
 
@@ -2279,6 +2288,10 @@ function TradePanel({
             }}
           >
             <div style={{
+              ...matchingDragStyle,
+              position: 'fixed',
+              top: '50%',
+              left: '50%',
               backgroundColor: 'white',
               borderRadius: '12px',
               maxWidth: '500px',
@@ -2290,12 +2303,16 @@ function TradePanel({
               boxShadow: '0 10px 40px rgba(0,0,0,0.3)'
             }}>
               {/* 헤더 */}
-              <div style={{
-                padding: '1rem 1.5rem',
-                backgroundColor: '#e74c3c',
-                color: 'white'
-              }}>
-                <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <div
+                onMouseDown={handleMatchingDrag}
+                style={{
+                  padding: '1rem 1.5rem',
+                  backgroundColor: '#e74c3c',
+                  color: 'white',
+                  cursor: 'grab'
+                }}
+              >
+                <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem', pointerEvents: 'none' }}>
                   ⚠️ 삭제할 수 없습니다
                 </h3>
               </div>
@@ -2413,7 +2430,8 @@ function TradePanel({
         ]}
         tradeDate={master.trade_date}
         tradeType={master.trade_type}
-        tradePartnerName={companies.find(c => String(c.id) === String(master.company_id))?.company_name}
+        companyName={companies.find(c => String(c.id) === String(master.company_id))?.company_name}
+        tradeNumber={currentTradeId} // 전표 번호 전달 추가 (누락되어 있었음)
       />
 
       {/* 대기 중 입출금 수정 모달 */}
@@ -2442,16 +2460,19 @@ function TradePanel({
             <div
               className="modal-container"
               tabIndex={-1}
+              onMouseDown={handlePaymentDrag}
               style={{
+                ...paymentDragStyle,
                 backgroundColor: 'white',
                 borderRadius: '8px',
                 maxWidth: '400px',
                 width: '90%',
                 padding: '1.5rem',
-                outline: 'none'
+                outline: 'none',
+                cursor: 'grab'
               }}
             >
-              <h3 style={{ margin: '0 0 1rem 0', color: '#2c3e50' }}>
+              <h3 style={{ margin: '0 0 1rem 0', color: '#2c3e50', pointerEvents: 'none' }}>
                 {isPurchase ? '💸 출금' : '💰 입금'} 수정 (대기)
               </h3>
 
@@ -2590,19 +2611,28 @@ function TradePanel({
             <div
               className="modal-container"
               style={{
+                ...inventoryDragStyle,
+                position: 'fixed', // useModalDraggable의 transform 기준점 확보
+                top: '50%',
+                left: '50%',
                 width: '450px',
                 maxWidth: '90%',
                 padding: '1.5rem',
-                textAlign: 'left' // modal-container 기본이 center일 수 있으므로
+                textAlign: 'left', // modal-container 기본이 center일 수 있으므로
+                boxShadow: '0 4px 6px rgba(0,0,0,0.1), 0 1px 3px rgba(0,0,0,0.08)' // 그림자 추가
               }}
               onClick={(e) => e.stopPropagation()}
             >
               {/* 헤더 */}
-              <div style={{
-                textAlign: 'center',
-                marginBottom: '1.5rem'
-              }}>
-                <h3 style={{ margin: '0 0 0.5rem 0', color: '#2c3e50', fontSize: '1.4rem' }}>재고 품목 추가</h3>
+              <div
+                onMouseDown={handleInventoryDrag}
+                style={{
+                  textAlign: 'center',
+                  marginBottom: '1.5rem',
+                  cursor: 'grab'
+                }}
+              >
+                <h3 style={{ margin: '0 0 0.5rem 0', color: '#2c3e50', fontSize: '1.4rem', pointerEvents: 'none' }}>재고 품목 추가</h3>
                 <div style={{
                   fontSize: '1.1rem',
                   fontWeight: '700',
@@ -2611,8 +2641,8 @@ function TradePanel({
                   {(() => {
                     const inv = inventoryInputModal.inventory || {};
                     const weight = inv.weight || inv.product_weight;
-                    const weightText = weight ? ` ${parseFloat(weight)}kg` : '';
-                    const senderText = inv.sender ? ` ${inv.sender}` : '';
+                    const weightText = weight ? ` ${parseFloat(weight)} kg` : '';
+                    const senderText = inv.sender ? ` ${inv.sender} ` : '';
                     const gradeText = inv.grade ? ` (${inv.grade})` : '';
 
                     return (

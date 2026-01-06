@@ -854,7 +854,7 @@ function MatchingPage() {
                           style={{ fontWeight: '500', cursor: 'help' }}
                           title={sale.customer_name}
                         >
-                          {sale.alias || sale.customer_name}
+                          {sale.company_name || sale.customer_name}
                         </td>
                         <td className="text-right">{formatCurrency(sale.total_amount)}</td>
                         <td className="text-right" style={{ color: balance > 0 ? '#e74c3c' : '#27ae60' }}>
@@ -951,9 +951,9 @@ function MatchingPage() {
                           whiteSpace: 'nowrap',
                           maxWidth: '160px'
                         }}
-                        title={trade.alias || trade.customer_name}
+                        title={trade.company_name || trade.customer_name}
                       >
-                        {trade.alias || trade.customer_name}
+                        {trade.company_name || trade.customer_name}
                       </td>
                     </tr>
                   ))}
@@ -984,7 +984,7 @@ function MatchingPage() {
                     <span className="summary-divider">|</span>
                     <span className="summary-item">
                       <span className="summary-label">거래처</span>
-                      <span className="summary-value highlight">{matchingModal.trade?.alias || matchingModal.trade?.customer_name || '-'}</span>
+                      <span className="summary-value highlight">{matchingModal.trade?.company_name || matchingModal.trade?.customer_name || '-'}</span>
                     </span>
                     <span className="summary-divider">|</span>
                     <span className="summary-item">
@@ -1239,7 +1239,7 @@ function MatchingPage() {
                                 <td className="text-right" style={{ fontSize: '0.9rem' }}>
                                   {formatCurrency(inv.unit_price)}
                                 </td>
-                                <td style={{ fontSize: '0.9rem', whiteSpace: 'nowrap' }}>{inv.alias || inv.company_name}</td>
+                                <td style={{ fontSize: '0.9rem', whiteSpace: 'nowrap' }}>{inv.company_name}</td>
                                 <td style={{ fontSize: '0.85rem', whiteSpace: 'nowrap' }}>{formatDateShort(inv.purchase_date)}</td>
                               </tr>
                             );
@@ -1420,7 +1420,7 @@ function MatchingPage() {
                         <div className="matching-card-row">
                           <span className="matching-card-label">매입일</span>
                           <span className="matching-card-value">{formatDateShort(m.purchase_date)}</span>
-                          <span className="company-badge">{m.alias || m.purchase_company}</span>
+                          <span className="company-badge">{m.company_name || m.purchase_company}</span>
                         </div>
                       </div>
 
