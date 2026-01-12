@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { expenseCategoryAPI } from '../services/api';
 import ConfirmModal, { useConfirmModal } from '../components/ConfirmModal';
+import { useModalDraggable } from '../hooks/useModalDraggable';
 import '../components/TradePanel.css';
 
 const ExpenseCategoryManagement = () => {
@@ -18,6 +20,9 @@ const ExpenseCategoryManagement = () => {
 
     // Confirm Modal Hook
     const { openModal: openConfirm, ConfirmModalComponent } = useConfirmModal();
+
+    // Draggable Modal Hook
+    const { handleMouseDown, draggableStyle } = useModalDraggable(isModalOpen);
 
     useEffect(() => {
         fetchCategories();
@@ -320,11 +325,19 @@ const ExpenseCategoryManagement = () => {
             </div>
 
             {/* Modal */}
-            {isModalOpen && (
-                <div className="modal-overlay">
-                    <div className="styled-modal" style={{ width: '400px' }} onClick={e => e.stopPropagation()}>
-                        <div className="modal-header">
-                            <h3>💸 {modalData.id ? '항목 수정' : '새 항목 추가'}</h3>
+            {isModalOpen && createPortal(
+                <div className="modal-overlay" style={{ zIndex: 10100 }}>
+                    <div
+                        className="styled-modal"
+                        style={{ width: '400px', ...draggableStyle }}
+                        onClick={e => e.stopPropagation()}
+                    >
+                        <div
+                            className="modal-header draggable-header"
+                            onMouseDown={handleMouseDown}
+                            style={{ cursor: 'move' }}
+                        >
+                            <h3 style={{ margin: 0 }}>💸 {modalData.id ? '항목 수정' : '새 항목 추가'}</h3>
                             <button className="close-btn" onClick={closeModal}>&times;</button>
                         </div>
 
@@ -351,7 +364,8 @@ const ExpenseCategoryManagement = () => {
                             </button>
                         </div>
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
 
             {ConfirmModalComponent}

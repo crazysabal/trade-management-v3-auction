@@ -4,6 +4,7 @@ import { matchingAPI } from '../services/api';
 import { Link } from 'react-router-dom';
 import ConfirmModal from '../components/ConfirmModal';
 import MatchingHistoryModal from '../components/MatchingHistoryModal';
+import MatchingQuantityInputModal from '../components/MatchingQuantityInputModal';
 
 function MatchingPage() {
   // 조회 조건
@@ -180,6 +181,17 @@ function MatchingPage() {
 
       const dates = Array.from(dateMap.values());
       setDateList(dates);
+
+      // [CHANGED] 기존 선택된 날짜가 있으면 유지
+      if (selectedDate) {
+        const preservedDateData = dates.find(d => d.date === selectedDate.date);
+        if (preservedDateData) {
+          setSelectedDate(preservedDateData);
+          setSalesData(preservedDateData.trades);
+          setLoading(false);
+          return;
+        }
+      }
 
       const today = getDateString(0);
       const todayData = dates.find(d => d.date === today);
@@ -401,10 +413,12 @@ function MatchingPage() {
   };
 
   // 수량 입력 모달 확인 - 바로 DB에 저장
-  const handleQtyInputConfirm = async () => {
-    const { saleItem, inventory, quantity } = qtyInputModal;
+  const handleQtyInputConfirmWithValue = async (confirmedQty) => {
+    // 인자로 전달된 수량이 없으면 상태에서 가져옴 (하위 호환)
+    const quantityToUse = confirmedQty !== undefined ? confirmedQty : qtyInputModal.quantity;
+    const { saleItem, inventory } = qtyInputModal;
 
-    if (quantity <= 0) {
+    if (quantityToUse <= 0) {
       setQtyInputModal({ isOpen: false, saleItem: null, inventory: null, quantity: 0, maxQuantity: 0 });
       return;
     }
@@ -415,7 +429,7 @@ function MatchingPage() {
         sale_detail_id: saleItem.sale_detail_id,
         matchings: [{
           purchase_inventory_id: inventory.id,
-          quantity: quantity
+          quantity: quantityToUse
         }]
       });
 
@@ -441,6 +455,9 @@ function MatchingPage() {
       });
     }
   };
+
+  // 기존 호환성 유지용 (혹시 모를 호출 대비)
+  const handleQtyInputConfirm = () => handleQtyInputConfirmWithValue(qtyInputModal.quantity);
 
   // 수량 입력 모달 취소
   const handleQtyInputCancel = () => {
@@ -752,7 +769,7 @@ function MatchingPage() {
       {/* 3단 레이아웃 */}
       <div style={{ display: 'flex', gap: '0.5rem', flex: 1, minHeight: 0 }}>
         {/* 왼쪽: 날짜 목록 */}
-        <div className="card" style={{ width: '150px', flexShrink: 0, padding: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+        <div className="card" style={{ width: 'auto', flexShrink: 0, padding: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
           <h3 className="card-title" style={{ margin: 0, padding: '0.5rem', borderRadius: 0, fontSize: '0.9rem', flexShrink: 0, backgroundColor: '#f8f9fa', borderBottom: '1px solid #ddd' }}>날짜</h3>
           <div style={{ flex: 1, overflowY: 'auto' }}>
             <table style={{ width: '100%' }}>
@@ -772,43 +789,55 @@ function MatchingPage() {
                       }}
                     >
                       <td style={{
-                        padding: '0.5rem 0.5rem',
+                        padding: '0.3rem 0.3rem',
                         borderBottom: '1px solid #eee',
                         color: dayColor,
-                        fontWeight: isSelected ? '600' : '400'
+                        fontWeight: isSelected ? '600' : '400',
+                        textAlign: 'center',
+                        whiteSpace: 'nowrap'
                       }}>
-                        {dateData.date.substring(5)}
+                        {dateData.date}({dateData.dayOfWeek})
                       </td>
+
+
+
                       <td style={{
-                        padding: '0.5rem 0.4rem',
+                        padding: '0.3rem 0.3rem',
                         borderBottom: '1px solid #eee',
-                        color: dayColor,
-                        textAlign: 'center'
+                        textAlign: 'right',
+                        verticalAlign: 'middle'
                       }}>
-                        {dateData.dayOfWeek}
-                      </td>
-                      <td style={{
-                        padding: '0.6rem 0.4rem',
-                        borderBottom: '1px solid #eee',
-                        textAlign: 'center'
-                      }}>
-                        {dateData.unmatchedCount > 0 && (
-                          <span style={{
-                            backgroundColor: '#e74c3c',
-                            color: '#fff',
-                            padding: '2px 6px',
-                            borderRadius: '10px',
-                            fontSize: '0.8rem'
-                          }}>
-                            {dateData.unmatchedCount}
-                          </span>
-                        )}
+                        {(() => {
+                          const trades = dateData.trades || [];
+                          const total = trades.length;
+                          const completed = trades.filter(t => t.overall_status === 'MATCHED').length;
+                          const unmatched = total - completed;
+
+                          if (total === 0) return <span style={{ color: '#ccc', fontSize: '0.8rem' }}>-</span>;
+
+                          return (
+                            <div style={{ display: 'flex', flexDirection: 'row', gap: '8px', fontSize: '0.8rem', alignItems: 'center', justifyContent: 'flex-end' }}>
+                              <strong style={{ color: '#555' }} title="전체">{total}</strong>
+                              <span style={{ color: '#ccc' }}>/</span>
+                              <strong style={{ color: '#27ae60' }} title="완료">{completed}</strong>
+                              <span style={{ color: '#ccc' }}>/</span>
+                              <strong style={{ color: unmatched > 0 ? '#e74c3c' : '#bdc3c7' }} title="미매칭">{unmatched}</strong>
+                            </div>
+                          );
+                        })()}
                       </td>
                     </tr>
                   );
                 })}
               </tbody>
             </table>
+          </div>
+          <div style={{ height: '40px', padding: '0 0.5rem', borderTop: '1px solid #ddd', backgroundColor: '#f8f9fa', fontSize: '0.75rem', color: '#666', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <span style={{ fontWeight: '600', color: '#555' }}>전체</span>
+            <span style={{ margin: '0 4px', color: '#ccc' }}>/</span>
+            <span style={{ fontWeight: '600', color: '#27ae60' }}>완료</span>
+            <span style={{ margin: '0 4px', color: '#ccc' }}>/</span>
+            <span style={{ fontWeight: '600', color: '#e74c3c' }}>미매칭</span>
           </div>
         </div>
 
@@ -912,13 +941,13 @@ function MatchingPage() {
             </div>
           )}
 
-          <div style={{ padding: '0.5rem 0.8rem', borderTop: '1px solid #eee', backgroundColor: '#f8f9fa', fontSize: '0.9rem', color: '#7f8c8d' }}>
+          <div style={{ height: '40px', padding: '0 0.8rem', borderTop: '1px solid #eee', backgroundColor: '#f8f9fa', fontSize: '0.9rem', color: '#7f8c8d', display: 'flex', alignItems: 'center' }}>
             💡 전표를 더블클릭하면 매칭 작업을 할 수 있습니다.
           </div>
         </div >
 
         {/* 오른쪽: 미매칭 전체 전표 목록 */}
-        <div className="card" style={{ width: '250px', flex: 'none', padding: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+        <div className="card" style={{ width: 'auto', flex: 'none', padding: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
           <h3 className="card-title" style={{ margin: 0, padding: '0.5rem', borderRadius: 0, fontSize: '0.9rem', flexShrink: 0, backgroundColor: '#f8f9fa', borderBottom: '1px solid #ddd' }}>
             미매칭 내역 <span style={{ fontWeight: '400', fontSize: '0.9rem' }}>({unmatchedTrades.length}건)</span>
           </h3>
@@ -931,8 +960,8 @@ function MatchingPage() {
               <table>
                 <thead>
                   <tr>
-                    <th style={{ width: '70px' }}>날짜</th>
-                    <th>거래처</th>
+                    <th style={{ whiteSpace: 'nowrap', padding: '0.5rem' }}>날짜</th>
+                    <th style={{ whiteSpace: 'nowrap', padding: '0.5rem' }}>거래처</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -943,14 +972,12 @@ function MatchingPage() {
                       style={{ cursor: 'pointer' }}
                       title="더블클릭하여 매칭"
                     >
-                      <td style={{ fontSize: '0.9rem' }}>{formatDateShort(trade.trade_date)}</td>
+                      <td style={{ fontSize: '0.9rem', whiteSpace: 'nowrap', padding: '0.3rem 0.5rem' }}>{formatDateShort(trade.trade_date)}</td>
                       <td
                         style={{
                           fontWeight: '500',
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
                           whiteSpace: 'nowrap',
-                          maxWidth: '160px'
+                          padding: '0.3rem 0.5rem'
                         }}
                         title={trade.company_name || trade.customer_name}
                       >
@@ -1266,111 +1293,35 @@ function MatchingPage() {
         showCancel={modal.showCancel}
       />
 
-      {/* 수량 입력 모달 */}
-      {
-        qtyInputModal.isOpen && createPortal(
-          <div className="modal-overlay">
-            <div
-              className="qty-input-modal"
-              onClick={(e) => e.stopPropagation()}
-            >
-              {/* 아이콘 */}
-              <div className="qty-input-modal-icon">
-                <span>📦</span>
-              </div>
+      <MatchingQuantityInputModal
+        isOpen={qtyInputModal.isOpen}
+        onClose={handleQtyInputCancel}
+        saleItem={qtyInputModal.saleItem}
+        inventory={qtyInputModal.inventory}
+        defaultQuantity={qtyInputModal.quantity}
+        maxQuantity={qtyInputModal.maxQuantity}
+        onConfirm={(qty) => {
+          setQtyInputModal(prev => ({ ...prev, quantity: qty }));
+          // 상태 업데이트 후 바로 handleQtyInputConfirm 실행을 위해 setTimeout 등 사용하거나,
+          // onConfirm에서 바로 로직을 수행하도록 변경해야 함.
+          // 여기서는 MatchingPage의 handleQtyInputConfirm 함수가 상태(qtyInputModal.quantity)를 참조하므로,
+          // 상태를 먼저 업데이트하고 useEffect를 쓰거나, 아니면 quantity를 인자로 받도록 수정해야 함.
+          // MatchingPage.js의 handleQtyInputConfirm을 수정하는 것이 가장 깔끔함.
+          // 일단 여기서는 quantity를 상태에 넣고 confirm 호출.
 
-              {/* 제목 */}
-              <h2 className="qty-input-modal-title">매칭 수량 입력</h2>
+          // 더 나은 방법: handleQtyInputConfirm이 인자를 받을 수 있게 수정하거나,
+          // 여기서 직접 match API 호출... 은 복잡.
+          // MatchingPage.js의 handleQtyInputConfirm은 인자 없이 상태를 참조함.
+          // 따라서 여기서 상태 업데이트를 해봤자 비동기라 바로 반영 안될 수 있음.
 
-              {/* 부제목 */}
-              <p className="qty-input-modal-subtitle">
-                {formatProductName(qtyInputModal.saleItem)}
-              </p>
-
-              {/* 정보 영역 */}
-              <div className="qty-input-info">
-                <div className="qty-input-row">
-                  <span className="qty-input-label">매입처</span>
-                  <span className="qty-input-value">{qtyInputModal.inventory?.company_name}</span>
-                </div>
-                <div className="qty-input-row">
-                  <span className="qty-input-label">출하주</span>
-                  <span className="qty-input-value">
-                    {qtyInputModal.inventory?.sender || '-'}
-                  </span>
-                </div>
-                <div className="qty-input-row">
-                  <span className="qty-input-label">미매칭 수량</span>
-                  <span className="qty-input-value" style={{ color: '#dc2626', fontWeight: '600' }}>
-                    {formatNumber(qtyInputModal.saleItem?.unmatched_quantity)}
-                  </span>
-                </div>
-                <div className="qty-input-row">
-                  <span className="qty-input-label">재고 잔량</span>
-                  <span className="qty-input-value" style={{ color: '#16a34a', fontWeight: '600' }}>
-                    {formatNumber(qtyInputModal.inventory?.remaining_quantity)}
-                  </span>
-                </div>
-              </div>
-
-              {/* 수량 입력 */}
-              <div className="qty-input-field">
-                <label>매칭할 수량</label>
-                <input
-                  type="text"
-                  inputMode="decimal"
-                  value={qtyInputModal.quantity === 0 ? '' : qtyInputModal.quantity}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    if (val === '' || val === '.') {
-                      setQtyInputModal(prev => ({ ...prev, quantity: 0 }));
-                    } else {
-                      const num = parseFloat(val);
-                      if (!isNaN(num)) {
-                        setQtyInputModal(prev => ({
-                          ...prev,
-                          quantity: Math.min(num, prev.maxQuantity)
-                        }));
-                      }
-                    }
-                  }}
-                  autoFocus
-                  onFocus={(e) => e.target.select()}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.stopPropagation();
-                      handleQtyInputConfirm();
-                    }
-                    if (e.key === 'Escape') {
-                      e.stopPropagation();
-                      handleQtyInputCancel();
-                    }
-                  }}
-                />
-                <span className="qty-input-hint">최대: {formatNumber(qtyInputModal.maxQuantity)}</span>
-              </div>
-
-              {/* 버튼 */}
-              <div className="qty-input-modal-buttons">
-                <button
-                  className="modal-btn modal-btn-cancel"
-                  onClick={handleQtyInputCancel}
-                >
-                  취소
-                </button>
-                <button
-                  className="modal-btn modal-btn-primary"
-                  onClick={handleQtyInputConfirm}
-                  disabled={qtyInputModal.quantity <= 0}
-                >
-                  확인
-                </button>
-              </div>
-            </div>
-          </div>,
-          document.body
-        )
-      }
+          // 해결책: handleQtyInputConfirmWithQty(qty) 함수를 새로 만들거나 기존 함수 수정.
+          // MatchingPage.js 수정이 필요함. 일단 컴포넌트 교체만 하고 함수 수정은 다음 스텝에서.
+          handleQtyInputConfirmWithValue(qty);
+        }}
+        formatProductName={formatProductName}
+        formatNumber={formatNumber}
+        formatDateShort={formatDateShort}
+      />
 
       {/* 기존 매칭 내역 모달 */}
       <MatchingHistoryModal

@@ -86,6 +86,9 @@
 
 #### Front-end
 - **모달 스타일 재사용**: `TradeDetailModal`, `ConfirmModal` 등의 표준 패턴을 재사용합니다.
+- **[Critical] 중앙 앱 레지스트리 및 메뉴 단일 소스 원칙 (Central App Registry & Menu Source of Truth)**:
+  - 모든 메뉴 구성(그룹, 아이콘, 라벨) 및 앱 메타데이터는 `src/config/menuConfig.js`에서 통합 관리한다.
+  - `Navbar`, `RoleManagement`, `DesktopManager`는 직접 하드코딩하지 않고 본 설정 파일을 참조하여 데이터 무결성을 보장한다. (Quad-Sync Registry Standard 준수)
 
 #### Back-end (API)
 - **안정성**: `LEFT JOIN` 권장 (누락 방지).

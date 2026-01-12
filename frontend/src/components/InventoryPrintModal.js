@@ -2,24 +2,47 @@ import React, { useRef, useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import html2canvas from 'html2canvas';
 import { useModalDraggable } from '../hooks/useModalDraggable';
+import { useAuth } from '../context/AuthContext';
 
 const InventoryPrintModal = ({ isOpen, onClose, inventory, warehouses }) => {
     const printRef = useRef(null);
-    const [zoomLevel, setZoomLevel] = useState(1);
-    // State with Persistence (Lazy Init)
-    const [layoutMode, setLayoutMode] = useState(() => localStorage.getItem('inv_layoutMode') || 'double');
-    const [showRemarks, setShowRemarks] = useState(() => localStorage.getItem('inv_showRemarks') !== 'false'); // Default true checking string 'false'
-    const [showDate, setShowDate] = useState(() => localStorage.getItem('inv_showDate') === 'true'); // Default false
-    const [useSmartRatio, setUseSmartRatio] = useState(() => localStorage.getItem('inv_useSmartRatio') === 'true'); // Default false
+    const { user } = useAuth();
+
+    // Helper to get scoped key
+    const getScopedKey = (key) => user?.id ? `u${user.id}_${key}` : key;
+
+    const [zoomLevel, setZoomLevel] = useState(0.8);
+    const [layoutMode, setLayoutMode] = useState('double');
+    const [showRemarks, setShowRemarks] = useState(true);
+    const [showDate, setShowDate] = useState(false);
+    const [useSmartRatio, setUseSmartRatio] = useState(false);
+
+    // Load Settings on Mount or User Change
+    useEffect(() => {
+        const load = (key, fallback, parser = v => v) => {
+            const val = localStorage.getItem(getScopedKey(key));
+            return val !== null ? parser(val) : fallback;
+        };
+
+        setZoomLevel(load('inv_zoomLevel', 0.8, parseFloat));
+        setLayoutMode(load('inv_layoutMode', 'double'));
+        setShowRemarks(load('inv_showRemarks', 'true') !== 'false');
+        setShowDate(load('inv_showDate', 'false') === 'true');
+        setUseSmartRatio(load('inv_useSmartRatio', 'false') === 'true');
+    }, [user?.id]);
+
     const { handleMouseDown, draggableStyle } = useModalDraggable(isOpen);
 
     // Save Settings
     useEffect(() => {
-        localStorage.setItem('inv_layoutMode', layoutMode);
-        localStorage.setItem('inv_showRemarks', showRemarks);
-        localStorage.setItem('inv_showDate', showDate);
-        localStorage.setItem('inv_useSmartRatio', useSmartRatio);
-    }, [layoutMode, showRemarks, showDate, useSmartRatio]);
+        const save = (key, val) => localStorage.setItem(getScopedKey(key), val);
+
+        save('inv_layoutMode', layoutMode);
+        save('inv_showRemarks', showRemarks);
+        save('inv_showDate', showDate);
+        save('inv_useSmartRatio', useSmartRatio);
+        save('inv_zoomLevel', zoomLevel);
+    }, [layoutMode, showRemarks, showDate, useSmartRatio, zoomLevel, user?.id]);
 
     useEffect(() => {
         const handleEsc = (e) => {
@@ -153,12 +176,14 @@ const InventoryPrintModal = ({ isOpen, onClose, inventory, warehouses }) => {
                 style={{
                     backgroundColor: '#fff',
                     borderRadius: '8px',
-                    width: '95%',
-                    maxWidth: '1200px',
-                    maxHeight: '98vh',
+                    width: 'fit-content',
+                    minWidth: '600px',
+                    maxWidth: '95vw',
+                    height: '85vh',
                     display: 'flex',
                     flexDirection: 'column',
                     boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+                    overflow: 'hidden',
                     ...draggableStyle
                 }}
             >
@@ -346,6 +371,7 @@ const InventoryPrintModal = ({ isOpen, onClose, inventory, warehouses }) => {
                     flex: 1, // Restore flex-grow
                     // width: 'fit-content', // REMOVED to align with header
                     minWidth: '100%',
+                    minHeight: 0,
                     overflow: 'auto',
                     padding: '2rem',
                     backgroundColor: '#e2e8f0', // Slightly darker bg for contrast

@@ -9,9 +9,14 @@ const app = express();
 app.use(cors({
 }));
 app.use(express.json());
+app.get('/', (req, res) => {
+  res.send('Backend Server is Running');
+});
 app.use(express.urlencoded({ extended: true }));
 
 // 라우터
+const authRouter = require('./routes/auth'); // Moved and assigned to variable
+const rolesRouter = require('./routes/roles'); // RBAC Route
 const companiesRouter = require('./routes/companies');
 const productsRouter = require('./routes/products');
 const categoriesRouter = require('./routes/categories');
@@ -53,6 +58,7 @@ app.use('/api/settlement', settlementRouter);
 app.use('/api/inventory-audit', inventoryAuditRouter);
 app.use('/api/auth', require('./routes/auth')); // 인증 라우터 추가
 app.use('/api/users', require('./routes/users')); // 사용자 관리 라우터 추가
+app.use('/api/roles', rolesRouter); // RBAC 역할 관리 라우터 추가
 
 // 헬스체크
 app.get('/api/health', (req, res) => {

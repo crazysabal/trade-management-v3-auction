@@ -5,6 +5,7 @@ import { tradeAPI } from '../services/api';
 import ConfirmModal from '../components/ConfirmModal';
 import TradeDetailModal from '../components/TradeDetailModal';
 import TradePrintModal from '../components/TradePrintModal';
+import { useAuth } from '../context/AuthContext';
 
 // 기본 날짜 설정 (해당 달 1일, 당일)
 const formatDate = (date) => {
@@ -53,11 +54,16 @@ const filterTrades = (trades, filterText) => {
   });
 };
 
+
+
 function TradeList({ isWindow, onOpenTradeEdit }) {
   const defaultDates = getDefaultDates();
   const [purchaseTrades, setPurchaseTrades] = useState([]);
   const [saleTrades, setSaleTrades] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  const { user } = useAuth();
+  const getScopedKey = (key) => user?.id ? `u${user.id}_${key}` : key;
 
   // 기간 필터
   const [dateRange, setDateRange] = useState({
@@ -70,16 +76,28 @@ function TradeList({ isWindow, onOpenTradeEdit }) {
   const [saleFilter, setSaleFilter] = useState('');
 
   // 좌우 위치 설정 (localStorage에 저장)
-  const [layoutOrder, setLayoutOrder] = useState(() => {
-    const saved = localStorage.getItem('tradeListLayout');
-    return saved ? JSON.parse(saved) : { left: 'PURCHASE', right: 'SALE' };
-  });
+  const [layoutOrder, setLayoutOrder] = useState({ left: 'PURCHASE', right: 'SALE' });
+
+  // Load Layout
+  useEffect(() => {
+    const saved = localStorage.getItem(getScopedKey('tradeListLayout'));
+    if (saved) {
+      try {
+        setLayoutOrder(JSON.parse(saved));
+      } catch (e) {
+        setLayoutOrder({ left: 'PURCHASE', right: 'SALE' });
+      }
+    }
+  }, [user?.id]);
 
   // 패널 크기 비율 (0.3 ~ 0.7, 기본 0.5)
-  const [splitRatio, setSplitRatio] = useState(() => {
-    const saved = localStorage.getItem('tradeListSplitRatio');
-    return saved ? parseFloat(saved) : 0.5;
-  });
+  const [splitRatio, setSplitRatio] = useState(0.5);
+
+  // Load Split Ratio
+  useEffect(() => {
+    const saved = localStorage.getItem(getScopedKey('tradeListSplitRatio'));
+    if (saved) setSplitRatio(parseFloat(saved));
+  }, [user?.id]);
 
   // 드래그 상태
   const [isDragging, setIsDragging] = useState(false);
@@ -92,13 +110,13 @@ function TradeList({ isWindow, onOpenTradeEdit }) {
       right: layoutOrder.left
     };
     setLayoutOrder(newLayout);
-    localStorage.setItem('tradeListLayout', JSON.stringify(newLayout));
+    localStorage.setItem(getScopedKey('tradeListLayout'), JSON.stringify(newLayout));
   };
 
   // 비율 초기화
   const resetSplitRatio = () => {
     setSplitRatio(0.5);
-    localStorage.setItem('tradeListSplitRatio', '0.5');
+    localStorage.setItem(getScopedKey('tradeListSplitRatio'), '0.5');
   };
 
   // 리사이즈 핸들러
@@ -121,9 +139,9 @@ function TradeList({ isWindow, onOpenTradeEdit }) {
   const handleMouseUp = useCallback(() => {
     if (isDragging) {
       setIsDragging(false);
-      localStorage.setItem('tradeListSplitRatio', splitRatio.toString());
+      localStorage.setItem(getScopedKey('tradeListSplitRatio'), splitRatio.toString());
     }
-  }, [isDragging, splitRatio]);
+  }, [isDragging, splitRatio, user?.id]);
 
   useEffect(() => {
     if (isDragging) {
@@ -213,7 +231,10 @@ function TradeList({ isWindow, onOpenTradeEdit }) {
   const handleDateChange = (field, value) => {
     const newDateRange = { ...dateRange, [field]: value };
     setDateRange(newDateRange);
-    loadTrades(newDateRange.start_date, newDateRange.end_date);
+  };
+
+  const handleSearch = () => {
+    loadTrades(dateRange.start_date, dateRange.end_date);
   };
 
   const handleDelete = (id, tradeNumber) => {
@@ -323,7 +344,7 @@ function TradeList({ isWindow, onOpenTradeEdit }) {
                 const paymentAmount = getPaymentAmount(trade);
                 return (
                   <tr key={trade.id} style={{ borderBottom: '1px solid #eee' }}>
-                    <td style={{ padding: '0.4rem 0.5rem', fontSize: '0.9rem' }}>
+                    <td style={{ padding: '0.5rem 0.5rem', fontSize: '0.9rem' }}>
                       <span
                         className="trade-number-link"
                         onClick={() => setDetailModal({ isOpen: true, tradeId: trade.id })}
@@ -332,13 +353,13 @@ function TradeList({ isWindow, onOpenTradeEdit }) {
                         {trade.trade_number}
                       </span>
                     </td>
-                    <td style={{ padding: '0.4rem 0.5rem', fontSize: '0.9rem' }}>{trade.trade_date ? trade.trade_date.substring(0, 10) : '-'}</td>
-                    <td style={{ padding: '0.4rem 0.5rem', fontSize: '0.9rem' }}>{trade.company_name}</td>
-                    <td style={{ padding: '0.4rem 0.5rem', fontSize: '0.9rem', textAlign: 'right', fontWeight: '600' }}>
+                    <td style={{ padding: '0.5rem 0.5rem', fontSize: '0.9rem' }}>{trade.trade_date ? trade.trade_date.substring(0, 10) : '-'}</td>
+                    <td style={{ padding: '0.5rem 0.5rem', fontSize: '0.9rem' }}>{trade.company_name}</td>
+                    <td style={{ padding: '0.5rem 0.5rem', fontSize: '0.9rem', textAlign: 'right', fontWeight: '600' }}>
                       {formatCurrency(trade.total_price)}
                     </td>
                     <td style={{
-                      padding: '0.4rem 0.5rem',
+                      padding: '0.5rem 0.5rem',
                       fontSize: '0.9rem',
                       textAlign: 'right',
                       fontWeight: '500',
@@ -347,7 +368,7 @@ function TradeList({ isWindow, onOpenTradeEdit }) {
                       {formatCurrency(paymentAmount)}
                     </td>
                     <td style={{
-                      padding: '0.4rem 0.5rem',
+                      padding: '0.5rem 0.5rem',
                       fontSize: '0.9rem',
                       textAlign: 'right',
                       fontWeight: '600',
@@ -355,7 +376,7 @@ function TradeList({ isWindow, onOpenTradeEdit }) {
                     }}>
                       {formatCurrency(balance)}
                     </td>
-                    <td style={{ padding: '0.4rem 0.5rem', textAlign: 'center' }}>
+                    <td style={{ padding: '0.5rem 0.5rem', textAlign: 'center' }}>
                       <div style={{ display: 'flex', gap: '4px', justifyContent: 'center', whiteSpace: 'nowrap' }}>
                         <button
                           onClick={() => setPrintModal({ isOpen: true, tradeId: trade.id })}
@@ -425,7 +446,7 @@ function TradeList({ isWindow, onOpenTradeEdit }) {
       }}>
         {/* 패널 헤더 */}
         <div style={{
-          padding: '0.6rem 0.75rem',
+          padding: '0.5rem 0.75rem',
           backgroundColor: bgColor,
           borderBottom: `2px solid ${color}`,
           display: 'flex',
@@ -463,7 +484,7 @@ function TradeList({ isWindow, onOpenTradeEdit }) {
         </div>
 
         {/* 필터 입력 */}
-        <div style={{ padding: '0.4rem 0.5rem', borderBottom: '1px solid #eee', flexShrink: 0 }}>
+        <div style={{ padding: '0.5rem 0.5rem', borderBottom: '1px solid #eee', flexShrink: 0 }}>
           <input
             type="text"
             placeholder="🔍 전표번호, 거래일자, 거래처, 금액..."
@@ -516,92 +537,113 @@ function TradeList({ isWindow, onOpenTradeEdit }) {
       width: '100%'
     }}>
       {/* 헤더 */}
-      <div className="page-header" style={{ display: 'flex', alignItems: 'center' }}>
-        <div className="page-header-actions-left" style={{ display: 'flex', alignItems: 'center' }}>
-          <h1 className="page-title" style={{ margin: 0 }}>
-            📋 전표 목록
-          </h1>
-          <button
-            onClick={toggleLayout}
-            style={{
-              padding: '0.4rem 0.8rem',
-              backgroundColor: '#9b59b6',
-              color: 'white',
-              border: 'none',
-              borderRadius: '6px',
-              cursor: 'pointer',
-              fontSize: '0.85rem',
-              fontWeight: '600',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.4rem',
-              transition: 'all 0.2s'
-            }}
-            title="좌우 위치 변경"
-          >
-            🔄 위치 변경
-            <span style={{
-              fontSize: '0.75rem',
-              opacity: 0.9,
-              backgroundColor: 'rgba(255,255,255,0.2)',
-              padding: '0.15rem 0.4rem',
-              borderRadius: '4px'
-            }}>
-              {layoutOrder.left === 'PURCHASE' ? '매입←→매출' : '매출←→매입'}
-            </span>
-          </button>
-          {splitRatio !== 0.5 && (
+      <div className="page-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+          {/* 기간 조회 (왼쪽으로 이동) */}
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.5rem',
+            backgroundColor: 'rgba(0,0,0,0.03)',
+            padding: '4px 10px',
+            borderRadius: '8px'
+          }}>
+            <span style={{ fontSize: '0.85rem', color: '#666', fontWeight: 'bold' }}>기간</span>
+            <input
+              type="date"
+              value={dateRange.start_date}
+              onChange={(e) => handleDateChange('start_date', e.target.value)}
+              max={dateRange.end_date}
+              style={{
+                padding: '0.35rem 0.5rem',
+                border: '1px solid #ddd',
+                borderRadius: '5px',
+                fontSize: '0.85rem',
+                backgroundColor: '#fff'
+              }}
+            />
+            <span style={{ color: '#999' }}>~</span>
+            <input
+              type="date"
+              value={dateRange.end_date}
+              onChange={(e) => handleDateChange('end_date', e.target.value)}
+              min={dateRange.start_date}
+              style={{
+                padding: '0.35rem 0.5rem',
+                border: '1px solid #ddd',
+                borderRadius: '5px',
+                fontSize: '0.85rem',
+                backgroundColor: '#fff'
+              }}
+            />
             <button
-              onClick={resetSplitRatio}
+              onClick={handleSearch}
+              style={{
+                marginLeft: '0.4rem',
+                padding: '0.35rem 1rem',
+                backgroundColor: '#2980b9',
+                color: 'white',
+                border: 'none',
+                borderRadius: '5px',
+                fontSize: '0.85rem',
+                fontWeight: '600',
+                cursor: 'pointer'
+              }}
+            >
+              조회
+            </button>
+          </div>
+
+          {/* 위치/크기 조절 버튼 */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <button
+              onClick={toggleLayout}
               style={{
                 padding: '0.4rem 0.8rem',
-                backgroundColor: '#7f8c8d',
+                backgroundColor: '#9b59b6',
                 color: 'white',
                 border: 'none',
                 borderRadius: '6px',
                 cursor: 'pointer',
                 fontSize: '0.85rem',
-                fontWeight: '500'
+                fontWeight: '600',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.4rem',
+                transition: 'all 0.2s'
               }}
-              title="패널 크기 초기화"
+              title="좌우 위치 변경"
             >
-              ↔ 크기 초기화
+              🔄 위치 변경
+              <span style={{
+                fontSize: '0.75rem',
+                opacity: 0.9,
+                backgroundColor: 'rgba(255,255,255,0.2)',
+                padding: '0.15rem 0.4rem',
+                borderRadius: '4px'
+              }}>
+                {layoutOrder.left === 'PURCHASE' ? '매입←→매출' : '매출←→매입'}
+              </span>
             </button>
-          )}
-        </div>
-
-        {/* 기간 조회 */}
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '0.5rem'
-        }}>
-          <span style={{ fontSize: '0.85rem', color: '#666' }}>📅</span>
-          <input
-            type="date"
-            value={dateRange.start_date}
-            onChange={(e) => handleDateChange('start_date', e.target.value)}
-            max={dateRange.end_date}
-            style={{
-              padding: '0.35rem 0.5rem',
-              border: '1px solid #ddd',
-              borderRadius: '5px',
-              fontSize: '0.9rem'
-            }}
-          />
-          <span style={{ color: '#999' }}>~</span>
-          <input
-            type="date"
-            value={dateRange.end_date}
-            onChange={(e) => handleDateChange('end_date', e.target.value)}
-            min={dateRange.start_date}
-            style={{
-              padding: '0.35rem 0.5rem',
-              border: '1px solid #ddd',
-              borderRadius: '5px',
-              fontSize: '0.9rem'
-            }}
-          />
+            {splitRatio !== 0.5 && (
+              <button
+                onClick={resetSplitRatio}
+                style={{
+                  padding: '0.4rem 0.8rem',
+                  backgroundColor: '#7f8c8d',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  fontSize: '0.85rem',
+                  fontWeight: '500'
+                }}
+                title="패널 크기 초기화"
+              >
+                ↔ 초기화
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -611,7 +653,7 @@ function TradeList({ isWindow, onOpenTradeEdit }) {
         style={{
           flex: 1,
           display: 'flex',
-          padding: '0.75rem',
+          padding: '0.5rem',
           overflow: 'hidden',
           minHeight: 0,
           gap: 0

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { inventoryProductionAPI } from '../services/api';
 import { useModalDraggable } from '../hooks/useModalDraggable';
@@ -7,15 +7,17 @@ import { useModalDraggable } from '../hooks/useModalDraggable';
  * 재고 작업 상세 보기 모달 컴포넌트
  * (생산/소분 등 작업 내역의 원재료 및 산출물 상세 표시)
  */
-function ProductionDetailModal({ isOpen, onClose, jobId }) {
+function ProductionDetailModal({ isOpen, onClose, jobId, highlightId }) {
     const [loading, setLoading] = useState(false);
     const [jobData, setJobData] = useState(null);
     const [error, setError] = useState(null);
     const { handleMouseDown, draggableStyle } = useModalDraggable(isOpen);
+    const highlightedRowRef = useRef(null);
 
     // 작업 상세 정보 로드
     useEffect(() => {
         if (isOpen && jobId) {
+            setJobData(null); // Clear previous data
             loadJobDetail();
         }
     }, [isOpen, jobId]);
@@ -24,8 +26,29 @@ function ProductionDetailModal({ isOpen, onClose, jobId }) {
         try {
             setLoading(true);
             setError(null);
-            const response = await inventoryProductionAPI.getJobDetail(jobId);
-            setJobData(response.data.data);
+            const response = await inventoryProductionAPI.getDetail(jobId);
+            const rawData = response.data.data;
+
+            // 데이터 정규화 (백엔드 필드 명칭과 모달 기대 필드 조율)
+            const normalized = {
+                ...rawData,
+                job_date: rawData.created_at,
+                job_type: '생산 작업',
+                // 재료비 합계 + 추가 비용
+                total_cost: (rawData.ingredients || []).reduce((sum, ing) => sum + (Number(ing.unit_price) * Number(ing.used_quantity)), 0) + Number(rawData.additional_cost || 0),
+                notes: rawData.memo,
+                outputs: [{
+                    id: rawData.output_inventory_id,
+                    product_name: rawData.output_product_name,
+                    product_weight: rawData.output_product_weight,
+                    grade: rawData.output_product_grade,
+                    quantity: rawData.output_quantity,
+                    unit_cost: rawData.unit_cost,
+                    warehouse_name: rawData.output_warehouse_name
+                }]
+            };
+
+            setJobData(normalized);
         } catch (err) {
             console.error('작업 상세 조회 오류:', err);
             setError('작업 정보를 불러오는데 실패했습니다.');
@@ -45,6 +68,18 @@ function ProductionDetailModal({ isOpen, onClose, jobId }) {
         return () => window.removeEventListener('keydown', handleEsc);
     }, [isOpen, onClose]);
 
+    // 강조 항목으로 스크롤
+    useEffect(() => {
+        if (isOpen && jobData && highlightId) {
+            const timer = setTimeout(() => {
+                if (highlightedRowRef.current) {
+                    highlightedRowRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+            }, 500);
+            return () => clearTimeout(timer);
+        }
+    }, [isOpen, jobData, highlightId]);
+
     if (!isOpen) return null;
 
     const formatCurrency = (value) => {
@@ -57,7 +92,7 @@ function ProductionDetailModal({ isOpen, onClose, jobId }) {
     };
 
     return createPortal(
-        <div className="modal-overlay" style={{ zIndex: 1100 }}>
+        <div className="modal-overlay" style={{ zIndex: 10100 }}>
             <div
                 className="styled-modal"
                 onClick={(e) => e.stopPropagation()}
@@ -72,14 +107,13 @@ function ProductionDetailModal({ isOpen, onClose, jobId }) {
             >
                 {/* 헤더 */}
                 <div
-                    className="modal-header"
+                    className="modal-header draggable-header"
                     onMouseDown={handleMouseDown}
-                    style={{ cursor: 'grab' }}
                 >
-                    <h2 style={{ margin: 0, fontSize: '1.25rem', color: '#1e293b', pointerEvents: 'none' }}>
+                    <h2 className="drag-pointer-none" style={{ margin: 0, fontSize: '1.25rem', color: '#1e293b' }}>
                         🛠️ 작업 상세 내역
                     </h2>
-                    <button className="close-btn" onClick={onClose} style={{ pointerEvents: 'auto' }}>&times;</button>
+                    <button className="close-btn drag-pointer-auto" onClick={onClose}>&times;</button>
                 </div>
 
                 {/* 바디 */}
@@ -130,28 +164,37 @@ function ProductionDetailModal({ isOpen, onClose, jobId }) {
                                 </h3>
                                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
                                     <thead>
-                                        <tr style={{ backgroundColor: '#f1f5f9', borderBottom: '2px solid #e2e8f0' }}>
-                                            <th style={{ padding: '0.75rem', textAlign: 'left' }}>품목</th>
-                                            <th style={{ padding: '0.75rem', textAlign: 'center' }}>출하주</th>
-                                            <th style={{ padding: '0.75rem', textAlign: 'right' }}>수량</th>
-                                            <th style={{ padding: '0.75rem', textAlign: 'right' }}>평균단가</th>
-                                            <th style={{ padding: '0.75rem', textAlign: 'right' }}>금액</th>
+                                        <tr style={{ backgroundColor: '#34495e', color: '#ffffff' }}>
+                                            <th style={{ padding: '0.75rem', textAlign: 'left', fontWeight: '600' }}>품목</th>
+                                            <th style={{ padding: '0.75rem', textAlign: 'center', fontWeight: '600' }}>출하주</th>
+                                            <th style={{ padding: '0.75rem', textAlign: 'right', fontWeight: '600' }}>수량</th>
+                                            <th style={{ padding: '0.75rem', textAlign: 'right', fontWeight: '600' }}>평균단가</th>
+                                            <th style={{ padding: '0.75rem', textAlign: 'right', fontWeight: '600' }}>금액</th>
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {jobData.ingredients?.map((item, idx) => (
-                                            <tr key={idx} style={{ borderBottom: '1px solid #e2e8f0' }}>
-                                                <td style={{ padding: '0.75rem' }}>
-                                                    {item.product_name} {item.product_weight}kg {item.grade}
-                                                </td>
-                                                <td style={{ padding: '0.75rem', textAlign: 'center' }}>{item.sender}</td>
-                                                <td style={{ padding: '0.75rem', textAlign: 'right' }}>{item.quantity}</td>
-                                                <td style={{ padding: '0.75rem', textAlign: 'right' }}>{formatCurrency(item.unit_cost)}</td>
-                                                <td style={{ padding: '0.75rem', textAlign: 'right', fontWeight: '500' }}>
-                                                    {formatCurrency(item.quantity * item.unit_cost)}
-                                                </td>
-                                            </tr>
-                                        ))}
+                                        {jobData.ingredients?.map((item, idx) => {
+                                            const isHighlighted = highlightId && String(item.id) === String(highlightId);
+                                            return (
+                                                <tr
+                                                    key={idx}
+                                                    ref={isHighlighted ? highlightedRowRef : null}
+                                                    className={isHighlighted ? 'highlighted-row' : ''}
+                                                    style={{ borderBottom: '1px solid #e2e8f0' }}
+                                                >
+                                                    <td style={{ padding: '0.75rem', fontWeight: isHighlighted ? '700' : 'normal' }}>
+                                                        {item.product_name} {item.product_weight}kg {item.grade}
+                                                        {isHighlighted && <span style={{ marginLeft: '8px', color: '#f08c00', fontSize: '0.8rem' }}>👈 선택됨</span>}
+                                                    </td>
+                                                    <td style={{ padding: '0.75rem', textAlign: 'center' }}>{item.sender || '-'}</td>
+                                                    <td style={{ padding: '0.75rem', textAlign: 'right' }}>{item.used_quantity}</td>
+                                                    <td style={{ padding: '0.75rem', textAlign: 'right' }}>{formatCurrency(item.unit_price)}</td>
+                                                    <td style={{ padding: '0.75rem', textAlign: 'right', fontWeight: '500' }}>
+                                                        {formatCurrency(item.used_quantity * item.unit_price)}
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
                                     </tbody>
                                 </table>
                             </div>
@@ -163,30 +206,39 @@ function ProductionDetailModal({ isOpen, onClose, jobId }) {
                                 </h3>
                                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
                                     <thead>
-                                        <tr style={{ backgroundColor: '#f1f5f9', borderBottom: '2px solid #e2e8f0' }}>
-                                            <th style={{ padding: '0.75rem', textAlign: 'left' }}>품목</th>
-                                            <th style={{ padding: '0.75rem', textAlign: 'right' }}>생산수량</th>
-                                            <th style={{ padding: '0.75rem', textAlign: 'right' }}>산출단가</th>
-                                            <th style={{ padding: '0.75rem', textAlign: 'right' }}>총액</th>
-                                            <th style={{ padding: '0.75rem', textAlign: 'center' }}>보관창고</th>
+                                        <tr style={{ backgroundColor: '#34495e', color: '#ffffff' }}>
+                                            <th style={{ padding: '0.75rem', textAlign: 'left', fontWeight: '600' }}>품목</th>
+                                            <th style={{ padding: '0.75rem', textAlign: 'right', fontWeight: '600' }}>생산수량</th>
+                                            <th style={{ padding: '0.75rem', textAlign: 'right', fontWeight: '600' }}>산출단가</th>
+                                            <th style={{ padding: '0.75rem', textAlign: 'right', fontWeight: '600' }}>총액</th>
+                                            <th style={{ padding: '0.75rem', textAlign: 'center', fontWeight: '600' }}>보관창고</th>
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {jobData.outputs?.map((item, idx) => (
-                                            <tr key={idx} style={{ borderBottom: '1px solid #e2e8f0' }}>
-                                                <td style={{ padding: '0.75rem' }}>
-                                                    {item.product_name} {item.product_weight}kg {item.grade}
-                                                </td>
-                                                <td style={{ padding: '0.75rem', textAlign: 'right', fontWeight: 'bold', color: '#2563eb' }}>
-                                                    {item.quantity}
-                                                </td>
-                                                <td style={{ padding: '0.75rem', textAlign: 'right' }}>{formatCurrency(item.unit_cost)}</td>
-                                                <td style={{ padding: '0.75rem', textAlign: 'right', fontWeight: '500' }}>
-                                                    {formatCurrency(item.quantity * item.unit_cost)}
-                                                </td>
-                                                <td style={{ padding: '0.75rem', textAlign: 'center' }}>{item.warehouse_name}</td>
-                                            </tr>
-                                        ))}
+                                        {jobData.outputs?.map((item, idx) => {
+                                            const isHighlighted = highlightId && String(item.id) === String(highlightId);
+                                            return (
+                                                <tr
+                                                    key={idx}
+                                                    ref={isHighlighted ? highlightedRowRef : null}
+                                                    className={isHighlighted ? 'highlighted-row' : ''}
+                                                    style={{ borderBottom: '1px solid #e2e8f0' }}
+                                                >
+                                                    <td style={{ padding: '0.75rem', fontWeight: isHighlighted ? '700' : 'normal' }}>
+                                                        {item.product_name} {item.product_weight}kg {item.grade}
+                                                        {isHighlighted && <span style={{ marginLeft: '8px', color: '#f08c00', fontSize: '0.8rem' }}>👈 선택됨</span>}
+                                                    </td>
+                                                    <td style={{ padding: '0.75rem', textAlign: 'right', fontWeight: 'bold', color: '#2563eb' }}>
+                                                        {item.quantity}
+                                                    </td>
+                                                    <td style={{ padding: '0.75rem', textAlign: 'right' }}>{formatCurrency(item.unit_cost)}</td>
+                                                    <td style={{ padding: '0.75rem', textAlign: 'right', fontWeight: '500' }}>
+                                                        {formatCurrency(item.quantity * item.unit_cost)}
+                                                    </td>
+                                                    <td style={{ padding: '0.75rem', textAlign: 'center' }}>{item.warehouse_name}</td>
+                                                </tr>
+                                            );
+                                        })}
                                     </tbody>
                                 </table>
                             </div>
@@ -198,7 +250,7 @@ function ProductionDetailModal({ isOpen, onClose, jobId }) {
 
                 {/* 푸터 */}
                 <div className="modal-footer" style={{ borderTop: '1px solid #e2e8f0', padding: '1rem 1.5rem', backgroundColor: '#f8fafc' }}>
-                    <button className="modal-btn modal-btn-cancel" onClick={onClose}>닫기</button>
+                    <button className="modal-btn modal-btn-primary" onClick={onClose}>닫기</button>
                     {/* 필요 시 작업 취소 버튼 등을 여기에 추가 가능 */}
                 </div>
             </div>

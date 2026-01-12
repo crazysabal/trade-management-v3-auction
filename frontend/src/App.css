@@ -1,4 +1,4 @@
-* {
+﻿* {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
@@ -15,28 +15,28 @@ body {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
-  /* 세로 배치 (Navbar + Content) */
+  /* ?몃줈 諛곗튂 (Navbar + Content) */
 }
 
-/* ==================== 사이드바 제거됨 ==================== */
-/* Navbar로 대체됨 */
+/* ==================== ?ъ씠?쒕컮 ?쒓굅??==================== */
+/* Navbar濡??泥대맖 */
 
-/* 메인 콘텐츠 */
+/* 硫붿씤 肄섑뀗痢?*/
 .main-content {
   flex: 1;
   margin-left: 0;
-  /* 사이드바 공간 제거 */
+  /* ?ъ씠?쒕컮 怨듦컙 ?쒓굅 */
   padding: 1.5rem 2rem;
   background-color: #f5f5f5;
   width: 100%;
   max-width: 1600px;
-  /* 너무 넓어지지 않게 제한 */
+  /* ?덈Т ?볦뼱吏吏 ?딄쾶 ?쒗븳 */
   margin: 0 auto;
-  /* 중앙 정렬 */
+  /* 以묒븰 ?뺣젹 */
   contain: layout style;
 }
 
-/* 페이지 헤더 */
+/* ?섏씠吏 ?ㅻ뜑 */
 .page-header {
   display: flex;
   justify-content: space-between;
@@ -49,7 +49,7 @@ body {
   color: #2c3e50;
 }
 
-/* 버튼 */
+/* 踰꾪듉 */
 .btn {
   padding: 0.6rem 1.2rem;
   border: none;
@@ -107,7 +107,7 @@ body {
 
 .btn-sm {
   height: 32px;
-  /* 높이 고정 */
+  /* ?믪씠 怨좎젙 */
   padding: 0 0.8rem;
   font-size: 0.9rem;
   display: inline-flex;
@@ -117,7 +117,7 @@ body {
   line-height: 1;
 }
 
-/* 카드 */
+/* 移대뱶 */
 .card {
   background: white;
   border-radius: 8px;
@@ -134,7 +134,7 @@ body {
   padding-bottom: 0.5rem;
 }
 
-/* 검색 및 필터 */
+/* 寃??諛??꾪꽣 */
 .search-filter-container {
   background: white;
   padding: 1.5rem;
@@ -171,7 +171,7 @@ body {
   font-size: 1rem;
 }
 
-/* 테이블 */
+/* ?뚯씠釉?*/
 .table-container {
   overflow-x: auto;
   background: white;
@@ -183,7 +183,7 @@ body {
 table {
   width: 100%;
   border-collapse: collapse;
-  /* table-layout: auto (기본값) - 컬럼 너비 자동 조절 */
+  /* table-layout: auto (湲곕낯媛? - 而щ읆 ?덈퉬 ?먮룞 議곗젅 */
 }
 
 thead {
@@ -213,7 +213,7 @@ textarea,
   font-family: inherit;
 }
 
-/* 긴 텍스트 셀에만 ellipsis 적용 */
+/* 湲??띿뒪????먮쭔 ellipsis ?곸슜 */
 td.ellipsis {
   overflow: hidden;
   text-overflow: ellipsis;
@@ -232,7 +232,7 @@ tbody tr.drag-over {
   background-color: #e0f2fe;
 }
 
-/* 테이블 유틸리티 클래스 */
+/* ?뚯씠釉??좏떥由ы떚 ?대옒??*/
 .drag-handle {
   text-align: center;
   color: #94a3b8;
@@ -255,7 +255,7 @@ tbody tr.drag-over {
   cursor: pointer;
 }
 
-/* 토글 스위치 */
+/* ?좉? ?ㅼ쐞移?*/
 .toggle-switch {
   display: inline-flex;
   align-items: center;
@@ -301,7 +301,7 @@ tbody tr.drag-over {
   text-align: center;
 }
 
-/* 폼 */
+/* ??*/
 .form-container {
   background: white;
   border-radius: 8px;
@@ -329,7 +329,7 @@ tbody tr.drag-over {
 
 .form-group>label {
   width: 100px;
-  /* 라벨 너비 고정 */
+  /* ?쇰꺼 ?덈퉬 怨좎젙 */
   min-width: 100px;
   margin-bottom: 0;
   margin-right: 1rem;
@@ -417,6 +417,23 @@ tbody tr.drag-over {
   z-index: 9999;
 }
 
+/* Modal Overlay - Center Alignment Globally */
+.premium-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  /* backdrop-blur ?쒓굅?섏뿬 ?깅뒫 ?뺣낫 */
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 10100;
+  /* Legacy Modal(9999) 蹂대떎 ?믪븘????*/
+  animation: fadeIn 0.2s ease-out;
+}
+
 .modal-header {
   padding: 1rem 1.5rem;
   border-bottom: 1px solid #e2e8f0;
@@ -431,6 +448,24 @@ tbody tr.drag-over {
   font-size: 1.25rem;
   color: #2d3748;
   font-weight: 600;
+}
+
+/* [NEW] Draggable Modal Utilities */
+.draggable-header {
+  cursor: grab !important;
+  user-select: none;
+}
+
+.draggable-header:active {
+  cursor: grabbing !important;
+}
+
+.drag-pointer-none {
+  pointer-events: none;
+}
+
+.drag-pointer-auto {
+  pointer-events: auto;
 }
 
 .modal-body {
@@ -489,7 +524,7 @@ tbody tr.drag-over {
   text-align: left;
   margin-bottom: 1rem;
   padding-right: 0.5rem;
-  /* 스크롤바 여백 */
+  /* ?ㅽ겕濡ㅻ컮 ?щ갚 */
 }
 
 .modal-icon {
@@ -515,6 +550,36 @@ tbody tr.drag-over {
   line-height: 1.6;
   margin-bottom: 2rem;
   word-break: keep-all;
+}
+
+/* [NEW] Safe Deletion Context Styles */
+.safe-delete-message {
+  text-align: left;
+  background-color: #fffaf0;
+  padding: 1rem;
+  border-radius: 8px;
+  border-left: 4px solid #f6ad55;
+  margin-bottom: 1.5rem;
+}
+
+.safe-delete-message .main-warning {
+  font-size: 1.05rem;
+  color: #2d3748;
+  margin-bottom: 1rem;
+}
+
+.safe-delete-message .warning-detail {
+  font-size: 0.9rem;
+  color: #718096;
+  line-height: 1.5;
+}
+
+.safe-delete-message .warning-detail p {
+  margin-bottom: 0.5rem;
+}
+
+.safe-delete-message .warning-detail p:last-child {
+  margin-bottom: 0;
 }
 
 .modal-buttons {
@@ -591,7 +656,7 @@ tbody tr.drag-over {
   background-color: #d97706;
 }
 
-/* 뱃지 스타일 토글 (체크박스 대체) */
+/* 諭껋? ?ㅽ????좉? (泥댄겕諛뺤뒪 ?泥? */
 .badge-toggle {
   display: inline-flex;
   align-items: center;
@@ -606,20 +671,20 @@ tbody tr.drag-over {
   border: 1px solid transparent;
 }
 
-/* 기본 상태 (Unchecked) */
+/* 湲곕낯 ?곹깭 (Unchecked) */
 .badge-toggle {
   background-color: #f3f4f6;
   color: #6b7280;
   border-color: #e5e7eb;
 }
 
-/* 체크박스 숨김 */
+/* 泥댄겕諛뺤뒪 ?④? */
 .badge-toggle input[type="checkbox"] {
   display: none;
 }
 
-/* 체크된 상태 (Checked) */
-/* 체크된 상태 (Checked) - Solid Badge Style */
+/* 泥댄겕???곹깭 (Checked) */
+/* 泥댄겕???곹깭 (Checked) - Solid Badge Style */
 .badge-toggle.checked {
   background-color: #3b82f6;
   /* Solid Blue */
@@ -636,7 +701,7 @@ tbody tr.drag-over {
   /* Darker Blue on Hover */
 }
 
-/* 반응형 */
+/* 諛섏쓳??*/
 @media (max-width: 1024px) {
   .sidebar {
     width: 200px;
@@ -679,14 +744,14 @@ tbody tr.drag-over {
   }
 }
 
-/* 거래 전표 테이블 컬럼 너비 */
+/* 嫄곕옒 ?꾪몴 ?뚯씠釉?而щ읆 ?덈퉬 */
 .trade-list th:nth-child(2),
 .trade-list td:nth-child(2) {
   min-width: 50px;
   text-align: center;
 }
 
-/* 구분 */
+/* 援щ텇 */
 
 .trade-list th:nth-child(8),
 .trade-list td:nth-child(8) {
@@ -694,7 +759,7 @@ tbody tr.drag-over {
   text-align: center;
 }
 
-/* 상태 */
+/* ?곹깭 */
 
 .trade-list th:nth-child(9),
 .trade-list td:nth-child(9) {
@@ -703,9 +768,9 @@ tbody tr.drag-over {
   white-space: nowrap;
 }
 
-/* 액션 */
+/* ?≪뀡 */
 
-/* 스타일링된 Input (수량/단가용) */
+/* ?ㅽ??쇰쭅??Input (?섎웾/?④??? */
 .input-styled {
   width: 100%;
   padding: 0.5rem 0.75rem;
@@ -733,13 +798,13 @@ tbody tr.drag-over {
   opacity: 1;
 }
 
-/* 테이블 내 input 스타일 조정 */
+/* ?뚯씠釉???input ?ㅽ???議곗젙 */
 table .input-styled {
   padding: 0.4rem 0.5rem;
   font-size: 0.9rem;
 }
 
-/* ==================== 매칭 모달 스타일 ==================== */
+/* ==================== 留ㅼ묶 紐⑤떖 ?ㅽ???==================== */
 .matching-modal-container {
   position: relative;
   background: white;
@@ -983,7 +1048,7 @@ table .input-styled {
   color: #27ae60;
 }
 
-/* 선택된 매출 품목 행 */
+/* ?좏깮??留ㅼ텧 ?덈ぉ ??*/
 .selected-row {
   background-color: #dbeafe !important;
   outline: 2px solid #3b82f6;
@@ -1019,7 +1084,7 @@ table .input-styled {
   font-weight: 400;
 }
 
-/* 매칭 모달 테이블 개선 */
+/* 留ㅼ묶 紐⑤떖 ?뚯씠釉?媛쒖꽑 */
 .matching-modal-table table {
   font-size: 0.9rem;
   table-layout: auto;
@@ -1056,7 +1121,7 @@ table .input-styled {
   border-top: 2px solid #bdc3c7;
 }
 
-/* 드래그 앤 드롭 스타일 */
+/* ?쒕옒洹????쒕∼ ?ㅽ???*/
 .matching-modal-table tbody tr[draggable="true"]:hover {
   cursor: grab;
 }
@@ -1071,21 +1136,10 @@ table .input-styled {
   outline-offset: -2px;
 }
 
-/* 수량 입력 모달 - ConfirmModal과 동일한 스타일 */
-.qty-input-modal {
-  position: fixed;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  background: white;
-  border-radius: 16px;
-  padding: 2rem;
-  max-width: 420px;
-  width: 90%;
-  text-align: center;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-  animation: slideIn 0.3s ease-out;
-}
+/* ?섎웾 ?낅젰 紐⑤떖 - Legacy (Deprecated in favor of Premium Modal) */
+/* .qty-input-modal {
+  ...
+} */
 
 .qty-input-modal-icon {
   width: 70px;
@@ -1192,7 +1246,7 @@ table .input-styled {
   max-width: 140px;
 }
 
-/* 선택 취소 버튼 */
+/* ?좏깮 痍⑥냼 踰꾪듉 */
 .btn-clear-selection {
   display: inline-flex;
   align-items: center;
@@ -1220,7 +1274,7 @@ table .input-styled {
   transform: scale(0.95);
 }
 
-/* 저장된 매칭 버튼 */
+/* ??λ맂 留ㅼ묶 踰꾪듉 */
 .btn-saved-matching {
   display: inline-block;
   padding: 2px 8px;
@@ -1239,24 +1293,10 @@ table .input-styled {
   transform: scale(1.05);
 }
 
-/* 기존 매칭 내역 모달 - ConfirmModal과 동일한 스타일 */
-.matching-history-modal {
-  position: fixed;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  background: white;
-  border-radius: 16px;
-  padding: 2rem;
-  max-width: 450px;
-  width: 90%;
-  max-height: 80vh;
-  display: flex;
-  flex-direction: column;
-  text-align: center;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-  animation: slideIn 0.3s ease-out;
-}
+/* 湲곗〈 留ㅼ묶 ?댁뿭 紐⑤떖 - Legacy (Deprecated in favor of Premium Modal) */
+/* .matching-history-modal {
+  ...
+} */
 
 .matching-history-modal-icon {
   width: 70px;
@@ -1311,7 +1351,7 @@ table .input-styled {
   margin-bottom: 1.5rem;
 }
 
-/* 기존 스타일 (하위 호환) */
+/* 湲곗〈 ?ㅽ???(?섏쐞 ?명솚) */
 .matching-history-item {
   display: flex;
   justify-content: space-between;
@@ -1350,24 +1390,31 @@ table .input-styled {
   color: #9ca3af;
 }
 
-/* ========== 개선된 매칭 카드 스타일 ========== */
+/* ========== 媛쒖꽑??留ㅼ묶 移대뱶 ?ㅽ???(移대뱶留??④린怨?紐⑤떖 ?ㅽ??쇱? Global Premium Modal濡??대룞?? ========== */
 .matching-history-card {
   display: flex;
   align-items: center;
-  gap: 1rem;
-  padding: 0.75rem 1rem;
+  gap: 0.8rem;
+  /* 媛꾧꺽 ?쏀븯寃?議곗젙 */
+  padding: 0.8rem 1rem;
   background: #ffffff;
-  border-radius: 8px;
-  border: 1px solid #e5e7eb;
-  transition: all 0.15s ease;
+  border-radius: 12px;
+  /* 移대뱶 ?κ?寃?*/
+  border: 1px solid #f1f5f9;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.03);
+  /* ????洹몃┝??*/
+  transition: all 0.2s ease;
+  margin-bottom: 0.5rem;
 }
 
 .matching-history-card:hover {
-  border-color: #93c5fd;
-  background: #f8fafc;
+  border-color: #bfdbfe;
+  /* blue-200 */
+  transform: translateY(-1px);
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
 }
 
-/* 정보 영역 */
+/* ?뺣낫 ?곸뿭 */
 .matching-card-info {
   flex: 1;
   display: flex;
@@ -1376,7 +1423,7 @@ table .input-styled {
   min-width: 0;
 }
 
-/* 카드 행 */
+/* 移대뱶 ??*/
 .matching-card-row {
   display: flex;
   align-items: center;
@@ -1413,7 +1460,7 @@ table .input-styled {
   margin-left: 0.25rem;
 }
 
-/* 취소 버튼 */
+/* 痍⑥냼 踰꾪듉 */
 .matching-card-cancel-btn {
   padding: 0.35rem 0.625rem;
   font-size: 0.75rem;
@@ -1473,7 +1520,7 @@ table .input-styled {
   background: #c0392b;
 }
 
-/* 전표 상세 모달 */
+/* ?꾪몴 ?곸꽭 紐⑤떖 */
 .trade-detail-modal {
   background: #fff;
   border-radius: 12px;
@@ -1676,7 +1723,24 @@ table .input-styled {
   justify-content: flex-end;
 }
 
-/* 전표 번호 링크 스타일 */
+/* [NEW] Row Highlight Standard - Using inset box-shadow for consistent border appearance in collapsed tables */
+.highlighted-row {
+  background-color: #fff9db !important;
+}
+
+.highlighted-row td {
+  box-shadow: inset 0 2px 0 #fab005, inset 0 -2px 0 #fab005;
+}
+
+.highlighted-row td:first-child {
+  box-shadow: inset 2px 0 0 #fab005, inset 0 2px 0 #fab005, inset 0 -2px 0 #fab005;
+}
+
+.highlighted-row td:last-child {
+  box-shadow: inset -2px 0 0 #fab005, inset 0 2px 0 #fab005, inset 0 -2px 0 #fab005;
+}
+
+/* ?꾪몴 踰덊샇 留곹겕 ?ㅽ???*/
 .trade-number-link {
   color: #3b82f6;
   cursor: pointer;
@@ -1689,7 +1753,7 @@ table .input-styled {
   text-decoration: underline;
 }
 
-/* 매칭 에러 모달 */
+/* 留ㅼ묶 ?먮윭 紐⑤떖 */
 .matching-error-modal {
   background: #fff;
   border-radius: 12px;
@@ -1849,7 +1913,7 @@ table .input-styled {
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
   flex-shrink: 0;
   height: 60px;
-  /* 고정 높이 */
+  /* 怨좎젙 ?믪씠 */
 }
 
 .page-title {
@@ -1874,12 +1938,12 @@ table .input-styled {
   gap: 0.75rem;
 }
 
-/* 미사용 거래처 행 스타일 */
+/* 誘몄궗??嫄곕옒泥????ㅽ???*/
 .inactive-row {
   color: #9ca3af !important;
-  /* 흐린 회색 텍스트 */
+  /* ?먮┛ ?뚯깋 ?띿뒪??*/
   background-color: #f3f4f6 !important;
-  /* 배경색 강제 적용 */
+  /* 諛곌꼍??媛뺤젣 ?곸슜 */
 }
 
 .inactive-row td {
@@ -1891,12 +1955,12 @@ table .input-styled {
 .inactive-row .drag-handle,
 .inactive-row input {
   opacity: 0.5;
-  /* 요소들 투명도 조절 */
+  /* ?붿냼???щ챸??議곗젅 */
 }
 
 .inactive-row:hover {
   background-color: #e5e7eb !important;
-  /* 호버 시 조금 더 진한 회색 */
+  /* ?몃쾭 ??議곌툑 ??吏꾪븳 ?뚯깋 */
 }
 
 /* ==================== Global Mobile DnD Utilities ==================== */
@@ -1957,4 +2021,260 @@ table .input-styled {
 
 .justify-center {
   justify-content: center !important;
+}
+
+/* ========================================================================== */
+/* Global Premium Modal Standard (Restored)                                   */
+/* ========================================================================== */
+
+.premium-modal-container {
+  background: white;
+  border-radius: 20px;
+  /* ??遺?쒕윭???쇱슫??*/
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  width: 90%;
+  max-width: 440px;
+  /* 理쒖쟻 ?덈퉬 */
+  overflow: hidden;
+  animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  display: flex;
+  flex-direction: column;
+  z-index: 10101;
+  /* Overlay(10100) 蹂대떎 ??*/
+  position: relative;
+}
+
+.premium-modal-header {
+  padding: 2.5rem 2rem 1rem 2rem;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: transparent;
+}
+
+.premium-modal-icon {
+  width: 72px;
+  height: 72px;
+  background-color: #eff6ff;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 1.25rem;
+  font-size: 36px;
+  color: #3b82f6;
+  box-shadow: 0 4px 6px -1px rgba(59, 130, 246, 0.1);
+}
+
+.premium-modal-title {
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: #1e293b;
+  margin: 0 0 0.5rem 0;
+  letter-spacing: -0.025em;
+}
+
+.premium-modal-subtitle {
+  font-size: 1rem;
+  color: #64748b;
+  margin: 0;
+  line-height: 1.5;
+}
+
+.premium-modal-body {
+  padding: 1rem 2rem;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.premium-modal-footer {
+  padding: 2rem;
+  display: flex;
+  gap: 0.75rem;
+  justify-content: stretch;
+  background-color: #ffffff;
+  /* 諛붾뵒? ?숈씪 */
+}
+
+/* Premium Button Styles */
+.premium-modal-btn {
+  flex: 1;
+  padding: 1rem;
+  /* ?곗튂 ?寃??뺣낫 */
+  font-size: 1.05rem;
+  font-weight: 600;
+  border-radius: 12px;
+  cursor: pointer;
+  border: none;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.premium-btn-primary {
+  background-color: #3b82f6;
+  color: white;
+  box-shadow: 0 4px 6px -1px rgba(59, 130, 246, 0.4);
+}
+
+.premium-btn-primary:active {
+  transform: scale(0.98);
+}
+
+.premium-btn-secondary {
+  background-color: #f1f5f9;
+  color: #475569;
+}
+
+.premium-btn-secondary:hover {
+  background-color: #e2e8f0;
+}
+
+.premium-btn-secondary:active {
+  transform: scale(0.98);
+}
+
+/* Input Field Style within Modal */
+.premium-input-group {
+  margin-bottom: 1.5rem;
+  text-align: left;
+}
+
+.premium-input-label {
+  display: block;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #64748b;
+  margin-bottom: 0.5rem;
+}
+
+.premium-input {
+  width: 100%;
+  padding: 1rem;
+  font-size: 1.5rem;
+  /* ???낅젰 ?띿뒪??*/
+  font-weight: 700;
+  text-align: center;
+  border: 2px solid #e2e8f0;
+  border-radius: 12px;
+  outline: none;
+  transition: all 0.2s;
+  color: #1e293b;
+}
+
+.premium-input:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1);
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+/* ========================================================================== */
+/* Company Balance Stats (Restored)                                           */
+/* ========================================================================== */
+
+.stats-grid {
+  display: grid;
+  gap: 1.5rem;
+}
+
+.stat-card {
+  background: white;
+  border-radius: 8px;
+  padding: 1.5rem;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  border-left: 4px solid #ddd;
+  /* Default color, overridden by inline style */
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.stat-card h3 {
+  margin: 0 0 0.5rem 0;
+  font-size: 1rem;
+  color: #64748b;
+  font-weight: 600;
+}
+
+.stat-value {
+  font-size: 1.8rem;
+  font-weight: 700;
+  color: #1e293b;
+  margin-bottom: 0.25rem;
+}
+
+.company-balances {
+  padding: 0.5rem;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ========================================================================== */
+/* Role Management - Badge Toggle Style                                       */
+/* ========================================================================== */
+
+.badge-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 12px;
+  background-color: #f1f5f9;
+  color: #64748b;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  border: 1px solid #e2e8f0;
+  user-select: none;
+  min-width: 60px;
+}
+
+.badge-toggle:hover {
+  background-color: #e2e8f0;
+  border-color: #cbd5e1;
+}
+
+.badge-toggle.checked {
+  background-color: #dbeafe;
+  color: #2563eb;
+  border-color: #bfdbfe;
+  box-shadow: 0 1px 2px rgba(37, 99, 235, 0.1);
+}
+
+.badge-toggle.checked:hover {
+  background-color: #bfdbfe;
+}
+
+.badge-toggle input[type="checkbox"] {
+  display: none;
+}
+
+.badge-toggle:active {
+  transform: scale(0.96);
 }

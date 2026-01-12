@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import ReactDOM from 'react-dom';
+import html2canvas from 'html2canvas';
 
 /**
  * FloatingWindow - 드래그 및 크기 조절 가능한 플로팅 윈도우
@@ -23,6 +24,11 @@ const FloatingWindow = ({ title, icon, onClose, initialPosition = { x: 100, y: 1
     const resizeStartPos = useRef({ x: 0, y: 0 });
     const windowStartSize = useRef({ width: 0, height: 0 });
     const isResizing = useRef(false);
+
+    // 복사 피드백 및 스크린샷 관련 상태
+    const [showCopyFeedback, setShowCopyFeedback] = useState(false);
+    const [showScreenshotFeedback, setShowScreenshotFeedback] = useState(false);
+    const [isCapturing, setIsCapturing] = useState(false);
 
     useEffect(() => {
         // 모바일이면 위치/크기 조절 로직 스킵 (항상 전체화면)
@@ -299,6 +305,53 @@ const FloatingWindow = ({ title, icon, onClose, initialPosition = { x: 100, y: 1
         }
     };
 
+    // --- 스크린샷 캡처 핸들러 ---
+    const handleCaptureScreenshot = async (e) => {
+        if (e) e.stopPropagation();
+        if (!windowRef.current || isCapturing) return;
+
+        try {
+            setIsCapturing(true);
+
+            // 캡처 전 렌더링 최적화를 위해 약간의 지연
+            await new Promise(resolve => setTimeout(resolve, 100));
+
+            const canvas = await html2canvas(windowRef.current, {
+                useCORS: true,
+                scale: 2, // 고해상도
+                backgroundColor: null,
+                logging: false,
+                ignoreElements: (element) => {
+                    // 캡처 시 불필요한 UI 요소(예: 리사이즈 핸들러) 제외 가능
+                    return element.classList.contains('no-screenshot');
+                }
+            });
+
+            // 캔버스를 Blob으로 변환하여 클립보드에 복사
+            canvas.toBlob(async (blob) => {
+                try {
+                    if (!blob) throw new Error('Blob creation failed');
+                    const data = [new ClipboardItem({ 'image/png': blob })];
+                    await navigator.clipboard.write(data);
+
+                    // 성공 피드백 표시
+                    setShowScreenshotFeedback(true);
+                    setTimeout(() => setShowScreenshotFeedback(false), 2000);
+                } catch (err) {
+                    console.error('Clipboard copy failed:', err);
+                    alert('클립보드 복사에 실패했습니다. 브라우저 설정을 확인해주세요.');
+                } finally {
+                    setIsCapturing(false);
+                }
+            }, 'image/png');
+
+        } catch (err) {
+            console.error('Screenshot failed:', err);
+            alert('스크린샷 캡처에 실패했습니다.');
+            setIsCapturing(false);
+        }
+    };
+
     // Resizer Component Helper
     const Resizer = ({ direction, style, cursor }) => (
         <div
@@ -368,8 +421,18 @@ const FloatingWindow = ({ title, icon, onClose, initialPosition = { x: 100, y: 1
                         onClick={(e) => {
                             e.stopPropagation();
                             navigator.clipboard.writeText(title);
+                            setShowCopyFeedback(true);
+                            setTimeout(() => setShowCopyFeedback(false), 2000);
                         }}
-                        style={{ fontWeight: 'bold', fontSize: '0.95rem', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}
+                        style={{
+                            fontWeight: 'bold',
+                            fontSize: '0.95rem',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '8px',
+                            cursor: 'pointer',
+                            position: 'relative'
+                        }}
                         title="클릭하여 화면 명 복사"
                     >
                         {icon && <span>{icon}</span>}
@@ -388,6 +451,22 @@ const FloatingWindow = ({ title, icon, onClose, initialPosition = { x: 100, y: 1
                                 수정중
                             </span>
                         )}
+                        {showCopyFeedback && (
+                            <span style={{
+                                position: 'absolute',
+                                left: '100%',
+                                marginLeft: '10px',
+                                backgroundColor: '#2ecc71',
+                                color: 'white',
+                                fontSize: '0.75rem',
+                                padding: '2px 8px',
+                                borderRadius: '4px',
+                                whiteSpace: 'nowrap',
+                                animation: 'fadeInOut 1.8s ease-in-out forwards'
+                            }}>
+                                복사됨!
+                            </span>
+                        )}
                     </div>
                     <style>{`
                         @keyframes pulse {
@@ -395,8 +474,49 @@ const FloatingWindow = ({ title, icon, onClose, initialPosition = { x: 100, y: 1
                             50% { opacity: 0.8; transform: scale(0.95); }
                             100% { opacity: 1; transform: scale(1); }
                         }
+                        @keyframes fadeInOut {
+                            0% { opacity: 0; transform: translateY(5px); }
+                            15% { opacity: 1; transform: translateY(0); }
+                            85% { opacity: 1; transform: translateY(0); }
+                            100% { opacity: 0; transform: translateY(-5px); }
+                        }
                     `}</style>
-                    <div style={{ display: 'flex', gap: '8px' }}>
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center', position: 'relative' }}>
+                        {showScreenshotFeedback && (
+                            <span style={{
+                                position: 'absolute',
+                                right: '100%',
+                                marginRight: '10px',
+                                backgroundColor: '#3498db',
+                                color: 'white',
+                                fontSize: '0.75rem',
+                                padding: '4px 10px',
+                                borderRadius: '4px',
+                                whiteSpace: 'nowrap',
+                                boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
+                                animation: 'fadeInOut 2s ease-in-out forwards',
+                                zIndex: 1000
+                            }}>
+                                📸 화면이 클립보드에 복사되었습니다!
+                            </span>
+                        )}
+                        <button
+                            onClick={handleCaptureScreenshot}
+                            disabled={isCapturing}
+                            title="화면 캡처하여 클립보드에 복사"
+                            style={{
+                                background: 'none',
+                                border: 'none',
+                                color: 'white',
+                                fontSize: '1.1rem',
+                                cursor: isCapturing ? 'wait' : 'pointer',
+                                padding: '0 5px',
+                                lineHeight: 1,
+                                opacity: isCapturing ? 0.5 : 1
+                            }}
+                        >
+                            📸
+                        </button>
                         {rest.onMinimize && (
                             <button
                                 onClick={(e) => {
@@ -424,48 +544,49 @@ const FloatingWindow = ({ title, icon, onClose, initialPosition = { x: 100, y: 1
             )}
 
             {/* Content */}
-            <div style={{ flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column', padding: isMobile ? 0 : contentPadding }}>
+            <div className="window-content-area" style={{ flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column', padding: isMobile ? 0 : contentPadding }}>
                 {children}
             </div>
 
             {/* --- Resize Handles --- */}
+            <div className="no-screenshot">
+                {/* Right Edge */}
+                <Resizer
+                    direction="right"
+                    cursor="ew-resize"
+                    style={{ top: 0, right: -4, width: '10px', height: '100%' }}
+                />
+                {/* Left Edge */}
+                <Resizer
+                    direction="left"
+                    cursor="ew-resize"
+                    style={{ top: 0, left: -4, width: '10px', height: '100%' }}
+                />
+                {/* Bottom Edge */}
+                <Resizer
+                    direction="bottom"
+                    cursor="ns-resize"
+                    style={{ bottom: -3, left: 0, width: '100%', height: '6px' }}
+                />
 
-            {/* Right Edge */}
-            <Resizer
-                direction="right"
-                cursor="ew-resize"
-                style={{ top: 0, right: -4, width: '10px', height: '100%' }}
-            />
-            {/* Left Edge */}
-            <Resizer
-                direction="left"
-                cursor="ew-resize"
-                style={{ top: 0, left: -4, width: '10px', height: '100%' }}
-            />
-            {/* Bottom Edge */}
-            <Resizer
-                direction="bottom"
-                cursor="ns-resize"
-                style={{ bottom: -3, left: 0, width: '100%', height: '6px' }}
-            />
+                {/* Bottom-Right Corner (Visual Icon) */}
+                <div
+                    onMouseDown={(e) => handleResizeMouseDown(e, 'bottom-right')}
+                    style={{
+                        position: 'absolute', right: 0, bottom: 0, width: '20px', height: '20px',
+                        cursor: 'nwse-resize', zIndex: 11, display: 'flex', alignItems: 'flex-end', justifyContent: 'flex-end', padding: '2px'
+                    }}
+                >
+                    <div style={{ width: 0, height: 0, borderStyle: 'solid', borderWidth: '0 0 10px 10px', borderColor: 'transparent transparent #95a5a6 transparent' }} />
+                </div>
 
-            {/* Bottom-Right Corner (Visual Icon) */}
-            <div
-                onMouseDown={(e) => handleResizeMouseDown(e, 'bottom-right')}
-                style={{
-                    position: 'absolute', right: 0, bottom: 0, width: '20px', height: '20px',
-                    cursor: 'nwse-resize', zIndex: 11, display: 'flex', alignItems: 'flex-end', justifyContent: 'flex-end', padding: '2px'
-                }}
-            >
-                <div style={{ width: 0, height: 0, borderStyle: 'solid', borderWidth: '0 0 10px 10px', borderColor: 'transparent transparent #95a5a6 transparent' }} />
+                {/* Bottom-Left Corner */}
+                <Resizer
+                    direction="bottom-left"
+                    cursor="nesw-resize"
+                    style={{ bottom: -4, left: -4, width: '16px', height: '16px', zIndex: 11 }}
+                />
             </div>
-
-            {/* Bottom-Left Corner */}
-            <Resizer
-                direction="bottom-left"
-                cursor="nesw-resize"
-                style={{ bottom: -4, left: -4, width: '16px', height: '16px', zIndex: 11 }}
-            />
 
         </div>,
         document.body

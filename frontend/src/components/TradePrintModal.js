@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import html2canvas from 'html2canvas';
 import { tradeAPI, companyInfoAPI, paymentAPI } from '../services/api';
 import { useModalDraggable } from '../hooks/useModalDraggable';
+import { useAuth } from '../context/AuthContext';
 
 /**
 /**
@@ -61,17 +62,25 @@ function TradePrintModal({ isOpen, onClose, tradeId }) {
   const [companyInfo, setCompanyInfo] = useState(null);
   const [companySummary, setCompanySummary] = useState(null);
   const [error, setError] = useState(null);
-  const [zoomLevel, setZoomLevel] = useState(() => {
-    const saved = localStorage.getItem('tradePrintZoom');
-    return saved ? parseFloat(saved) : 1;
-  }); // 확대/축소 상태
+
+  const { user } = useAuth();
+  const getScopedKey = (key) => user?.id ? `u${user.id}_${key}` : key;
+
+  const [zoomLevel, setZoomLevel] = useState(1);
+
+  // Load Zoom Level
+  useEffect(() => {
+    const saved = localStorage.getItem(getScopedKey('tradePrintZoom'));
+    if (saved) setZoomLevel(parseFloat(saved));
+  }, [user?.id]);
+
   const printRef = useRef(null);
   const { handleMouseDown, draggableStyle } = useModalDraggable(isOpen);
 
   // 줌 레벨 저장
   useEffect(() => {
-    localStorage.setItem('tradePrintZoom', zoomLevel);
-  }, [zoomLevel]);
+    localStorage.setItem(getScopedKey('tradePrintZoom'), zoomLevel);
+  }, [zoomLevel, user?.id]);
 
   // 전표 상세 조회
   useEffect(() => {

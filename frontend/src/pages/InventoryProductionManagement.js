@@ -3,7 +3,8 @@ import { createPortal } from 'react-dom';
 import { purchaseInventoryAPI, inventoryProductionAPI, productAPI } from '../services/api';
 import SearchableSelect from '../components/SearchableSelect';
 import ConfirmModal from '../components/ConfirmModal';
-import ProductionDetailModal from '../components/ProductionDetailModal'; // [NEW]
+import ProductionDetailModal from '../components/ProductionDetailModal';
+import { useModalDraggable } from '../hooks/useModalDraggable'; // [NEW]
 import './InventoryProductionManagement.css';
 import '../styles/InventoryTransfer.css';
 
@@ -17,6 +18,7 @@ const InventoryProductionManagement = () => {
     // Output Form
     const [outputProductId, setOutputProductId] = useState('');
     const [outputQuantity, setOutputQuantity] = useState(1);
+    const [sender, setSender] = useState(''); // [NEW] 출하주
     const [memo, setMemo] = useState('');
 
     // Input Modal State
@@ -43,11 +45,12 @@ const InventoryProductionManagement = () => {
     const [draggedItem, setDraggedItem] = useState(null);
     const [selectedInventoryIds, setSelectedInventoryIds] = useState(new Set()); // [NEW] Multi-select State
 
-    // [NEW] Detail Modal State
     const [detailModal, setDetailModal] = useState({
         isOpen: false,
         productionId: null
     });
+
+    const { handleMouseDown: handleInputDrag, draggableStyle: inputDragStyle } = useModalDraggable(inputModal.isOpen, { isCentered: true });
 
     useEffect(() => {
         loadData();
@@ -157,6 +160,7 @@ const InventoryProductionManagement = () => {
                 })),
                 output_product_id: outputProductId,
                 output_quantity: outputQuantity,
+                sender: sender, // [NEW] 출하주
                 additional_cost: 0,
                 memo
             };
@@ -176,6 +180,7 @@ const InventoryProductionManagement = () => {
             setSelectedIngredients([]);
             setOutputProductId('');
             setOutputQuantity(1);
+            setSender(''); // [NEW] 출하주 리셋
             setMemo('');
             loadData();
 
@@ -196,13 +201,20 @@ const InventoryProductionManagement = () => {
     };
 
     const handleCancelProduction = async (id) => {
+        const target = history.find(h => h.id === id);
+        const weightStr = Number(target?.output_product_weight || 0) > 0 ? ` ${Number(target.output_product_weight)}kg` : '';
+        const gradeStr = target?.output_product_grade ? ` (${target.output_product_grade})` : '';
+        const displayName = `${target?.output_product_name || '작업'}${weightStr}${gradeStr}`;
+
+        const createdDate = target ? new Date(target.created_at).toLocaleDateString() : '';
+
         setConfirmModal({
             isOpen: true,
-            title: '작업 취소',
-            message: '정말로 이 생산 이력을 취소하시겠습니까?\n(생산된 재고가 삭제되고 사용된 재료가 복구됩니다)',
+            title: '생산 작업 취소',
+            message: `'${createdDate} ${displayName}' 생산 이력을 취소하시겠습니까?\n\n[주의]\n1. 생산된 재고가 삭제됩니다.\n2. 사용된 재료가 원본 재고로 복구됩니다.`,
             type: 'delete',
             showCancel: true,
-            confirmText: '작업 취소',
+            confirmText: '작업 취소 실행',
             cancelText: '닫기',
             onConfirm: async () => {
                 setConfirmModal(prev => ({ ...prev, isOpen: false }));
@@ -212,13 +224,13 @@ const InventoryProductionManagement = () => {
                     setConfirmModal({
                         isOpen: true,
                         title: '취소 완료',
-                        message: '작업 이력이 취소되었습니다.',
+                        message: '생산 작업이 정상적으로 취소되었습니다.',
                         type: 'success',
                         showCancel: false,
                         confirmText: '확인',
                         onConfirm: () => { }
                     });
-                    loadData(); // Reload all data
+                    loadData();
                 } catch (error) {
                     console.error('Cancel Error:', error);
                     setConfirmModal({
@@ -419,63 +431,54 @@ const InventoryProductionManagement = () => {
     };
 
     return (
-        <div className="fade-in" style={{ height: 'calc(100vh - 60px)', display: 'flex', flexDirection: 'column', boxSizing: 'border-box', maxWidth: '1400px', margin: '0 auto', width: '100%' }}>
-
-
-            <div style={{ padding: '0.5rem', display: 'flex', flexDirection: 'column', flex: 1, overflowY: 'auto' }}>
-
-                <div style={{ display: 'flex', gap: '12px', flex: 'none', overflow: 'hidden', alignItems: 'flex-start' }}>
+        <div className="production-container fade-in">
+            <div className="production-page-body">
+                <div className="production-main-columns">
 
                     {/* [Left Panel] Available Ingredients */}
-                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', backgroundColor: 'white', borderRadius: '12px', boxShadow: '0 4px 15px rgba(0,0,0,0.05)', overflow: 'hidden', border: '1px solid #eef2f7', height: '780px' }}>
-                        <div style={{ padding: '0.5rem', borderBottom: '1px solid #f0f0f0', backgroundColor: '#fafbfc', height: '100px', display: 'flex', flexDirection: 'column', justifyContent: 'center', boxSizing: 'border-box' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-                                <h3 style={{ margin: 0, fontSize: '1.1rem', color: '#555' }}>📦 자재 선택</h3>
-                                <span style={{ fontSize: '0.85rem', color: '#888', backgroundColor: '#eee', padding: '2px 8px', borderRadius: '10px' }}>{filteredInventory.length} 건</span>
+                    <div className="production-panel">
+                        <div className="panel-header ingredients">
+                            <div className="panel-header-row">
+                                <h3 className="panel-title">📦 자재 선택</h3>
+                                <span className="badge-count">{filteredInventory.length} 건</span>
                             </div>
-                            <input
-                                type="text"
-                                placeholder="품목, 등급, 출하주, 창고, 매입처 검색..."
-                                value={searchTerm}
-                                onChange={e => setSearchTerm(e.target.value)}
-                                style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px', fontSize: '0.95rem' }}
-                            />
+                            <div className="search-input-wrapper">
+                                <input
+                                    type="text"
+                                    className="production-input"
+                                    placeholder="품목, 등급, 출하주, 창고, 매입처 검색..."
+                                    value={searchTerm}
+                                    onChange={e => setSearchTerm(e.target.value)}
+                                />
+                            </div>
                         </div>
-                        <div style={{ flex: 1, overflowY: 'auto', padding: '0.5rem', backgroundColor: '#fdfdfd' }}>
+                        <div className="panel-content">
                             {filteredInventory.map(item => (
                                 <div
                                     key={item.id}
                                     draggable={true}
                                     onDragStart={(e) => handleDragStart(e, item)}
-                                    // [NEW] Multi-select props
                                     onClick={(e) => toggleInventorySelection(e, item.id)}
                                     data-order={[...selectedInventoryIds].indexOf(item.id) + 1}
                                     className={`inventory-card ${selectedInventoryIds.has(item.id) ? 'selected' : ''}`}
-                                    style={{ cursor: 'pointer' }}
                                 >
                                     <div className="card-content">
-                                        <div className="card-main-info" style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-                                            <span style={{ marginRight: 0 }}>{item.product_name}</span>
+                                        <div className="card-main-info">
+                                            <span>{item.product_name}</span>
                                             {Number(item.product_weight) > 0 && <span style={{ color: '#555' }}>{Number(item.product_weight)}kg</span>}
                                             <span style={{ color: '#27ae60' }}>{item.sender}</span>
                                             {item.grade && <span style={{ color: '#7f8c8d' }}>({item.grade})</span>}
-
                                             <span style={{ flex: 1 }}></span>
-
-                                            <span className="info-qty" style={{ fontWeight: 'bold', color: '#2980b9' }}>
-                                                {Number(item.remaining_quantity).toLocaleString()}개
-                                            </span>
-                                            <span className="info-price" style={{ color: '#555' }}>
-                                                {Number(item.unit_price).toLocaleString()}원
-                                            </span>
+                                            <span className="info-qty">{Number(item.remaining_quantity).toLocaleString()}개</span>
+                                            <span className="info-price">{Number(item.unit_price).toLocaleString()}원</span>
                                         </div>
 
-                                        <div className="card-sub-info" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '4px', borderTop: '1px solid #f0f0f0', paddingTop: '4px' }}>
-                                            <div style={{ display: 'flex', gap: '8px', fontSize: '0.8rem', color: '#7f8c8d', alignItems: 'center', lineHeight: '1' }}>
+                                        <div className="card-sub-info">
+                                            <div className="sub-info-text">
                                                 <span>{item.company_name || '-'}</span>
-                                                <span style={{ fontSize: '0.7rem', color: '#bdc3c7' }}>|</span>
-                                                <span>{item.purchase_date}</span>
-                                                <span style={{ fontSize: '0.7rem', color: '#bdc3c7' }}>|</span>
+                                                <span className="sub-info-divider">|</span>
+                                                <span>{item.purchase_date?.substring(5)}</span>
+                                                <span className="sub-info-divider">|</span>
                                                 <span>{item.warehouse_name}</span>
                                             </div>
                                         </div>
@@ -485,90 +488,58 @@ const InventoryProductionManagement = () => {
                         </div>
                     </div>
 
-
-
                     {/* [Right Panel] Workbench (Drop Zone) */}
                     <div
                         onDragOver={handleDragOver}
                         onDragLeave={handleDragLeave}
                         onDrop={handleDrop}
-                        style={{
-                            flex: 1,
-                            display: 'flex',
-                            flexDirection: 'column',
-                            backgroundColor: 'white',
-                            borderRadius: '12px',
-                            boxShadow: isDragOver ? '0 0 0 2px #3498db, 0 8px 20px rgba(52, 152, 219, 0.2)' : '0 4px 15px rgba(0,0,0,0.05)',
-                            overflow: 'hidden',
-                            border: isDragOver ? '1px solid #3498db' : '1px solid #eef2f7',
-                            transition: 'all 0.2s',
-                            height: '780px'
-                        }}
+                        className={`production-panel workbench drop-zone ${isDragOver ? 'drag-over' : ''}`}
                     >
-                        <div style={{ padding: '0.8rem', borderBottom: '1px solid #f0f0f0', backgroundColor: '#fff8f0', display: 'flex', alignItems: 'center', gap: '8px', height: '100px', boxSizing: 'border-box' }}>
-                            <h3 style={{ margin: 0, fontSize: '1.2rem', color: '#e67e22' }}>🛠️ 작업대</h3>
-                            <span style={{ fontSize: '0.8rem', color: '#e67e22', backgroundColor: '#fff3cd', padding: '2px 8px', borderRadius: '4px' }}>자재를 이곳으로 드래그하세요</span>
+                        <div className="panel-header workbench">
+                            <div className="panel-header-row">
+                                <h3 className="panel-title workbench-title">🛠️ 작업대</h3>
+                                <span className="workbench-guide">자재를 이곳으로 드래그하세요</span>
+                            </div>
                         </div>
 
                         {/* Ingredient List */}
-                        <div style={{ flex: 1, overflowY: 'auto', padding: '0.5rem', backgroundColor: isDragOver ? '#f0f9ff' : 'white', transition: 'background-color 0.2s' }}>
+                        <div className={`panel-content ${isDragOver ? 'drag-over' : ''}`}>
                             {selectedIngredients.length === 0 ? (
-                                <div style={{
-                                    height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-                                    color: '#ccc', border: '2px dashed #eee', borderRadius: '8px'
-                                }}>
-                                    <span style={{ fontSize: '2rem', marginBottom: '10px' }}>📥</span>
+                                <div className="empty-workbench">
+                                    <span className="empty-workbench-icon">📥</span>
                                     <span>자재를 드래그하여 추가하세요</span>
                                 </div>
                             ) : selectedIngredients.map(item => (
-                                <div key={item.id} className="inventory-card" style={{ position: 'relative' }}>
-                                    {/* Remove Button */}
+                                <div key={item.id} className="inventory-card">
                                     <button
                                         onClick={() => handleRemoveIngredient(item.id)}
-                                        style={{
-                                            position: 'absolute',
-                                            top: '4px',
-                                            right: '4px',
-                                            border: 'none',
-                                            background: 'transparent',
-                                            color: '#95a5a6',
-                                            fontSize: '1.2rem',
-                                            cursor: 'pointer',
-                                            padding: '0 4px',
-                                            lineHeight: 1,
-                                            zIndex: 2
-                                        }}
+                                        className="close-btn"
+                                        style={{ position: 'absolute', top: '4px', right: '4px', zIndex: 2 }}
                                         title="제거"
                                     >
                                         ×
                                     </button>
 
                                     <div className="card-content">
-                                        <div className="card-main-info" style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', paddingRight: '15px' }}>
-                                            <span style={{ marginRight: 0 }}>{item.product_name}</span>
+                                        <div className="card-main-info" style={{ paddingRight: '15px' }}>
+                                            <span>{item.product_name}</span>
                                             {Number(item.product_weight) > 0 && <span style={{ color: '#555' }}>{Number(item.product_weight)}kg</span>}
                                             <span style={{ color: '#27ae60' }}>{item.sender}</span>
                                             {item.grade && <span style={{ color: '#7f8c8d' }}>({item.grade})</span>}
-
                                             <span style={{ flex: 1 }}></span>
-
-                                            <span className="info-qty" style={{ fontWeight: 'bold', color: '#2980b9' }}>
-                                                {Number(item.use_quantity).toLocaleString()}개
-                                            </span>
-                                            <span className="info-price" style={{ color: '#555' }}>
-                                                {Number(item.unit_price).toLocaleString()}원
-                                            </span>
+                                            <span className="info-qty">{Number(item.use_quantity).toLocaleString()}개</span>
+                                            <span className="info-price">{Number(item.unit_price).toLocaleString()}원</span>
                                         </div>
 
-                                        <div className="card-sub-info" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '4px', borderTop: '1px solid #f0f0f0', paddingTop: '4px' }}>
-                                            <div style={{ display: 'flex', gap: '8px', fontSize: '0.8rem', color: '#7f8c8d', alignItems: 'center', lineHeight: '1' }}>
+                                        <div className="card-sub-info">
+                                            <div className="sub-info-text">
                                                 <span>{item.company_name || '-'}</span>
-                                                <span style={{ fontSize: '0.7rem', color: '#bdc3c7' }}>|</span>
-                                                <span>{item.purchase_date}</span>
-                                                <span style={{ fontSize: '0.7rem', color: '#bdc3c7' }}>|</span>
+                                                <span className="sub-info-divider">|</span>
+                                                <span>{item.purchase_date?.substring(5)}</span>
+                                                <span className="sub-info-divider">|</span>
                                                 <span>{item.warehouse_name}</span>
                                             </div>
-                                            <span style={{ fontWeight: 'bold', color: '#e74c3c' }}>
+                                            <span className="sub-info-total">
                                                 {(Number(item.unit_price) * Number(item.use_quantity)).toLocaleString()}원
                                             </span>
                                         </div>
@@ -578,24 +549,22 @@ const InventoryProductionManagement = () => {
                         </div>
 
                         {/* Cost & Output Config */}
-                        <div style={{ padding: '1.2rem', backgroundColor: '#f8f9fa', borderTop: '1px solid #eee' }}>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-                                {/* Row 1: Cost */}
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '1rem' }}>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: '110px', color: '#555' }}>
+                        <div className="workbench-footer">
+                            <div className="footer-config-container">
+                                <div className="config-row">
+                                    <div className="row-label">
                                         <span>💰</span>
                                         <span>재료비 합계</span>
                                     </div>
-                                    <strong style={{ color: '#2c3e50', fontSize: '1.1rem' }}>{totalIngredientCost.toLocaleString()} 원</strong>
+                                    <strong className="config-total-value">{totalIngredientCost.toLocaleString()} 원</strong>
                                 </div>
 
-                                {/* Row 2: Output */}
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: '110px', color: '#555' }}>
+                                <div className="output-config">
+                                    <div className="row-label">
                                         <span>📦</span>
                                         <span>생산 결과</span>
                                     </div>
-                                    <div style={{ flex: 1 }}>
+                                    <div className="output-select-wrapper">
                                         <SearchableSelect
                                             options={productOptions}
                                             value={outputProductId}
@@ -603,58 +572,58 @@ const InventoryProductionManagement = () => {
                                             placeholder="품목 선택..."
                                         />
                                     </div>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                    <div className="output-qty-wrapper">
                                         <input
                                             type="number"
                                             value={outputQuantity}
                                             onChange={e => { if (!e.target.value.includes('.') && Number(e.target.value) >= 0) setOutputQuantity(e.target.value) }}
-                                            className="production-input text-right"
+                                            className="output-qty-input"
                                             step="1"
                                             min="0"
                                             placeholder="수량"
-                                            style={{ width: '60px', padding: '8px', border: '1px solid #ddd', borderRadius: '4px', textAlign: 'center' }}
                                         />
                                         <span style={{ color: '#666', fontSize: '0.9rem' }}>개</span>
                                     </div>
                                 </div>
-                                {/* Row 3: Memo Input */}
-                                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: '110px', color: '#555', marginTop: '6px' }}>
+
+                                <div className="config-row">
+                                    <div className="row-label">
+                                        <span>👤</span>
+                                        <span>출하주</span>
+                                    </div>
+                                    <input
+                                        type="text"
+                                        className="production-input"
+                                        value={sender}
+                                        onChange={e => setSender(e.target.value)}
+                                        placeholder="생산물 출하주 정보를 입력하세요..."
+                                        style={{ flex: 1 }}
+                                    />
+                                </div>
+
+                                <div className="config-row">
+                                    <div className="row-label">
                                         <span>📝</span>
                                         <span>메모</span>
                                     </div>
                                     <textarea
                                         value={memo}
+                                        className="memo-input"
                                         onChange={e => setMemo(e.target.value)}
                                         placeholder="작업 관련 메모를 입력하세요..."
-                                        style={{
-                                            flex: 1,
-                                            padding: '8px',
-                                            border: '1px solid #ddd',
-                                            borderRadius: '4px',
-                                            fontSize: '0.9rem',
-                                            resize: 'vertical',
-                                            minHeight: '40px',
-                                            maxHeight: '80px',
-                                            fontFamily: 'inherit'
-                                        }}
                                     />
                                 </div>
-                                {/* Action Bar (Unified) */}
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '10px', borderTop: '1px solid #eee' }}>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                        <span style={{ color: '#7f8c8d' }}>예상 생산 단가:</span>
-                                        <strong style={{ fontSize: '1.4rem', color: '#27ae60' }}>{Number(estimatedUnitPrice).toLocaleString()} 원</strong>
+
+                                <div className="action-bar">
+                                    <div className="price-summary">
+                                        <span className="price-summary-label">예상 생산 단가:</span>
+                                        <strong className="price-summary-value">{Math.round(estimatedUnitPrice).toLocaleString()} 원</strong>
                                     </div>
 
                                     <button
                                         onClick={handleSubmit}
                                         disabled={loading}
-                                        style={{
-                                            padding: '12px 30px', backgroundColor: '#e67e22', color: 'white',
-                                            border: 'none', borderRadius: '6px', fontSize: '1.1rem', fontWeight: 'bold', cursor: 'pointer',
-                                            opacity: loading ? 0.7 : 1, boxShadow: '0 4px 6px rgba(230, 126, 34, 0.2)'
-                                        }}
+                                        className="submit-btn"
                                     >
                                         {loading ? '처리 중...' : '작업 완료'}
                                     </button>
@@ -665,59 +634,45 @@ const InventoryProductionManagement = () => {
                 </div>
 
                 {/* History Section [NEW] */}
-                <div style={{ marginTop: '12px', backgroundColor: 'white', borderRadius: '12px', padding: '0.5rem', boxShadow: '0 4px 15px rgba(0,0,0,0.05)', border: '1px solid #eef2f7' }}>
-                    <h3 style={{ margin: '0 0 1rem 0', color: '#2c3e50', fontSize: '1.1rem' }}>📜 최근 작업 이력</h3>
-                    <div style={{ overflowX: 'auto' }}>
-                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
+                <div className="history-container">
+                    <h3 className="history-title">📜 최근 작업 이력</h3>
+                    <div className="history-table-wrapper">
+                        <table className="history-table">
                             <thead>
-                                <tr style={{ backgroundColor: '#f8f9fa', color: '#666', borderBottom: '2px solid #eee' }}>
-                                    <th style={{ padding: '10px', textAlign: 'left' }}>작업일시</th>
-                                    <th style={{ padding: '10px', textAlign: 'left' }}>생산 품목</th>
-                                    <th style={{ padding: '10px', textAlign: 'right' }}>수량</th>
-                                    <th style={{ padding: '10px', textAlign: 'right' }}>단가</th>
-                                    <th style={{ padding: '10px', textAlign: 'left' }}>비고</th>
-                                    <th style={{ padding: '10px', textAlign: 'center' }}>관리</th>
+                                <tr>
+                                    <th>작업일시</th>
+                                    <th>생산 품목</th>
+                                    <th style={{ textAlign: 'right' }}>수량</th>
+                                    <th style={{ textAlign: 'right' }}>단가</th>
+                                    <th>비고</th>
+                                    <th style={{ textAlign: 'center' }}>관리</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {loading ? (
-                                    <tr><td colSpan="5" style={{ padding: '20px', textAlign: 'center', color: '#999' }}>로딩 중...</td></tr>
+                                    <tr><td colSpan="6" style={{ padding: '20px', textAlign: 'center', color: '#999' }}>로딩 중...</td></tr>
                                 ) : history.length === 0 ? (
-                                    <tr><td colSpan="5" style={{ padding: '20px', textAlign: 'center', color: '#999' }}>최근 이력이 없습니다.</td></tr>
+                                    <tr><td colSpan="6" style={{ padding: '20px', textAlign: 'center', color: '#999' }}>최근 이력이 없습니다.</td></tr>
                                 ) : (
                                     history.map((historyItem) => {
-                                        // Format: [Name] [Weight]kg ([Grade])
                                         const weightStr = Number(historyItem.output_product_weight || 0) > 0 ? ` ${Number(historyItem.output_product_weight)}kg` : '';
                                         const gradeStr = historyItem.output_product_grade ? ` (${historyItem.output_product_grade})` : '';
                                         const displayName = `${historyItem.output_product_name}${weightStr}${gradeStr}`;
 
                                         return (
-                                            <tr key={historyItem.id} style={{ borderBottom: '1px solid #f0f0f0' }}>
-                                                <td style={{ padding: '10px' }}>
+                                            <tr key={historyItem.id}>
+                                                <td className="history-item-date">
                                                     {(() => {
                                                         const d = new Date(historyItem.created_at);
-                                                        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${d.toLocaleTimeString()}`;
+                                                        return `${d.getMonth() + 1}-${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
                                                     })()}
                                                 </td>
-                                                <td style={{ padding: '10px', fontWeight: 'bold', color: '#2c3e50' }}>{displayName}</td>
-                                                <td style={{ padding: '10px', textAlign: 'right' }}>{Number(historyItem.output_quantity).toLocaleString()}</td>
-                                                <td style={{ padding: '10px', textAlign: 'right' }}>{Math.round(historyItem.unit_cost || 0).toLocaleString()} 원</td>
-                                                <td style={{ padding: '10px', color: '#7f8c8d' }}>{historyItem.memo || '-'}</td>
-                                                <td style={{ padding: '10px', textAlign: 'center', display: 'flex', gap: '6px', justifyContent: 'center' }}>
-                                                    <button
-                                                        onClick={() => handleShowDetail(historyItem.id)}
-                                                        style={{
-                                                            padding: '4px 8px',
-                                                            fontSize: '0.8rem',
-                                                            color: '#2980b9',
-                                                            backgroundColor: '#f0f9ff',
-                                                            border: '1px solid #abd5f7',
-                                                            borderRadius: '4px',
-                                                            cursor: 'pointer',
-                                                            display: 'flex', alignItems: 'center', gap: '4px'
-                                                        }}
-                                                        title="재료 상세 보기"
-                                                    >
+                                                <td className="history-item-name">{displayName}</td>
+                                                <td className="history-item-qty">{Number(historyItem.output_quantity).toLocaleString()}</td>
+                                                <td className="history-item-price">{Math.round(historyItem.unit_cost || 0).toLocaleString()} 원</td>
+                                                <td style={{ color: '#7f8c8d' }}>{historyItem.memo || '-'}</td>
+                                                <td className="history-actions">
+                                                    <button onClick={() => handleShowDetail(historyItem.id)} className="history-btn detail" title="재료 상세 보기">
                                                         <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                                             <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
                                                             <polyline points="14 2 14 8 20 8"></polyline>
@@ -727,18 +682,7 @@ const InventoryProductionManagement = () => {
                                                         </svg>
                                                         상세
                                                     </button>
-                                                    <button
-                                                        onClick={() => handleCancelProduction(historyItem.id)}
-                                                        style={{
-                                                            padding: '4px 8px',
-                                                            fontSize: '0.8rem',
-                                                            color: '#c0392b',
-                                                            backgroundColor: '#fff0f0',
-                                                            border: '1px solid #fab1a0',
-                                                            borderRadius: '4px',
-                                                            cursor: 'pointer'
-                                                        }}
-                                                    >
+                                                    <button onClick={() => handleCancelProduction(historyItem.id)} className="history-btn cancel">
                                                         취소
                                                     </button>
                                                 </td>
@@ -761,88 +705,62 @@ const InventoryProductionManagement = () => {
             <ProductionDetailModal
                 isOpen={detailModal.isOpen}
                 onClose={() => setDetailModal({ isOpen: false, productionId: null })}
-                productionId={detailModal.productionId}
+                jobId={detailModal.productionId}
             />
 
             {/* Input Modal */}
             {
                 inputModal.isOpen && createPortal(
-                    <div className="modal-overlay" style={{ zIndex: 1200 }}>
+                    <div className="modal-overlay" style={{ zIndex: 12000 }}>
                         <div
                             className="qty-input-modal"
-                            style={{
-                                minWidth: '400px',
-                                maxWidth: '95%',
-                                backgroundColor: 'white',
-                                borderRadius: '12px',
-                                boxShadow: '0 10px 25px rgba(0,0,0,0.2)',
-                                overflow: 'hidden'
-                            }}
+                            style={inputDragStyle}
                             onClick={(e) => e.stopPropagation()}
                         >
-                            <div className="modal-header" style={{ padding: '0.75rem 1rem', borderBottom: '1px solid #e5e7eb', background: '#f8fafc' }}>
-                                <h3 style={{ margin: 0, fontSize: '1.1rem', color: '#1e293b', display: 'flex', alignItems: 'center' }}>
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '8px', color: '#3498db' }}>
+                            <div className="modal-header-premium draggable-header" onMouseDown={handleInputDrag}>
+                                <h3 className="modal-header-title drag-pointer-none">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: '#3498db' }}>
                                         <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
                                         <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
                                         <line x1="12" y1="22.08" x2="12" y2="12"></line>
                                     </svg>
-                                    작업 수량 입력
+                                    자재 투입 수량 설정
                                 </h3>
-                                <button className="close-btn" onClick={() => setInputModal({ isOpen: false, inventory: null, quantity: '', maxQuantity: 0 })}>&times;</button>
+                                <button className="close-btn drag-pointer-auto" onClick={() => setInputModal({ isOpen: false, inventory: null, quantity: '', maxQuantity: 0 })}>&times;</button>
                             </div>
 
-                            <div className="modal-body" style={{ padding: '1.25rem' }}>
-                                <div style={{
-                                    marginBottom: '1rem',
-                                    padding: '1.2rem',
-                                    backgroundColor: '#fff',
-                                    borderRadius: '12px',
-                                    border: '1px solid #e0e0e0',
-                                    boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.03)'
-                                }}>
-                                    <div style={{ fontSize: '1.1rem', fontWeight: 'bold', color: '#2c3e50', marginBottom: '1rem', textAlign: 'center' }}>
+                            <div className="modal-body-premium">
+                                <div className="modal-card-summary">
+                                    <div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#1e293b', marginBottom: '1.25rem', textAlign: 'center' }}>
                                         {inputModal.inventory?.product_name}
                                         {Number(inputModal.inventory?.product_weight) > 0 && ` ${Number(inputModal.inventory?.product_weight)}kg`}
                                         {inputModal.inventory?.grade && ` (${inputModal.inventory?.grade})`}
                                     </div>
 
-                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '8px', fontSize: '0.9rem' }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', color: '#555' }}>
-                                            <span style={{ color: '#888', marginRight: '6px', minWidth: '50px' }}>생산자:</span>
-                                            <strong>{inputModal.inventory?.sender}</strong>
-                                        </div>
-                                        <div style={{ display: 'flex', alignItems: 'center', color: '#555' }}>
-                                            <span style={{ color: '#888', marginRight: '6px', minWidth: '50px' }}>매입처:</span>
-                                            {inputModal.inventory?.company_name}
-                                        </div>
-                                        <div style={{ display: 'flex', alignItems: 'center', color: '#555' }}>
-                                            <span style={{ color: '#888', marginRight: '6px', minWidth: '50px' }}>보관:</span>
-                                            {inputModal.inventory?.warehouse_name}
-                                        </div>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '4px', borderTop: '1px solid #eee', paddingTop: '8px' }}>
-                                            <div style={{ display: 'flex', alignItems: 'center', color: '#555' }}>
-                                                <span style={{ color: '#888', marginRight: '6px' }}>매입일:</span>
-                                                {inputModal.inventory?.purchase_date}
-                                            </div>
-                                            <div style={{ display: 'flex', alignItems: 'center', color: '#555' }}>
-                                                <span style={{ color: '#888', marginRight: '6px' }}>단가:</span>
-                                                {Number(inputModal.inventory?.unit_price).toLocaleString()}원
-                                            </div>
-                                        </div>
+                                    <div className="modal-card-row">
+                                        <span className="modal-label">출하주:</span>
+                                        <span className="modal-value">{inputModal.inventory?.sender}</span>
                                     </div>
-
-                                    <div style={{ marginTop: '1rem', paddingTop: '0.8rem', borderTop: '1px dashed #ddd', textAlign: 'center' }}>
-                                        <span style={{ color: '#888', marginRight: '8px', fontSize: '0.85rem' }}>현재 잔고</span>
-                                        <strong style={{ color: '#27ae60', fontSize: '1.1rem' }}>{Number(inputModal.maxQuantity).toLocaleString()}</strong>
+                                    <div className="modal-card-row">
+                                        <span className="modal-label">매입처 / 창고:</span>
+                                        <span className="modal-value">{inputModal.inventory?.company_name} / {inputModal.inventory?.warehouse_name}</span>
+                                    </div>
+                                    <div className="modal-card-row" style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid #e2e8f0' }}>
+                                        <span className="modal-label">매입 일자:</span>
+                                        <span className="modal-value">{inputModal.inventory?.purchase_date}</span>
+                                    </div>
+                                    <div className="modal-card-row">
+                                        <span className="modal-label">현재 가용 재고:</span>
+                                        <span className="modal-value-highlight">{Number(inputModal.maxQuantity).toLocaleString()} 개</span>
                                     </div>
                                 </div>
 
-                                <div style={{ marginBottom: '1.25rem' }}>
-                                    <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold', color: '#555', fontSize: '0.9rem' }}>투입 수량</label>
+                                <div style={{ marginBottom: '1.5rem' }}>
+                                    <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', color: '#475569', fontSize: '0.95rem' }}>투입할 수량 입력</label>
                                     <input
                                         type="text"
                                         onFocus={(e) => e.target.select()}
+                                        className="qty-input-large"
                                         value={inputModal.quantity ? Number(inputModal.quantity.replace(/,/g, '')).toLocaleString() : ''}
                                         onChange={(e) => {
                                             const val = e.target.value.replace(/,/g, '');
@@ -852,36 +770,28 @@ const InventoryProductionManagement = () => {
                                         }}
                                         onKeyDown={(e) => {
                                             if (e.key === 'Enter') handleInputConfirm();
-                                            if (e.key === 'Escape') setInputModal({ isOpen: false, inventory: null, quantity: '', maxQuantity: 0 });
                                         }}
                                         autoFocus
-                                        style={{
-                                            width: '100%',
-                                            padding: '0.8rem',
-                                            fontSize: '1.2rem',
-                                            border: '2px solid #3498db',
-                                            borderRadius: '8px',
-                                            textAlign: 'center',
-                                            fontWeight: 'bold',
-                                            boxSizing: 'border-box'
-                                        }}
                                     />
+                                    <span className="modal-qty-guide" style={{ color: inputModal.quantity > inputModal.maxQuantity ? '#ef4444' : '#64748b' }}>
+                                        {inputModal.quantity > inputModal.maxQuantity ? '⚠️ 가용 재고를 초과할 수 없습니다.' : `최대 ${Number(inputModal.maxQuantity).toLocaleString()}개 입력 가능`}
+                                    </span>
                                 </div>
 
-                                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                <div style={{ display: 'flex', gap: '12px' }}>
                                     <button
                                         onClick={() => setInputModal({ isOpen: false, inventory: null, quantity: '', maxQuantity: 0 })}
-                                        className="btn btn-secondary"
-                                        style={{ flex: 1, padding: '0.75rem' }}
+                                        className="modal-btn modal-btn-cancel"
+                                        style={{ flex: 1, height: '48px' }}
                                     >
                                         취소
                                     </button>
                                     <button
                                         onClick={handleInputConfirm}
-                                        className="btn btn-primary"
-                                        style={{ flex: 1, padding: '0.75rem', fontWeight: 'bold' }}
+                                        className="modal-btn modal-btn-primary"
+                                        style={{ flex: 1, height: '48px', fontWeight: 'bold' }}
                                     >
-                                        추가
+                                        작업대에 추가
                                     </button>
                                 </div>
                             </div>

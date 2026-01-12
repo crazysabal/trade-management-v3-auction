@@ -10,11 +10,18 @@ router.use(authenticateToken);
 // 1. 사용자 목록 조회
 router.get('/', async (req, res) => {
     try {
-        const [users] = await db.query('SELECT id, username, role, created_at FROM users ORDER BY created_at DESC');
+        // [RBAC] Join with roles table to get role name. 
+        // We use 'r.name as role' to keep frontend compatibility for now
+        const [users] = await db.query(`
+            SELECT u.id, u.username, u.is_active, u.created_at, u.role_id,
+                   coalesce(r.name, u.role) as role 
+            FROM users u
+            LEFT JOIN roles r ON u.role_id = r.id
+            ORDER BY u.created_at DESC
+        `);
         res.json(users);
-    } catch (error) {
-        console.error('User list error:', error);
-        res.status(500).json({ message: '사용자 목록을 불러오는 중 오류가 발생했습니다.' });
+    } catch (err) {
+        res.status(500).json({ message: 'Error fetching users' });
     }
 });
 
@@ -37,9 +44,9 @@ router.get('/history', async (req, res) => {
     }
 });
 
-// 2. 사용자 추가 (Register 로직 재사용)
+// 2. 사용자 추가
 router.post('/', async (req, res) => {
-    const { username, password, role } = req.body;
+    const { username, password, role_id, is_active } = req.body;
 
     if (!username || !password) {
         return res.status(400).json({ message: '아이디와 비밀번호를 입력해주세요.' });
@@ -53,20 +60,28 @@ router.post('/', async (req, res) => {
 
         const hashedPassword = await bcrypt.hash(password, 10);
 
-        // [SECURITY] 일반 직원은 'admin' 계정을 생성할 수 없음
-        let userRole = role || 'user';
-        if (userRole.toLowerCase() === 'admin') {
-            if (!req.user.role || req.user.role.toLowerCase() !== 'admin') {
-                return res.status(403).json({ message: '관리자 권한을 부여할 수 없습니다. (관리자 전용)' });
-            }
-        }
-        await db.query('INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)',
-            [username, hashedPassword, userRole]);
+        await db.query(
+            'INSERT INTO users (username, password_hash, role_id, is_active) VALUES (?, ?, ?, ?)',
+            [username, hashedPassword, role_id || null, is_active === undefined ? 1 : is_active]
+        );
 
         res.status(201).json({ message: '사용자가 추가되었습니다.' });
     } catch (error) {
         console.error('Create user error:', error);
         res.status(500).json({ message: '사용자 추가 중 오류가 발생했습니다.' });
+    }
+});
+
+// Update User (including role/status)
+// Note: Password update is separate usually, or handled here if provided
+// Here we follow REST pattern or existing code style
+router.put('/:id', async (req, res) => {
+    const { role_id, is_active } = req.body;
+    try {
+        await db.query('UPDATE users SET role_id = ?, is_active = ? WHERE id = ?', [role_id, is_active, req.params.id]);
+        res.json({ message: 'User updated' });
+    } catch (err) {
+        res.status(500).json({ message: 'Error updating user' });
     }
 });
 

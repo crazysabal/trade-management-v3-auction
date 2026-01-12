@@ -1,15 +1,34 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
+import axios from 'axios';
 import { useModalDraggable } from '../hooks/useModalDraggable';
 
 const UserFormModal = ({ isOpen, onClose, onSubmit, initialData }) => {
     const [formData, setFormData] = useState({
         username: '',
         password: '',
-        role: 'user',
+        role_id: '',
         is_active: true
     });
     const { handleMouseDown, draggableStyle } = useModalDraggable(isOpen);
+    const [error, setError] = useState('');
+
+    const [roles, setRoles] = useState([]);
+
+    useEffect(() => {
+        // Fetch roles for dropdown
+        const fetchRoles = async () => {
+            try {
+                const response = await axios.get('/api/roles');
+                setRoles(response.data);
+            } catch (error) {
+                console.error('Failed to fetch roles', error);
+            }
+        };
+        if (isOpen) {
+            fetchRoles();
+        }
+    }, [isOpen]);
 
     useEffect(() => {
         if (isOpen) {
@@ -17,14 +36,14 @@ const UserFormModal = ({ isOpen, onClose, onSubmit, initialData }) => {
                 setFormData({
                     username: initialData.username || '',
                     password: '', // 비밀번호는 수정 시 비워둠 (입력 시에만 변경)
-                    role: initialData.role || 'user',
+                    role_id: initialData.role_id || '', // role_id 사용
                     is_active: initialData.is_active !== false
                 });
             } else {
                 setFormData({
                     username: '',
                     password: '',
-                    role: 'user',
+                    role_id: '',
                     is_active: true
                 });
             }
@@ -39,9 +58,14 @@ const UserFormModal = ({ isOpen, onClose, onSubmit, initialData }) => {
         }));
     };
 
-    const handleSubmit = (e) => {
+    const handleSubmit = async (e) => {
         e.preventDefault();
-        onSubmit(formData);
+        setError('');
+        try {
+            await onSubmit(formData);
+        } catch (err) {
+            setError(err.response?.data?.message || '저장 중 오류가 발생했습니다.');
+        }
     };
 
     // ESC 키로 닫기
@@ -58,7 +82,7 @@ const UserFormModal = ({ isOpen, onClose, onSubmit, initialData }) => {
     if (!isOpen) return null;
 
     return createPortal(
-        <div className="modal-overlay" style={{ zIndex: 1100 }}>
+        <div className="modal-overlay" style={{ zIndex: 10100 }}>
             <div
                 className="styled-modal"
                 onClick={e => e.stopPropagation()}
@@ -72,7 +96,8 @@ const UserFormModal = ({ isOpen, onClose, onSubmit, initialData }) => {
                     <button className="close-btn drag-pointer-auto" onClick={onClose}>&times;</button>
                 </div>
                 <form onSubmit={handleSubmit}>
-                    <div className="modal-body" style={{ padding: '1.5rem' }}>
+                    <div className="modal-body">
+                        {error && <div className="error-message" style={{ color: '#d32f2f', backgroundColor: '#ffebee', padding: '8px', borderRadius: '4px', marginBottom: '15px', fontSize: '13px' }}>{error}</div>}
                         <div className="form-group">
                             <label>사용자 아이디</label>
                             <input
@@ -99,31 +124,34 @@ const UserFormModal = ({ isOpen, onClose, onSubmit, initialData }) => {
                             />
                         </div>
                         <div className="form-group">
-                            <label>권한</label>
+                            <label>권한 (역할)</label>
                             <select
-                                name="role"
+                                name="role_id"
                                 className="form-select"
-                                value={formData.role}
+                                value={formData.role_id || ''}
                                 onChange={handleChange}
                             >
-                                <option value="user">일반 사용자</option>
-                                <option value="admin">관리자</option>
+                                <option value="">역할 선택</option>
+                                {roles.map(role => (
+                                    <option key={role.id} value={role.id}>
+                                        {role.name}
+                                    </option>
+                                ))}
                             </select>
                         </div>
                         <div className="form-group">
-                            <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
+                            <label className="checkbox-label" style={{ justifyContent: 'flex-start', marginLeft: '100px' }}>
                                 <input
                                     type="checkbox"
                                     name="is_active"
                                     checked={formData.is_active}
                                     onChange={handleChange}
-                                    style={{ marginRight: '8px' }}
                                 />
-                                계정 활성화
+                                계정 활성화 (접속 허용)
                             </label>
                         </div>
                     </div>
-                    <div className="modal-footer" style={{ borderTop: '1px solid #e2e8f0', padding: '1rem 1.5rem', display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+                    <div className="modal-footer">
                         <button type="button" className="modal-btn modal-btn-cancel" onClick={onClose}>취소</button>
                         <button type="submit" className="modal-btn modal-btn-primary">저장</button>
                     </div>

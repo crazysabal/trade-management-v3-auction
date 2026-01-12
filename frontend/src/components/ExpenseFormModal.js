@@ -164,6 +164,26 @@ export default function ExpenseFormModalComponent({ isOpen, onClose, initialData
                             </div>
 
                             <div className="form-group">
+                                <label>결제 수단</label>
+                                <select
+                                    value={formData.payment_method}
+                                    onChange={(e) => setFormData({ ...formData, payment_method: e.target.value })}
+                                >
+                                    {paymentMethods.length > 0 ? (
+                                        paymentMethods.map(pm => (
+                                            <option key={pm.id} value={pm.code}>{pm.name}</option>
+                                        ))
+                                    ) : (
+                                        <>
+                                            <option value="CASH">현금</option>
+                                            <option value="CARD">카드</option>
+                                            <option value="TRANSFER">계좌이체</option>
+                                        </>
+                                    )}
+                                </select>
+                            </div>
+
+                            <div className="form-group">
                                 <label>금액</label>
                                 <input
                                     type="text"
@@ -188,25 +208,7 @@ export default function ExpenseFormModalComponent({ isOpen, onClose, initialData
                                 />
                             </div>
 
-                            <div className="form-group">
-                                <label>결제 수단</label>
-                                <select
-                                    value={formData.payment_method}
-                                    onChange={(e) => setFormData({ ...formData, payment_method: e.target.value })}
-                                >
-                                    {paymentMethods.length > 0 ? (
-                                        paymentMethods.map(pm => (
-                                            <option key={pm.id} value={pm.code}>{pm.name}</option>
-                                        ))
-                                    ) : (
-                                        <>
-                                            <option value="CASH">현금</option>
-                                            <option value="CARD">카드</option>
-                                            <option value="TRANSFER">계좌이체</option>
-                                        </>
-                                    )}
-                                </select>
-                            </div>
+
                         </form>
                     </div>
 

@@ -281,6 +281,7 @@ router.get('/transactions', async (req, res) => {
         CASE WHEN tm.trade_type = 'PRODUCTION' THEN 'PRODUCTION_IN' ELSE 'PURCHASE' END as transaction_type,
         DATE(pi.purchase_date) as transaction_date,
         pi.id as reference_id,
+        td.id as trade_detail_id,
         pi.id as lot_id, -- [NEW] Lot ID Added
         pi.product_id,
         p.product_name,
@@ -295,6 +296,7 @@ router.get('/transactions', async (req, res) => {
         tm.trade_number,
         tm.id as trade_master_id,
         ip.id as production_id, -- [NEW] Production ID linked to Output Inventory
+        COALESCE(ip.memo, tm.notes) as notes, -- [NEW] Production or Trade Master Memo
         pi.created_at as detail_date,
         w.name as warehouse_name
       FROM purchase_inventory pi
@@ -338,6 +340,7 @@ router.get('/transactions', async (req, res) => {
         'SALE' as transaction_type,
         DATE(spm.matched_at) as transaction_date,
         spm.id as reference_id,
+        td_sale.id as trade_detail_id,
         pi.id as lot_id, -- [NEW] Lot ID Added
         pi.product_id,
         p.product_name,
@@ -353,8 +356,10 @@ router.get('/transactions', async (req, res) => {
         tm_sale.trade_number,
         tm_sale.id as trade_master_id,
         NULL as production_id, -- [NEW]
+        tm_sale.notes as notes, -- [NEW] Sale Memo
         tm_source.id as source_trade_id,     -- [NEW] Origin Trade ID
         tm_source.trade_number as source_trade_number, -- [NEW] Origin Trade Number
+        pi.trade_detail_id as source_trade_detail_id, -- [NEW]
         spm.matched_at as detail_date,
         w.name as warehouse_name
       FROM sale_purchase_matching spm
@@ -416,8 +421,10 @@ router.get('/transactions', async (req, res) => {
         COALESCE(tm_out.trade_number, CONCAT('PROD-', ip.id)) as trade_number,
         NULL as trade_master_id,
         ip.id as production_id, -- [NEW] Production ID
+        COALESCE(ip.memo, tm_out.notes) as notes, -- [NEW] Production or Output Trade Memo
         tm_source.id as source_trade_id,     -- [NEW] Source Trade ID
         tm_source.trade_number as source_trade_number, -- [NEW]
+        pi.trade_detail_id as source_trade_detail_id, -- [NEW]
         ip.created_at as detail_date,
         w.name as warehouse_name
       FROM inventory_production_ingredients ipi
@@ -481,8 +488,10 @@ router.get('/transactions', async (req, res) => {
         CONCAT('TRANS-', DATE_FORMAT(wt.transfer_date, '%Y%m%d'), '-', wt.id) as trade_number,
         NULL as trade_master_id,
         NULL as production_id, -- [NEW]
+        wt.notes as notes, -- [NEW] Transfer Memo
         tm_source.id as source_trade_id,     -- [NEW] Source Trade ID
         tm_source.trade_number as source_trade_number, -- [NEW]
+        pi.trade_detail_id as source_trade_detail_id, -- [NEW]
         wt.created_at as detail_date,
         w_from.name as warehouse_name
       FROM warehouse_transfers wt
@@ -543,8 +552,10 @@ router.get('/transactions', async (req, res) => {
         CONCAT('TRANS-', DATE_FORMAT(wt.transfer_date, '%Y%m%d'), '-', wt.id) as trade_number,
         NULL as trade_master_id,
         NULL as production_id,
+        wt.notes as notes, -- [NEW] Transfer Memo
         tm_source.id as source_trade_id,
         tm_source.trade_number as source_trade_number,
+        pi.trade_detail_id as source_trade_detail_id, -- [NEW]
         wt.created_at as detail_date,
         w_to.name as warehouse_name -- Destination Warehouse (Current Location for IN)
       FROM warehouse_transfers wt
@@ -607,6 +618,7 @@ router.get('/transactions', async (req, res) => {
         NULL as production_id, -- [NEW]
         tm_source.id as source_trade_id,
         tm_source.trade_number as source_trade_number,
+        pi.trade_detail_id as source_trade_detail_id, -- [NEW]
         ia.adjusted_at as detail_date,
         w.name as warehouse_name
       FROM inventory_adjustments ia

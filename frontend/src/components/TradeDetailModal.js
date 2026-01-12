@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { tradeAPI, paymentAPI } from '../services/api';
 import { useModalDraggable } from '../hooks/useModalDraggable';
@@ -11,16 +11,18 @@ import { useModalDraggable } from '../hooks/useModalDraggable';
  * @param {function} onClose - 모달 닫기
  * @param {number} tradeId - 전표 ID (trade_masters.id)
  */
-function TradeDetailModal({ isOpen, onClose, tradeId }) {
+function TradeDetailModal({ isOpen, onClose, tradeId, highlightId }) {
   const [loading, setLoading] = useState(false);
   const [trade, setTrade] = useState(null);
   const [error, setError] = useState(null);
   const [companySummary, setCompanySummary] = useState(null);
   const { handleMouseDown, draggableStyle } = useModalDraggable(isOpen);
+  const highlightedRowRef = useRef(null);
 
   // 전표 상세 조회
   useEffect(() => {
     if (isOpen && tradeId) {
+      setTrade(null); // Clear previous trade to ensure new highlight/scroll logic triggers cleanly
       loadTradeDetail();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -83,6 +85,19 @@ function TradeDetailModal({ isOpen, onClose, tradeId }) {
     };
   }, [isOpen]);
 
+  // 강조 항목으로 스크롤
+  useEffect(() => {
+    if (isOpen && trade && highlightId) {
+      // Small delay to ensure table is fully rendered and ref is attached
+      const timer = setTimeout(() => {
+        if (highlightedRowRef.current) {
+          highlightedRowRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }, 500); // Increased slightly for robustness in slow renders
+      return () => clearTimeout(timer);
+    }
+  }, [isOpen, trade, highlightId]);
+
   if (!isOpen) return null;
 
   const formatCurrency = (value) => {
@@ -102,11 +117,19 @@ function TradeDetailModal({ isOpen, onClose, tradeId }) {
   };
 
   const getTradeTypeBadge = (type) => {
-    if (type === 'SALE') {
-      return <span className="badge badge-success">매출</span>;
-    } else {
-      return <span className="badge badge-info">매입</span>;
-    }
+    const isSale = type === 'SALE';
+    const style = {
+      display: 'inline-block',
+      padding: '4px 12px',
+      borderRadius: '20px',
+      fontSize: '0.85rem',
+      fontWeight: '700',
+      backgroundColor: isSale ? '#27ae60' : '#3498db',
+      color: 'white',
+      boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+      marginLeft: '12px'
+    };
+    return <span style={style}>{isSale ? '매출' : '매입'}</span>;
   };
 
   const formatWeight = (weight) => {
@@ -142,13 +165,9 @@ function TradeDetailModal({ isOpen, onClose, tradeId }) {
           onMouseDown={handleMouseDown}
         >
           <div className="trade-detail-modal-header-left drag-pointer-none">
-            <h2 style={{ display: 'flex', alignItems: 'center' }}>
-              <span>📋 전표 상세</span>
-              {trade && (
-                <span style={{ marginLeft: '10px', fontSize: '0.6em' }}>
-                  {getTradeTypeBadge(trade.trade_type)}
-                </span>
-              )}
+            <h2 style={{ display: 'flex', alignItems: 'center', margin: 0 }}>
+              <span>📋 {isPurchase ? '매입' : '매출'} 전표 상세</span>
+              {trade && getTradeTypeBadge(trade.trade_type)}
             </h2>
             {trade && (
               <div className="trade-detail-header-summary">
@@ -194,8 +213,8 @@ function TradeDetailModal({ isOpen, onClose, tradeId }) {
               {/* 기본 정보 */}
               <div className="trade-detail-info-grid">
                 <div className="trade-detail-info-item">
-                  <label>전표번호</label>
-                  <div className="trade-detail-info-value highlight">
+                  <label>{isPurchase ? '매입번호' : '매출번호'}</label>
+                  <div className="trade-detail-info-value highlight" style={{ color: isPurchase ? '#1565c0' : '#27ae60' }}>
                     {trade.trade_number}
                   </div>
                 </div>
@@ -278,23 +297,31 @@ function TradeDetailModal({ isOpen, onClose, tradeId }) {
                   </thead>
                   <tbody>
                     {trade.details && trade.details.length > 0 ? (
-                      trade.details.map((detail, index) => (
-                        <tr key={detail.id || index}>
-                          <td className="text-center">{detail.seq_no || index + 1}</td>
-                          <td style={{ fontWeight: '500' }}>
-                            {formatProductName(detail)}
-                          </td>
-                          <td className="text-right">{formatNumber(detail.quantity)}</td>
-                          <td className="text-right">{formatCurrency(detail.unit_price)}</td>
-                          <td className="text-right" style={{ fontWeight: '600', color: '#1565c0' }}>
-                            {formatCurrency(detail.supply_amount || (detail.quantity * detail.unit_price))}
-                          </td>
-                          {isPurchase && (
-                            <td style={{ color: '#666', fontSize: '0.9rem' }}>{detail.sender || '-'}</td>
-                          )}
-                          <td style={{ color: '#666', fontSize: '0.9rem' }}>{detail.notes || '-'}</td>
-                        </tr>
-                      ))
+                      trade.details.map((detail, index) => {
+                        const isHighlighted = highlightId && String(detail.id) === String(highlightId);
+                        return (
+                          <tr
+                            key={detail.id || index}
+                            ref={isHighlighted ? highlightedRowRef : null}
+                            className={isHighlighted ? 'highlighted-row' : ''}
+                          >
+                            <td className="text-center">{detail.seq_no || index + 1}</td>
+                            <td style={{ fontWeight: isHighlighted ? '700' : '500' }}>
+                              {formatProductName(detail)}
+                              {isHighlighted && <span style={{ marginLeft: '8px', color: '#f08c00', fontSize: '0.8rem' }}>👈 선택됨</span>}
+                            </td>
+                            <td className="text-right">{formatNumber(detail.quantity)}</td>
+                            <td className="text-right">{formatCurrency(detail.unit_price)}</td>
+                            <td className="text-right" style={{ fontWeight: '600', color: '#1565c0' }}>
+                              {formatCurrency(detail.supply_amount || (detail.quantity * detail.unit_price))}
+                            </td>
+                            {isPurchase && (
+                              <td style={{ color: '#666', fontSize: '0.9rem' }}>{detail.sender || '-'}</td>
+                            )}
+                            <td style={{ color: '#666', fontSize: '0.9rem' }}>{detail.notes || '-'}</td>
+                          </tr>
+                        );
+                      })
                     ) : (
                       <tr>
                         <td colSpan={isPurchase ? 7 : 6} className="text-center" style={{ color: '#94a3b8', padding: '2rem' }}>
@@ -332,7 +359,7 @@ function TradeDetailModal({ isOpen, onClose, tradeId }) {
         {/* 푸터 */}
         <div className="trade-detail-modal-footer">
           <button
-            className="btn btn-secondary"
+            className="modal-btn modal-btn-primary"
             onClick={onClose}
           >
             닫기

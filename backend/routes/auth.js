@@ -60,9 +60,33 @@ router.post('/login', async (req, res) => {
         await db.query('INSERT INTO login_history (user_id, action_type, ip_address, user_agent) VALUES (?, ?, ?, ?)',
             [user.id, 'LOGIN', ip, userAgent]);
 
+        // Fetch user permissions
+        const [permissions] = await db.query(`
+            SELECT p.resource, p.action 
+            FROM permissions p
+            JOIN role_permissions rp ON p.id = rp.permission_id
+            WHERE rp.role_id = ?
+        `, [user.role_id]);
+
+        // Construct simplified permissions object { RESOURCE: ['READ', 'CREATE', ...] } or a flat list
+        // Let's send a list of objects for flexibility: [{resource: 'TRADE', action: 'READ'}, ...]
+        // Or simpler: { TRADE: ['READ', 'CREATE'] }
+
+        const permissionMap = {};
+        permissions.forEach(p => {
+            if (!permissionMap[p.resource]) permissionMap[p.resource] = [];
+            permissionMap[p.resource].push(p.action);
+        });
+
         res.json({
             token,
-            user: { id: user.id, username: user.username, role: user.role }
+            user: {
+                id: user.id,
+                username: user.username,
+                role: user.role, // Legacy
+                role_id: user.role_id,
+                permissions: permissionMap
+            }
         });
 
     } catch (error) {
@@ -88,9 +112,41 @@ router.post('/logout', authenticateToken, async (req, res) => {
     }
 });
 
-// Me (User Profile)
-router.get('/me', authenticateToken, (req, res) => {
-    res.json({ user: req.user });
+// Me (User Profile with latest permissions)
+router.get('/me', authenticateToken, async (req, res) => {
+    try {
+        const [users] = await db.query('SELECT * FROM users WHERE id = ?', [req.user.id]);
+        if (users.length === 0) return res.status(404).json({ message: 'User not found' });
+
+        const user = users[0];
+
+        // Fetch user permissions
+        const [permissions] = await db.query(`
+            SELECT p.resource, p.action 
+            FROM permissions p
+            JOIN role_permissions rp ON p.id = rp.permission_id
+            WHERE rp.role_id = ?
+        `, [user.role_id]);
+
+        const permissionMap = {};
+        permissions.forEach(p => {
+            if (!permissionMap[p.resource]) permissionMap[p.resource] = [];
+            permissionMap[p.resource].push(p.action);
+        });
+
+        res.json({
+            user: {
+                id: user.id,
+                username: user.username,
+                role: user.role,
+                role_id: user.role_id,
+                permissions: permissionMap
+            }
+        });
+    } catch (error) {
+        console.error('Me error:', error);
+        res.status(500).json({ message: '사용자 정보를 가져오는 중 오류가 발생했습니다.' });
+    }
 });
 
 module.exports = router;

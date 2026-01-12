@@ -114,15 +114,14 @@ const ExpenseList = () => {
     };
 
     return (
-        <div className="expense-list-page" style={{ maxWidth: '1200px', margin: '0 auto', padding: '1.5rem' }}>
+        <div className="expense-list-page" style={{ padding: '0.5rem', width: '100%', height: '100%', display: 'flex', flexDirection: 'column' }}>
             {/* 헤더 섹션 */}
-            <div className="page-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
-                <h1 className="page-title" style={{ margin: 0, fontSize: '1.5rem', fontWeight: 'bold' }}>💰 지출 내역 관리</h1>
+            <div className="page-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', marginBottom: '0.5rem' }}>
                 <div className="header-actions">
                     <button
                         onClick={() => setIsModalOpen(true)}
                         className="btn btn-primary"
-                        style={{ fontSize: '1rem', padding: '0.5rem 1rem' }}
+                        style={{ fontSize: '0.9rem', padding: '0.4rem 0.8rem' }}
                     >
                         + 지출 등록
                     </button>
@@ -130,7 +129,7 @@ const ExpenseList = () => {
             </div>
 
             {/* 필터 및 요약 카드 */}
-            <div className="card" style={{ backgroundColor: '#fff', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)', padding: '1.5rem', marginBottom: '1.5rem' }}>
+            <div className="card" style={{ backgroundColor: '#fff', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)', padding: '0.5rem', marginBottom: '0.5rem' }}>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '20px', alignItems: 'center', justifyContent: 'space-between' }}>
 
                     {/* 검색 폼 */}
@@ -162,7 +161,7 @@ const ExpenseList = () => {
             </div>
 
             {/* 리스트 테이블 카드 */}
-            <div className="card" style={{ backgroundColor: '#fff', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)', padding: '1.5rem' }}>
+            <div className="card" style={{ backgroundColor: '#fff', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)', padding: '0.5rem' }}>
                 <div className="content-area">
                     <table className="trade-Table" style={{ width: '100%' }}>
                         <thead>

@@ -457,8 +457,7 @@ function CompanyBalances() {
 
   return (
     <div className="company-balances">
-      <div className="page-header" style={{ display: 'flex', alignItems: 'center', marginBottom: '1rem' }}>
-        <h1 className="page-title" style={{ margin: 0 }}>💰 거래처 잔고 관리</h1>
+      <div className="page-header" style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', marginBottom: '1rem' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
           <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
             <input
@@ -473,24 +472,7 @@ function CompanyBalances() {
       </div>
 
       {/* 요약 카드 */}
-      <div className="stats-grid" style={{ gridTemplateColumns: 'repeat(2, 1fr)', marginBottom: '1.5rem' }}>
-        <div className="stat-card" style={{ borderLeftColor: '#3498db' }}>
-          <h3>미지급금 (매입처)</h3>
-          <div className="stat-value" style={{ color: '#2c3e50' }}>
-            {formatCurrency(summary.totalPayable)}
-            <span style={{ fontSize: '1rem', fontWeight: 'normal', marginLeft: '4px' }}>원</span>
-          </div>
-          <small style={{ color: '#7f8c8d' }}>{summary.payableCount}개 거래처</small>
-        </div>
-        <div className="stat-card" style={{ borderLeftColor: '#3498db' }}>
-          <h3>미수금 (매출처)</h3>
-          <div className="stat-value" style={{ color: '#2c3e50' }}>
-            {formatCurrency(summary.totalReceivable)}
-            <span style={{ fontSize: '1rem', fontWeight: 'normal', marginLeft: '4px' }}>원</span>
-          </div>
-          <small style={{ color: '#7f8c8d' }}>{summary.receivableCount}개 거래처</small>
-        </div>
-      </div>
+
 
       {/* 좌우 분할 목록 */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>

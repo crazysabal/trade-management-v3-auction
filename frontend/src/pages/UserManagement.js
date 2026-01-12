@@ -5,14 +5,17 @@ import './UserManagement.css';
 import ConfirmModal from '../components/ConfirmModal';
 import UserFormModal from '../components/UserFormModal';
 import { useModalDraggable } from '../hooks/useModalDraggable';
+import { usePermission } from '../hooks/usePermission'; // RBAC Hook
 
 const UserManagement = () => {
+    const { hasPermission } = usePermission();
     const [activeTab, setActiveTab] = useState('users'); // 'users', 'history'
     const [users, setUsers] = useState([]);
     const [history, setHistory] = useState([]);
 
     // Modals
-    const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+    const [isFormModalOpen, setIsFormModalOpen] = useState(false);
+    const [editingUser, setEditingUser] = useState(null); // null for add, {user} for edit
     const [isResetModalOpen, setIsResetModalOpen] = useState(false);
 
     // Draggable for Reset Password Modal
@@ -37,8 +40,9 @@ const UserManagement = () => {
     useEffect(() => {
         const handleEsc = (e) => {
             if (e.key === 'Escape') {
-                if (isAddModalOpen) {
-                    setIsAddModalOpen(false);
+                if (isFormModalOpen) {
+                    setIsFormModalOpen(false);
+                    setEditingUser(null);
                     setError(''); // Clear modal error
                     e.stopPropagation();
                 }
@@ -50,11 +54,11 @@ const UserManagement = () => {
             }
         };
 
-        if (isAddModalOpen || isResetModalOpen) {
+        if (isFormModalOpen || isResetModalOpen) {
             window.addEventListener('keydown', handleEsc);
         }
         return () => window.removeEventListener('keydown', handleEsc);
-    }, [isAddModalOpen, isResetModalOpen]);
+    }, [isFormModalOpen, isResetModalOpen]);
 
     const fetchUsers = async () => {
         try {
@@ -123,19 +127,38 @@ const UserManagement = () => {
         }
     };
 
-    // Helper to render modal via Portal (MDI Standard)
-    const renderModal = (content) => {
-        return ReactDOM.createPortal(
-            content,
-            document.body
-        );
+    // [New] Handle Add/Edit Submit
+    const handleFormSubmit = async (formData) => {
+        try {
+            if (editingUser) {
+                // UPDATE
+                await axios.put(`/api/users/${editingUser.id}`, {
+                    role_id: formData.role_id,
+                    is_active: formData.is_active
+                });
+                setSuccessMsg('사용자 정보가 수정되었습니다.');
+            } else {
+                // CREATE
+                await axios.post('/api/users', formData);
+                setSuccessMsg('사용자가 추가되었습니다.');
+            }
+
+            setIsFormModalOpen(false);
+            setEditingUser(null);
+            fetchUsers();
+            setTimeout(() => setSuccessMsg(''), 3000);
+        } catch (err) {
+            // Error handling is inside the modal or passed back
+            throw err;
+        }
     };
+
+    // Helper to render modal via Portal (MDI Standard)
 
     return (
         <div className="user-management-container fade-in">
             {/* ... (existing header and list content) ... */}
             <div className="um-header">
-                <h2>사용자/직원 관리</h2>
                 <div className="um-tabs">
                     <button
                         className={`um-tab ${activeTab === 'users' ? 'active' : ''}`}
@@ -160,9 +183,11 @@ const UserManagement = () => {
                     <>
                         <div className="content-actions">
                             <span className="info-text">총 {users.length}명의 사용자가 있습니다.</span>
-                            <button className="add-user-btn" onClick={() => setIsAddModalOpen(true)}>
-                                + 사용자 추가
-                            </button>
+                            {hasPermission('USER_MANAGEMENT', 'CREATE') && (
+                                <button className="add-user-btn" onClick={() => { setEditingUser(null); setIsFormModalOpen(true); }}>
+                                    + 사용자 추가
+                                </button>
+                            )}
                         </div>
                         <div className="user-list-grid">
                             {users.map(user => (
@@ -174,20 +199,33 @@ const UserManagement = () => {
                                         <div className="user-main-row">
                                             <span className="user-name">{user.username}</span>
                                             <span className={`role-badge ${user.role}`}>
-                                                {(user.role && user.role.toLowerCase() === 'admin') ? '관리자' : '직원'}
+                                                {user.role || '미지정'}
                                             </span>
+                                            {!user.is_active && <span className="status-badge inactive">비활성</span>}
                                         </div>
                                         <span className="user-subinfo">
-                                            가입일: {new Date(user.created_at).toLocaleDateString()}
+                                            가입일: {(() => {
+                                                const d = new Date(user.created_at);
+                                                return `${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+                                            })()}
                                         </span>
                                     </div>
                                     <div className="user-actions-row">
-                                        <button className="action-btn reset" onClick={() => openResetModal(user.id, user.username)}>
-                                            비번변경
-                                        </button>
-                                        <button className="action-btn delete" onClick={() => openDeleteModal(user.id, user.username)}>
-                                            삭제
-                                        </button>
+                                        {hasPermission('USER_MANAGEMENT', 'UPDATE') && (
+                                            <>
+                                                <button className="action-btn edit" onClick={() => { setEditingUser(user); setIsFormModalOpen(true); }}>
+                                                    정보수정
+                                                </button>
+                                                <button className="action-btn reset" onClick={() => openResetModal(user.id, user.username)}>
+                                                    비번변경
+                                                </button>
+                                            </>
+                                        )}
+                                        {hasPermission('USER_MANAGEMENT', 'DELETE') && (
+                                            <button className="action-btn delete" onClick={() => openDeleteModal(user.id, user.username)}>
+                                                삭제
+                                            </button>
+                                        )}
                                     </div>
                                 </div>
                             ))}
@@ -201,9 +239,19 @@ const UserManagement = () => {
                     onClose={() => setIsDeleteConfirmOpen(false)}
                     onConfirm={handleDeleteUser}
                     title="사용자 삭제"
-                    message={`'${deleteTarget.username}' 사용자를 삭제하시겠습니까?\n(작성한 전표가 있을 경우 문제가 될 수 있습니다.)`}
+                    message={
+                        <div className="safe-delete-message">
+                            <p className="main-warning">
+                                <strong>'{deleteTarget.username}'</strong> 사용자를 삭제하시겠습니까?
+                            </p>
+                            <div className="warning-detail">
+                                <p>⚠️ 주의: 사용자가 작성한 전표나 활동 이력이 있을 경우 데이터 무결성에 영향을 줄 수 있습니다.</p>
+                                <p>가급적 계정 삭제보다는 비밀번호 변경을 통한 접속 차단을 권장합니다.</p>
+                            </div>
+                        </div>
+                    }
                     type="delete"
-                    confirmText="삭제"
+                    confirmText="사용자 삭제"
                     cancelText="취소"
                 />
 
@@ -220,22 +268,26 @@ const UserManagement = () => {
                                 </tr>
                             </thead>
                             <tbody>
-                                {history.length > 0 ? history.map(log => (
-                                    <tr key={log.id}>
-                                        <td>{new Date(log.created_at).toLocaleString()}</td>
-                                        <td>
-                                            {log.username}
-                                            <span className={`small-badge ${log.role}`}>{log.role}</span>
-                                        </td>
-                                        <td>
-                                            <span className={`action-badge ${log.action_type}`}>
-                                                {log.action_type === 'LOGIN' ? '로그인' : '로그아웃'}
-                                            </span>
-                                        </td>
-                                        <td>{log.ip_address}</td>
-                                        <td title={log.user_agent} className="truncate-cell">{log.user_agent}</td>
-                                    </tr>
-                                )) : (
+                                {history.length > 0 ? history.map(log => {
+                                    const d = new Date(log.created_at);
+                                    const dateStr = `${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+                                    return (
+                                        <tr key={log.id}>
+                                            <td>{dateStr}</td>
+                                            <td>
+                                                {log.username}
+                                                <span className={`small-badge ${log.role}`}>{log.role}</span>
+                                            </td>
+                                            <td>
+                                                <span className={`action-badge ${log.action_type}`}>
+                                                    {log.action_type === 'LOGIN' ? '로그인' : '로그아웃'}
+                                                </span>
+                                            </td>
+                                            <td>{log.ip_address}</td>
+                                            <td title={log.user_agent} className="truncate-cell">{log.user_agent}</td>
+                                        </tr>
+                                    );
+                                }) : (
                                     <tr>
                                         <td colSpan="5" className="empty-state">이력이 없습니다.</td>
                                     </tr>
@@ -246,32 +298,28 @@ const UserManagement = () => {
                 )}
             </div>
 
-            {/* Add User Modal - Extracted */}
+            {/* User Form Modal (Add/Edit) */}
             <UserFormModal
-                isOpen={isAddModalOpen}
-                onClose={() => setIsAddModalOpen(false)}
-                onSuccess={() => {
-                    setSuccessMsg('사용자가 추가되었습니다.');
-                    fetchUsers();
-                    setTimeout(() => setSuccessMsg(''), 3000);
-                }}
+                isOpen={isFormModalOpen}
+                onClose={() => { setIsFormModalOpen(false); setEditingUser(null); }}
+                onSubmit={handleFormSubmit}
+                initialData={editingUser}
             />
 
             {/* Reset Password Modal - Portaled */}
             {isResetModalOpen && renderModal(
-                <div className="modal-overlay" onClick={() => setIsResetModalOpen(false)} style={{ zIndex: 9999 }}>{/* Enhanced z-index for portal */}
+                <div className="modal-overlay" onClick={() => setIsResetModalOpen(false)} style={{ zIndex: 10200 }}>
                     <div
                         className="styled-modal um-modal"
                         onClick={e => e.stopPropagation()}
                         style={resetDragStyle}
                     >
                         <div
-                            className="modal-header"
+                            className="modal-header draggable-header"
                             onMouseDown={handleResetDrag}
-                            style={{ cursor: 'grab' }}
                         >
-                            <h3 style={{ pointerEvents: 'none' }}>비밀번호 변경</h3>
-                            <button className="close-btn" onClick={() => setIsResetModalOpen(false)} style={{ pointerEvents: 'auto' }}>×</button>
+                            <h3 className="drag-pointer-none">비밀번호 변경</h3>
+                            <button className="close-btn drag-pointer-auto" onClick={() => setIsResetModalOpen(false)}>×</button>
                         </div>
                         <form onSubmit={handleResetPassword}>
                             <div className="modal-body">
@@ -279,7 +327,7 @@ const UserManagement = () => {
                                 <p className="modal-desc">
                                     <strong>{resetTarget.username}</strong> 사용자의 새로운 비밀번호를 입력해주세요.
                                 </p>
-                                <div className="form-group">
+                                <div className="form-group" style={{ marginBottom: 0 }}>
                                     <label>새 비밀번호</label>
                                     <input
                                         type="password"

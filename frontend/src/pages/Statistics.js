@@ -1,12 +1,16 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { tradeAPI } from '../services/api';
 import ConfirmModal from '../components/ConfirmModal';
+import { useAuth } from '../context/AuthContext';
 
 function Statistics() {
   const [purchaseStats, setPurchaseStats] = useState([]);
   const [saleStats, setSaleStats] = useState([]);
   const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState({ isOpen: false, type: 'info', title: '', message: '', onConfirm: () => { }, confirmText: '확인', showCancel: false });
+
+  const { user } = useAuth();
+  const getScopedKey = (key) => user?.id ? `u${user.id}_${key}` : key;
 
   // 조회 유형: daily, monthly, yearly
   const [viewType, setViewType] = useState('daily');
@@ -17,16 +21,28 @@ function Statistics() {
   });
 
   // 패널 크기 비율 (0.3 ~ 0.7, 기본 0.5)
-  const [splitRatio, setSplitRatio] = useState(() => {
-    const saved = localStorage.getItem('statisticsSplitRatio');
-    return saved ? parseFloat(saved) : 0.5;
-  });
+  const [splitRatio, setSplitRatio] = useState(0.5);
+
+  // Load Split Ratio
+  useEffect(() => {
+    const saved = localStorage.getItem(getScopedKey('statisticsSplitRatio'));
+    if (saved) setSplitRatio(parseFloat(saved));
+  }, [user?.id]);
 
   // 좌우 레이아웃 순서
-  const [layoutOrder, setLayoutOrder] = useState(() => {
-    const saved = localStorage.getItem('statisticsLayoutOrder');
-    return saved ? JSON.parse(saved) : { left: 'PURCHASE', right: 'SALE' };
-  });
+  const [layoutOrder, setLayoutOrder] = useState({ left: 'PURCHASE', right: 'SALE' });
+
+  // Load Layout
+  useEffect(() => {
+    const saved = localStorage.getItem(getScopedKey('statisticsLayoutOrder'));
+    if (saved) {
+      try {
+        setLayoutOrder(JSON.parse(saved));
+      } catch (e) {
+        setLayoutOrder({ left: 'PURCHASE', right: 'SALE' });
+      }
+    }
+  }, [user?.id]);
 
   // 드래그 상태
   const [isDragging, setIsDragging] = useState(false);
@@ -53,7 +69,7 @@ function Statistics() {
       // 최소/최대 비율 제한
       const clampedRatio = Math.max(0.3, Math.min(0.7, newRatio));
       setSplitRatio(clampedRatio);
-      localStorage.setItem('statisticsSplitRatio', clampedRatio.toString());
+      localStorage.setItem(getScopedKey('statisticsSplitRatio'), clampedRatio.toString());
     };
 
     const handleMouseUp = () => {
@@ -69,7 +85,7 @@ function Statistics() {
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [isDragging]);
+  }, [isDragging, user?.id]);
 
   // 좌우 위치 변경
   const toggleLayout = () => {
@@ -78,13 +94,13 @@ function Statistics() {
       right: layoutOrder.left
     };
     setLayoutOrder(newLayout);
-    localStorage.setItem('statisticsLayoutOrder', JSON.stringify(newLayout));
+    localStorage.setItem(getScopedKey('statisticsLayoutOrder'), JSON.stringify(newLayout));
   };
 
   // 패널 크기 초기화
   const resetSplitRatio = () => {
     setSplitRatio(0.5);
-    localStorage.setItem('statisticsSplitRatio', '0.5');
+    localStorage.setItem(getScopedKey('statisticsSplitRatio'), '0.5');
   };
 
   // 조회 유형에 따른 날짜 범위 계산

@@ -63,7 +63,7 @@ const Taskbar = ({ windows, activeWindowId, onToggleWindow, onCloseWindow, onRes
             boxShadow: '0 -2px 10px rgba(0,0,0,0.05)'
         }}>
             <div style={{ display: 'flex', gap: '0.5rem', overflowX: 'auto', width: '100%' }}>
-                {windows.map(win => {
+                {(windows || []).map(win => {
                     const isActive = win.id === activeWindowId && !win.isMinimized;
                     return (
                         <button

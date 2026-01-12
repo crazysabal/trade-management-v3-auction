@@ -4,6 +4,7 @@ import { purchaseInventoryAPI } from '../services/api';
 import { Link } from 'react-router-dom';
 import ConfirmModal from '../components/ConfirmModal';
 import TradeDetailModal from '../components/TradeDetailModal';
+import { useAuth } from '../context/AuthContext';
 
 // 금액 포맷 함수 (컴포넌트 외부)
 const formatCurrency = (value) => {
@@ -56,21 +57,36 @@ function InventoryList() {
   const [viewMode, setViewMode] = useState('detail'); // 'detail' | 'summary'
   const [loading, setLoading] = useState(true);
 
+  const { user } = useAuth();
+  const getScopedKey = (key) => user?.id ? `u${user.id}_${key}` : key;
+
   // 개별 필터링 키워드
   const [availableFilter, setAvailableFilter] = useState('');
   const [depletedFilter, setDepletedFilter] = useState('');
 
   // 좌우 위치 설정 (localStorage에 저장)
-  const [layoutOrder, setLayoutOrder] = useState(() => {
-    const saved = localStorage.getItem('inventoryListLayout');
-    return saved ? JSON.parse(saved) : { left: 'AVAILABLE', right: 'DEPLETED' };
-  });
+  const [layoutOrder, setLayoutOrder] = useState({ left: 'AVAILABLE', right: 'DEPLETED' });
+
+  // Load Layout
+  useEffect(() => {
+    const saved = localStorage.getItem(getScopedKey('inventoryListLayout'));
+    if (saved) {
+      try {
+        setLayoutOrder(JSON.parse(saved));
+      } catch (e) {
+        setLayoutOrder({ left: 'AVAILABLE', right: 'DEPLETED' });
+      }
+    }
+  }, [user?.id]);
 
   // 패널 크기 비율 (0.3 ~ 0.7, 기본 0.5)
-  const [splitRatio, setSplitRatio] = useState(() => {
-    const saved = localStorage.getItem('inventoryListSplitRatio');
-    return saved ? parseFloat(saved) : 0.5;
-  });
+  const [splitRatio, setSplitRatio] = useState(0.5);
+
+  // Load Split Ratio
+  useEffect(() => {
+    const saved = localStorage.getItem(getScopedKey('inventoryListSplitRatio'));
+    if (saved) setSplitRatio(parseFloat(saved));
+  }, [user?.id]);
 
   // 드래그 상태
   const [isDragging, setIsDragging] = useState(false);
@@ -99,13 +115,13 @@ function InventoryList() {
       right: layoutOrder.left
     };
     setLayoutOrder(newLayout);
-    localStorage.setItem('inventoryListLayout', JSON.stringify(newLayout));
+    localStorage.setItem(getScopedKey('inventoryListLayout'), JSON.stringify(newLayout));
   };
 
   // 비율 초기화
   const resetSplitRatio = () => {
     setSplitRatio(0.5);
-    localStorage.setItem('inventoryListSplitRatio', '0.5');
+    localStorage.setItem(getScopedKey('inventoryListSplitRatio'), '0.5');
   };
 
   // 리사이즈 핸들러
@@ -128,9 +144,9 @@ function InventoryList() {
   const handleMouseUp = useCallback(() => {
     if (isDragging) {
       setIsDragging(false);
-      localStorage.setItem('inventoryListSplitRatio', splitRatio.toString());
+      localStorage.setItem(getScopedKey('inventoryListSplitRatio'), splitRatio.toString());
     }
-  }, [isDragging, splitRatio]);
+  }, [isDragging, splitRatio, user?.id]);
 
   useEffect(() => {
     if (isDragging) {
@@ -544,7 +560,7 @@ function InventoryList() {
         style={{
           flex: 1,
           display: 'flex',
-          padding: '0.75rem',
+          padding: '0.5rem',
           overflow: 'hidden',
           minHeight: 0,
           gap: 0

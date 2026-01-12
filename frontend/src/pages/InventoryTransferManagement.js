@@ -250,14 +250,14 @@ const InventoryTransferManagement = () => {
         setPrintModalOpen(true);
     };
 
-    // --- Rendering Helpers ---
-    const getInventoryForWarehouse = (warehouseId) => {
-        // 이미 렌더링 시 state.inventory 순서대로 나오므로 필터만 하면 됨
-        // 단, 검색어가 있으면 검색어로 필터링
-        return inventory.filter(item => {
-            const matchWh = String(item.warehouse_id) === String(warehouseId);
+    // --- Filtering & Statistics ---
+    // 1. 검색어로 필터링된 전체 인벤토리 (useMemo로 최적화 및 통계 계산용)
+    const filteredInventory = React.useMemo(() => {
+        const keywords = searchKeyword.toLowerCase().trim().split(/\s+/).filter(k => k);
 
-            const keywords = searchKeyword.toLowerCase().trim().split(/\s+/).filter(k => k);
+        return inventory.filter(item => {
+            if (keywords.length === 0) return true;
+
             const targetString = `
                 ${item.product_name || ''}
                 ${item.grade || ''}
@@ -270,12 +270,26 @@ const InventoryTransferManagement = () => {
                 ${item.purchase_date || ''}
             `.toLowerCase();
 
-            const matchKeyword = keywords.length === 0 || keywords.every(k => targetString.includes(k));
+            return keywords.every(k => targetString.includes(k));
+        });
+    }, [inventory, searchKeyword]);
 
-            if (warehouseId === 'Unassigned' && !item.warehouse_id) return matchKeyword;
-            return matchWh && matchKeyword;
+    // 2. 창고별 인벤토리 가져오기 (filteredInventory 기반)
+    const getInventoryForWarehouse = (warehouseId) => {
+        return filteredInventory.filter(item => {
+            if (warehouseId === 'Unassigned') return !item.warehouse_id;
+            return String(item.warehouse_id) === String(warehouseId);
         });
     };
+
+    // 3. 통계 계산 Helper
+    const calculateStats = (items) => {
+        const count = items.length;
+        const totalValue = items.reduce((sum, item) => sum + (Number(item.remaining_quantity) * Number(item.unit_price)), 0);
+        return { count, totalValue };
+    };
+
+    const totalStats = calculateStats(filteredInventory);
 
     return (
         <div className="inventory-transfer-page fade-in">
@@ -320,7 +334,28 @@ const InventoryTransferManagement = () => {
                     >
                         🖨 목록 출력
                     </button>
-                    {/* 빈 공간은 flex-start로 인해 자연스럽게 우측에 생성됨 */}
+
+                    {/* 전체 재고 통계 (우측 정렬) */}
+                    <div style={{
+                        marginLeft: 'auto',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '1rem',
+                        fontSize: '0.9rem',
+                        backgroundColor: 'white',
+                        padding: '0.4rem 1rem',
+                        borderRadius: '6px',
+                        border: '1px solid #e2e8f0',
+                        boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+                    }}>
+                        <span style={{ color: '#64748b' }}>
+                            전체 재고: <strong style={{ color: '#1e293b' }}>{totalStats.count}건</strong>
+                        </span>
+                        <div style={{ width: '1px', height: '14px', backgroundColor: '#cbd5e1' }}></div>
+                        <span style={{ color: '#64748b' }}>
+                            총 재고금액: <strong style={{ color: '#2563eb' }}>{Math.floor(totalStats.totalValue).toLocaleString()}원</strong>
+                        </span>
+                    </div>
                 </div>
             </div>
 
@@ -330,93 +365,103 @@ const InventoryTransferManagement = () => {
                     <div className="loading-container">로딩 중...</div>
                 ) : (
                     <>
-                        {warehouses.map((wh, index) => (
-                            <div
-                                key={wh.id}
-                                draggable={reorderMode}
-                                onDragStart={(e) => handleWarehouseDragStart(e, index)}
-                                onDragOver={(e) => handleColumnDragOver(e, index, wh.id)}
-                                onDragLeave={handleColumnDragLeave}
-                                onDragEnd={handleWarehouseDragEnd}
-                                onDrop={(e) => handleDrop(e, wh.id)}
-                                className={`warehouse-column ${draggedItem && dragOverWarehouseId === wh.id ? 'highlight' : ''} ${draggedWarehouse === index ? 'dragging' : ''}`}
-                                style={{
-                                    minWidth: `${columnWidth}px`,
-                                    width: `${columnWidth}px`
-                                    // width는 동적이므로 인라인 유지 (slider 제어)
-                                }}
-                            >
-                                {/* Header */}
-                                <div className={`warehouse-header ${draggedItem && dragOverWarehouseId === wh.id ? 'highlight' : (wh.is_default ? 'default' : '')}`}>
-                                    <h3 className="warehouse-title">
-                                        {reorderMode && '↕ '}
-                                        {wh.name} {!wh.is_active && <span className="inactive-label">(비활성)</span>}
-                                    </h3>
-                                    <span className="warehouse-count">
-                                        {getInventoryForWarehouse(wh.id).length} 건
-                                    </span>
-                                </div>
+                        {warehouses.map((wh, index) => {
+                            const whData = getInventoryForWarehouse(wh.id);
+                            const whStats = calculateStats(whData);
+                            return (
+                                <div
+                                    key={wh.id}
+                                    draggable={reorderMode}
+                                    onDragStart={(e) => handleWarehouseDragStart(e, index)}
+                                    onDragOver={(e) => handleColumnDragOver(e, index, wh.id)}
+                                    onDragLeave={handleColumnDragLeave}
+                                    onDragEnd={handleWarehouseDragEnd}
+                                    onDrop={(e) => handleDrop(e, wh.id)}
+                                    className={`warehouse-column ${draggedItem && dragOverWarehouseId === wh.id ? 'highlight' : ''} ${draggedWarehouse === index ? 'dragging' : ''}`}
+                                    style={{
+                                        minWidth: `${columnWidth}px`,
+                                        width: `${columnWidth}px`
+                                        // width는 동적이므로 인라인 유지 (slider 제어)
+                                    }}
+                                >
+                                    {/* Header */}
+                                    <div className={`warehouse-header ${draggedItem && dragOverWarehouseId === wh.id ? 'highlight' : (wh.is_default ? 'default' : '')}`}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '4px' }}>
+                                            <h3 className="warehouse-title" style={{ margin: 0 }}>
+                                                {reorderMode && '↕ '}
+                                                {wh.name} {!wh.is_active && <span className="inactive-label">(비활성)</span>}
+                                            </h3>
+                                            <span className="warehouse-count" style={{ fontSize: '0.85rem' }}>
+                                                {whStats.count} 건
+                                            </span>
+                                        </div>
+                                        {/* 창고별 재고 금액 표시 (우측 정렬) */}
+                                        <div style={{ textAlign: 'right', fontSize: '0.8rem', color: '#555', fontWeight: '600' }}>
+                                            {Math.floor(whStats.totalValue).toLocaleString()} 원
+                                        </div>
+                                    </div>
 
-                                {/* Inventory List */}
-                                <div className="inventory-list">
-                                    {getInventoryForWarehouse(wh.id).map(item => (
-                                        <div
-                                            key={item.id}
-                                            draggable={!reorderMode}
-                                            onDragStart={(e) => handleDragStart(e, item)}
-                                            onDragOver={(e) => handleCardDragOver(e, item)}
-                                            onClick={(e) => toggleSelection(e, item.id)}
-                                            data-order={[...selectedItems].indexOf(item.id) + 1}
-                                            className={`inventory-card ${draggedItem?.id === item.id ? 'dragging' : ''} ${selectedItems.has(item.id) ? 'selected' : ''}`}
-                                            style={{ cursor: reorderMode ? 'default' : 'pointer' }}
-                                        >
-                                            <div className="card-content">
-                                                <div className="card-main-info" style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-                                                    <span style={{ marginRight: 0, fontWeight: 600, color: '#2d3748' }}>{item.product_name}</span>
-                                                    {Number(item.product_weight) > 0 && <span style={{ color: '#4a5568' }}>{Number(item.product_weight)}kg</span>}
-                                                    <span style={{ color: '#2b6cb0' }}>{item.sender}</span>
-                                                    {item.grade && <span style={{ color: '#718096' }}>({item.grade})</span>}
+                                    {/* Inventory List */}
+                                    <div className="inventory-list">
+                                        {whData.map(item => (
+                                            <div
+                                                key={item.id}
+                                                draggable={!reorderMode}
+                                                onDragStart={(e) => handleDragStart(e, item)}
+                                                onDragOver={(e) => handleCardDragOver(e, item)}
+                                                onClick={(e) => toggleSelection(e, item.id)}
+                                                data-order={[...selectedItems].indexOf(item.id) + 1}
+                                                className={`inventory-card ${draggedItem?.id === item.id ? 'dragging' : ''} ${selectedItems.has(item.id) ? 'selected' : ''}`}
+                                                style={{ cursor: reorderMode ? 'default' : 'pointer' }}
+                                            >
+                                                <div className="card-content">
+                                                    <div className="card-main-info" style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                                                        <span style={{ marginRight: 0, fontWeight: 600, color: '#2d3748' }}>{item.product_name}</span>
+                                                        {Number(item.product_weight) > 0 && <span style={{ color: '#4a5568' }}>{Number(item.product_weight)}kg</span>}
+                                                        <span style={{ color: '#2b6cb0' }}>{item.sender}</span>
+                                                        {item.grade && <span style={{ color: '#718096' }}>({item.grade})</span>}
 
-                                                    <span style={{ flex: 1 }}></span> {/* Spacer */}
+                                                        <span style={{ flex: 1 }}></span> {/* Spacer */}
 
-                                                    <span className="info-qty" style={{ fontWeight: 'bold', color: '#2980b9' }}>
-                                                        {Number(item.remaining_quantity) % 1 === 0 ? Math.floor(item.remaining_quantity) : Number(item.remaining_quantity)}개
-                                                    </span>
-                                                    <span className="info-price" style={{ color: '#555' }}>
-                                                        {Number(item.unit_price).toLocaleString()}원
-                                                    </span>
-                                                </div>
-
-                                                <div className="card-sub-info" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '4px', borderTop: '1px solid #f0f0f0', paddingTop: '4px' }}>
-                                                    <div style={{ display: 'flex', gap: '8px', fontSize: '0.8rem', color: '#7f8c8d', alignItems: 'center', lineHeight: '1' }}>
-                                                        <span title={item.business_name}>{item.company_name || '-'}</span>
-                                                        <span style={{ fontSize: '0.7rem', color: '#bdc3c7' }}>|</span>
-                                                        <span>{item.purchase_date}</span>
+                                                        <span className="info-qty" style={{ fontWeight: 'bold', color: '#2980b9' }}>
+                                                            {Number(item.remaining_quantity) % 1 === 0 ? Math.floor(item.remaining_quantity) : Number(item.remaining_quantity)}개
+                                                        </span>
+                                                        <span className="info-price" style={{ color: '#555' }}>
+                                                            {Number(item.unit_price).toLocaleString()}원
+                                                        </span>
                                                     </div>
 
-                                                    <button
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            setAdjustmentModal({ isOpen: true, inventory: item });
-                                                        }}
-                                                        className="btn-adjust"
-                                                        title="재고 조정/폐기"
-                                                        style={{ margin: 0 }}
-                                                    >
-                                                        🗑️ 조정/폐기
-                                                    </button>
+                                                    <div className="card-sub-info" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '4px', borderTop: '1px solid #f0f0f0', paddingTop: '4px' }}>
+                                                        <div style={{ display: 'flex', gap: '8px', fontSize: '0.8rem', color: '#7f8c8d', alignItems: 'center', lineHeight: '1' }}>
+                                                            <span title={item.business_name}>{item.company_name || '-'}</span>
+                                                            <span style={{ fontSize: '0.7rem', color: '#bdc3c7' }}>|</span>
+                                                            <span>{item.purchase_date}</span>
+                                                        </div>
+
+                                                        <button
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                setAdjustmentModal({ isOpen: true, inventory: item });
+                                                            }}
+                                                            className="btn-adjust"
+                                                            title="재고 조정/폐기"
+                                                            style={{ margin: 0 }}
+                                                        >
+                                                            🗑️ 조정/폐기
+                                                        </button>
+                                                    </div>
                                                 </div>
                                             </div>
-                                        </div>
-                                    ))}
-                                    {getInventoryForWarehouse(wh.id).length === 0 && (
-                                        <div className="inventory-empty">
-                                            재고 없음
-                                        </div>
-                                    )}
+                                        ))}
+                                        {whData.length === 0 && (
+                                            <div className="inventory-empty">
+                                                재고 없음
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
-                            </div>
-                        ))}
+                            );
+                        })}
                     </>
                 )}
             </div>

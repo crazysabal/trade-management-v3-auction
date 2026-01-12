@@ -2,6 +2,9 @@ import React, { useState, useCallback, useEffect } from 'react';
 import FloatingWindow from '../components/FloatingWindow';
 import Navbar from '../components/Navbar';
 import Taskbar from '../components/Taskbar';
+import { useAuth } from '../context/AuthContext';
+import { usePermission } from '../hooks/usePermission'; // RBAC Hook
+import { useConfirmModal } from '../components/ConfirmModal'; // Added import
 
 // Apps (Components)
 import TradePanel from '../components/TradePanel';
@@ -31,6 +34,8 @@ import MessageTestPage from './MessageTestPage';
 import AuctionImportV2 from './AuctionImportV2';
 import AuctionAccounts from './AuctionAccounts';
 import UserManagement from './UserManagement';
+import { RESOURCE_METADATA } from '../config/menuConfig';
+import RoleManagement from './RoleManagement'; // RBAC Page
 
 /**
  * DesktopManager
@@ -40,42 +45,60 @@ import UserManagement from './UserManagement';
  * 모바일 환경에서는 자동으로 최대화된 창으로 열립니다.
  */
 const DesktopManager = () => {
+    const { user } = useAuth();
+    const { hasPermission } = usePermission(); // RBAC Hook
+    const getScopedKey = useCallback((key) => user?.id ? `u${user.id}_${key}` : key, [user?.id]);
+
+    // ... (rest of code)
+
+
     // 열린 윈도우 목록
     // { id, type, zIndex, position, title, icon, size, componentProps, isMinimized }
-    const [windows, setWindows] = useState(() => {
-        const saved = localStorage.getItem('desktop_windows');
+    // 열린 윈도우 목록
+    // { id, type, zIndex, position, title, icon, size, componentProps, isMinimized }
+    // [FIX] 초기값을 null로 설정하여 "로딩 중" 상태를 구분 (빈 배열 []과 구분)
+    const [windows, setWindows] = useState(null);
+
+    // Load Windows
+    useEffect(() => {
+        const saved = localStorage.getItem(getScopedKey('desktop_windows'));
         if (saved) {
             try {
                 const parsed = JSON.parse(saved);
-                // 세션 복구 시 isDirty는 false로 초기화 (새로고침 시점의 상태를 알 수 없으므로)
-                return parsed.map(w => ({ ...w, isDirty: false }));
+                setWindows(parsed.map(w => ({ ...w, isDirty: false })));
             } catch (e) {
                 console.error('Failed to restore windows:', e);
+                setWindows([]);
             }
+        } else {
+            setWindows([]);
         }
-        return [];
-    });
+    }, [getScopedKey]);
 
-    const [maxZIndex, setMaxZIndex] = useState(() => {
-        if (windows.length > 0) {
-            return Math.max(...windows.map(w => w.zIndex), 100);
+    const [maxZIndex, setMaxZIndex] = useState(100);
+    useEffect(() => {
+        if (windows && windows.length > 0) {
+            setMaxZIndex(Math.max(...windows.map(w => w.zIndex), 100));
         }
-        return 100;
-    });
+    }, [windows]);
 
-    const [activeWindowId, setActiveWindowId] = useState(() => {
-        const saved = localStorage.getItem('active_window_id');
-        return saved ? parseInt(saved) : null;
-    }); // 현재 활성화된(최상위) 윈도우 ID
+    const [activeWindowId, setActiveWindowId] = useState(null);
+    useEffect(() => {
+        const saved = localStorage.getItem(getScopedKey('active_window_id'));
+        setActiveWindowId(saved ? parseInt(saved) : null);
+    }, [getScopedKey]);
+
     const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
     // 출력 모달 상태
     const [printModal, setPrintModal] = useState({ isOpen: false, tradeId: null });
     const handlePrint = (tradeId) => setPrintModal({ isOpen: true, tradeId });
 
     // 윈도우 모드 설정 (multi: 다중 창 허용, single: 중복 실행 방지)
-    const [windowMode, setWindowMode] = useState(() => {
-        return localStorage.getItem('window_mode') || 'multi';
-    });
+    const [windowMode, setWindowMode] = useState('multi');
+    useEffect(() => {
+        const saved = localStorage.getItem(getScopedKey('window_mode'));
+        setWindowMode(saved || 'multi');
+    }, [getScopedKey]);
 
     // 화면 크기 감지
     useEffect(() => {
@@ -87,38 +110,53 @@ const DesktopManager = () => {
     // 윈도우 모드 변경 핸들러 (저장 포함)
     const handleSetWindowMode = (mode) => {
         setWindowMode(mode);
-        localStorage.setItem('window_mode', mode);
+        localStorage.setItem(getScopedKey('window_mode'), mode);
     };
 
     // 윈도우 상태 변경 시 localStorage 저장
     useEffect(() => {
+        // [FIX] 로딩 전(null)에는 저장하지 않음 (빈 배열로 덮어쓰기 방지)
+        if (windows === null) return;
+
         // 불필요한 속성(isDirty 등) 제외하고 저장하거나, 초기화하여 저장
         const dataToSave = windows.map(({ isDirty, ...rest }) => rest);
-        localStorage.setItem('desktop_windows', JSON.stringify(dataToSave));
-    }, [windows]);
+        localStorage.setItem(getScopedKey('desktop_windows'), JSON.stringify(dataToSave));
+    }, [windows, getScopedKey]);
 
     useEffect(() => {
         if (activeWindowId) {
-            localStorage.setItem('active_window_id', activeWindowId.toString());
+            localStorage.setItem(getScopedKey('active_window_id'), activeWindowId.toString());
         } else {
-            localStorage.removeItem('active_window_id');
+            localStorage.removeItem(getScopedKey('active_window_id'));
         }
-    }, [activeWindowId]);
+    }, [activeWindowId, getScopedKey]);
 
     // 앱 실행 (윈도우 열기)
     const launchApp = useCallback((appType, props = {}) => {
-        // [NEW] Dashboard Home Action -> Close All Windows (Mobile Friendly)
+        // [RBAC] Permission Guard
+        // [NEW] DASHBOARD is basically home, skip READ check or handle as no-op later
         if (appType === 'DASHBOARD') {
             closeAll();
             return;
         }
 
+        // Check if user has READ permission for this appType
+        if (!hasPermission(appType, 'READ')) {
+            openModal({
+                type: 'warning',
+                title: '접근 제한',
+                message: '해당 메뉴에 대한 접근 권한이 없습니다. 관리자에게 문의하세요.',
+                showCancel: false
+            });
+            return;
+        }
+
         // 이미 열린 단일 인스턴스 앱 확인 (설정, 통계 등은 하나만)
         const alwaysSingleInstanceApps = [
-            'SETTINGS', 'STATISTICS' // 이 앱들은 설정과 무관하게 항상 하나만
+            'SETTINGS', 'STATISTICS', 'ROLE_MANAGEMENT' // Added ROLE_MANAGEMENT to single instance
         ];
 
-        const existing = windows.find(w => w.type === appType);
+        const existing = windows?.find(w => w.type === appType);
 
         // 1. 항상 단일 인스턴스인 앱
         if (existing && alwaysSingleInstanceApps.includes(appType)) {
@@ -143,48 +181,19 @@ const DesktopManager = () => {
         setMaxZIndex(newZIndex);
         setActiveWindowId(newId);
 
-        // 기본 설정
-        let title = 'App';
-        let icon = '📱'; // 기본 아이콘
+        // 기본 설정 (from Source of Truth)
+        const meta = RESOURCE_METADATA[appType] || {};
+        let title = meta.label || appType;
+        let icon = meta.icon || '📱';
         let size = { width: 1000, height: 700 };
-        let position = { x: 50 + (windows.length % 10) * 30, y: 50 + (windows.length % 10) * 30 };
+        let position = { x: 50 + ((windows?.length || 0) % 10) * 30, y: 50 + ((windows?.length || 0) % 10) * 30 };
 
-        // 앱별 설정
-        switch (appType) {
-            case 'PURCHASE': title = '매입 전표 등록'; icon = '📥'; break;
-            case 'SALE': title = '매출 전표 등록'; icon = '📤'; break;
-            case 'TRADE_LIST': title = '전표 목록'; icon = '📝'; break;
-            case 'COMPANY_LIST': title = '거래처 관리'; icon = '🏢'; break;
-            case 'PRODUCT_LIST': title = '품목 관리'; icon = '📦'; break;
-            case 'INVENTORY_QUICK':
-                title = '재고 현황 (Quick)';
-                icon = '⚡';
-                size = { width: 600, height: 800 };
-                break;
-            case 'INVENTORY_LIST': title = '재고 현황'; icon = '📊'; break;
-            case 'INVENTORY_TRANSFER': title = '재고 이동'; icon = '🚚'; break;
-            case 'INVENTORY_PRODUCTION': title = '재고 작업'; icon = '🏭'; break;
-            case 'INVENTORY_PRODUCTION_HISTORY': title = '재고 작업 이력'; icon = '📜'; break;
-            case 'INVENTORY_HISTORY': title = '재고 이력'; icon = '📜'; break;
-            case 'INVENTORY_AUDIT': title = '재고 실사'; icon = '🔍'; break;
+        // 크기 예외 처리 (config로 옮길 수도 있지만 일단 유지)
+        if (appType === 'ROLE_MANAGEMENT' || appType === 'USER_MANAGEMENT') size = { width: 1000, height: 750 };
+        if (appType === 'SETTLEMENT_HISTORY' || appType === 'WAREHOUSES') size = { width: 900, height: 600 };
+        if (appType === 'SETTINGS' || appType === 'EXPENSE_CATEGORIES') size = { width: 800, height: 600 };
+        if (appType === 'COMPANY_INFO') size = { width: 600, height: 500 };
 
-
-            case 'MATCHING': title = '마감 (매칭)'; icon = '🔗'; break;
-            case 'AUCTION_IMPORT': title = '낙찰 데이터 가져오기'; icon = '🔨'; break;
-            case 'AUCTION_ACCOUNTS': title = '경매 계정 관리'; icon = '🆔'; break;
-            case 'COMPANY_BALANCES': title = '거래처 잔고'; icon = '💰'; break;
-            case 'EXPENSES': title = '지출 내역'; icon = '💸'; break;
-            case 'SETTLEMENT': title = '정산 리포트'; icon = '📈'; break;
-            case 'SETTLEMENT_HISTORY': title = '정산 이력 조회'; icon = '📜'; size = { width: 900, height: 600 }; break;
-            case 'STATISTICS': title = '통계'; icon = '📉'; break;
-            case 'SETTINGS': title = '시스템 설정'; icon = '⚙️'; size = { width: 800, height: 600 }; break;
-            case 'WAREHOUSES': title = '창고 관리'; icon = '🏭'; size = { width: 900, height: 600 }; break;
-            case 'EXPENSE_CATEGORIES': title = '지출 항목 관리'; icon = '🏷️'; size = { width: 800, height: 600 }; break;
-            case 'COMPANY_INFO': title = '본사 정보'; icon = 'ℹ️'; size = { width: 600, height: 500 }; break;
-            case 'MESSAGE_TEST': title = '시스템 테스트'; icon = '🧪'; break;
-            case 'USER_MANAGEMENT': title = '사용자/직원 관리'; icon = '👥'; size = { width: 1000, height: 750 }; break;
-            default: title = appType; icon = '📱';
-        }
         // [DEBUG] Append App Type for User Identification
         title = `${title} [${appType}]`;
 
@@ -195,8 +204,8 @@ const DesktopManager = () => {
         }
 
         // 윈도우 크기 및 위치 복원 (저장된 값이 있으면)
-        const savedSize = localStorage.getItem(`window_size_${appType}`);
-        const savedPosition = localStorage.getItem(`window_position_${appType}`);
+        const savedSize = localStorage.getItem(getScopedKey(`window_size_${appType}`));
+        const savedPosition = localStorage.getItem(getScopedKey(`window_position_${appType}`));
 
         if (!isMobile) {
             if (savedSize) {
@@ -288,12 +297,12 @@ const DesktopManager = () => {
         if (!win) return;
 
         // localStorage 제거
-        localStorage.removeItem(`window_position_${win.type}`);
-        localStorage.removeItem(`window_size_${win.type}`);
+        localStorage.removeItem(getScopedKey(`window_position_${win.type}`));
+        localStorage.removeItem(getScopedKey(`window_size_${win.type}`));
 
         // 기본 위치 및 크기로 리셋
         // 기본 위치 로직 재현 (약식)
-        const defaultPosition = { x: 50 + (windows.length % 10) * 30, y: 50 + (windows.length % 10) * 30 };
+        const defaultPosition = { x: 50 + ((windows?.length || 0) % 10) * 30, y: 50 + ((windows?.length || 0) % 10) * 30 };
 
         let defaultSize = { width: 1000, height: 700 };
         if (['INVENTORY_QUICK', 'COMPANY_INFO'].includes(win.type)) defaultSize = { width: 600, height: 800 };
@@ -314,6 +323,8 @@ const DesktopManager = () => {
 
     // 재고 목록 새로고침 키
     const [inventoryRefreshKey, setInventoryRefreshKey] = useState(0);
+
+    const { openModal, ConfirmModalComponent } = useConfirmModal(); // Init hook
 
     const handleInventoryUpdate = useCallback((inventoryId, delta) => {
         setInventoryAdjustments(prev => {
@@ -380,6 +391,7 @@ const DesktopManager = () => {
             case 'COMPANY_INFO': return <CompanyInfo isWindow={true} {...componentProps} />;
             case 'MESSAGE_TEST': return <MessageTestPage isWindow={true} {...componentProps} />;
             case 'USER_MANAGEMENT': return <UserManagement isWindow={true} {...componentProps} />;
+            case 'ROLE_MANAGEMENT': return <RoleManagement isWindow={true} {...componentProps} />;
             default: return <div>Unknown App: {type}</div>;
         }
     };
@@ -395,7 +407,7 @@ const DesktopManager = () => {
             </div>
 
             {/* 플로팅 윈도우들 (최소화된 것은 렌더링하지 않음 - style로 숨김) */}
-            {windows.map(win => (
+            {windows && windows.map(win => (
                 <FloatingWindow
                     key={win.id}
                     title={win.title}
@@ -413,12 +425,14 @@ const DesktopManager = () => {
                     onMouseDown={() => bringToFront(win.id)}
                     onResizeStop={(newSize) => {
                         if (!isMobile) {
-                            localStorage.setItem(`window_size_${win.type}`, JSON.stringify(newSize));
+                            localStorage.setItem(getScopedKey(`window_size_${win.type}`), JSON.stringify(newSize));
+                            setWindows(prev => prev.map(w => w.id === win.id ? { ...w, size: newSize } : w));
                         }
                     }}
                     onDragStop={(newPos) => {
                         if (!isMobile) {
-                            localStorage.setItem(`window_position_${win.type}`, JSON.stringify(newPos));
+                            localStorage.setItem(getScopedKey(`window_position_${win.type}`), JSON.stringify(newPos));
+                            setWindows(prev => prev.map(w => w.id === win.id ? { ...w, position: newPos } : w));
                         }
                     }}
                 >
@@ -446,6 +460,7 @@ const DesktopManager = () => {
                     tradeId={printModal.tradeId}
                 />
             )}
+            {ConfirmModalComponent}
         </div>
     );
 };

@@ -3,12 +3,16 @@ import FloatingWindow from '../components/FloatingWindow';
 import TradePanel from '../components/TradePanel';
 import InventoryQuickView from '../components/InventoryQuickView';
 import TradePrintModal from '../components/TradePrintModal';
+import { useAuth } from '../context/AuthContext';
 
 /**
  * FloatingTradeLauncher
  * 여러 개의 전표 등록 창을 플로팅 윈도우로 띄워 관리하는 페이지
  */
 function FloatingTradeLauncher() {
+    const { user } = useAuth();
+    const getScopedKey = (key) => user?.id ? `u${user.id}_${key}` : key;
+
     // 열린 윈도우 목록
     // { id, type, zIndex, position, title }
     const [windows, setWindows] = useState([]);
@@ -57,7 +61,7 @@ function FloatingTradeLauncher() {
         }
 
         // 저장된 크기가 있으면 불러오기 (INVENTORY의 'auto'는 제외하거나, 사용자가 조절한 경우 덮어씌움)
-        const savedSize = localStorage.getItem(`window_size_${type}`);
+        const savedSize = localStorage.getItem(getScopedKey(`window_size_${type}`));
         if (savedSize) {
             try {
                 size = JSON.parse(savedSize);
@@ -212,7 +216,7 @@ function FloatingTradeLauncher() {
                     onMouseDown={() => bringToFront(win.id)}
                     onResizeStop={(newSize) => {
                         // 크기 변경 시 로컬 스토리지에 저장
-                        localStorage.setItem(`window_size_${win.type}`, JSON.stringify(newSize));
+                        localStorage.setItem(getScopedKey(`window_size_${win.type}`), JSON.stringify(newSize));
                     }}
                 >
                     <div style={{ flex: 1, overflow: 'hidden' }}>

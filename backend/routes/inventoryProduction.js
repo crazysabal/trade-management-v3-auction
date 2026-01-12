@@ -16,6 +16,7 @@ router.post('/', async (req, res) => {
             output_product_id,  // Result Product ID
             output_quantity,    // Result Quantity
             additional_cost,    // Extra Cost (Money)
+            sender,             // [NEW] Result Sender
             memo
         } = req.body;
 
@@ -62,9 +63,9 @@ router.post('/', async (req, res) => {
         // 3. Create Trade Detail
         const [detailResult] = await connection.query(
             `INSERT INTO trade_details 
-            (trade_master_id, seq_no, product_id, quantity, unit_price, supply_amount, tax_amount, total_amount) 
-            VALUES (?, 1, ?, ?, ?, ?, 0, ?)`,
-            [tradeMasterId, output_product_id, output_quantity, newUnitPrice, totalCost, totalCost]
+            (trade_master_id, seq_no, product_id, quantity, unit_price, supply_amount, tax_amount, total_amount, sender) 
+            VALUES (?, 1, ?, ?, ?, ?, 0, ?, ?)`,
+            [tradeMasterId, output_product_id, output_quantity, newUnitPrice, totalCost, totalCost, sender]
         );
         const tradeDetailId = detailResult.insertId;
 
@@ -79,10 +80,10 @@ router.post('/', async (req, res) => {
             `INSERT INTO purchase_inventory 
             (trade_detail_id, product_id, company_id, warehouse_id, 
              purchase_date, original_quantity, remaining_quantity, 
-             unit_price, status, created_at) 
-            VALUES (?, ?, ?, ?, NOW(), ?, ?, ?, 'AVAILABLE', NOW())`,
+             unit_price, sender, status, created_at) 
+            VALUES (?, ?, ?, ?, NOW(), ?, ?, ?, ?, 'AVAILABLE', NOW())`,
             [tradeDetailId, output_product_id, companyId, warehouseId,
-                output_quantity, output_quantity, newUnitPrice]
+                output_quantity, output_quantity, newUnitPrice, sender]
         );
         const newInventoryId = invResult.insertId;
 
@@ -124,14 +125,14 @@ router.post('/', async (req, res) => {
             // Let's re-fetch OR assume we can query it. 
             // Re-fetching inside loop is bad for perf but ok for low volume.
 
-            const [localRows] = await connection.query('SELECT product_id, unit_price FROM purchase_inventory WHERE id = ?', [ing.inventory_id]);
+            const [localRows] = await connection.query('SELECT product_id, unit_price, sender FROM purchase_inventory WHERE id = ?', [ing.inventory_id]);
             const item = localRows[0];
             const usageCost = Number(item.unit_price) * Number(ing.use_quantity);
 
             await connection.query(
                 `INSERT INTO trade_details 
-                (trade_master_id, seq_no, product_id, quantity, unit_price, supply_amount, tax_amount, total_amount) 
-                VALUES (?, ?, ?, ?, ?, ?, 0, ?)`,
+                (trade_master_id, seq_no, product_id, quantity, unit_price, supply_amount, tax_amount, total_amount, sender) 
+                VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?)`,
                 [
                     tradeMasterId,
                     seqNo++,
@@ -139,7 +140,8 @@ router.post('/', async (req, res) => {
                     -Number(ing.use_quantity), // Negative Quantity
                     item.unit_price,
                     -usageCost, // Negative Amount
-                    -usageCost
+                    -usageCost,
+                    item.sender
                 ]
             );
         }
@@ -384,12 +386,14 @@ router.get('/:id', async (req, res) => {
                 p.grade AS output_product_grade,
                 p.weight AS output_product_weight,
                 pi.original_quantity AS output_quantity,
-
                 pi.unit_price AS unit_cost,
-                pi.id as output_inventory_id
+                pi.id as output_inventory_id,
+                pi.sender as output_sender,
+                w.name as output_warehouse_name
             FROM inventory_productions ip
             JOIN purchase_inventory pi ON ip.output_inventory_id = pi.id
             JOIN products p ON pi.product_id = p.id
+            LEFT JOIN warehouses w ON pi.warehouse_id = w.id
             WHERE ip.id = ?
         `, [id]);
 

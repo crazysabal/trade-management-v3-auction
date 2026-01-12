@@ -10,8 +10,8 @@ const InventoryHistory = ({ onOpenTrade }) => {
     const [warehouses, setWarehouses] = useState([]);
     const [loading, setLoading] = useState(false);
     const [messageModal, setMessageModal] = useState({ isOpen: false, title: '', message: '', content: null });
-    const [detailModal, setDetailModal] = useState({ isOpen: false, tradeId: null });
-    const [prodDetailModal, setProdDetailModal] = useState({ isOpen: false, productionId: null });
+    const [detailModal, setDetailModal] = useState({ isOpen: false, tradeId: null, highlightId: null });
+    const [prodDetailModal, setProdDetailModal] = useState({ isOpen: false, productionId: null, highlightId: null });
     const [confirmAction, setConfirmAction] = useState(null); // Function to execute on confirm
 
     // Filters
@@ -407,7 +407,7 @@ const InventoryHistory = ({ onOpenTrade }) => {
                             <th>창고</th>
                             <th>품목명</th>
                             <th>출하주</th>
-                            <th>등급</th>
+                            <th className="text-center">등급</th>
                             <th>수량</th>
                             <th>잔고</th>
                             <th>거래처</th>
@@ -440,7 +440,7 @@ const InventoryHistory = ({ onOpenTrade }) => {
                                     <td>
                                         {item.sender || '-'}
                                     </td>
-                                    <td>
+                                    <td className="text-center">
                                         {item.grade || '-'}
                                     </td>
                                     <td>
@@ -480,10 +480,20 @@ const InventoryHistory = ({ onOpenTrade }) => {
                                             onClick={(e) => {
                                                 if (item.production_id) {
                                                     e.stopPropagation();
-                                                    setProdDetailModal({ isOpen: true, productionId: item.production_id });
+                                                    // use reference_id (ipi.id or pi.id) for highlighting in the production detail
+                                                    setProdDetailModal({
+                                                        isOpen: true,
+                                                        productionId: item.production_id,
+                                                        highlightId: item.reference_id
+                                                    });
                                                 } else if (item.trade_master_id) {
                                                     e.stopPropagation();
-                                                    setDetailModal({ isOpen: true, tradeId: item.trade_master_id });
+                                                    // use trade_detail_id for highlighting in the slip detail
+                                                    setDetailModal({
+                                                        isOpen: true,
+                                                        tradeId: item.trade_master_id,
+                                                        highlightId: item.trade_detail_id || item.reference_id
+                                                    });
                                                 }
                                             }}
                                         >
@@ -526,7 +536,11 @@ const InventoryHistory = ({ onOpenTrade }) => {
                                                     style={{ color: '#6c757d', textDecoration: 'underline', cursor: 'pointer' }}
                                                     onClick={(e) => {
                                                         e.stopPropagation();
-                                                        setDetailModal({ isOpen: true, tradeId: item.source_trade_id });
+                                                        setDetailModal({
+                                                            isOpen: true,
+                                                            tradeId: item.source_trade_id,
+                                                            highlightId: item.source_trade_detail_id
+                                                        });
                                                     }}
                                                 >
                                                     {item.source_trade_number}
@@ -572,14 +586,16 @@ const InventoryHistory = ({ onOpenTrade }) => {
 
             <TradeDetailModal
                 isOpen={detailModal.isOpen}
-                onClose={() => setDetailModal({ isOpen: false, tradeId: null })}
+                onClose={() => setDetailModal({ isOpen: false, tradeId: null, highlightId: null })}
                 tradeId={detailModal.tradeId}
+                highlightId={detailModal.highlightId}
             />
 
             <ProductionDetailModal
                 isOpen={prodDetailModal.isOpen}
-                onClose={() => setProdDetailModal({ isOpen: false, productionId: null })}
-                productionId={prodDetailModal.productionId}
+                onClose={() => setProdDetailModal({ isOpen: false, productionId: null, highlightId: null })}
+                jobId={prodDetailModal.productionId}
+                highlightId={prodDetailModal.highlightId}
             />
         </div >
     );

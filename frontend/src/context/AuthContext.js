@@ -11,6 +11,8 @@ export const AuthProvider = ({ children }) => {
     useEffect(() => {
         // Check for token in localStorage on init
         const token = localStorage.getItem('token');
+        const savedPermissions = localStorage.getItem('permissions');
+
         if (token) {
             try {
                 const decoded = jwtDecode(token);
@@ -18,7 +20,10 @@ export const AuthProvider = ({ children }) => {
                 if (decoded.exp * 1000 < Date.now()) {
                     logout();
                 } else {
-                    setUser(decoded);
+                    // Restore user with permissions if available
+                    const permissions = savedPermissions ? JSON.parse(savedPermissions) : {};
+                    setUser({ ...decoded, permissions });
+
                     // Set default header
                     axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
                 }
@@ -36,6 +41,10 @@ export const AuthProvider = ({ children }) => {
             const { token, user } = response.data;
 
             localStorage.setItem('token', token);
+            if (user.permissions) {
+                localStorage.setItem('permissions', JSON.stringify(user.permissions));
+            }
+
             axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
             setUser(user);
             return { success: true };
@@ -50,8 +59,22 @@ export const AuthProvider = ({ children }) => {
 
     const logout = () => {
         localStorage.removeItem('token');
+        localStorage.removeItem('permissions');
         delete axios.defaults.headers.common['Authorization'];
         setUser(null);
+    };
+
+    const refreshPermissions = async () => {
+        try {
+            const response = await axios.get('/api/auth/me');
+            const { user: updatedUser } = response.data;
+            if (updatedUser.permissions) {
+                localStorage.setItem('permissions', JSON.stringify(updatedUser.permissions));
+                setUser(prev => ({ ...prev, ...updatedUser }));
+            }
+        } catch (error) {
+            console.error("Permission refresh failed", error);
+        }
     };
 
     // Axios interceptor for 401 handling
@@ -73,7 +96,7 @@ export const AuthProvider = ({ children }) => {
     }
 
     return (
-        <AuthContext.Provider value={{ user, login, logout, loading }}>
+        <AuthContext.Provider value={{ user, login, logout, refreshPermissions, loading }}>
             {children}
         </AuthContext.Provider>
     );
