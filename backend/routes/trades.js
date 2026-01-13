@@ -13,6 +13,17 @@ router.get('/', async (req, res) => {
         tm.*,
         c.company_name,
         c.company_code,
+        (
+          SELECT COUNT(*) 
+          FROM trade_details td 
+          WHERE td.trade_master_id = tm.id
+        ) as item_count,
+        (
+          SELECT GROUP_CONCAT(DISTINCT p.product_name ORDER BY td.seq_no SEPARATOR ', ')
+          FROM trade_details td
+          LEFT JOIN products p ON td.product_id = p.id
+          WHERE td.trade_master_id = tm.id
+        ) as product_names,
         IFNULL((
           SELECT SUM(t.total_price) 
           FROM trade_masters t 

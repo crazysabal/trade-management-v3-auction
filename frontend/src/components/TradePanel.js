@@ -6,6 +6,7 @@ import TradePrintModal from './TradePrintModal';
 import './TradePanel.css';
 import TradeDeleteConfirmModal from './TradeDeleteConfirmModal';
 import SearchableSelect from './SearchableSelect';
+import SalesLookupModal from './SalesLookupModal'; // Import SalesLookupModal
 import { useModalDraggable } from '../hooks/useModalDraggable';
 
 function TradePanel({
@@ -133,8 +134,64 @@ function TradePanel({
     showCancel: false
   });
 
+  const [matchingHistoryModal, setMatchingHistoryModal] = useState({
+    isOpen: false,
+    detail: null
+  });
+
+  // Sales Lookup Modal State
+  const [isSalesLookupOpen, setIsSalesLookupOpen] = useState(false);
+
   // 변경 감지
   const [initialData, setInitialData] = useState(null);
+
+  // 반품 처리: 선택한 매출 내역을 마이너스 수량으로 로드
+  const handleSalesLink = async (selectedSale) => {
+    try {
+      // 1. 선택된 전표의 상세 정보를 가져옴
+      const fullTrade = await tradeAPI.getById(selectedSale.id);
+      if (!fullTrade) throw new Error('전표 정보를 가져올 수 없습니다.');
+
+      // 2. 현재 폼을 초기화하되, 반품 모드로 설정
+      // 기존 resetForm과 유사하지만, details를 반품 데이터로 채움
+
+      const newDetails = fullTrade.details.map(d => ({
+        product_id: d.product_id,
+        product_name: d.product_name,
+        quantity: -Math.abs(d.quantity), // 수량 음수 변환
+        unit_price: d.unit_price, // 단가는 그대로 (양수)
+        amount: -Math.abs(d.amount), // 금액 음수 변환
+        remarks: `반품: ${fullTrade.master.trade_number} / ${d.product_name}`,
+
+        // 중요: 원본 재고 ID를 유지하여 원가 복구 지원
+        // 매칭된 재고가 있다면 그 ID를, 없다면 원본 ID를 사용
+        inventory_id: d.matched_inventory_id || d.inventory_id,
+
+        // 기타 필드
+        shipper_id: d.shipper_id,
+        location_id: d.location_id,
+        is_agricultural: d.is_agricultural
+      }));
+
+      // 3. 상태 업데이트
+      setDetails(newDetails);
+      setIsSalesLookupOpen(false);
+
+      // 4. 알림
+      setModal({
+        isOpen: true,
+        type: 'info',
+        title: '반품 전표 생성됨',
+        message: '선택한 매출 내역이 반품(마이너스) 상태로 입력되었습니다.\n내용을 확인 후 저장하세요.',
+        confirmText: '확인',
+        onConfirm: () => setModal(prev => ({ ...prev, isOpen: false }))
+      });
+
+    } catch (error) {
+      console.error('반품 처리 중 오류:', error);
+      alert('반품 처리에 실패했습니다.');
+    }
+  };
 
   // refs
   const companyRef = useRef(null);
@@ -1516,6 +1573,18 @@ function TradePanel({
                 >
                   🔄 새로고침
                 </button>
+                {/* 반품 버튼 (매출일 때만 표시) */}
+                {!isPurchase && (
+                  <button
+                    type="button"
+                    className="btn btn-warning btn-custom btn-sm"
+                    onClick={() => setIsSalesLookupOpen(true)}
+                    disabled={!master.company_id || isViewMode}
+                    style={{ backgroundColor: '#f39c12', color: 'white', border: 'none' }}
+                  >
+                    ↩️ 반품등록
+                  </button>
+                )}
                 <button
                   type="button"
                   className="btn btn-success btn-custom btn-sm"
@@ -2439,6 +2508,15 @@ function TradePanel({
         tradeType={master.trade_type}
         companyName={companies.find(c => String(c.id) === String(master.company_id))?.company_name}
         tradeNumber={currentTradeId} // 전표 번호 전달 추가 (누락되어 있었음)
+      />
+
+      {/* 반품 조회 모달 */}
+      <SalesLookupModal
+        isOpen={isSalesLookupOpen}
+        onClose={() => setIsSalesLookupOpen(false)}
+        companyId={master.company_id}
+        companyName={companies.find(c => c.id === master.company_id)?.company_name}
+        onSelect={handleSalesLink}
       />
 
       {/* 대기 중 입출금 수정 모달 */}
