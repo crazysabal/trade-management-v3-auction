@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { paymentAPI } from '../services/api';
+import { paymentAPI, tradeAPI } from '../services/api';
 import ConfirmModal from '../components/ConfirmModal';
+import useDraggable from '../hooks/useDraggable';
+import UnsettledPrintModal from '../components/UnsettledPrintModal';
 
 function CompanyBalances() {
   const [receivables, setReceivables] = useState([]);
@@ -14,25 +16,22 @@ function CompanyBalances() {
   const [loading, setLoading] = useState(true);
   const [searchReceivable, setSearchReceivable] = useState('');
   const [searchPayable, setSearchPayable] = useState('');
-  const [hasBalanceOnly, setHasBalanceOnly] = useState(true);
+  const [checkedCompanies, setCheckedCompanies] = useState([]);
 
-  // 입금/출금 모달
-  const [paymentModal, setPaymentModal] = useState({
+  const toggleCheck = (id) => {
+    setCheckedCompanies(prev =>
+      prev.includes(id) ? prev.filter(cid => cid !== id) : [...prev, id]
+    );
+  };
+
+  const [unsettledModal, setUnsettledModal] = useState({
     isOpen: false,
-    type: 'RECEIPT',
-    company: null
+    data: [] // { company, trades: [ { master, details } ] }
   });
+  const [loadingUnsettled, setLoadingUnsettled] = useState(false);
 
-  const [paymentForm, setPaymentForm] = useState({
-    transaction_date: formatLocalDate(new Date()),
-    amount: '',
-    displayAmount: '', // 천단위 콤마 표시용
-    payment_method: '계좌이체',
-    notes: ''
-  });
-
-  const [unpaidTrades, setUnpaidTrades] = useState([]);
-  const [loadingTrades, setLoadingTrades] = useState(false);
+  // 드래그 훅 적용 (hooks/useDraggable.js 사양에 맞춤)
+  const unsettledDrag = useDraggable();
 
   // 입출금 내역 모달
   const [historyModal, setHistoryModal] = useState({
@@ -58,6 +57,7 @@ function CompanyBalances() {
     confirmText: '확인',
     showCancel: false
   });
+  const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
 
   function formatLocalDate(date) {
     const d = date || new Date();
@@ -106,8 +106,8 @@ function CompanyBalances() {
       setReceivables(receivableList);
       setPayables(payableList);
 
-      const receivableWithBalance = receivableList.filter(item => item.balance > 0);
-      const payableWithBalance = payableList.filter(item => item.balance > 0);
+      const receivableWithBalance = receivableList.filter(item => item.balance !== 0);
+      const payableWithBalance = payableList.filter(item => item.balance !== 0);
 
       setSummary({
         totalReceivable: receivableWithBalance.reduce((sum, item) => sum + item.balance, 0),
@@ -122,331 +122,195 @@ function CompanyBalances() {
     }
   };
 
+  const handleRefresh = () => {
+    setSearchReceivable('');
+    setSearchPayable('');
+    setCheckedCompanies([]);
+    loadBalances();
+  };
+
+  const toggleSelectAll = (type, isSelected) => {
+    const list = type === 'receivable' ? getFilteredReceivables() : getFilteredPayables();
+    const ids = list.map(item => item.company_id);
+
+    if (isSelected) {
+      setCheckedCompanies(prev => [...new Set([...prev, ...ids])]);
+    } else {
+      setCheckedCompanies(prev => prev.filter(id => !ids.includes(id)));
+    }
+  };
+
   const formatCurrency = (value) => {
     return new Intl.NumberFormat('ko-KR').format(value || 0);
   };
 
   const getFilteredReceivables = () => {
     return receivables.filter(item => {
+      // 검색 필터
       if (searchReceivable && !item.company_name.toLowerCase().includes(searchReceivable.toLowerCase())
         && !item.company_code?.toLowerCase().includes(searchReceivable.toLowerCase())) {
         return false;
       }
-      if (hasBalanceOnly && item.balance <= 0) {
-        return false;
-      }
-      return true;
+      // 잔고 필터 (0원 제외)
+      return item.balance !== 0;
     });
   };
 
   const getFilteredPayables = () => {
     return payables.filter(item => {
+      // 검색 필터
       if (searchPayable && !item.company_name.toLowerCase().includes(searchPayable.toLowerCase())
         && !item.company_code?.toLowerCase().includes(searchPayable.toLowerCase())) {
         return false;
       }
-      if (hasBalanceOnly && item.balance <= 0) {
-        return false;
-      }
-      return true;
+      // 잔고 필터 (0원 제외)
+      return item.balance !== 0;
     });
   };
 
-  // 금액 입력 핸들러 (마이너스 허용 - 기초잔고 설정용)
-  const handleAmountChange = (e) => {
-    const rawValue = parseNumberFromComma(e.target.value);
-    // 마이너스 부호 또는 숫자만 허용
-    if (rawValue === '' || rawValue === '-' || /^-?\d+$/.test(rawValue)) {
-      setPaymentForm(prev => ({
-        ...prev,
-        amount: rawValue,
-        displayAmount: rawValue === '-' ? '-' : formatNumberWithComma(rawValue)
-      }));
-    }
-  };
 
-  const openPaymentModal = async (company, type) => {
-    setPaymentForm({
-      transaction_date: formatLocalDate(new Date()),
-      amount: '',
-      displayAmount: '',
-      payment_method: '계좌이체',
-      notes: ''
-    });
-    setUnpaidTrades([]);
-
-    setPaymentModal({
-      isOpen: true,
-      type,
-      company
-    });
-
-    await loadUnpaidTrades(company.company_id, type === 'RECEIPT' ? 'SALE' : 'PURCHASE');
-  };
-
-  const loadUnpaidTrades = async (companyId, tradeType) => {
-    try {
-      setLoadingTrades(true);
-      const response = await paymentAPI.getUnpaidTrades(companyId, tradeType);
-      setUnpaidTrades(response.data.data || []);
-    } catch (error) {
-      console.error('미결제 전표 조회 오류:', error);
-    } finally {
-      setLoadingTrades(false);
-    }
-  };
-
-  // FIFO 방식으로 자동 배분 계산
-  const fifoAllocation = useMemo(() => {
-    const inputAmount = parseFloat(paymentForm.amount) || 0;
-    let remainingAmount = inputAmount;
-    const allocations = [];
-
-    for (const trade of unpaidTrades) {
-      const unpaidAmount = parseFloat(trade.unpaid_amount || 0);
-      if (remainingAmount <= 0 || unpaidAmount <= 0) {
-        allocations.push({
-          ...trade,
-          allocatedAmount: 0,
-          remainingAfter: unpaidAmount,
-          status: 'pending'
-        });
-        continue;
-      }
-
-      const allocated = Math.min(remainingAmount, unpaidAmount);
-      const remaining = unpaidAmount - allocated;
-
-      allocations.push({
-        ...trade,
-        allocatedAmount: allocated,
-        remainingAfter: remaining,
-        status: remaining === 0 ? 'paid' : (allocated > 0 ? 'partial' : 'pending')
-      });
-
-      remainingAmount -= allocated;
-    }
-
-    const totalAllocated = allocations.reduce((sum, a) => sum + a.allocatedAmount, 0);
-    const currentBalance = paymentModal.company?.balance || 0;
-    const balanceAfter = currentBalance - inputAmount;
-
-    return {
-      allocations,
-      totalAllocated,
-      balanceAfter,
-      inputAmount,
-      paidCount: allocations.filter(a => a.status === 'paid').length,
-      partialCount: allocations.filter(a => a.status === 'partial').length,
-      pendingCount: allocations.filter(a => a.status === 'pending').length
-    };
-  }, [paymentForm.amount, unpaidTrades, paymentModal.company?.balance]);
-
-  const getUnpaidTotal = () => {
-    return unpaidTrades.reduce((sum, t) => sum + parseFloat(t.unpaid_amount || 0), 0);
-  };
-
-  // 실제 입금/출금 처리
-  const executePayment = async () => {
-    const amount = parseFloat(paymentForm.amount);
-
-    try {
-      const allocationList = fifoAllocation.allocations
-        .filter(a => a.allocatedAmount > 0)
-        .map(a => ({
-          trade_master_id: a.id,
-          amount: a.allocatedAmount
-        }));
-
-      const data = {
-        transaction_date: paymentForm.transaction_date,
-        payment_method: paymentForm.payment_method,
-        notes: paymentForm.notes,
-        company_id: paymentModal.company.company_id,
-        transaction_type: paymentModal.type,
-        amount: amount,
-        allocations: allocationList
-      };
-
-      await paymentAPI.createTransactionWithAllocation(data);
-
-      setModal({
-        isOpen: true,
-        type: 'success',
-        title: '처리 완료',
-        message: `${paymentModal.type === 'RECEIPT' ? '입금' : '출금'}이 처리되었습니다.${allocationList.length > 0 ? ` (${allocationList.length}건 전표 결제)` : ''}`,
-        confirmText: '확인',
-        showCancel: false,
-        onConfirm: () => {
-          setPaymentModal({ isOpen: false, type: 'RECEIPT', company: null });
-          loadBalances();
-        }
-      });
-    } catch (error) {
-      console.error('입금/출금 처리 오류:', error);
-      setModal({
-        isOpen: true,
-        type: 'warning',
-        title: '처리 실패',
-        message: error.response?.data?.message || '처리에 실패했습니다.',
-        confirmText: '확인',
-        showCancel: false,
-        onConfirm: () => { }
-      });
-    }
-  };
-
-  const handlePaymentSubmit = async () => {
-    const amount = parseFloat(paymentForm.amount);
-    if (!paymentForm.amount || paymentForm.amount === '-' || amount === 0) {
-      setModal({
-        isOpen: true,
-        type: 'warning',
-        title: '입력 오류',
-        message: '금액을 입력하세요.',
-        confirmText: '확인',
-        showCancel: false,
-        onConfirm: () => { }
-      });
-      return;
-    }
-
-    // 마이너스 금액인 경우 (기초잔고 설정) - 바로 처리
-    if (amount < 0) {
-      executePayment();
-      return;
-    }
-
-    // 잔고 초과 여부 확인
-    const currentBalance = paymentModal.company?.balance || 0;
-    const isReceipt = paymentModal.type === 'RECEIPT';
-    const actionName = isReceipt ? '입금' : '출금';
-
-    if (amount > currentBalance) {
-      const overAmount = amount - currentBalance;
-      const newBalance = currentBalance - amount;
-
-      setModal({
-        isOpen: true,
-        type: 'warning',
-        title: '⚠️ 잔고 초과 경고',
-        message: `${actionName} 금액이 현재 잔고를 초과합니다.\n\n` +
-          `• 현재 잔고: ${formatCurrency(currentBalance)}원\n` +
-          `• ${actionName} 금액: ${formatCurrency(amount)}원\n` +
-          `• 초과 금액: ${formatCurrency(overAmount)}원\n\n` +
-          `${actionName} 후 잔고: ${formatCurrency(Math.abs(newBalance))}원 (${isReceipt ? '선수금' : '선급금'})\n\n` +
-          `계속 진행하시겠습니까?`,
-        confirmText: '진행',
-        showCancel: true,
-        onConfirm: executePayment
-      });
-      return;
-    }
-
-    // 잔고 이하면 바로 처리
-    await executePayment();
-  };
-
-  const handleFullPayment = () => {
-    const balance = paymentModal.company?.balance || 0;
-    setPaymentForm(prev => ({
-      ...prev,
-      amount: String(balance),
-      displayAmount: formatNumberWithComma(balance)
-    }));
-  };
-
-  const closePaymentModal = () => {
-    setPaymentModal({ isOpen: false, type: 'RECEIPT', company: null });
-  };
-
-  // 입출금 내역 조회
+  // 입출금 및 전표 통합 내역(원장) 조회
   const openHistoryModal = async (company, type) => {
     setHistoryModal({
       isOpen: true,
       company,
       type
     });
-    await loadPaymentHistory(company.company_id, type === 'receivable' ? 'RECEIPT' : 'PAYMENT');
+    await loadLedger(company.company_id);
   };
 
-  const loadPaymentHistory = async (companyId, transactionType) => {
+  const loadLedger = async (companyId) => {
     try {
       setLoadingHistory(true);
-      const response = await paymentAPI.getTransactions({
-        company_id: companyId,
-        transaction_type: transactionType
-      });
-      setPaymentHistory(response.data.data || []);
+      const response = await paymentAPI.getLedger(companyId);
+      setPaymentHistory(response.data.transactions || []);
     } catch (error) {
-      console.error('입출금 내역 조회 오류:', error);
+      console.error('거래처 원장 조회 오류:', error);
     } finally {
       setLoadingHistory(false);
     }
   };
+
+  // 잔고 0원 이후 전표 상세 내역 조회 로직
+  const handleViewUnsettledDetails = async () => {
+    if (checkedCompanies.length === 0) return;
+
+    // 모달 열기 전 드래그 위치 초기화
+    if (unsettledDrag.setPosition) {
+      unsettledDrag.setPosition({ x: 0, y: 0 });
+    }
+
+    try {
+      setLoadingUnsettled(true);
+      const results = [];
+
+      for (const companyId of checkedCompanies) {
+        // 1. 해당 업체의 원장 데이터 가져오기
+        const ledgerRes = await paymentAPI.getLedger(companyId);
+        const { company, transactions } = ledgerRes.data.data;
+
+        // 2. 현재 잔고 확인
+        const balancesRes = await paymentAPI.getBalances({});
+        const companyBalance = balancesRes.data.data.find(b => b.company_id === companyId);
+        // 품목 상세를 보려는 쪽의 잔고 (receivable - payable)
+        // 여기서는 통합 기준 잔고를 역산함
+        let currentBalance = (parseFloat(companyBalance?.receivable || 0) - parseFloat(companyBalance?.payable || 0));
+
+        const targetItems = []; // { type: 'trade'|'payment', data: object, date: string }
+        // 3. 역산하며 0원 시점 찾기
+        // transactions는 최신순(DESC)으로 정렬되어 있음
+        for (const tx of transactions) {
+          if (tx.reference.startsWith('SAL') || tx.reference.startsWith('PUR')) {
+            targetItems.push({ type: 'trade', reference: tx.reference, date: tx.date });
+          } else if (tx.reference.startsWith('REC') || tx.reference.startsWith('PAY')) {
+            targetItems.push({ type: 'payment', reference: tx.reference, date: tx.date, tx: tx });
+          }
+
+          // 역산: 이전 잔고 = 현재 잔고 - (이번 거래의 영향)
+          currentBalance = currentBalance - (parseFloat(tx.debit || 0) - parseFloat(tx.credit || 0));
+
+          // 잔고가 0이 되거나 부호가 바뀌면 (정확히 0이 아닐 수 있으므로) 중단
+          if (Math.abs(currentBalance) < 1) break;
+        }
+
+        // 4. 상세 정보 수집 (전표 품목 + 입출금 상세)
+        const combinedDetails = [];
+        for (const item of targetItems) {
+          if (item.type === 'trade') {
+            const searchRes = await tradeAPI.getAll({ search: item.reference });
+            const tradeMaster = searchRes.data.data.find(t => t.trade_number === item.reference);
+            if (tradeMaster) {
+              const detailRes = await tradeAPI.getById(tradeMaster.id);
+              combinedDetails.push({
+                type: 'trade',
+                ...detailRes.data.data
+              });
+            }
+          } else if (item.type === 'payment') {
+            // 입출금 데이터는 Ledger API에서 온 정보를 그대로 사용하거나 추가 조인 가능
+            combinedDetails.push({
+              type: 'payment',
+              reference: item.reference,
+              date: item.date,
+              description: item.tx.description,
+              debit: item.tx.debit,
+              credit: item.tx.credit,
+              payment_method: item.tx.payment_method
+            });
+          }
+        }
+
+        results.push({
+          company,
+          details: combinedDetails // 날짜순 정렬은 모달 내에서 처리하거나 여기서 수행
+        });
+      }
+
+      setUnsettledModal({
+        isOpen: true,
+        data: results
+      });
+    } catch (error) {
+      console.error('미결제 상세 조회 오류:', error);
+      setModal({
+        isOpen: true,
+        type: 'error',
+        title: '조회 오류',
+        message: '전표 상세 내역을 불러오는 중 오류가 발생했습니다.',
+        confirmText: '확인'
+      });
+    } finally {
+      setLoadingUnsettled(false);
+    }
+  };
+
+
 
   const closeHistoryModal = () => {
     setHistoryModal({ isOpen: false, company: null, type: null });
     setPaymentHistory([]);
   };
 
-  // 입출금 삭제
-  const handleDeleteTransaction = (transaction) => {
-    setModal({
-      isOpen: true,
-      type: 'warning',
-      title: '삭제 확인',
-      message: `${transaction.transaction_number} 거래를 삭제하시겠습니까?\n\n금액: ${formatCurrency(transaction.amount)}원\n삭제 시 잔고가 복원됩니다.`,
-      confirmText: '삭제',
-      showCancel: true,
-      onConfirm: async () => {
-        try {
-          await paymentAPI.deleteTransaction(transaction.id);
-          setModal({
-            isOpen: true,
-            type: 'success',
-            title: '삭제 완료',
-            message: '거래가 삭제되었습니다.',
-            confirmText: '확인',
-            showCancel: false,
-            onConfirm: () => {
-              loadPaymentHistory(historyModal.company.company_id, historyModal.type === 'receivable' ? 'RECEIPT' : 'PAYMENT');
-              loadBalances();
-            }
-          });
-        } catch (error) {
-          console.error('삭제 오류:', error);
-          setModal({
-            isOpen: true,
-            type: 'warning',
-            title: '삭제 실패',
-            message: error.response?.data?.message || '삭제에 실패했습니다.',
-            confirmText: '확인',
-            showCancel: false,
-            onConfirm: () => { }
-          });
-        }
-      }
-    });
-  };
-
   // ESC 키 처리
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (e.key === 'Escape') {
-        if (editModal.isOpen) {
-          setEditModal({ isOpen: false, transaction: null });
-        } else if (historyModal.isOpen) {
+        // 상위 모달(인쇄 미리보기, 알림창)이 열려 있으면 해당 모달의 자체 ESC 처리에 맡김
+        if (isPrintModalOpen || modal.isOpen) return;
+
+        if (historyModal.isOpen) {
           closeHistoryModal();
-        } else if (paymentModal.isOpen) {
-          closePaymentModal();
+        } else if (unsettledModal.isOpen) {
+          setUnsettledModal({ isOpen: false, data: [] });
+        } else if (editModal.isOpen) {
+          setEditModal({ isOpen: false, transaction: null });
         }
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [paymentModal.isOpen, historyModal.isOpen, editModal.isOpen]);
+  }, [historyModal.isOpen, editModal.isOpen, unsettledModal.isOpen, isPrintModalOpen, modal.isOpen]);
 
   if (loading && receivables.length === 0 && payables.length === 0) {
     return <div className="loading">데이터를 불러오는 중...</div>;
@@ -457,18 +321,66 @@ function CompanyBalances() {
 
   return (
     <div className="company-balances">
-      <div className="page-header" style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', marginBottom: '1rem' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-          <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
-            <input
-              type="checkbox"
-              checked={hasBalanceOnly}
-              onChange={(e) => setHasBalanceOnly(e.target.checked)}
-              style={{ width: '18px', height: '18px' }}
-            />
-            잔고 있는 거래처만
-          </label>
-        </div>
+
+
+      {/* 상단 컨트롤 영역 */}
+      <div style={{
+        display: 'flex',
+        justifyContent: 'flex-end',
+        alignItems: 'center',
+        gap: '0.5rem',
+        marginBottom: '1rem',
+        width: '100%',
+        padding: '0 0.5rem'
+      }}>
+        <button
+          className="btn"
+          onClick={handleViewUnsettledDetails}
+          disabled={checkedCompanies.length === 0 || loadingUnsettled}
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '8px',
+            padding: '8px 14px',
+            fontSize: '0.85rem',
+            fontWeight: '600',
+            backgroundColor: checkedCompanies.length > 0 ? '#2c3e50' : '#e2e8f0',
+            color: checkedCompanies.length > 0 ? 'white' : '#94a3b8',
+            borderRadius: '6px',
+            border: 'none',
+            cursor: checkedCompanies.length > 0 ? 'pointer' : 'not-allowed',
+            transition: 'all 0.2s',
+            flex: 'none',
+            width: 'fit-content'
+          }}
+        >
+          {loadingUnsettled ? '📦 분석 중...' : '📝 전표 상세 조회'}
+        </button>
+
+        <button
+          className="btn btn-primary"
+          onClick={handleRefresh}
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '6px',
+            padding: '8px 14px',
+            fontSize: '0.85rem',
+            fontWeight: '600',
+            backgroundColor: '#3498db',
+            borderRadius: '6px',
+            border: 'none',
+            color: 'white',
+            cursor: 'pointer',
+            transition: 'all 0.2s',
+            flex: 'none',
+            width: 'fit-content'
+          }}
+        >
+          🔄 새로고침
+        </button>
       </div>
 
       {/* 요약 카드 */}
@@ -513,10 +425,18 @@ function CompanyBalances() {
             <table style={{ width: '100%', fontSize: '0.9rem' }}>
               <thead>
                 <tr style={{ backgroundColor: '#34495e', color: 'white' }}>
-                  <th style={{ padding: '10px 8px', textAlign: 'left' }}>거래처명</th>
-                  <th style={{ padding: '10px 8px', textAlign: 'center', width: '90px' }}>최근거래</th>
-                  <th style={{ padding: '10px 8px', textAlign: 'right', width: '120px' }}>미지급금</th>
-                  <th style={{ padding: '10px 8px', textAlign: 'center', width: '110px' }}>액션</th>
+                  <th style={{ padding: '8px 8px', textAlign: 'center', width: '40px' }}>
+                    <input
+                      type="checkbox"
+                      checked={filteredPayables.length > 0 && filteredPayables.every(item => checkedCompanies.includes(item.company_id))}
+                      onChange={(e) => toggleSelectAll('payable', e.target.checked)}
+                      style={{ width: '16px', height: '16px', cursor: 'pointer' }}
+                    />
+                  </th>
+                  <th style={{ padding: '8px 8px', textAlign: 'left' }}>거래처명</th>
+                  <th style={{ padding: '8px 8px', textAlign: 'center', width: '90px' }}>최근거래</th>
+                  <th style={{ padding: '8px 8px', textAlign: 'right', width: '120px' }}>미지급금</th>
+                  <th style={{ padding: '8px 8px', textAlign: 'center', width: '60px' }}>액션</th>
                 </tr>
               </thead>
               <tbody>
@@ -527,33 +447,39 @@ function CompanyBalances() {
                     </td>
                   </tr>
                 ) : (
-                  filteredPayables.map((item) => (
-                    <tr key={`payable-${item.company_id}`} style={{ borderBottom: '1px solid #eee' }}>
-                      <td style={{ padding: '10px 8px', fontWeight: '500' }}>
+                  filteredPayables.map((item, index) => (
+                    <tr
+                      key={`payable-${item.company_id}`}
+                      style={{
+                        backgroundColor: index % 2 === 0 ? '#ffffff' : '#f8fafc',
+                        borderTop: index > 0 ? '2px solid #e2e8f0' : 'none'
+                      }}
+                    >
+                      <td style={{ padding: '8px 8px', textAlign: 'center' }}>
+                        <input
+                          type="checkbox"
+                          checked={checkedCompanies.includes(item.company_id)}
+                          onChange={() => toggleCheck(item.company_id)}
+                          style={{ width: '16px', height: '16px', cursor: 'pointer' }}
+                        />
+                      </td>
+                      <td style={{ padding: '8px 8px', fontWeight: '500' }}>
                         {item.company_name}
                       </td>
-                      <td style={{ padding: '10px 8px', textAlign: 'center', fontSize: '0.85rem', color: '#7f8c8d' }}>
+                      <td style={{ padding: '8px 8px', textAlign: 'center', fontSize: '0.85rem', color: '#7f8c8d' }}>
                         {item.last_transaction_date || '-'}
                       </td>
                       <td style={{
-                        padding: '10px 8px',
+                        padding: '8px 8px',
                         textAlign: 'right',
-                        color: item.balance > 0 ? '#2c3e50' : '#7f8c8d',
-                        fontWeight: item.balance > 0 ? '600' : '400'
+                        color: item.balance < 0 ? '#e74c3c' : (item.balance > 0 ? '#2c3e50' : '#7f8c8d'),
+                        fontWeight: item.balance !== 0 ? '600' : '400'
                       }}>
-                        {item.balance > 0 ? formatCurrency(item.balance) + '원' : '-'}
+                        {item.balance !== 0 ? formatCurrency(item.balance) + '원' : '-'}
                       </td>
-                      <td style={{ padding: '10px 8px', textAlign: 'center' }}>
+                      <td style={{ padding: '8px 8px', textAlign: 'center' }}>
                         <div style={{ display: 'flex', gap: '4px', justifyContent: 'center', flexWrap: 'nowrap' }}>
-                          {item.balance > 0 && (
-                            <button
-                              className="btn btn-sm btn-primary"
-                              onClick={() => openPaymentModal(item, 'PAYMENT')}
-                              style={{ padding: '4px 8px', fontSize: '0.75rem', whiteSpace: 'nowrap' }}
-                            >
-                              출금
-                            </button>
-                          )}
+
                           <button
                             className="btn btn-sm"
                             onClick={() => openHistoryModal(item, 'payable')}
@@ -627,10 +553,18 @@ function CompanyBalances() {
             <table style={{ width: '100%', fontSize: '0.9rem' }}>
               <thead>
                 <tr style={{ backgroundColor: '#34495e', color: 'white' }}>
-                  <th style={{ padding: '10px 8px', textAlign: 'left' }}>거래처명</th>
-                  <th style={{ padding: '10px 8px', textAlign: 'center', width: '90px' }}>최근거래</th>
-                  <th style={{ padding: '10px 8px', textAlign: 'right', width: '120px' }}>미수금</th>
-                  <th style={{ padding: '10px 8px', textAlign: 'center', width: '110px' }}>액션</th>
+                  <th style={{ padding: '8px 8px', textAlign: 'center', width: '40px' }}>
+                    <input
+                      type="checkbox"
+                      checked={filteredReceivables.length > 0 && filteredReceivables.every(item => checkedCompanies.includes(item.company_id))}
+                      onChange={(e) => toggleSelectAll('receivable', e.target.checked)}
+                      style={{ width: '16px', height: '16px', cursor: 'pointer' }}
+                    />
+                  </th>
+                  <th style={{ padding: '8px 8px', textAlign: 'left' }}>거래처명</th>
+                  <th style={{ padding: '8px 8px', textAlign: 'center', width: '90px' }}>최근거래</th>
+                  <th style={{ padding: '8px 8px', textAlign: 'right', width: '120px' }}>미수금</th>
+                  <th style={{ padding: '8px 8px', textAlign: 'center', width: '60px' }}>액션</th>
                 </tr>
               </thead>
               <tbody>
@@ -641,33 +575,39 @@ function CompanyBalances() {
                     </td>
                   </tr>
                 ) : (
-                  filteredReceivables.map((item) => (
-                    <tr key={`receivable-${item.company_id}`} style={{ borderBottom: '1px solid #eee' }}>
-                      <td style={{ padding: '10px 8px', fontWeight: '500' }}>
+                  filteredReceivables.map((item, index) => (
+                    <tr
+                      key={`receivable-${item.company_id}`}
+                      style={{
+                        backgroundColor: index % 2 === 0 ? '#ffffff' : '#f8fafc',
+                        borderTop: index > 0 ? '2px solid #e2e8f0' : 'none'
+                      }}
+                    >
+                      <td style={{ padding: '8px 8px', textAlign: 'center' }}>
+                        <input
+                          type="checkbox"
+                          checked={checkedCompanies.includes(item.company_id)}
+                          onChange={() => toggleCheck(item.company_id)}
+                          style={{ width: '16px', height: '16px', cursor: 'pointer' }}
+                        />
+                      </td>
+                      <td style={{ padding: '8px 8px', fontWeight: '500' }}>
                         {item.company_name}
                       </td>
-                      <td style={{ padding: '10px 8px', textAlign: 'center', fontSize: '0.85rem', color: '#7f8c8d' }}>
+                      <td style={{ padding: '8px 8px', textAlign: 'center', fontSize: '0.85rem', color: '#7f8c8d' }}>
                         {item.last_transaction_date || '-'}
                       </td>
                       <td style={{
-                        padding: '10px 8px',
+                        padding: '8px 8px',
                         textAlign: 'right',
-                        color: item.balance > 0 ? '#2c3e50' : '#7f8c8d',
-                        fontWeight: item.balance > 0 ? '600' : '400'
+                        color: item.balance < 0 ? '#e74c3c' : (item.balance > 0 ? '#2c3e50' : '#7f8c8d'),
+                        fontWeight: item.balance !== 0 ? '600' : '400'
                       }}>
-                        {item.balance > 0 ? formatCurrency(item.balance) + '원' : '-'}
+                        {item.balance !== 0 ? formatCurrency(item.balance) + '원' : '-'}
                       </td>
-                      <td style={{ padding: '10px 8px', textAlign: 'center' }}>
+                      <td style={{ padding: '8px 8px', textAlign: 'center' }}>
                         <div style={{ display: 'flex', gap: '4px', justifyContent: 'center', flexWrap: 'nowrap' }}>
-                          {item.balance > 0 && (
-                            <button
-                              className="btn btn-sm btn-primary"
-                              onClick={() => openPaymentModal(item, 'RECEIPT')}
-                              style={{ padding: '4px 8px', fontSize: '0.75rem', whiteSpace: 'nowrap' }}
-                            >
-                              입금
-                            </button>
-                          )}
+
                           <button
                             className="btn btn-sm"
                             onClick={() => openHistoryModal(item, 'receivable')}
@@ -705,427 +645,330 @@ function CompanyBalances() {
         </div>
       </div>
 
-      {/* 입금/출금 모달 */}
-      {paymentModal.isOpen && (
-        <div className="modal-overlay">
-          <div
-            className="modal-container"
-            style={{ maxWidth: '700px', maxHeight: '90vh', overflow: 'auto' }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* 거래처명 강조 헤더 */}
-            <div style={{
-              backgroundColor: paymentModal.type === 'RECEIPT' ? '#27ae60' : '#3498db',
-              color: 'white',
-              padding: '1rem 1.5rem',
-              margin: '-1.5rem -1.5rem 1.5rem -1.5rem',
-              borderRadius: '12px 12px 0 0',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '1rem'
-            }}>
-              <span style={{ fontSize: '2rem' }}>
-                {paymentModal.type === 'RECEIPT' ? '💰' : '💸'}
-              </span>
-              <div>
-                <div style={{ fontSize: '0.9rem', opacity: 0.9 }}>
-                  {paymentModal.type === 'RECEIPT' ? '입금 처리' : '출금 처리'}
-                </div>
-                <div style={{ fontSize: '1.4rem', fontWeight: '700' }}>
-                  {paymentModal.company?.company_name}
-                </div>
-              </div>
-            </div>
 
-            {/* 현재 잔액 및 입금 후 잔액 표시 */}
-            <div style={{
-              marginBottom: '1rem',
-              padding: '1rem',
-              backgroundColor: '#f8f9fa',
-              borderRadius: '8px',
-              display: 'grid',
-              gridTemplateColumns: '1fr 1fr 1fr',
-              gap: '1rem',
-              textAlign: 'center'
-            }}>
-              <div>
-                <div style={{ color: '#7f8c8d', fontSize: '0.85rem', marginBottom: '4px' }}>
-                  현재 {paymentModal.type === 'RECEIPT' ? '미수금' : '미지급금'}
-                </div>
-                <div style={{ fontWeight: '700', fontSize: '1.1rem', color: '#2c3e50' }}>
-                  {formatCurrency(paymentModal.company?.balance)}원
-                </div>
-              </div>
-              <div>
-                <div style={{ color: '#7f8c8d', fontSize: '0.85rem', marginBottom: '4px' }}>
-                  {paymentModal.type === 'RECEIPT' ? '입금' : '출금'} 금액
-                </div>
-                <div style={{ fontWeight: '700', fontSize: '1.1rem', color: '#3498db' }}>
-                  {paymentForm.amount ? formatCurrency(paymentForm.amount) + '원' : '-'}
-                </div>
-              </div>
-              <div>
-                <div style={{ color: '#7f8c8d', fontSize: '0.85rem', marginBottom: '4px' }}>
-                  {paymentModal.type === 'RECEIPT' ? '입금' : '출금'} 후 잔액
-                </div>
-                <div style={{
-                  fontWeight: '700',
-                  fontSize: '1.1rem',
-                  color: fifoAllocation.balanceAfter <= 0 ? '#27ae60' : '#e74c3c'
-                }}>
-                  {paymentForm.amount ? formatCurrency(Math.max(0, fifoAllocation.balanceAfter)) + '원' : '-'}
-                </div>
-              </div>
-            </div>
-
-            <div style={{ textAlign: 'left' }}>
-              {/* 기본 정보 입력 */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
-                <div className="form-group">
-                  <label>거래일자</label>
-                  <input
-                    type="date"
-                    value={paymentForm.transaction_date}
-                    onChange={(e) => setPaymentForm({ ...paymentForm, transaction_date: e.target.value })}
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label className="required">금액</label>
-                  <div style={{ display: 'flex', gap: '8px' }}>
-                    <input
-                      type="text"
-                      value={paymentForm.displayAmount}
-                      onChange={handleAmountChange}
-                      placeholder="0"
-                      style={{ textAlign: 'right', flex: 1 }}
-                    />
-                    <button
-                      type="button"
-                      onClick={handleFullPayment}
-                      style={{
-                        padding: '8px 12px',
-                        backgroundColor: '#27ae60',
-                        color: 'white',
-                        border: 'none',
-                        borderRadius: '6px',
-                        cursor: 'pointer',
-                        whiteSpace: 'nowrap',
-                        fontSize: '0.85rem'
-                      }}
-                    >
-                      전액
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
-                <div className="form-group">
-                  <label>결제방법</label>
-                  <select
-                    value={paymentForm.payment_method}
-                    onChange={(e) => setPaymentForm({ ...paymentForm, payment_method: e.target.value })}
-                  >
-                    <option value="현금">현금</option>
-                    <option value="계좌이체">계좌이체</option>
-                    <option value="카드">카드</option>
-                    <option value="어음">어음</option>
-                    <option value="기타">기타</option>
-                  </select>
-                </div>
-
-                <div className="form-group">
-                  <label>비고</label>
-                  <input
-                    type="text"
-                    value={paymentForm.notes}
-                    onChange={(e) => setPaymentForm({ ...paymentForm, notes: e.target.value })}
-                    placeholder="메모"
-                  />
-                </div>
-              </div>
-
-              {/* 전표 결제 미리보기 */}
-              <div style={{ marginTop: '1.5rem', borderTop: '1px solid #eee', paddingTop: '1rem' }}>
-                <h4 style={{ margin: '0 0 0.75rem 0', color: '#2c3e50', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <span>📋 전표 결제 미리보기</span>
-                  {paymentForm.amount && fifoAllocation.paidCount > 0 && (
-                    <span style={{ fontSize: '0.85rem', fontWeight: 'normal', color: '#27ae60' }}>
-                      {fifoAllocation.paidCount}건 완납{fifoAllocation.partialCount > 0 ? `, ${fifoAllocation.partialCount}건 부분결제` : ''}
-                    </span>
-                  )}
-                </h4>
-
-                {loadingTrades ? (
-                  <div style={{ padding: '1rem', textAlign: 'center', color: '#7f8c8d' }}>
-                    불러오는 중...
-                  </div>
-                ) : unpaidTrades.length === 0 ? (
-                  <div style={{ padding: '1rem', textAlign: 'center', color: '#7f8c8d', backgroundColor: '#f8f9fa', borderRadius: '6px' }}>
-                    미결제 전표가 없습니다.
-                  </div>
-                ) : (
-                  <>
-                    <div style={{ maxHeight: '180px', overflowY: 'auto', border: '1px solid #ddd', borderRadius: '6px' }}>
-                      <table style={{ width: '100%', fontSize: '0.85rem' }}>
-                        <thead>
-                          <tr style={{ backgroundColor: '#34495e', color: 'white' }}>
-                            <th style={{ padding: '8px', textAlign: 'left' }}>전표번호</th>
-                            <th style={{ padding: '8px', textAlign: 'center' }}>거래일</th>
-                            <th style={{ padding: '8px', textAlign: 'right' }}>미결제</th>
-                            <th style={{ padding: '8px', textAlign: 'right' }}>결제예정</th>
-                            <th style={{ padding: '8px', textAlign: 'center' }}>상태</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {fifoAllocation.allocations.map((trade) => (
-                            <tr
-                              key={trade.id}
-                              style={{
-                                borderBottom: '1px solid #eee',
-                                backgroundColor: trade.status === 'paid' ? '#e8f8f0' :
-                                  trade.status === 'partial' ? '#fef9e7' : 'white'
-                              }}
-                            >
-                              <td style={{ padding: '8px' }}>{trade.trade_number}</td>
-                              <td style={{ padding: '8px', textAlign: 'center' }}>
-                                {trade.trade_date?.split('T')[0]}
-                              </td>
-                              <td style={{ padding: '8px', textAlign: 'right' }}>
-                                {formatCurrency(trade.unpaid_amount)}
-                              </td>
-                              <td style={{
-                                padding: '8px',
-                                textAlign: 'right',
-                                fontWeight: trade.allocatedAmount > 0 ? '600' : '400',
-                                color: trade.allocatedAmount > 0 ? '#27ae60' : '#bdc3c7'
-                              }}>
-                                {trade.allocatedAmount > 0 ? formatCurrency(trade.allocatedAmount) : '-'}
-                              </td>
-                              <td style={{ padding: '8px', textAlign: 'center' }}>
-                                {trade.status === 'paid' && (
-                                  <span style={{
-                                    backgroundColor: '#27ae60',
-                                    color: 'white',
-                                    padding: '2px 8px',
-                                    borderRadius: '10px',
-                                    fontSize: '0.75rem'
-                                  }}>완납</span>
-                                )}
-                                {trade.status === 'partial' && (
-                                  <span style={{
-                                    backgroundColor: '#f39c12',
-                                    color: 'white',
-                                    padding: '2px 8px',
-                                    borderRadius: '10px',
-                                    fontSize: '0.75rem'
-                                  }}>부분</span>
-                                )}
-                                {trade.status === 'pending' && (
-                                  <span style={{
-                                    backgroundColor: '#bdc3c7',
-                                    color: 'white',
-                                    padding: '2px 8px',
-                                    borderRadius: '10px',
-                                    fontSize: '0.75rem'
-                                  }}>대기</span>
-                                )}
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-
-                    {/* 합계 */}
-                    <div style={{
-                      marginTop: '0.5rem',
-                      padding: '0.75rem',
-                      backgroundColor: '#34495e',
-                      borderRadius: '6px',
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                      color: 'white'
-                    }}>
-                      <span>
-                        총 미결제: <strong>{formatCurrency(getUnpaidTotal())}원</strong>
-                        <span style={{ marginLeft: '10px', color: '#bdc3c7' }}>({unpaidTrades.length}건)</span>
-                      </span>
-                      <span>
-                        결제 예정: <strong style={{ color: '#2ecc71' }}>
-                          {formatCurrency(fifoAllocation.totalAllocated)}원
-                        </strong>
-                      </span>
-                    </div>
-                  </>
-                )}
-              </div>
-            </div>
-
-            <div className="modal-buttons" style={{ marginTop: '1.5rem' }}>
-              <button
-                className="modal-btn modal-btn-cancel"
-                onClick={closePaymentModal}
-              >
-                취소
-              </button>
-              <button
-                className="modal-btn modal-btn-primary"
-                onClick={handlePaymentSubmit}
-              >
-                {paymentModal.type === 'RECEIPT' ? '입금' : '출금'} 처리
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* 입출금 내역 모달 */}
       {historyModal.isOpen && (
-        <div className="modal-overlay">
+        <div className="premium-modal-overlay">
           <div
-            className="modal-container"
-            style={{ maxWidth: '800px', maxHeight: '90vh', overflow: 'auto' }}
+            className="premium-modal-container"
+            style={{ maxWidth: '850px' }}
             onClick={(e) => e.stopPropagation()}
           >
-            {/* 헤더 */}
-            <div style={{
-              backgroundColor: '#34495e',
-              color: 'white',
-              padding: '1rem 1.5rem',
-              margin: '-1.5rem -1.5rem 1.5rem -1.5rem',
-              borderRadius: '12px 12px 0 0',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between'
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                <span style={{ fontSize: '1.5rem' }}>📜</span>
-                <div>
-                  <div style={{ fontSize: '0.9rem', opacity: 0.9 }}>
-                    {historyModal.type === 'receivable' ? '입금 내역' : '출금 내역'}
-                  </div>
-                  <div style={{ fontSize: '1.2rem', fontWeight: '700' }}>
-                    {historyModal.company?.company_name}
-                  </div>
-                </div>
+            {/* 헤더: 아이콘 + 제목 + 부제목 */}
+            <div className="premium-modal-header" style={{ paddingBottom: '1.5rem' }}>
+              <div className="premium-modal-icon">
+                <span role="img" aria-label="history">📜</span>
               </div>
-              <button
-                onClick={closeHistoryModal}
-                style={{
-                  backgroundColor: 'transparent',
-                  border: 'none',
-                  color: 'white',
-                  fontSize: '1.5rem',
-                  cursor: 'pointer',
-                  padding: '4px 8px'
-                }}
-              >
-                ×
-              </button>
+              <h2 className="premium-modal-title">
+                {historyModal.company?.company_name} - 상세 원장
+              </h2>
+              <p className="premium-modal-subtitle" style={{ fontWeight: '600', color: '#1e293b', marginTop: '0.25rem' }}>
+                전표 및 입출금 통합 이력
+              </p>
             </div>
 
-            {loadingHistory ? (
-              <div style={{ padding: '2rem', textAlign: 'center', color: '#7f8c8d' }}>
-                불러오는 중...
-              </div>
-            ) : paymentHistory.length === 0 ? (
-              <div style={{ padding: '2rem', textAlign: 'center', color: '#7f8c8d' }}>
-                {historyModal.type === 'receivable' ? '입금' : '출금'} 내역이 없습니다.
-              </div>
-            ) : (
-              <div style={{ overflowX: 'auto' }}>
-                <table style={{ width: '100%', fontSize: '0.9rem' }}>
-                  <thead>
-                    <tr style={{ backgroundColor: '#f8f9fa' }}>
-                      <th style={{ padding: '12px 8px', textAlign: 'left', borderBottom: '2px solid #ddd' }}>거래번호</th>
-                      <th style={{ padding: '12px 8px', textAlign: 'center', borderBottom: '2px solid #ddd' }}>거래일</th>
-                      <th style={{ padding: '12px 8px', textAlign: 'right', borderBottom: '2px solid #ddd' }}>금액</th>
-                      <th style={{ padding: '12px 8px', textAlign: 'center', borderBottom: '2px solid #ddd' }}>결제방법</th>
-                      <th style={{ padding: '12px 8px', textAlign: 'left', borderBottom: '2px solid #ddd' }}>비고</th>
-                      <th style={{ padding: '12px 8px', textAlign: 'center', borderBottom: '2px solid #ddd', width: '80px' }}>액션</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {paymentHistory.map((tx) => (
-                      <tr key={tx.id} style={{ borderBottom: '1px solid #eee' }}>
-                        <td style={{ padding: '10px 8px', fontFamily: 'monospace', fontSize: '0.85rem' }}>
-                          {tx.transaction_number}
-                        </td>
-                        <td style={{ padding: '10px 8px', textAlign: 'center' }}>
-                          {tx.transaction_date?.split('T')[0]}
-                        </td>
-                        <td style={{ padding: '10px 8px', textAlign: 'right', fontWeight: '600', color: '#2c3e50' }}>
-                          {formatCurrency(tx.amount)}원
-                        </td>
-                        <td style={{ padding: '10px 8px', textAlign: 'center' }}>
-                          {tx.payment_method || '-'}
-                        </td>
-                        <td style={{ padding: '10px 8px', color: '#7f8c8d', fontSize: '0.85rem' }}>
-                          {tx.notes || '-'}
-                        </td>
-                        <td style={{ padding: '10px 8px', textAlign: 'center' }}>
-                          <button
-                            onClick={() => handleDeleteTransaction(tx)}
-                            style={{
-                              padding: '4px 8px',
-                              fontSize: '0.75rem',
-                              backgroundColor: '#e74c3c',
-                              color: 'white',
-                              border: 'none',
+            <div className="premium-modal-body" style={{ padding: '0 2rem 1.5rem 2rem' }}>
+              {loadingHistory ? (
+                <div style={{ padding: '3rem', textAlign: 'center', color: '#64748b' }}>
+                  데이터를 불러오는 중...
+                </div>
+              ) : paymentHistory.length === 0 ? (
+                <div style={{ padding: '3rem', textAlign: 'center', color: '#94a3b8' }}>
+                  상세 내역이 없습니다.
+                </div>
+              ) : (
+                <div style={{ overflowX: 'auto', border: '1px solid #e2e8f0', borderRadius: '12px' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
+                    <thead>
+                      <tr style={{ backgroundColor: '#f8fafc', borderBottom: '2px solid #e2e8f0' }}>
+                        <th style={{ padding: '12px 1rem', textAlign: 'center', color: '#475569', fontWeight: '600', width: '110px', whiteSpace: 'nowrap' }}>거래일</th>
+                        <th style={{ padding: '12px 1rem', textAlign: 'left', color: '#475569', fontWeight: '600', width: '100px', whiteSpace: 'nowrap' }}>구분</th>
+                        <th style={{ padding: '12px 1rem', textAlign: 'right', color: '#475569', fontWeight: '600', width: '120px', whiteSpace: 'nowrap' }}>매출 / 출금</th>
+                        <th style={{ padding: '12px 1rem', textAlign: 'right', color: '#475569', fontWeight: '600', width: '120px', whiteSpace: 'nowrap' }}>매입 / 입금</th>
+                        <th style={{ padding: '12px 1rem', textAlign: 'left', color: '#475569', fontWeight: '600', whiteSpace: 'nowrap' }}>비고/참조</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {paymentHistory.map((tx, idx) => (
+                        <tr key={idx} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                          <td style={{ padding: '12px 1rem', textAlign: 'center', color: '#475569', whiteSpace: 'nowrap' }}>
+                            {tx.date?.split('T')[0]}
+                          </td>
+                          <td style={{ padding: '12px 1rem' }}>
+                            <span style={{
+                              backgroundColor: tx.type === '매출' || tx.type === '입금' ? '#e6fffa' : '#fff5f5',
+                              color: tx.type === '매출' || tx.type === '입금' ? '#047481' : '#c53030',
+                              padding: '2px 8px',
                               borderRadius: '4px',
-                              cursor: 'pointer'
-                            }}
-                          >
-                            삭제
-                          </button>
+                              fontSize: '0.8rem',
+                              fontWeight: '600',
+                              whiteSpace: 'nowrap'
+                            }}>
+                              {tx.type}
+                            </span>
+                          </td>
+                          <td style={{ padding: '12px 1rem', textAlign: 'right', color: tx.debit > 0 ? '#1e293b' : '#94a3b8' }}>
+                            {tx.debit > 0 ? formatCurrency(tx.debit) + '원' : '-'}
+                          </td>
+                          <td style={{ padding: '12px 1rem', textAlign: 'right', color: tx.credit > 0 ? '#1e293b' : '#94a3b8' }}>
+                            {tx.credit > 0 ? formatCurrency(tx.credit) + '원' : '-'}
+                          </td>
+                          <td style={{ padding: '12px 1rem', color: '#64748b', fontSize: '0.85rem' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column' }}>
+                              <span style={{ color: '#94a3b8', fontSize: '0.75rem', fontFamily: 'monospace' }}>{tx.reference}</span>
+                              <span style={{ marginTop: '2px' }}>{tx.description || '-'}</span>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr style={{ backgroundColor: '#f8fafc', borderTop: '2px solid #e2e8f0' }}>
+                        <td colSpan="2" style={{ padding: '12px 1rem', fontWeight: '600', color: '#475569', whiteSpace: 'nowrap' }}>
+                          총 {paymentHistory.length}건
+                        </td>
+                        <td style={{ padding: '12px 1rem', textAlign: 'right', fontWeight: '800', color: '#475569' }}>
+                          {formatCurrency(paymentHistory.reduce((sum, tx) => sum + parseFloat(tx.debit || 0), 0))}원
+                        </td>
+                        <td style={{ padding: '12px 1rem', textAlign: 'right', fontWeight: '800', color: '#475569' }}>
+                          {formatCurrency(paymentHistory.reduce((sum, tx) => sum + parseFloat(tx.credit || 0), 0))}원
+                        </td>
+                        <td style={{ padding: '12px 1rem', textAlign: 'right', fontWeight: '800', color: '#2563eb', fontSize: '1rem' }}>
+                          잔액: {formatCurrency(
+                            paymentHistory.reduce((sum, tx) => sum + (parseFloat(tx.debit || 0) - parseFloat(tx.credit || 0)), 0)
+                          )}원
                         </td>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-
-                {/* 합계 */}
-                <div style={{
-                  marginTop: '1rem',
-                  padding: '0.75rem',
-                  backgroundColor: '#34495e',
-                  borderRadius: '6px',
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  color: 'white'
-                }}>
-                  <span>{paymentHistory.length}건</span>
-                  <span>
-                    합계: <strong>{formatCurrency(paymentHistory.reduce((sum, tx) => sum + parseFloat(tx.amount || 0), 0))}원</strong>
-                  </span>
+                    </tfoot>
+                  </table>
                 </div>
-              </div>
-            )}
+              )}
+            </div>
 
-            <div className="modal-buttons" style={{ marginTop: '1.5rem' }}>
+            <div className="premium-modal-footer">
               <button
-                className="modal-btn modal-btn-cancel"
+                className="premium-modal-btn premium-btn-primary"
                 onClick={closeHistoryModal}
+                style={{ flex: 'none', width: '120px', marginLeft: 'auto' }}
               >
                 닫기
-              </button>
-              <button
-                className="modal-btn modal-btn-primary"
-                onClick={() => {
-                  closeHistoryModal();
-                  openPaymentModal(historyModal.company, historyModal.type === 'receivable' ? 'RECEIPT' : 'PAYMENT');
-                }}
-              >
-                {historyModal.type === 'receivable' ? '입금' : '출금'} 등록
               </button>
             </div>
           </div>
         </div>
       )}
+
+      {/* 미결제 전표 상세 내역 모달 */}
+      {unsettledModal.isOpen && (
+        <div className="premium-modal-overlay" style={{ display: 'block' }}>
+          <div
+            ref={unsettledDrag.modalRef}
+            className="premium-modal-container"
+            style={{
+              width: 'fit-content',
+              minWidth: '600px',
+              maxWidth: '95vw',
+              maxHeight: '85vh',
+              position: 'fixed',
+              top: `calc(50% + ${unsettledDrag.position.y}px)`,
+              left: `calc(50% + ${unsettledDrag.position.x}px)`,
+              transform: 'translate(-50%, -50%)',
+              display: 'flex',
+              flexDirection: 'column',
+              animation: 'none', // CSS 라이브러리의 slideUp 애니메이션과 transform 충돌(깜빡임) 방지
+              margin: 0
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div
+              className="premium-modal-header"
+              onMouseDown={unsettledDrag.handleMouseDown}
+              style={{ cursor: 'grab' }}
+            >
+              <div className="premium-modal-icon">
+                <span role="img" aria-label="details">📝</span>
+              </div>
+              <h2 className="premium-modal-title">미결제 전표 상세 내역</h2>
+            </div>
+
+            <div className="premium-modal-body" style={{ overflowY: 'auto' }}>
+              {unsettledModal.data.map((res, cIdx) => (
+                <div key={cIdx} style={{ marginBottom: '2rem' }}>
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '10px',
+                    padding: '8px 12px',
+                    backgroundColor: '#f8fafc',
+                    borderRadius: '8px',
+                    marginBottom: '1rem',
+                    borderLeft: '4px solid #3498db'
+                  }}>
+                    <span style={{ fontWeight: '700', fontSize: '1.1rem', color: '#1e293b' }}>{res.company.company_name}</span>
+                  </div>
+
+                  {res.details.length === 0 ? (
+                    <div style={{ padding: '2rem', textAlign: 'center', color: '#94a3b8' }}>
+                      표시할 미결제 내역이 없습니다.
+                    </div>
+                  ) : (
+                    <div style={{ border: '1px solid #e2e8f0', borderRadius: '8px', overflow: 'hidden', backgroundColor: '#fff' }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+                        <thead style={{ backgroundColor: '#f8fafc' }}>
+                          <tr style={{ borderBottom: '1px solid #e2e8f0' }}>
+                            <th style={{ padding: '10px 16px', textAlign: 'left', color: '#475569', whiteSpace: 'nowrap', width: '80px' }}>일자</th>
+                            <th style={{ padding: '10px 16px', textAlign: 'left', color: '#475569', whiteSpace: 'nowrap' }}>품목명</th>
+                            <th style={{ padding: '10px 16px', textAlign: 'left', color: '#475569', whiteSpace: 'nowrap', width: '120px' }}>출하주</th>
+                            <th style={{ padding: '10px 16px', textAlign: 'center', color: '#475569', whiteSpace: 'nowrap', width: '120px' }}>등급</th>
+                            <th style={{ padding: '10px 16px', textAlign: 'right', color: '#475569', whiteSpace: 'nowrap', width: '80px' }}>수량</th>
+                            <th style={{ padding: '10px 16px', textAlign: 'right', color: '#475569', whiteSpace: 'nowrap', width: '100px' }}>단가</th>
+                            <th style={{ padding: '10px 16px', textAlign: 'right', color: '#475569', whiteSpace: 'nowrap', width: '120px' }}>금액</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {res.details.flatMap(item => {
+                            if (item.type === 'trade') {
+                              return item.details.map(detail => ({
+                                ...detail,
+                                rowType: 'trade',
+                                date: item.master.trade_date,
+                                trade_type: item.master.trade_type
+                              }));
+                            } else {
+                              return [{
+                                rowType: 'payment',
+                                date: item.date,
+                                description: item.description,
+                                debit: item.debit,
+                                credit: item.credit,
+                                reference: item.reference,
+                                payment_method: item.payment_method
+                              }];
+                            }
+                          }).sort((a, b) => {
+                            const dateA = a.date.substring(0, 10);
+                            const dateB = b.date.substring(0, 10);
+                            if (dateA !== dateB) return dateA.localeCompare(dateB);
+
+                            const pA = a.rowType === 'payment' ? 1 : 0;
+                            const pB = b.rowType === 'payment' ? 1 : 0;
+                            return pA - pB;
+                          }).map((item, iIdx) => {
+                            if (item.rowType === 'trade') {
+                              const amount = item.total_price ? parseFloat(item.total_price) : (parseFloat(item.quantity || 0) * parseFloat(item.unit_price || 0));
+                              const sign = item.trade_type === 'SALE' ? 1 : -1;
+                              return (
+                                <tr key={iIdx} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                                  <td style={{ padding: '10px 16px', color: '#64748b', whiteSpace: 'nowrap', fontSize: '0.8rem' }}>
+                                    {item.date ? item.date.substring(5) : '-'}
+                                  </td>
+                                  <td style={{ padding: '10px 16px', color: '#1e293b', whiteSpace: 'nowrap' }}>
+                                    {item.product_name} {Number(item.product_weight || 0) > 0 ? `${Number(item.product_weight).toString()}kg` : ''}
+                                  </td>
+                                  <td style={{ padding: '10px 16px', color: '#475569', whiteSpace: 'nowrap' }}>{item.sender_name || '-'}</td>
+                                  <td style={{ padding: '10px 16px', color: '#475569', whiteSpace: 'nowrap', textAlign: 'center' }}>
+                                    {item.grade} {item.size && `(${item.size})`}
+                                  </td>
+                                  <td style={{ padding: '10px 16px', textAlign: 'right', fontWeight: '600' }}>
+                                    {parseFloat(item.quantity || 0).toString()}
+                                  </td>
+                                  <td style={{ padding: '10px 16px', textAlign: 'right' }}>{formatCurrency(item.unit_price)}</td>
+                                  <td style={{ padding: '10px 16px', textAlign: 'right', fontWeight: '700', color: item.trade_type === 'SALE' ? '#0f172a' : '#ef4444' }}>
+                                    {formatCurrency(amount * sign)}
+                                  </td>
+                                </tr>
+                              );
+                            } else {
+                              const amount = parseFloat(item.debit || 0) - parseFloat(item.credit || 0);
+                              const isDeposit = parseFloat(item.credit || 0) > 0;
+                              return (
+                                <tr key={iIdx} style={{ borderBottom: '1px solid #f1f5f9', backgroundColor: '#f0f9ff' }}>
+                                  <td style={{ padding: '10px 16px', color: '#0369a1', fontSize: '0.8rem' }}>{item.date?.substring(5, 10)}</td>
+                                  <td colSpan="5" style={{ padding: '10px 16px', color: '#0369a1', fontWeight: '700' }}>
+                                    [{isDeposit ? '입금' : '출금'}] {item.description || `(${item.payment_method})`}
+                                  </td>
+                                  <td style={{
+                                    padding: '10px 16px',
+                                    textAlign: 'right',
+                                    fontWeight: '800',
+                                    color: amount < 0 ? '#ef4444' : '#0369a1'
+                                  }}>
+                                    {formatCurrency(amount)}
+                                  </td>
+                                </tr>
+                              );
+                            }
+                          })}
+                        </tbody>
+                        <tfoot>
+                          <tr style={{ backgroundColor: '#f8fafc', borderTop: '2px solid #e2e8f0' }}>
+                            <td colSpan="6" style={{ padding: '12px 16px', textAlign: 'right', fontWeight: '700', color: '#475569', whiteSpace: 'nowrap' }}>
+                              합계 :
+                            </td>
+                            <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: '800', color: '#2563eb', fontSize: '1rem', whiteSpace: 'nowrap' }}>
+                              {formatCurrency(res.details.reduce((sum, item) => {
+                                if (item.type === 'trade') {
+                                  const tAmt = item.details.reduce((s, d) => {
+                                    const amt = d.total_price ? parseFloat(d.total_price) : (parseFloat(d.quantity || 0) * parseFloat(d.unit_price || 0));
+                                    return s + amt;
+                                  }, 0);
+                                  return sum + (item.master.trade_type === 'SALE' ? tAmt : -tAmt);
+                                } else {
+                                  return sum + (parseFloat(item.debit || 0) - parseFloat(item.credit || 0));
+                                }
+                              }, 0))}원
+                            </td>
+                          </tr>
+                        </tfoot>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            <div className="premium-modal-footer">
+              <div style={{ marginRight: 'auto', display: 'flex', gap: '20px', alignItems: 'center' }}>
+                <span style={{ fontSize: '0.9rem', color: '#64748b' }}>조회 업체: {unsettledModal.data.length}개</span>
+                <span style={{ fontSize: '1rem', fontWeight: '700', color: '#2563eb' }}>
+                  미정산 총액: {new Intl.NumberFormat('ko-KR').format(unsettledModal.data.reduce((acc, curr) => {
+                    const total = curr.details.reduce((sum, item) => {
+                      if (item.type === 'trade') {
+                        const amt = item.details.reduce((s, d) => s + (d.total_price || (d.quantity * d.unit_price)), 0);
+                        return sum + (item.master.trade_type === 'SALE' ? amt : -amt);
+                      } else {
+                        return sum + (item.debit - item.credit);
+                      }
+                    }, 0);
+                    return acc + total;
+                  }, 0))}원
+                </span>
+              </div>
+              <button
+                className="premium-modal-btn premium-btn-primary"
+                onClick={() => setIsPrintModalOpen(true)}
+                style={{ width: 'auto', height: '40px', padding: '0 1.5rem', fontSize: '0.95rem', flex: 'none' }}
+              >
+                🖨️ 인쇄 미리보기
+              </button>
+              <button
+                className="premium-modal-btn premium-btn-secondary"
+                onClick={() => setUnsettledModal({ isOpen: false, data: [] })}
+                style={{ width: '100px', height: '40px', padding: '0', fontSize: '0.95rem', flex: 'none' }}
+              >
+                닫기
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <UnsettledPrintModal
+        isOpen={isPrintModalOpen}
+        onClose={() => setIsPrintModalOpen(false)}
+        data={unsettledModal.data}
+      />
 
       <ConfirmModal
         isOpen={modal.isOpen}

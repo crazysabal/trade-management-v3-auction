@@ -702,7 +702,7 @@ router.get('/company-today-summary/:companyId', async (req, res) => {
       `SELECT IFNULL(SUM(amount), 0) as before_payment
        FROM payment_transactions 
        WHERE company_id = ? 
-         AND transaction_date < ? 
+         AND DATE(transaction_date) < ? 
          AND transaction_type = ?`,
       [companyId, targetDate, paymentType]
     );
@@ -732,14 +732,29 @@ router.get('/company-today-summary/:companyId', async (req, res) => {
     const todayTotal = parseFloat(todayTradesRows[0].today_total || 0);
 
     // ★ 핵심 수정: 오늘 입금/출금 합계 (모든 결제수단 포함)
-    const [todayPaymentsRows] = await pool.query(
-      `SELECT IFNULL(SUM(amount), 0) as today_payment
+    let todayPaymentQuery = `
+       SELECT IFNULL(SUM(amount), 0) as today_payment
        FROM payment_transactions 
        WHERE company_id = ? 
-         AND transaction_date = ? 
-         AND transaction_type = ?`,
-      [companyId, targetDate, paymentType]
-    );
+         AND DATE(transaction_date) = ? 
+         AND transaction_type = ?
+    `;
+    const todayPaymentParams = [companyId, targetDate, paymentType];
+
+    if (exclude_trade_id) {
+      // 해당 전표와 연관된 모든 입출금 제외 (직접 연결 또는 배분)
+      const excludeId = parseInt(exclude_trade_id);
+      if (!isNaN(excludeId)) {
+        todayPaymentQuery += ` AND id NOT IN (
+          SELECT id FROM payment_transactions WHERE trade_master_id = ?
+          UNION
+          SELECT payment_id FROM payment_allocations WHERE trade_master_id = ?
+        )`;
+        todayPaymentParams.push(excludeId, excludeId);
+      }
+    }
+
+    const [todayPaymentsRows] = await pool.query(todayPaymentQuery, todayPaymentParams);
     const todayPayment = parseFloat(todayPaymentsRows[0].today_payment || 0);
 
     // ★ 수정: 결제 수단별 합계가 아닌, '개별 상세 내역'을 조회하도록 변경 (사용자 요청)
@@ -942,7 +957,7 @@ router.get('/by-trade/:tradeId', async (req, res) => {
       return res.json({ success: true, data: [] });
     }
 
-    // 1. 전표 등록 시 직접 연결된 입출금 (source_trade_id)
+    // 1. 직접 연결된 입출금
     const [directPayments] = await pool.query(
       `SELECT 
         pt.id,
@@ -962,11 +977,36 @@ router.get('/by-trade/:tradeId', async (req, res) => {
       [tradeId]
     );
 
-    // 참고: 배분된 입출금(allocated)과 거래처의 기타 입출금(general)은 표시하지 않음
-    //       전표 화면에는 해당 전표에서 직접 등록한 입출금만 표시
-    //       거래처 전체 입출금 현황은 수금/지급 관리에서 확인
+    // 2. 다른 입출금에서 배분된 정보
+    const [allocatedPayments] = await pool.query(
+      `SELECT 
+        pt.id,
+        pt.transaction_number,
+        pt.transaction_date,
+        pt.transaction_type,
+        pt.amount,
+        pt.payment_method,
+        pt.notes,
+        pt.created_at,
+        c.company_name,
+        'allocated' as link_type,
+        pa.amount as allocated_amount
+       FROM payment_allocations pa
+       JOIN payment_transactions pt ON pa.payment_id = pt.id
+       JOIN companies c ON pt.company_id = c.id
+       WHERE pa.trade_master_id = ?`,
+      [tradeId]
+    );
 
-    const allPayments = directPayments
+    // 중복 제거 및 병합 (직접 연결 우선)
+    const paymentMap = new Map();
+    [...directPayments, ...allocatedPayments].forEach(p => {
+      if (!paymentMap.has(p.id) || p.link_type === 'direct') {
+        paymentMap.set(p.id, p);
+      }
+    });
+
+    const allPayments = Array.from(paymentMap.values())
       .sort((a, b) => new Date(b.transaction_date) - new Date(a.transaction_date));
 
     res.json({ success: true, data: allPayments });

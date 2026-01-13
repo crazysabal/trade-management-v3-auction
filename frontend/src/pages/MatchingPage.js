@@ -6,7 +6,7 @@ import ConfirmModal from '../components/ConfirmModal';
 import MatchingHistoryModal from '../components/MatchingHistoryModal';
 import MatchingQuantityInputModal from '../components/MatchingQuantityInputModal';
 
-function MatchingPage() {
+function MatchingPage({ isWindow, refreshKey, onTradeChange }) {
   // 조회 조건
   const [dateRange, setDateRange] = useState({
     start_date: getDateString(-14),
@@ -129,7 +129,7 @@ function MatchingPage() {
   useEffect(() => {
     loadData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [refreshKey]);
 
   const loadData = async () => {
     try {
@@ -529,7 +529,10 @@ function MatchingPage() {
       setModal({
         isOpen: true, type: 'success', title: '취소 완료',
         message: '매칭이 취소되었습니다.',
-        confirmText: '확인', showCancel: false, onConfirm: () => { }
+        confirmText: '확인', showCancel: false,
+        onConfirm: () => {
+          if (onTradeChange) onTradeChange();
+        }
       });
     } catch (error) {
       setModal({
@@ -619,6 +622,7 @@ function MatchingPage() {
         confirmText: '확인', showCancel: false,
         onConfirm: () => {
           loadData();
+          if (onTradeChange) onTradeChange();
         }
       });
     } catch (error) {

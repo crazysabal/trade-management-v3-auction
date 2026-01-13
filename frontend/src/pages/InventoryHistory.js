@@ -339,13 +339,13 @@ const InventoryHistory = ({ onOpenTrade }) => {
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px', width: '100%' }}>
                     {/* 기간 선택 */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', backgroundColor: 'white', padding: '2px 8px', borderRadius: '4px', border: '1px solid #ddd' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: 0, borderRadius: '4px' }}>
                             <input
                                 type="date"
                                 value={startDate}
                                 onChange={(e) => setStartDate(e.target.value)}
                                 className="history-date-picker"
-                                style={{ padding: '4px 8px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '0.9rem' }}
+                                style={{ padding: '0 8px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '0.9rem', height: '40px', boxSizing: 'border-box' }}
                             />
                             <span style={{ color: '#868e96' }}>~</span>
                             <input
@@ -353,7 +353,7 @@ const InventoryHistory = ({ onOpenTrade }) => {
                                 value={endDate}
                                 onChange={(e) => setEndDate(e.target.value)}
                                 className="history-date-picker"
-                                style={{ padding: '4px 8px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '0.9rem' }}
+                                style={{ padding: '0 8px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '0.9rem', height: '40px', boxSizing: 'border-box' }}
                             />
                         </div>
                     </div>
@@ -375,11 +375,12 @@ const InventoryHistory = ({ onOpenTrade }) => {
                             }}
                             style={{
                                 flex: 1,
-                                height: '36px',
+                                height: '40px',
                                 padding: '0 0.75rem',
                                 fontSize: '0.9rem',
                                 border: '1px solid #ddd',
-                                borderRadius: '4px'
+                                borderRadius: '4px',
+                                boxSizing: 'border-box'
                             }}
                         />
                     </div>
@@ -390,7 +391,7 @@ const InventoryHistory = ({ onOpenTrade }) => {
                             onClick={fetchHistory}
                             disabled={loading}
                             className="btn btn-primary"
-                            style={{ padding: '6px 16px', height: '36px', fontSize: '0.9rem', opacity: loading ? 0.7 : 1 }}
+                            style={{ padding: '0 20px', height: '40px', fontSize: '0.9rem', fontWeight: 'bold', opacity: loading ? 0.7 : 1, whiteSpace: 'nowrap' }}
                         >
                             {loading ? '조회 중...' : '조회'}
                         </button>

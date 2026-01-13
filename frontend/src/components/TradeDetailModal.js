@@ -220,22 +220,11 @@ function TradeDetailModal({ isOpen, onClose, tradeId, highlightId }) {
                 </div>
 
                 <div className="trade-detail-info-item">
-                  <label>결제방법</label>
+                  <label>비고</label>
                   <div className="trade-detail-info-value">
-                    {trade.payment_method === 'CASH' ? '현금' :
-                      trade.payment_method === 'CARD' ? '카드' :
-                        trade.payment_method === 'TRANSFER' ? '계좌이체' :
-                          trade.payment_method === 'CREDIT' ? '외상' : trade.payment_method || '-'}
+                    {trade.notes || '-'}
                   </div>
                 </div>
-                {trade.notes && (
-                  <div className="trade-detail-info-item full-width">
-                    <label>비고</label>
-                    <div className="trade-detail-info-value">
-                      {trade.notes}
-                    </div>
-                  </div>
-                )}
               </div>
 
               {/* 거래처 잔고 정보 */}

@@ -56,7 +56,7 @@ const filterTrades = (trades, filterText) => {
 
 
 
-function TradeList({ isWindow, onOpenTradeEdit }) {
+function TradeList({ isWindow, refreshKey, onOpenTradeEdit }) {
   const defaultDates = getDefaultDates();
   const [purchaseTrades, setPurchaseTrades] = useState([]);
   const [saleTrades, setSaleTrades] = useState([]);
@@ -187,9 +187,10 @@ function TradeList({ isWindow, onOpenTradeEdit }) {
     tradeId: null
   });
 
+  // MDI 동기화: refreshKey 변경 시 데이터 재로딩
   useEffect(() => {
     loadTrades();
-  }, []);
+  }, [refreshKey]);
 
   const loadTrades = async (startDate, endDate) => {
     try {

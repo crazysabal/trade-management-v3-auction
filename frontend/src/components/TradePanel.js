@@ -556,10 +556,12 @@ function TradePanel({
       setCompanySummary(null);
     }
 
-    // 재고 목록 및 임시 차감 상태 초기화
+    // 단순 조회/전환 시에는 목록 새로고침을 유도하지 않음 (사용자 요청)
+    /*
     if (onTradeChange) {
       onTradeChange();
     }
+    */
   };
 
   // 거래처 변경
@@ -1322,12 +1324,15 @@ function TradePanel({
   // 금일합계: 현재 입력 중인 품목의 합계 (실시간 반영)
   const currentTodayTotal = totalAmount;
   // 전잔고 + 금일 타 전표 + 금일 현재 전표 (실시간 계산)
-  const currentSubtotal = (summary.previous_balance || 0) + (summary.today_total || 0) + currentTodayTotal;
+  const currentSubtotal = (Number(summary.previous_balance) || 0) + (Number(summary.today_total) || 0) + currentTodayTotal;
   // 입출금 대기 금액
-  const pendingTotal = pendingPayments.reduce((sum, p) => sum + (p.amount || 0), 0);
-  const displayPayment = summary.today_payment + pendingTotal;
+  const pendingTotal = pendingPayments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+  // [FIX] 기존 연결된 입금 내역 + 대기 중인 입금 내역 합계
+  const linkedTotal = linkedPayments.reduce((sum, p) => sum + (Number(p.allocated_amount || p.amount) || 0), 0);
+  // [FIX] 수식 전수 숫자화 (문자열 연결 방지) 및 명시적 초기값 보장
+  const displayPayment = (Number(summary.today_payment) || 0) + (Number(pendingTotal) || 0) + (Number(linkedTotal) || 0);
   // 최종 잔고 (전잔고 + 금일 - 입금)
-  const displayBalance = currentSubtotal - displayPayment;
+  const displayBalance = Number(currentSubtotal) - Number(displayPayment);
 
   // 변경사항 여부 (UI 버튼 스타일링용)
   const hasChanges = checkDirty();
@@ -1564,7 +1569,7 @@ function TradePanel({
                       }}
                       onDragEnd={handleDragEnd}
                       onClick={() => setSelectedRowIndex(index)}
-                      className={`trade - table - row ${selectedRowIndex === index ? 'selected' : ''} ${draggedIndex === index ? 'is-dragging' : ''} ${dragOverIndex === index ? 'is-over' : ''} `}
+                      className={`trade-table-row ${selectedRowIndex === index ? 'selected' : ''} ${draggedIndex === index ? 'is-dragging' : ''} ${dragOverIndex === index ? 'is-over' : ''}`}
                       style={{ transition: 'background-color 0.15s' }}
                     >
                       <td>
@@ -1725,9 +1730,9 @@ function TradePanel({
 
               {/* 잔고 정보 리스트 */}
               <div className="balance-list">
-                <div className="balance-item header">
-                  <span className="font-medium text-blue">금일 합계</span>
-                  <span className={`font - bold ${isPurchase ? 'text-red' : 'text-blue'} `}>
+                <div className="balance-item">
+                  <span className="balance-text-label">금일 합계</span>
+                  <span className="balance-text-value">
                     {formatCurrency(currentTodayTotal)}원
                   </span>
                 </div>
@@ -1746,6 +1751,7 @@ function TradePanel({
                   <span className="balance-text-label">전잔고 + 금일</span>
                   <span className="balance-text-value">{formatCurrency(currentSubtotal)}원</span>
                 </div>
+
                 <div className="balance-item">
                   <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                     <span className="balance-text-label">
@@ -1765,13 +1771,12 @@ function TradePanel({
               </div>
 
               {/* 잔고 */}
-              {/* 잔고 */}
               {(() => {
                 // 잔고 상태별 색상 클래스
                 const balanceClass = displayBalance > 0 ? 'positive' : displayBalance < 0 ? 'negative' : 'zero';
 
                 return (
-                  <div className={`balance - box ${balanceClass} `}>
+                  <div className={`balance-box ${balanceClass}`}>
                     <span className="balance-box-label">
                       잔고{pendingTotal > 0 ? ' (예정)' : ''}
                     </span>
@@ -1815,13 +1820,15 @@ function TradePanel({
 
                       // 유형별 스타일
                       return (
-                        <div key={`${payment.id} -${linkType} `} className={`payment - item ${linkType} `}>
+                        <div key={`${payment.id}-${linkType}`} className={`payment-item ${linkType}`}>
                           <div className="flex-1">
                             <div className="payment-detail-row">
                               {formatCurrency(displayAmount)}원
-                              <span className={`payment - badge ${linkType} `}>
-                                {linkType === 'direct' ? '직접' : linkType === 'allocated' ? '배분' : '수금/지급'}
-                              </span>
+                              {linkType !== 'direct' && (
+                                <span className={`payment-badge ${linkType}`}>
+                                  {linkType === 'allocated' ? '배분' : '수금/지급'}
+                                </span>
+                              )}
                               <span style={{
                                 fontSize: '0.75rem',
                                 padding: '1px 6px',

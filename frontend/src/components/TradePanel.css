@@ -215,9 +215,9 @@
 .trade-total-value {
     padding: 8px;
     text-align: right;
-    color: #c62828;
-    font-size: 1rem;
-    /* Slightly emphasized */
+    color: #dc2626;
+    font-size: 1.1rem;
+    font-weight: 800;
 }
 
 /* --- Form Elements --- */
@@ -474,25 +474,33 @@
 .balance-box {
     display: flex;
     justify-content: space-between;
-    padding: 0.5rem;
-    border-radius: 6px;
+    align-items: center;
+    padding: 10px 14px;
+    border-radius: 8px;
     margin-bottom: 0.5rem;
     flex-shrink: 0;
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.05);
 }
 
 .balance-box.positive {
-    background-color: #fff3e0;
-    color: #e65100;
+    background-color: #fef9c3;
+    /* Light Yellow/Orange */
+    color: #854d0e;
+    border: 1px solid #fde047;
 }
 
 .balance-box.negative {
-    background-color: #e3f2fd;
-    color: #1565c0;
+    background-color: #dcfce7;
+    /* Light Green */
+    color: #166534;
+    border: 1px solid #86efac;
 }
 
 .balance-box.zero {
-    background-color: #e8f5e9;
-    color: #2e7d32;
+    background-color: #f3f4f6;
+    /* Light Gray */
+    color: #374151;
+    border: 1px solid #e5e7eb;
 }
 
 .balance-box-label {
@@ -541,26 +549,34 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 0.2rem;
-    padding: 0.3rem;
-    border-radius: 4px;
-    border-left: 3px solid #ccc;
-    background-color: #f9f9f9;
+    margin-bottom: 0.4rem;
+    padding: 0.5rem 0.75rem;
+    border-radius: 6px;
+    border: 1px solid #f1f5f9;
+    border-left: 4px solid #ccc;
+    background-color: #ffffff;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
 }
 
+/* Hover effect removed by user request */
+
 .payment-item.direct {
-    background-color: #f0fff4;
-    border-left-color: #27ae60;
+    background-color: #f0fdf4;
+    border-left-color: #22c55e;
+    border-color: #dcfce7;
 }
 
 .payment-item.allocated {
-    background-color: #e3f2fd;
-    border-left-color: #2196f3;
+    background-color: #eff6ff;
+    border-left-color: #3b82f6;
+    border-color: #dbeafe;
 }
 
 .payment-item.general {
-    background-color: #f3e5f5;
-    border-left-color: #9c27b0;
+    background-color: #faf5ff;
+    border-left-color: #a855f7;
+    border-color: #f3e8ff;
 }
 
 .payment-badge {

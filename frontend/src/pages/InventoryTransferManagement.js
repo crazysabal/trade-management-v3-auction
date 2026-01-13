@@ -35,6 +35,7 @@ const InventoryTransferManagement = () => {
     const loadData = async () => {
         setLoading(true);
         setSelectedItems(new Set()); // 새로고침 시 선택 초기화
+        setSearchKeyword(''); // 새로고침 시 검색 필터 초기화
         try {
             const [invRes, whRes] = await Promise.all([
                 purchaseInventoryAPI.getAll({ has_remaining: 'true' }),
@@ -215,6 +216,23 @@ const InventoryTransferManagement = () => {
         setSelectedItems(newSet);
     };
 
+    const handleToggleWarehouseSelection = (e, items) => {
+        e.stopPropagation();
+        if (!items || items.length === 0) return;
+
+        const newSet = new Set(selectedItems);
+        const allInWarehouseSelected = items.every(item => newSet.has(item.id));
+
+        if (allInWarehouseSelected) {
+            // 해당 창고 아이템 모두 해제
+            items.forEach(item => newSet.delete(item.id));
+        } else {
+            // 해당 창고 아이템 모두 선택 추가
+            items.forEach(item => newSet.add(item.id));
+        }
+        setSelectedItems(newSet);
+    };
+
     // --- Drag & Drop Handlers (Warehouse Reorder) ---
     const handleWarehouseDragStart = (e, index) => {
         if (!reorderMode) {
@@ -295,14 +313,38 @@ const InventoryTransferManagement = () => {
         <div className="inventory-transfer-page fade-in">
             <div className="page-header">
                 <div className="header-controls" style={{ marginLeft: 0, width: '100%', justifyContent: 'flex-start', gap: '1rem' }}>
-                    <input
-                        type="text"
-                        placeholder="🔍 품목, 화주, 매입처, 수량, 단가... (띄어쓰기로 다중 검색)"
-                        value={searchKeyword}
-                        onChange={(e) => setSearchKeyword(e.target.value)}
-                        className="search-input"
-                        style={{ height: '36px', border: '1px solid #ddd', borderRadius: '4px', paddingLeft: '0.75rem', width: '380px' }}
-                    />
+                    <div className="search-wrapper">
+                        <input
+                            type="text"
+                            placeholder="🔍 품목, 화주, 매입처... (필터링)"
+                            value={searchKeyword}
+                            onChange={(e) => setSearchKeyword(e.target.value)}
+                            className={`search-input ${searchKeyword ? 'filtered' : ''}`}
+                            style={{ width: '380px' }} // Width control via slider or fixed
+                        />
+                        {searchKeyword && (
+                            <button
+                                onClick={() => setSearchKeyword('')}
+                                className="btn-filter-clear"
+                                title="필터 초기화"
+                            >
+                                &times;
+                            </button>
+                        )}
+                    </div>
+                    <button
+                        onClick={loadData}
+                        className="btn-refresh"
+                    >
+                        새로고침
+                    </button>
+                    <button
+                        className="btn-print"
+                        onClick={handlePrint}
+                        style={{ padding: '0.5rem 1rem', backgroundColor: '#95a5a6', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px' }}
+                    >
+                        🖨 목록 출력
+                    </button>
                     <button
                         onClick={() => setReorderMode(!reorderMode)}
                         className={`btn-reorder ${reorderMode ? 'active' : ''}`}
@@ -321,39 +363,22 @@ const InventoryTransferManagement = () => {
                             className="width-slider"
                         />
                     </div>
-                    <button
-                        onClick={loadData}
-                        className="btn-refresh"
-                    >
-                        새로고침
-                    </button>
-                    <button
-                        className="btn-print"
-                        onClick={handlePrint}
-                        style={{ marginRight: '10px', padding: '0.5rem 1rem', backgroundColor: '#95a5a6', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px' }}
-                    >
-                        🖨 목록 출력
-                    </button>
 
                     {/* 전체 재고 통계 (우측 정렬) */}
-                    <div style={{
-                        marginLeft: 'auto',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '1rem',
-                        fontSize: '0.9rem',
-                        backgroundColor: 'white',
-                        padding: '0.4rem 1rem',
-                        borderRadius: '6px',
-                        border: '1px solid #e2e8f0',
-                        boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
-                    }}>
-                        <span style={{ color: '#64748b' }}>
-                            전체 재고: <strong style={{ color: '#1e293b' }}>{totalStats.count}건</strong>
+                    <div className={`stats-summary-container ${searchKeyword ? 'filtered' : ''}`}>
+                        <span className={`stats-label ${searchKeyword ? 'filtered' : ''}`}>
+                            {searchKeyword ? '🔍 검색 결과: ' : '전체 재고: '}
+                            <strong className={searchKeyword ? 'stats-value filtered' : ''} style={{ color: !searchKeyword ? '#1e293b' : undefined }}>
+                                {totalStats.count}건
+                                {searchKeyword && ` / 전체 ${inventory.length}건`}
+                            </strong>
                         </span>
-                        <div style={{ width: '1px', height: '14px', backgroundColor: '#cbd5e1' }}></div>
+                        <div className={`stats-divider ${searchKeyword ? 'filtered' : ''}`}></div>
                         <span style={{ color: '#64748b' }}>
-                            총 재고금액: <strong style={{ color: '#2563eb' }}>{Math.floor(totalStats.totalValue).toLocaleString()}원</strong>
+                            {searchKeyword ? '결과 금액: ' : '총 재고금액: '}
+                            <strong className={searchKeyword ? 'stats-value filtered' : ''} style={{ color: !searchKeyword ? '#2563eb' : undefined }}>
+                                {Math.floor(totalStats.totalValue).toLocaleString()}원
+                            </strong>
                         </span>
                     </div>
                 </div>
@@ -386,18 +411,30 @@ const InventoryTransferManagement = () => {
                                 >
                                     {/* Header */}
                                     <div className={`warehouse-header ${draggedItem && dragOverWarehouseId === wh.id ? 'highlight' : (wh.is_default ? 'default' : '')}`}>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '4px' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', width: '100%', gap: '10px' }}>
                                             <h3 className="warehouse-title" style={{ margin: 0 }}>
                                                 {reorderMode && '↕ '}
                                                 {wh.name} {!wh.is_active && <span className="inactive-label">(비활성)</span>}
                                             </h3>
-                                            <span className="warehouse-count" style={{ fontSize: '0.85rem' }}>
-                                                {whStats.count} 건
-                                            </span>
-                                        </div>
-                                        {/* 창고별 재고 금액 표시 (우측 정렬) */}
-                                        <div style={{ textAlign: 'right', fontSize: '0.8rem', color: '#555', fontWeight: '600' }}>
-                                            {Math.floor(whStats.totalValue).toLocaleString()} 원
+
+                                            {whData.length > 0 && (
+                                                <button
+                                                    onClick={(e) => handleToggleWarehouseSelection(e, whData)}
+                                                    className={`btn-select-all ${whData.every(item => selectedItems.has(item.id)) ? 'active' : ''}`}
+                                                    title="전체 선택/해제"
+                                                >
+                                                    ✓ 전체 선택
+                                                </button>
+                                            )}
+
+                                            <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                <span className="warehouse-count">
+                                                    {whStats.count} 건
+                                                </span>
+                                                <span style={{ fontSize: '0.85rem', color: '#1e40af', fontWeight: '700', whiteSpace: 'nowrap' }}>
+                                                    {Math.floor(whStats.totalValue).toLocaleString()} 원
+                                                </span>
+                                            </div>
                                         </div>
                                     </div>
 

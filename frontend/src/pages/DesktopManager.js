@@ -321,8 +321,9 @@ const DesktopManager = () => {
     // 재고 조정 상태 (Floating Windows 간 동기화)
     const [inventoryAdjustments, setInventoryAdjustments] = useState({});
 
-    // 재고 목록 새로고침 키
+    // 전표 목록 및 재고 목록 새로고침 키
     const [inventoryRefreshKey, setInventoryRefreshKey] = useState(0);
+    const [tradeRefreshKey, setTradeRefreshKey] = useState(0);
 
     const { openModal, ConfirmModalComponent } = useConfirmModal(); // Init hook
 
@@ -344,9 +345,10 @@ const DesktopManager = () => {
         // 1. 재고 목록 새로고침 트리거
         setInventoryRefreshKey(prev => prev + 1);
 
-        // 2. 임시 차감된 재고 조정값 초기화 (DB에 반영되었으므로 더 이상 임시 차감 불필요)
-        // 주의: 여러 창을 동시에 띄워놓고 작업하는 경우 다른 창의 조정값도 날아갈 수 있음.
-        // 하지만 현재 워크플로우상 저장이 완료되면 "확정"된 것이므로 초기화하는 것이 맞음.
+        // 2. 전표 목록 새로고침 트리거 (MDI 연동)
+        setTradeRefreshKey(prev => prev + 1);
+
+        // 3. 임시 차감된 재고 조정값 초기화
         setInventoryAdjustments({});
     }, []);
 
@@ -364,7 +366,7 @@ const DesktopManager = () => {
         switch (type) {
             case 'PURCHASE': return <TradePanel tradeType="PURCHASE" panelId={`win-${win.id}`} onClose={() => closeWindow(win.id)} onPrint={handlePrint} onInventoryUpdate={handleInventoryUpdate} onTradeChange={handleTradeChange} onDirtyChange={(isDirty) => handleWindowDirtyChange(`win-${win.id}`, isDirty)} {...componentProps} />;
             case 'SALE': return <TradePanel tradeType="SALE" panelId={`win-${win.id}`} onClose={() => closeWindow(win.id)} onPrint={handlePrint} onInventoryUpdate={handleInventoryUpdate} onTradeChange={handleTradeChange} onDirtyChange={(isDirty) => handleWindowDirtyChange(`win-${win.id}`, isDirty)} {...componentProps} />;
-            case 'TRADE_LIST': return <TradeList isWindow={true} onOpenTradeEdit={(type, tradeId, viewMode = false) => launchApp(type, { initialTradeId: tradeId, initialViewMode: viewMode })} {...componentProps} />;
+            case 'TRADE_LIST': return <TradeList isWindow={true} refreshKey={tradeRefreshKey} onOpenTradeEdit={(type, tradeId, viewMode = false) => launchApp(type, { initialTradeId: tradeId, initialViewMode: viewMode })} {...componentProps} />;
             case 'COMPANY_LIST': return <CompanyList isWindow={true} {...componentProps} />;
             case 'PRODUCT_LIST': return <IntegratedProductManagement isWindow={true} {...componentProps} />;
             case 'INVENTORY_QUICK': return <InventoryQuickView isWindow={true} inventoryAdjustments={inventoryAdjustments} refreshKey={inventoryRefreshKey} onInventoryLoaded={(items) => {
@@ -376,9 +378,8 @@ const DesktopManager = () => {
             case 'INVENTORY_HISTORY': return <InventoryHistory isWindow={true} {...componentProps} />;
             case 'INVENTORY_AUDIT': return <InventoryAuditPage isWindow={true} {...componentProps} />;
 
-
-            case 'MATCHING': return <MatchingPage isWindow={true} {...componentProps} />;
-            case 'AUCTION_IMPORT': return <AuctionImportV2 isWindow={true} {...componentProps} />;
+            case 'MATCHING': return <MatchingPage isWindow={true} refreshKey={tradeRefreshKey} onTradeChange={handleTradeChange} {...componentProps} />;
+            case 'AUCTION_IMPORT': return <AuctionImportV2 isWindow={true} onTradeChange={handleTradeChange} {...componentProps} />;
             case 'AUCTION_ACCOUNTS': return <AuctionAccounts isWindow={true} {...componentProps} />;
             case 'COMPANY_BALANCES': return <CompanyBalances isWindow={true} {...componentProps} />;
             case 'EXPENSES': return <ExpenseList isWindow={true} {...componentProps} />;

@@ -64,6 +64,7 @@ const useDraggable = () => {
 
     return {
         position,
+        setPosition,
         handleMouseDown,
         modalRef
     };

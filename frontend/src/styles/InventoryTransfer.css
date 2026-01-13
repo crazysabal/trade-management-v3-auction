@@ -103,12 +103,12 @@
 }
 
 .warehouse-header {
-    padding: 1rem;
+    padding: 0.6rem 0.8rem;
     border-bottom: 1px solid #e9ecef;
     border-top-left-radius: 8px;
     border-top-right-radius: 8px;
     display: flex;
-    justify-content: space-between;
+    flex-direction: row;
     align-items: center;
     background-color: white;
 }
@@ -123,9 +123,11 @@
 
 .warehouse-title {
     margin: 0;
+    margin-right: 24px;
     font-size: 1rem;
     color: #2c3e50;
     font-weight: 600;
+    white-space: nowrap;
 }
 
 .warehouse-count {
@@ -311,4 +313,113 @@
 .inactive-label {
     font-size: 0.8rem;
     color: #e74c3c;
+}
+
+/* Select All Button */
+.btn-select-all {
+    padding: 2px 8px;
+    font-size: 0.75rem;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    background-color: white;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    color: #64748b;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.btn-select-all:hover {
+    border-color: #94a3b8;
+    background-color: #f8fafc;
+    color: #475569;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.btn-select-all.active {
+    background-color: #e0f2fe;
+    border-color: #7dd3fc;
+    color: #0369a1;
+    font-weight: 600;
+}
+
+.btn-select-all.active:hover {
+    background-color: #bae6fd;
+    border-color: #38bdf8;
+}
+
+.btn-select-all:active {
+    transform: translateY(0);
+}
+
+/* Header Enhancements */
+.search-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.search-input.filtered {
+    border: 2px solid #3498db;
+    background-color: #fffef2;
+}
+
+.btn-filter-clear {
+    position: absolute;
+    right: 8px;
+    background: none;
+    border: none;
+    color: #94a3b8;
+    cursor: pointer;
+    font-size: 1.2rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 4px;
+    transition: color 0.2s;
+}
+
+.btn-filter-clear:hover {
+    color: #64748b;
+}
+
+.stats-summary-container {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    font-size: 0.9rem;
+    background-color: white;
+    padding: 0.4rem 1rem;
+    border-radius: 6px;
+    border: 1px solid #e2e8f0;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+    transition: all 0.2s;
+}
+
+.stats-summary-container.filtered {
+    background-color: #eff6ff;
+    border: 1px solid #3b82f6;
+}
+
+.stats-label.filtered {
+    color: #1e40af;
+}
+
+.stats-value.filtered {
+    color: #2563eb;
+}
+
+.stats-divider {
+    width: 1px;
+    height: 14px;
+    background-color: #cbd5e1;
+}
+
+.stats-divider.filtered {
+    background-color: #bfdbfe;
 }
