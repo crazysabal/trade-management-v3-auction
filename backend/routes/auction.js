@@ -190,17 +190,32 @@ router.post('/crawl', async (req, res) => {
 
     // console.log('🚀 크롤링 시작 - 브라우저를 실행합니다...');
 
-    // Puppeteer로 크롤링 시작 (Stealth 모드 + headless)
+    // Puppeteer로 크롤링 시작 (Super Stealth 모드)
+    // 계정별로 브라우저 프로필(userDataDir)을 격리하여 세션 간섭 방지
+    const baseUserDataDir = path.join(__dirname, '../puppeteer_data');
+    const accountSpecificDir = path.join(baseUserDataDir, `account_${account_id}`);
+    
+    if (!fs.existsSync(accountSpecificDir)) {
+      fs.mkdirSync(accountSpecificDir, { recursive: true });
+    }
+
     browser = await puppeteer.launch({
-      headless: 'new',  // 새로운 headless 모드 (더 빠름)
+      headless: 'shell', // 레거시 헤드리스 모델이 감지가 덜 됨
+      userDataDir: accountSpecificDir,
+      ignoreDefaultArgs: ['--enable-automation'],
       args: [
         '--no-sandbox',
         '--disable-setuid-sandbox',
         '--disable-blink-features=AutomationControlled',
+        '--disable-features=IsolateOrigins,site-per-process',
+        '--disable-extensions',
         '--disable-gpu',
         '--disable-dev-shm-usage',
         '--no-first-run',
-        '--no-zygote'
+        '--no-zygote',
+        '--disable-web-security', // 웹 보안 비활성화 (BLOCKED_BY_CLIENT 방지)
+        '--allow-running-insecure-content',
+        '--ignore-certificate-errors'
       ],
       defaultViewport: { width: 1280, height: 800 }
     });
@@ -218,8 +233,8 @@ router.post('/crawl', async (req, res) => {
     // 낙찰 내역 페이지로 바로 이동 시도
     // console.log('📋 낙찰 내역 페이지 접속 시도...');
     await page.goto('http://tgjungang.co.kr/app/sub/nak_live_list.html', {
-      waitUntil: 'domcontentloaded',  // networkidle2보다 빠름
-      timeout: 15000
+      waitUntil: 'domcontentloaded',
+      timeout: 30000 // 타임아웃 30초로 연장
     });
 
     // 로그인 상태 확인
@@ -238,8 +253,8 @@ router.post('/crawl', async (req, res) => {
         timeout: 15000
       });
 
-      // 페이지 로딩 대기 (최소화)
-      await page.waitForTimeout(500);
+      // 페이지 로딩 대기 (v24 호환)
+      await new Promise(r => setTimeout(r, 500));
 
       // 1. 먼저 로그인 폼이 있는지 확인
       let idInput = await page.$('input[name="id"], input[id="var_id"], input[name="user_id"], input[name="mb_id"], input[id="user_id"]');
@@ -255,7 +270,7 @@ router.post('/crawl', async (req, res) => {
           isLoggedIn = true;
         } else {
           // 잠시 대기 후 다시 시도
-          await page.waitForTimeout(500);
+          await new Promise(r => setTimeout(r, 500));
           idInput = await page.$('input[name="id"], input[id="var_id"], input[name="user_id"], input[name="mb_id"], input[id="user_id"]');
           pwInput = await page.$('input[name="passwd"], input[id="var_passwd"], input[type="password"], input[name="user_pw"]');
 
@@ -367,7 +382,7 @@ router.post('/crawl', async (req, res) => {
         } catch (e) {
           // Navigation 타임아웃은 무시하고 URL 변경 확인
           // console.log('   페이지 이동 대기 중...');
-          await page.waitForTimeout(1000);
+          await new Promise(r => setTimeout(r, 1000));
         }
 
         // 로그인 성공 여부 확인
@@ -375,7 +390,7 @@ router.post('/crawl', async (req, res) => {
         if (currentUrl.includes('login')) {
           // 아직 로그인 페이지에 있으면 실패
           console.log('⚠️  로그인에 실패했을 수 있습니다.');
-          await page.waitForTimeout(2000); // 2초 추가 대기
+          await new Promise(r => setTimeout(r, 2000)); // 2초 추가 대기
         }
 
         // 쿠키 저장 (다음번 로그인 생략용)
@@ -400,7 +415,7 @@ router.post('/crawl', async (req, res) => {
     });
 
     // 페이지 로딩 대기 (최소화)
-    await page.waitForTimeout(300);
+    await new Promise(r => setTimeout(r, 300));
 
     // 날짜 설정 - 년/월/일 select 박스로 구성
     // console.log(`📅 날짜 설정: ${targetDate}`);
@@ -422,7 +437,7 @@ router.post('/crawl', async (req, res) => {
         await yearSelects[0].select(year);
         await yearSelects[1].select(String(monthNum));
         await yearSelects[2].select(String(dayNum));
-        await page.waitForTimeout(100);
+        await new Promise(r => setTimeout(r, 100));
 
         // 검색 버튼 클릭
         const searchLinks = await page.$$('a');
@@ -432,7 +447,7 @@ router.post('/crawl', async (req, res) => {
             // console.log('   검색 버튼 클릭...');
             await link.click();
             // 검색 결과 로딩 대기
-            await page.waitForTimeout(800);
+            await new Promise(r => setTimeout(r, 800));
             break;
           }
         }
@@ -464,7 +479,7 @@ router.post('/crawl', async (req, res) => {
             }
           }
         });
-        await page.waitForTimeout(800);
+        await new Promise(r => setTimeout(r, 800));
       }
     } catch (dateError) {
       console.log('   ⚠️ 날짜 설정 중 오류:', dateError.message);

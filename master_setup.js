@@ -2,6 +2,7 @@ const { execSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const readline = require('readline');
+const os = require('os');
 
 const rl = readline.createInterface({
     input: process.stdin,
@@ -19,13 +20,43 @@ async function runCommand(command, cwd) {
     }
 }
 
+async function createDesktopShortcut() {
+    const desktopPath = path.join(os.homedir(), 'Desktop');
+    const targetPath = path.join(__dirname, 'hongda-biz-launcher', 'dist', 'HongdaBiz-win32-x64', 'HongdaBiz.exe');
+    const shortcutPath = path.join(desktopPath, '홍다 비즈 (Hongda Biz).lnk');
+
+    if (!fs.existsSync(targetPath)) {
+        console.log('\n[INFO] 실행 파일을 찾을 수 없어 바로가기를 생성하지 않습니다.');
+        return;
+    }
+
+    console.log('\n--- 바탕화면 바로가기 생성 중... ---');
+
+    // PowerShell을 사용하여 바로가기 생성 (백틱과 따옴표 이스케이프 수정)
+    const psCommand = `
+        $WshShell = New-Object -ComObject WScript.Shell;
+        $Shortcut = $WshShell.CreateShortcut('${shortcutPath}');
+        $Shortcut.TargetPath = '${targetPath}';
+        $Shortcut.WorkingDirectory = '${path.dirname(targetPath)}';
+        $Shortcut.Description = '홍다 비즈 (Hongda Biz) 통합 시스템';
+        $Shortcut.Save();
+    `.replace(/\n/g, ' ').trim();
+
+    try {
+        execSync(`powershell -Command "${psCommand.replace(/"/g, '\\"')}"`);
+        console.log(`✅ 바탕화면 바로가기가 생성되었습니다: ${shortcutPath}`);
+    } catch (error) {
+        console.log('⚠️ 바로가기 생성 실패 (권한 문제일 수 있습니다):', error.message);
+    }
+}
+
 async function setup() {
     console.log('\n================================================');
-    console.log('   Trade Management v3 통합 자동 설정 마스터');
+    console.log('   홍다 비즈 (Hongda Biz) 통합 자동 설정 마스터');
     console.log('================================================\n');
 
     // 1. 디렉토리 확인
-    const dirs = ['backend', 'frontend', 'launcher'];
+    const dirs = ['backend', 'frontend', 'hongda-biz-launcher'];
     for (const dir of dirs) {
         if (!fs.existsSync(path.join(__dirname, dir))) {
             console.error(`❌ 오류: '${dir}' 폴더를 찾을 수 없습니다. 소스 코드 위치를 확인해주세요.`);
@@ -43,48 +74,83 @@ async function setup() {
     }
 
     // 3. 환경 변수 설정
-    console.log('\n--- [2/5] 서버 환경 설정 (.env) ---');
+    console.log('\n--- [2/5] 서버 환경 설정 및 DB 검증 ---');
     const envPath = path.join(__dirname, 'backend', '.env');
-    if (!fs.existsSync(envPath)) {
-        console.log('! backend/.env 파일이 없습니다. 설정을 생성합니다.');
-        const dbPassword = await new Promise(resolve => {
-            rl.question('! MySQL root 비밀번호를 입력해주세요: ', resolve);
-        });
+    const backendNodeModules = path.join(__dirname, 'backend', 'node_modules');
 
-        const envTemplate = `
+    if (fs.existsSync(backendNodeModules)) {
+        module.paths.push(backendNodeModules);
+    }
+
+    let mysql;
+    try {
+        mysql = require('mysql2/promise');
+    } catch (e) {
+        console.error('❌ mysql2 모듈을 로드할 수 없습니다. npm install이 정상적으로 완료되었는지 확인해주세요.');
+        process.exit(1);
+    }
+
+    let currentPassword = '';
+    if (fs.existsSync(envPath)) {
+        require('dotenv').config({ path: envPath });
+        currentPassword = process.env.DB_PASSWORD;
+        console.log('! 기존 .env 파일을 발견했습니다. 정합성을 확인합니다.');
+    }
+
+    let isConnected = false;
+    let dbPassword = currentPassword;
+
+    while (!isConnected) {
+        try {
+            const connection = await mysql.createConnection({
+                host: process.env.DB_HOST || 'localhost',
+                user: process.env.DB_USER || 'root',
+                password: dbPassword,
+                port: parseInt(process.env.DB_PORT) || 3306
+            });
+            await connection.end();
+            isConnected = true;
+            console.log('✅ DB 접속 확인 완료!');
+        } catch (error) {
+            console.log('\n❌ DB 접속 실패:', error.message);
+            if (error.code === 'ER_ACCESS_DENIED_ERROR') {
+                console.log('! 비밀번호가 틀렸거나 root 계정 접근 권한이 없습니다.');
+            } else {
+                console.log('! MySQL 서버가 실행 중인지 확인해주세요.');
+            }
+
+            dbPassword = await new Promise(resolve => {
+                rl.question('! 사용할 MySQL root 비밀번호를 다시 입력해주세요: ', resolve);
+            });
+        }
+    }
+
+    // 성공한 비밀번호로 .env 파일 저장/업데이트
+    const envTemplate = `
 # Database Configuration
 DB_HOST=localhost
 DB_USER=root
-DB_PASSWORD=${dbPassword || 'your_password'}
+DB_PASSWORD=${dbPassword}
 DB_NAME=trade_management
 DB_PORT=3306
 
 # Server Configuration
 PORT=5000
 NODE_ENV=development
-JWT_SECRET=your-secret-key-v3
+JWT_SECRET=hongda-biz-secret-key
 ENCRYPTION_KEY=secure-auction-key-v1-super-secret
 `;
-        fs.writeFileSync(envPath, envTemplate.trim());
-        console.log('✅ .env 파일 생성 완료');
-    } else {
-        console.log('✅ 기존 .env 파일을 유지합니다.');
-    }
+    fs.writeFileSync(envPath, envTemplate.trim());
+    console.log('✅ .env 파일 설정 완료');
 
     // 4. 데이터베이스 초기화
     console.log('\n--- [3/5] 데이터베이스 초기 구축 ---');
-    console.log('! database_schema_v3.sql 파일로 DB를 구축합니다.');
+    console.log('! database_schema.sql 파일로 DB를 구축합니다.');
 
     try {
-        const backendNodeModules = path.join(__dirname, 'backend', 'node_modules');
-        if (fs.existsSync(backendNodeModules)) {
-            module.paths.push(backendNodeModules);
-        }
-
         require('dotenv').config({ path: envPath });
-        const mysql = require('mysql2/promise');
 
-        // [STEP A] 데이터베이스 자체 생성 (연결 시 DB명을 지정하지 않음)
+        // [STEP A] 데이터베이스 자체 생성
         const connection = await mysql.createConnection({
             host: process.env.DB_HOST || 'localhost',
             user: process.env.DB_USER || 'root',
@@ -98,11 +164,45 @@ ENCRYPTION_KEY=secure-auction-key-v1-super-secret
         await connection.query(`USE ${dbName};`);
 
         // [STEP B] 스키마 파일 실행
-        const sql = fs.readFileSync(path.join(__dirname, 'database_schema_v3.sql'), 'utf8');
-        const cleanSql = sql.replace(/--.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '');
-        const queries = cleanSql.split(';').map(q => q.trim()).filter(q => q.length > 0);
+        const sql = fs.readFileSync(path.join(__dirname, 'database_schema.sql'), 'utf8');
 
-        console.log(`! 총 ${queries.length}개의 스키마 쿼리를 실행합니다...`);
+        // SQL 파싱 로직 개선 (Trigger의 DELIMITER 처리)
+        const queries = [];
+        let currentQuery = '';
+        let delimiter = ';';
+        const lines = sql.split('\n');
+
+        for (let line of lines) {
+            const trimmedLine = line.trim();
+            if (!trimmedLine || trimmedLine.startsWith('--') || trimmedLine.startsWith('/*')) continue;
+
+            // DELIMITER 명령 처리
+            if (trimmedLine.toUpperCase().startsWith('DELIMITER')) {
+                const parts = trimmedLine.split(/\s+/);
+                if (parts.length > 1) {
+                    delimiter = parts[1];
+                }
+                continue;
+            }
+
+            currentQuery += line + '\n';
+
+            // 현재 설정된 구분자로 쿼리가 끝났는지 확인
+            if (trimmedLine.endsWith(delimiter)) {
+                let queryToExecute = currentQuery.trim();
+                // 끝에 붙은 구분자 제거
+                if (queryToExecute.endsWith(delimiter)) {
+                    queryToExecute = queryToExecute.substring(0, queryToExecute.length - delimiter.length).trim();
+                }
+
+                if (queryToExecute) {
+                    queries.push(queryToExecute);
+                }
+                currentQuery = '';
+            }
+        }
+
+        console.log(`! 총 ${queries.length}개의 핵심 스키마 구문을 실행합니다...`);
         for (let query of queries) {
             try {
                 if (query.toUpperCase().startsWith('USE ')) continue;
@@ -110,7 +210,7 @@ ENCRYPTION_KEY=secure-auction-key-v1-super-secret
             } catch (queryError) {
                 const msg = queryError.message;
                 if (!msg.includes('already exists') && !msg.includes('Duplicate entry')) {
-                    console.log(`> [Info] 쿼리 건너뜀: ${msg.split('\n')[0]}`);
+                    console.log(`> [Info] 쿼리 알림: ${msg.split('\n')[0]}`);
                 }
             }
         }
@@ -133,12 +233,15 @@ ENCRYPTION_KEY=secure-auction-key-v1-super-secret
 
     // 런처 EXE 빌드 시도
     console.log('\n[INFO] 런처 실행 파일을 제작합니다...');
-    await runCommand('npx electron-packager . "TradeManagement" --platform=win32 --arch=x64 --out=dist --overwrite', path.join(__dirname, 'launcher'));
+    await runCommand('npx electron-packager . "HongdaBiz" --platform=win32 --arch=x64 --out=dist --overwrite', path.join(__dirname, 'hongda-biz-launcher'));
+
+    // 7. 바탕화면 바로가기 생성
+    await createDesktopShortcut();
 
     console.log('\n================================================');
     console.log('   🎉 모든 설정이 완료되었습니다!');
     console.log('================================================');
-    console.log('\n1. launcher/dist 폴더 안의 TradeManagement.exe를 실행하세요.');
+    console.log('\n1. hongda-biz-launcher/dist 폴더 안의 HongdaBiz.exe를 실행하세요.');
     console.log('2. 관리자 ID: admin / PW: admin1234');
     console.log('\n엔터를 누르면 종료됩니다.');
 

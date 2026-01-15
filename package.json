@@ -1,4 +1,5 @@
 {
+  "name": "hongda-biz",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.25.1",
     "mysql2": "^3.16.0",

@@ -1,0 +1,58 @@
+🚀 홍다 비즈 (Hongda Biz) 통합 설치 및 서버 가동 가이드
+
+이 가이드는 Hyper-V 가상환경 또는 신규 PC에서 시스템을 처음부터 끝까지 가장 안전하고 빠르게 설치하고 가동하기 위한 단일 프로세스를 제공합니다.
+
+---
+
+[1단계: 사전 준비 (Pre-requisites)]
+
+설치 전 아래 프로그램들을 먼저 설치해 주세요.
+1. Node.js (v20 이상 LTS 권장): https://nodejs.org/
+2. MySQL Server (8.0 또는 8.4 LTS 권장): https://dev.mysql.com/downloads/mysql/
+
+---
+
+[⚡ 퀵 스타트: 원스톱 자동 설치 (Quick Start)]
+
+신규 PC나 가상환경에서 모든 과정을 단 한 번의 실행으로 끝내는 권장 설치 방법입니다. (Standard OP 11.4)
+
+1. 실행: 프로젝트 루트 폴더에 있는 "Initial_Setup.bat" 파일을 더블 클릭하거나 명령 프롬프트에서 실행합니다.
+2. 데이터 입력: 실행 중 나타나는 안내에 따라 MySQL root 비밀번호를 입력합니다.
+3. 자동화 범위:
+   - 모든 라이브러리(node_modules) 자동 설치 (Backend, Frontend, Launcher)
+   - .env 파일 자동 생성 및 설정 (JWT_SECRET, ENCRYPTION_KEY 등 포함)
+   - 데이터베이스(DB) 스키마(database_schema.sql) 자동 구축
+   - 경매 크롤러용 Puppeteer 브라우저 엔진 자동 설치
+   - 관리자 비밀번호 강제 초기화 (admin1234)
+   - 최종 배포본 런처(HongdaBiz.exe) 폴더 자동 제작
+
+4. 한글 깨짐 방지: 명령 프롬프트(CMD)를 열고 `chcp 65001` 명령어를 입력하여 코드페이지를 UTF-8로 변경한 후 실행하세요. (이미 배치 파일 내부에 설정이 포함되어 있습니다.)
+
+---
+
+[⚙️ 시스템 실행 방법]
+
+방법 A: 실행 폴더(.exe 포함)로 깔끔하게 관리 (권장)
+- hongda-biz-launcher/dist/HongdaBiz-win32-x64 폴더 내 "HongdaBiz.exe"를 실행하세요. 바탕화면에 바로가기를 만들어 사용하면 편리합니다.
+
+방법 B: 클래식 배치 파일
+- 루트 폴더의 "Run Launcher.bat"을 실행합니다.
+
+---
+
+[🔑 로그인 및 접속]
+
+- URL: http://localhost:3000
+- ID: admin
+- PW: admin1234
+
+---
+
+[💡 자주 발생하는 문제]
+
+- "Could not find Chrome": Puppeteer 브라우저 엔진이 설치되지 않았습니다. Initial_Setup.bat을 다시 실행하세요.
+- 500 에러 또는 로그인 실패: DB 스키마가 최신인지, .env의 비밀번호가 맞는지 확인하세요.
+- 포구 권한 에러: "실전 관리자 권한"으로 파일을 실행해 보세요.
+
+---
+*참조: 이 가이드는 런처의 'Zero-Click Auto-Start' 기능을 기반으로 작성되었습니다.

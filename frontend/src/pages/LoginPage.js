@@ -30,7 +30,7 @@ const LoginPage = () => {
     return (
         <div className="login-container">
             <div className="login-card">
-                <h1 className="login-title">Trade Management</h1>
+                <h1 className="login-title">홍다 비즈 (Hongda Biz)</h1>
 
                 {error && <div className="error-message">{error}</div>}
 

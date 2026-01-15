@@ -1,0 +1,39 @@
+-- SQL PATCH for missing columns in v3.0 schema
+USE trade_management;
+
+-- 1. PRODUCTS 테이블 보정
+ALTER TABLE products 
+ADD COLUMN IF NOT EXISTS product_code VARCHAR(30) AFTER id,
+ADD COLUMN IF NOT EXISTS category_id INT AFTER grade,
+ADD COLUMN IF NOT EXISTS is_active TINYINT(1) DEFAULT 1 AFTER notes,
+ADD COLUMN IF NOT EXISTS sort_order INT DEFAULT 0 AFTER is_active;
+
+-- 2. WAREHOUSES 테이블 보정
+ALTER TABLE warehouses 
+ADD COLUMN IF NOT EXISTS type ENUM('MAIN', 'STORAGE', 'VEHICLE') DEFAULT 'STORAGE' AFTER name,
+ADD COLUMN IF NOT EXISTS is_default TINYINT(1) DEFAULT 0 AFTER type,
+ADD COLUMN IF NOT EXISTS address VARCHAR(200) AFTER is_active,
+ADD COLUMN IF NOT EXISTS description TEXT AFTER address,
+ADD COLUMN IF NOT EXISTS display_order INT DEFAULT 0 AFTER description;
+
+-- 3. TRADE_MASTERS 테이블 보정
+ALTER TABLE trade_masters
+MODIFY COLUMN status ENUM('DRAFT', 'CONFIRMED', 'COMPLETED', 'CANCELLED') DEFAULT 'DRAFT',
+ADD COLUMN IF NOT EXISTS payment_method VARCHAR(20) AFTER total_price,
+ADD COLUMN IF NOT EXISTS created_by VARCHAR(50) AFTER notes;
+
+-- 4. CATEGORIES 테이블 (누락되었을 경우)
+CREATE TABLE IF NOT EXISTS categories (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    category_name VARCHAR(50) NOT NULL UNIQUE,
+    parent_id INT,
+    level INT DEFAULT 1,
+    sort_order INT DEFAULT 0,
+    is_active TINYINT(1) DEFAULT 1,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (parent_id) REFERENCES categories(id) ON DELETE SET NULL
+);
+
+-- 5. 중복 제거 및 인덱스 복구
+ALTER TABLE products ADD UNIQUE INDEX IF NOT EXISTS idx_prod_code (product_code);

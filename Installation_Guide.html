@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>홍다 비즈 (Hongda Biz) 통합 설치 가이드</title>
+    <link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #2563eb;
+            --primary-dark: #1d4ed8;
+            --secondary: #64748b;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --bg: #f8fafc;
+            --card-bg: #ffffff;
+            --text: #1e293b;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Pretendard', sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            line-height: 1.6;
+            padding: 2rem 1rem;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 3rem;
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            color: var(--primary);
+            margin-bottom: 0.5rem;
+            font-weight: 700;
+        }
+
+        .subtitle {
+            font-size: 1.1rem;
+            color: var(--secondary);
+        }
+
+        .card {
+            background: var(--card-bg);
+            border-radius: 1rem;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+            border: 1px solid #e2e8f0;
+        }
+
+        h2 {
+            font-size: 1.5rem;
+            margin-bottom: 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            border-bottom: 2px solid #f1f5f9;
+            padding-bottom: 0.5rem;
+        }
+
+        .step-badge {
+            background: var(--primary);
+            color: white;
+            padding: 0.2rem 0.8rem;
+            border-radius: 2rem;
+            font-size: 0.9rem;
+            font-weight: 600;
+        }
+
+        ul,
+        ol {
+            margin-left: 1.5rem;
+            margin-bottom: 1rem;
+        }
+
+        li {
+            margin-bottom: 0.5rem;
+        }
+
+        code {
+            background: #f1f5f9;
+            padding: 0.2rem 0.4rem;
+            border-radius: 0.3rem;
+            font-family: 'Courier New', Courier, monospace;
+            font-weight: 600;
+            color: var(--danger);
+        }
+
+        .command-box {
+            background: #1e293b;
+            color: #f8fafc;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            font-family: 'Courier New', Courier, monospace;
+            margin: 1rem 0;
+            position: relative;
+        }
+
+        .quick-start {
+            border-left: 5px solid var(--success);
+        }
+
+        .login-info {
+            background: #eff6ff;
+            border: 1px solid #bfdbfe;
+        }
+
+        .alert {
+            padding: 1rem;
+            border-radius: 0.5rem;
+            margin-top: 1rem;
+            font-size: 0.95rem;
+        }
+
+        .alert-warning {
+            background: #fffbeb;
+            border: 1px solid #fef3c7;
+            color: #92400e;
+        }
+
+        .footer {
+            text-align: center;
+            margin-top: 4rem;
+            color: var(--secondary);
+            font-size: 0.9rem;
+        }
+
+        @media (max-width: 640px) {
+            h1 {
+                font-size: 1.8rem;
+            }
+
+            .card {
+                padding: 1.5rem;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <header>
+            <h1>🚀 홍다 비즈 (Hongda Biz)</h1>
+            <p class="subtitle">통합 설치 및 서버 가동 가이드</p>
+        </header>
+
+        <section class="card">
+            <h2><span class="step-badge">1단계</span> 사전 준비</h2>
+            <p>설치 전 아래 핵심 프로그램들을 먼저 설치해 주세요.</p>
+            <ul>
+                <li><strong>Node.js (v20 이상 LTS 권장)</strong>: <a href="https://nodejs.org/" target="_blank">다운로드</a>
+                </li>
+                <li><strong>MySQL Server (8.4 LTS 권장)</strong>: 8.0 또는 8.4 LTS 버전 <a
+                        href="https://dev.mysql.com/downloads/mysql/" target="_blank">다운로드</a></li>
+            </ul>
+        </section>
+
+        <section class="card quick-start">
+            <h2><span class="step-badge">추천</span> 원스톱 자동 설치 (Quick Start)</h2>
+            <p>신규 PC나 가상환경에서 모든 과정을 단 한 번의 실행으로 끝내는 방법입니다.</p>
+            <ol>
+                <li>프로젝트 루트 폴더의 <code>Initial_Setup.bat</code> 파일을 실행합니다.</li>
+                <li>안내에 따라 <strong>MySQL root 비밀번호</strong>를 입력합니다.</li>
+                <li>아래 과정이 자동으로 진행됩니다:
+                    <ul>
+                        <li>Backend, Frontend, Launcher 의존성 자동 설치</li>
+                        <li><code>.env</code> 환경 설정 파일 자동 생성</li>
+                        <li>데이터베이스 스키마 및 기초 데이터 구축</li>
+                        <li>Puppeteer 브라우저 엔진 및 관리자 계정 초기화</li>
+                    </ul>
+                </li>
+            </ol>
+            <div class="alert alert-warning">
+                💡 <strong>한글 깨짐 시</strong>: CMD에서 <code>chcp 65001</code>을 먼저 실행하세요.
+            </div>
+        </section>
+
+        <section class="card">
+            <h2>⚙️ 시스템 실행 방법</h2>
+            <p>설치가 완료된 후 시스템을 가동하는 방법입니다.</p>
+            <ul>
+                <li><strong>방법 A (권장)</strong>: <code>hongda-biz-launcher/dist/HongdaBiz-win32-x64</code> 폴더의
+                    <code>HongdaBiz.exe</code>를 실행하세요.
+                </li>
+                <li><strong>방법 B</strong>: 루트 폴더의 <code>Run Launcher.bat</code>을 실행하세요.</li>
+            </ul>
+        </section>
+
+        <section class="card login-info">
+            <h2>🔑 로그인 정보</h2>
+            <p>초기 접속 및 관리자 정보입니다.</p>
+            <ul>
+                <li><strong>주소</strong>: <a href="http://localhost:3000" target="_blank">http://localhost:3000</a></li>
+                <li><strong>아이디</strong>: <code>admin</code></li>
+                <li><strong>비밀번호</strong>: <code>admin1234</code></li>
+            </ul>
+        </section>
+
+        <div class="footer">
+            <p>© 2026 Hongda Biz System. All rights reserved.</p>
+            <p>Zero-Click Auto-Start Architecture 기반</p>
+        </div>
+    </div>
+</body>
+
+</html>

@@ -1,6 +1,6 @@
 @echo off
 taskkill /F /IM node.exe /T 2>nul
 
-cd launcher
+cd hongda-biz-launcher
 npm start
 pause

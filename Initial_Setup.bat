@@ -1,8 +1,8 @@
 @echo off
 chcp 65001 > nul
-title Trade Management v3 One-Click Setup
+title 홍다 비즈 (Hongda Biz) One-Click Setup
 echo ==================================================
-echo    Trade Management v3 통합 자동 설치기
+echo    홍다 비즈 (Hongda Biz) 통합 자동 설치기
 echo ==================================================
 echo.
 echo 이 스크립트는 시스템에 필요한 모든 환경을 자동으로 설정합니다.
