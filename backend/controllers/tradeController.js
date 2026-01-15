@@ -21,7 +21,55 @@ const TradeController = {
         return existingTrade;
     },
 
+    // 반품 수량 한도 체크
+    validateReturnLimits: async (connection, details, excludeDetailIds = []) => {
+        for (const detail of details) {
+            if (detail.parent_detail_id && detail.quantity < 0) {
+                // 1. 원본 매출 수량 조회
+                const [parents] = await connection.query(
+                    'SELECT ABS(quantity) as origin_qty, product_id FROM trade_details WHERE id = ?',
+                    [detail.parent_detail_id]
+                );
+
+                if (parents.length === 0) continue;
+                const originQty = parseFloat(parents[0].origin_qty);
+
+                // 2. 다른 전표에 있는 동일 원본 대상 반품들 합계 조회 (현재 수정 중인 항목들 제외)
+                let query = `
+                    SELECT COALESCE(SUM(ABS(td.quantity)), 0) as total_returned
+                    FROM trade_details td
+                    JOIN trade_masters tm ON td.trade_master_id = tm.id
+                    WHERE td.parent_detail_id = ? 
+                      AND tm.status != 'CANCELLED'
+                `;
+                const params = [detail.parent_detail_id];
+
+                if (excludeDetailIds.length > 0) {
+                    query += ` AND td.id NOT IN (?)`;
+                    params.push(excludeDetailIds);
+                }
+
+                const [result] = await connection.query(query, params);
+                const otherReturned = parseFloat(result[0].total_returned);
+
+                // 3. 현재 입력/수정하려는 수량 포함 합계 계산
+                const currentReturn = Math.abs(parseFloat(detail.quantity));
+
+                if (currentReturn + otherReturned > originQty) {
+                    const [prod] = await connection.query('SELECT product_name FROM products WHERE id = ?', [parents[0].product_id]);
+                    const productName = prod.length > 0 ? prod[0].product_name : '해당';
+                    throw {
+                        status: 400,
+                        message: `[${productName}] 품목의 반품 수량이 매출 수량을 초과합니다.\n\n원본 매출: ${originQty}\n기존 반품 합계: ${otherReturned}\n현재 입력: ${currentReturn}\n(최대 ${Math.max(0, originQty - otherReturned)}개까지 가능)`,
+                        data: { detail }
+                    };
+                }
+            }
+        }
+    },
+
     // 거래전표 등록
+
     createTrade: async (tradeData, userData) => {
         const connection = await db.getConnection();
 
@@ -30,7 +78,11 @@ const TradeController = {
 
             const { master, details } = tradeData;
 
+            // 0. 반품 한도 검사
+            await TradeController.validateReturnLimits(connection, details);
+
             // 1. 중복 검사
+
             const [existingTrade] = await connection.query(
                 `SELECT id, trade_number FROM trade_masters 
                  WHERE company_id = ? AND trade_date = ? AND trade_type = ? AND status != 'CANCELLED'`,
@@ -92,12 +144,13 @@ const TradeController = {
                     const detail = details[i];
                     const [detailResult] = await connection.query(
                         `INSERT INTO trade_details (
-                          trade_master_id, seq_no, product_id,
+                          trade_master_id, seq_no, product_id, parent_detail_id,
                           quantity, total_weight, unit_price, supply_amount, tax_amount, total_amount, auction_price, notes,
                           shipper_location, sender, purchase_price
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
                         [
-                            masterId, i + 1, detail.product_id, detail.quantity, detail.total_weight || 0,
+                            masterId, i + 1, detail.product_id, detail.parent_detail_id || null,
+                            detail.quantity, detail.total_weight || 0,
                             detail.unit_price, detail.supply_amount || 0, detail.tax_amount || 0,
                             detail.total_amount || detail.supply_amount || 0,
                             detail.auction_price || detail.unit_price || 0,
@@ -105,7 +158,6 @@ const TradeController = {
                             detail.sender_name || detail.sender || null, detail.purchase_price || null
                         ]
                     );
-
                     // 재고 기반 매출 등록인 경우 매칭 처리
                     if (master.trade_type === 'SALE' && detail.inventory_id && detail.inventory_id !== 'undefined') {
                         const trade_detail_id = detailResult.insertId;
@@ -176,7 +228,12 @@ const TradeController = {
             const currentCompanyId = masters[0].company_id;
             const currentTradeDate = masters[0].trade_date;
 
-            // 2. 중복 검사
+            // 2. 반품 한도 검사
+            const existingDetailIds = details.filter(d => d.id).map(d => d.id);
+            await TradeController.validateReturnLimits(connection, details, existingDetailIds);
+
+            // 3. 중복 검사
+
             const newCompanyId = master.company_id;
             const newTradeDate = master.trade_date;
 
@@ -445,12 +502,13 @@ const TradeController = {
 
                         await connection.query(
                             `UPDATE trade_details SET
-                              seq_no = ?, product_id = ?, quantity = ?, total_weight = ?,
+                              seq_no = ?, product_id = ?, parent_detail_id = ?, quantity = ?, total_weight = ?,
                               unit_price = ?, supply_amount = ?, tax_amount = ?, total_amount = ?,
                               auction_price = ?, notes = ?, shipper_location = ?, sender = ?, purchase_price = ?
                               WHERE id = ?`,
                             [
-                                i + 1, detail.product_id, detail.quantity, detail.total_weight || 0,
+                                i + 1, detail.product_id, detail.parent_detail_id || null,
+                                detail.quantity, detail.total_weight || 0,
                                 detail.unit_price, detail.supply_amount || 0, detail.tax_amount || 0,
                                 detail.total_amount || detail.supply_amount || 0,
                                 detail.auction_price || detail.unit_price || 0,
@@ -507,12 +565,13 @@ const TradeController = {
                         // INSERT (New Item)
                         const [detailResult] = await connection.query(
                             `INSERT INTO trade_details (
-                               trade_master_id, seq_no, product_id, quantity, total_weight, 
+                               trade_master_id, seq_no, product_id, parent_detail_id, quantity, total_weight, 
                                unit_price, supply_amount, tax_amount, total_amount, 
                                auction_price, notes, shipper_location, sender, purchase_price
-                             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
                             [
-                                tradeId, i + 1, detail.product_id, detail.quantity, detail.total_weight || 0,
+                                tradeId, i + 1, detail.product_id, detail.parent_detail_id || null,
+                                detail.quantity, detail.total_weight || 0,
                                 detail.unit_price, detail.supply_amount || 0, detail.tax_amount || 0,
                                 detail.total_amount || detail.supply_amount || 0,
                                 detail.auction_price || detail.unit_price || 0,
@@ -537,12 +596,13 @@ const TradeController = {
                         const existing = existingMap.get(detail.product_id);
                         const [detailResult] = await connection.query(
                             `INSERT INTO trade_details (
-                  trade_master_id, seq_no, product_id, quantity, total_weight, 
+                  trade_master_id, seq_no, product_id, parent_detail_id, quantity, total_weight, 
                   unit_price, supply_amount, tax_amount, total_amount, 
                   auction_price, notes, shipper_location, sender, purchase_price
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
                             [
-                                tradeId, i + 1, detail.product_id, detail.quantity, detail.total_weight || 0,
+                                tradeId, i + 1, detail.product_id, detail.parent_detail_id || null,
+                                detail.quantity, detail.total_weight || 0,
                                 detail.unit_price, detail.supply_amount || 0, detail.tax_amount || 0,
                                 detail.total_amount || detail.supply_amount || 0,
                                 detail.auction_price || detail.unit_price || 0,

@@ -91,7 +91,11 @@ router.post('/login', async (req, res) => {
 
     } catch (error) {
         console.error('Login error:', error);
-        res.status(500).json({ message: '로그인 처리 중 오류가 발생했습니다.' });
+        res.status(500).json({
+            message: '로그인 처리 중 오류가 발생했습니다.',
+            error: error.message,
+            stack: error.stack
+        });
     }
 });
 

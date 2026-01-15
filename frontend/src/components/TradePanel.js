@@ -71,8 +71,10 @@ function TradePanel({
 
   // 통화 포맷팅 (원화, 소수점 버림)
   const formatCurrency = (amount) => {
-    if (amount === null || amount === undefined || amount === '') return '0';
-    return Math.floor(amount).toLocaleString();
+    if (amount === null || amount === undefined || amount === '' || isNaN(amount)) return '';
+    // 숫자가 아니면 그대로 반환 (마이너스 부호 입력 등 대응)
+    if (amount === '-') return amount;
+    return Math.trunc(amount).toLocaleString(); // Math.trunc: 음수 반올림 방향 유지
   };
 
   const [master, setMaster] = useState({
@@ -155,23 +157,34 @@ function TradePanel({
       // 2. 현재 폼을 초기화하되, 반품 모드로 설정
       // 기존 resetForm과 유사하지만, details를 반품 데이터로 채움
 
-      const newDetails = fullTrade.details.map(d => ({
+      const tradeData = fullTrade.data.data;
+
+      // 2. [IMPROVED] 선택한 품목 하나만 반품하거나, 전체를 반품함
+      let targetDetails = tradeData.details;
+      if (selectedSale.selectedItemId) {
+        targetDetails = tradeData.details.filter(d => d.id === selectedSale.selectedItemId);
+      }
+
+      const newDetails = targetDetails.map(d => ({
         product_id: d.product_id,
         product_name: d.product_name,
         quantity: -Math.abs(d.quantity), // 수량 음수 변환
         unit_price: d.unit_price, // 단가는 그대로 (양수)
-        amount: -Math.abs(d.amount), // 금액 음수 변환
-        remarks: `반품: ${fullTrade.master.trade_number} / ${d.product_name}`,
+        supply_amount: -Math.abs(d.supply_amount || d.total_amount || 0), // 금액 음수 변환 (supply_amount 사용)
+        notes: '(반품)',
 
-        // 중요: 원본 재고 ID를 유지하여 원가 복구 지원
-        // 매칭된 재고가 있다면 그 ID를, 없다면 원본 ID를 사용
+        // 중요: 원본 품목 ID를 parent_detail_id로 저장하여 누적 반품 한도 추적
+        parent_detail_id: d.id,
         inventory_id: d.matched_inventory_id || d.inventory_id,
+        origin_quantity: Math.abs(d.quantity), // 원본 매출 수량
+        total_returned_quantity: parseFloat(d.item_returned_quantity) || 0, // 이미 반품된 합계
 
         // 기타 필드
         shipper_id: d.shipper_id,
         location_id: d.location_id,
         is_agricultural: d.is_agricultural
       }));
+
 
       // 3. 상태 업데이트
       setDetails(newDetails);
@@ -184,6 +197,7 @@ function TradePanel({
         title: '반품 전표 생성됨',
         message: '선택한 매출 내역이 반품(마이너스) 상태로 입력되었습니다.\n내용을 확인 후 저장하세요.',
         confirmText: '확인',
+        showCancel: false,
         onConfirm: () => setModal(prev => ({ ...prev, isOpen: false }))
       });
 
@@ -406,16 +420,23 @@ function TradePanel({
       // details 로드
       const loadedDetails = data.details.map((d, index) => {
         // 저장된 전표의 경우, 현재 잔량 + 이미 매칭된 수량 = 수정 가능한 최대 수량
-        const availableMax = d.inventory_remaining !== undefined
-          ? (parseFloat(d.inventory_remaining) || 0) + (parseFloat(d.matched_quantity) || 0)
-          : undefined;
+        // 반품(d.quantity < 0)의 경우 최대 수량을 0으로 설정하여 양수 판매 전환을 방지
+        const availableMax = d.quantity < 0 ? 0 : (
+          d.inventory_remaining !== undefined
+            ? (parseFloat(d.inventory_remaining) || 0) + (parseFloat(d.matched_quantity) || 0)
+            : undefined
+        );
 
         return {
           ...d,
           inventory_id: d.matched_inventory_id || d.inventory_id, // API 응답 필드 매핑
           max_quantity: availableMax, // 유효성 검사를 위한 최대 수량 설정
+          origin_quantity: (d.origin_quantity !== null && d.origin_quantity !== undefined) ? parseFloat(d.origin_quantity) : undefined,
+          total_returned_quantity: (d.other_returned_quantity !== null && d.other_returned_quantity !== undefined) ? parseFloat(d.other_returned_quantity) : 0,
           rowIndex: index
         };
+
+
       });
       setDetails(loadedDetails);
 
@@ -896,32 +917,62 @@ function TradePanel({
       // 초과 검증
       const maxQty = newDetails[index].max_quantity;
 
-      // 1. 신규 드롭된 항목 (max_quantity 존재)
-      if (maxQty !== undefined) {
-        if (newQty > maxQty) {
-          showModal('warning', '수량 초과', `재고 잔량을 초과할 수 없습니다.\n(최대: ${maxQty})`);
+      const originQty = newDetails[index].origin_quantity;
+      const totalReturnedOther = newDetails[index].total_returned_quantity || 0;
 
-          // 값 복원 (포커스 시 저장된 원본 값으로)
-          const originalVal = focusValueRef.current[index] !== undefined ? parseFloat(focusValueRef.current[index]) : oldQty;
+      // 0. 반품 한도 초과 검사 (판매한 수량보다 많이 반품하는 경우)
+      if (originQty !== undefined && (Math.abs(newQty) + totalReturnedOther) > originQty && newQty < 0) {
+        const availableReturn = Math.max(0, originQty - totalReturnedOther);
+        showModal('warning', '수량 초과',
+          `판매 수량을 초과하여 반품할 수 없습니다.\n` +
+          `원본 매출: ${originQty}\n` +
+          `기존 반품 합계: ${totalReturnedOther}\n` +
+          `현재 가능한 최대 반품: ${availableReturn}`
+        );
 
-          // 재고 상태 동기화:
-          // 입력 전(15) -> 입력 중(1) -> 입력 오류(18)
-          // 현재 시스템(InventoryMap)은 1만큼 차감된 상태 (1이 유효하게 입력되었으므로)
-          // 되돌리려면: 1 -> 15 (14 추가 사용)
-          // diff = 15 - 1 = 14.
-          // onInventoryUpdate(-14) 호출.
-          if (!isNaN(originalVal) && originalVal !== oldQty) {
-            const revertDiff = originalVal - oldQty;
-            if (revertDiff !== 0) {
-              onInventoryUpdate(newDetails[index].inventory_id, -revertDiff);
-            }
-          }
-
-          newDetails[index].quantity = originalVal;
-          setDetails(newDetails);
-          return;
+        let originalVal = focusValueRef.current[index] !== undefined ? parseFloat(focusValueRef.current[index]) : oldQty;
+        if (isNaN(originalVal)) {
+          // 복원 시에도 한도를 넘지 않도록 보정
+          originalVal = -availableReturn;
         }
+
+        newDetails[index].quantity = originalVal;
+        setDetails(newDetails);
+        return;
       }
+
+
+      // 1. 양수 입력 방지 (반품 전표인 경우)
+      if (newQty > maxQty) {
+        const isReturn = (focusValueRef.current[index] !== undefined ? parseFloat(focusValueRef.current[index]) : oldQty) < 0;
+        const msg = isReturn
+          ? '반품 전표에서는 양수 수량을 입력할 수 없습니다.\n반품할 수량을 마이너스(-)로 입력해주세요.'
+          : `재고 잔량을 초과할 수 없습니다.\n(최대: ${maxQty})`;
+
+        showModal('warning', '수량 초과', msg);
+
+        // 값 복합 복원 (NaN 방지)
+        let originalVal = focusValueRef.current[index] !== undefined ? parseFloat(focusValueRef.current[index]) : oldQty;
+        if (isNaN(originalVal)) originalVal = 0;
+
+        // 재고 상태 동기화:
+        // 입력 전(15) -> 입력 중(1) -> 입력 오류(18)
+        // 현재 시스템(InventoryMap)은 1만큼 차감된 상태 (1이 유효하게 입력되었으므로)
+        // 되돌리려면: 1 -> 15 (14 추가 사용)
+        // diff = 15 - 1 = 14.
+        // onInventoryUpdate(-14) 호출.
+        if (!isNaN(originalVal) && originalVal !== oldQty) {
+          const revertDiff = originalVal - oldQty;
+          if (revertDiff !== 0) {
+            onInventoryUpdate(newDetails[index].inventory_id, -revertDiff);
+          }
+        }
+
+        newDetails[index].quantity = originalVal;
+        setDetails(newDetails);
+        return;
+      }
+
       // 2. 기존 저장된 항목 (max_quantity 없음) -> inventoryMap 참조 검증
       else if (inventoryMap && inventoryMap[newDetails[index].inventory_id]) {
         const available = parseFloat(inventoryMap[newDetails[index].inventory_id].remaining_quantity) || 0;
@@ -1086,11 +1137,33 @@ function TradePanel({
     isSaving.current = true;
 
     try {
-      // 유효성 검사
       if (!master.company_id) {
         showModal('warning', '입력 오류', '거래처를 선택하세요.');
+        isSaving.current = false;
         return;
       }
+
+      // 누적 반품 한도 검사 (최종)
+      for (const d of details) {
+        if (d.parent_detail_id && d.quantity < 0) {
+          const originQty = parseFloat(d.origin_quantity);
+          const otherReturned = parseFloat(d.total_returned_quantity) || 0;
+          const currentReturn = Math.abs(parseFloat(d.quantity));
+
+          if (!isNaN(originQty) && (currentReturn + otherReturned) > originQty) {
+            showModal('warning', '저장 실패',
+              `[${d.product_name}] 품목의 반품 수량이 매출 한도를 초과합니다.\n\n` +
+              `원본 매출: ${originQty}\n` +
+              `기존 반품 합계: ${otherReturned}\n` +
+              `현재 입력: ${currentReturn}\n` +
+              `(최대 ${Math.max(0, originQty - otherReturned)}개까지 가능)`
+            );
+            isSaving.current = false;
+            return;
+          }
+        }
+      }
+
 
       const validDetails = details.filter(d => d.product_id && d.quantity);
       const hasModifiedPayments = Object.keys(modifiedPayments).length > 0;
@@ -1162,6 +1235,7 @@ function TradePanel({
           details: validDetails.map(d => ({
             id: d.id, // ID 포함 (수정 시 필수)
             product_id: d.product_id,
+            parent_detail_id: d.parent_detail_id, // [IMPORTANT] 누적 반품 추적을 위해 필수
             quantity: parseFloat(d.quantity) || 0,
             unit_price: parseFloat(d.unit_price) || 0,
             supply_amount: parseFloat(d.supply_amount) || 0,
@@ -1171,6 +1245,7 @@ function TradePanel({
             notes: d.notes || '',
             inventory_id: d.inventory_id // 재고 매칭을 위해 ID 전달
           }))
+
         };
 
         let savedTradeId;
@@ -1669,9 +1744,12 @@ function TradePanel({
                         <input
                           ref={el => quantityRefs.current[index] = el}
                           type="text"
-                          value={detail.quantity ? formatCurrency(Math.floor(detail.quantity)) : ''}
+                          value={detail.quantity !== undefined && detail.quantity !== null ? formatCurrency(detail.quantity) : ''}
                           onChange={(e) => {
-                            const val = e.target.value.replace(/[^0-9]/g, '');
+                            const inputValue = e.target.value;
+                            const isNegative = inputValue.startsWith('-');
+                            const numericPart = inputValue.replace(/[^0-9.]/g, ''); // 숫자와 소수점만 허용
+                            const val = (isNegative ? '-' : '') + numericPart;
                             handleDetailChange(index, 'quantity', val);
                           }}
                           onFocus={(e) => {
@@ -1688,9 +1766,12 @@ function TradePanel({
                         <input
                           ref={el => unitPriceRefs.current[index] = el}
                           type="text"
-                          value={detail.unit_price ? formatCurrency(Math.floor(detail.unit_price)) : ''}
+                          value={detail.unit_price !== undefined && detail.unit_price !== null ? formatCurrency(detail.unit_price) : ''}
                           onChange={(e) => {
-                            const val = e.target.value.replace(/[^0-9]/g, '');
+                            const inputValue = e.target.value;
+                            const isNegative = inputValue.startsWith('-');
+                            const numericPart = inputValue.replace(/[^0-9.]/g, '');
+                            const val = (isNegative ? '-' : '') + numericPart;
                             handleDetailChange(index, 'unit_price', val);
                           }}
                           onKeyDown={(e) => handleUnitPriceKeyDown(e, index)}
@@ -2078,7 +2159,6 @@ function TradePanel({
               onMouseDown={handlePaymentDrag}
               style={{
                 ...paymentDragStyle,
-                maxWidth: '400px',
                 padding: '1.5rem',
                 backgroundColor: '#fff',
                 borderRadius: '12px',

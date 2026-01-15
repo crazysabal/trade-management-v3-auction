@@ -165,8 +165,7 @@ router.get('/:id', async (req, res) => {
       return res.status(404).json({ success: false, message: '거래전표를 찾을 수 없습니다.' });
     }
 
-    // 상세 내역 조회 (매칭 정보 및 매입 단가 포함)
-    // ★ td.purchase_price 우선, 없으면 매칭 통해 조회
+    // 상세 내역 조회 (매칭 정보, 매입 단가, 및 반품 관련 메타데이터 포함)
     const [details] = await db.query(
       `SELECT 
         td.*,
@@ -179,15 +178,41 @@ router.get('/:id', async (req, res) => {
         spm.purchase_inventory_id as matched_inventory_id,
         spm.matched_quantity,
         pi.remaining_quantity as inventory_remaining, -- 현재 재고 잔량 (검증용)
-        COALESCE(td.purchase_price, pi.unit_price) as purchase_price
+        COALESCE(td.purchase_price, pi.unit_price) as purchase_price,
+
+        -- 1. 이 품목이 매출 항목인 경우: 여기에 달린 총 반품 수량
+        (
+          SELECT COALESCE(SUM(ABS(t_sub.quantity)), 0)
+          FROM trade_details t_sub
+          JOIN trade_masters m_sub ON t_sub.trade_master_id = m_sub.id
+          WHERE t_sub.parent_detail_id = td.id
+            AND m_sub.status != 'CANCELLED'
+        ) as item_returned_quantity,
+
+        -- 2. 이 품목이 반품 항목인 경우: 원본 매출의 총 수량
+        ABS(parent_td.quantity) as origin_quantity,
+
+        -- 3. 이 품목이 반품 항목인 경우: 동일 원본에 대한 다른 반품들의 수량 합계
+        (
+          SELECT COALESCE(SUM(ABS(t_sub.quantity)), 0)
+          FROM trade_details t_sub
+          JOIN trade_masters m_sub ON t_sub.trade_master_id = m_sub.id
+          WHERE t_sub.parent_detail_id = td.parent_detail_id
+            AND t_sub.id != td.id
+            AND m_sub.status != 'CANCELLED'
+        ) as other_returned_quantity
+
       FROM trade_details td
       LEFT JOIN products p ON td.product_id = p.id
       LEFT JOIN sale_purchase_matching spm ON td.id = spm.sale_detail_id
       LEFT JOIN purchase_inventory pi ON spm.purchase_inventory_id = pi.id
+      LEFT JOIN trade_details parent_td ON td.parent_detail_id = parent_td.id
       WHERE td.trade_master_id = ?
       ORDER BY td.seq_no`,
       [req.params.id]
     );
+
+
 
     res.json({
       success: true,

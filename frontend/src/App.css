@@ -392,9 +392,9 @@ tbody tr.drag-over {
   background: white;
   padding: 0;
   border-radius: 12px;
-  width: 90%;
-  max-width: 450px;
-  /* Slightly wider default */
+  width: auto;
+  min-width: 320px;
+  max-width: 95vw;
   max-height: 90vh;
   display: flex;
   flex-direction: column;
@@ -507,8 +507,9 @@ tbody tr.drag-over {
   background: white;
   border-radius: 16px;
   padding: 2rem;
-  max-width: 400px;
-  width: 90%;
+  width: auto;
+  min-width: 300px;
+  max-width: 90vw;
   max-height: 90vh;
   display: flex;
   flex-direction: column;

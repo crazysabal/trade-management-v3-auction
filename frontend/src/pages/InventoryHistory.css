@@ -168,3 +168,13 @@
   color: #1864ab;
   text-decoration: underline;
 }
+
+/* Return Row Highlight */
+.history-table tr.return-row td {
+  background-color: #f0fff4 !important;
+  /* Very light green */
+}
+
+.history-table tr.return-row:hover td {
+  background-color: #dcfce7 !important;
+}

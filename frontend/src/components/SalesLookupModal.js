@@ -17,9 +17,10 @@ const SalesLookupModal = ({
         return d.toISOString().split('T')[0];
     });
     const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
-    const [salesList, setSalesList] = useState([]);
+    const [itemsList, setItemsList] = useState([]); // [REPLACED] 전표 목록 -> 품목 목록
     const [loading, setLoading] = useState(false);
     const [searchTriggered, setSearchTriggered] = useState(false);
+    const [filterText, setFilterText] = useState('');
 
     // ESC 키로 닫기
     useEffect(() => {
@@ -51,18 +52,43 @@ const SalesLookupModal = ({
         setLoading(true);
         setSearchTriggered(true);
         try {
+            // 1. 거래처의 매출 전표 목록 조회
             const response = await axios.get('/api/trades', {
                 params: {
                     company_id: companyId,
                     start_date: startDate,
                     end_date: endDate,
                     trade_type: 'SALE',
-                    limit: 100
+                    limit: 200
                 }
             });
-            setSalesList(response.data.data.filter(t => t.status !== 'CANCELLED'));
+
+            const masters = response.data.data.filter(t => t.status !== 'CANCELLED' && t.item_count > 0);
+
+            // 2. 각 전표의 상세 정보를 병렬로 가져와서 '품목 단위'로 플랫하게 펼침
+            const detailPromises = masters.map(m => axios.get(`/api/trades/${m.id}`));
+            const detailsResponses = await Promise.all(detailPromises);
+
+            const flatItems = [];
+            detailsResponses.forEach((res, idx) => {
+                if (res.data.success) {
+                    const master = masters[idx];
+                    const details = res.data.data.details;
+                    details.forEach(d => {
+                        flatItems.push({
+                            ...d,
+                            trade_number: master.trade_number,
+                            trade_date: master.trade_date,
+                            master_id: master.id,
+                            total_price: master.total_price // 전표 전체 정보가 필요한 경우르 위해
+                        });
+                    });
+                }
+            });
+
+            setItemsList(flatItems);
         } catch (error) {
-            console.error("Failed to fetch sales history:", error);
+            console.error("Failed to fetch detailed sales history:", error);
         } finally {
             setLoading(false);
         }
@@ -74,6 +100,15 @@ const SalesLookupModal = ({
         }
     }, [isOpen, companyId]);
 
+    const handleItemSelect = (item) => {
+        // [MODIFIED] 개별 품목 반품을 위해 item.id (trade_detail_id)를 함께 전달
+        onSelect({
+            id: item.master_id,
+            trade_number: item.trade_number,
+            selectedItemId: item.id  // 개별 품목 ID
+        });
+    };
+
     if (!isOpen) return null;
 
     return createPortal(
@@ -82,8 +117,9 @@ const SalesLookupModal = ({
                 className="premium-modal-container"
                 onClick={(e) => e.stopPropagation()}
                 style={{
-                    maxWidth: '850px',
-                    width: '90%',
+                    width: 'auto',
+                    minWidth: '750px',
+                    maxWidth: '1000px',
                     transform: `translate(${position.x}px, ${position.y}px)`
                 }}
             >
@@ -104,9 +140,9 @@ const SalesLookupModal = ({
 
                 <div className="premium-modal-body">
                     {/* 검색 바 */}
-                    <div className="trade-toolbar" style={{ marginBottom: '1.5rem', backgroundColor: '#f8fafc', padding: '15px', borderRadius: '12px', border: '1px solid #e2e8f0', display: 'flex', justifyContent: 'center', gap: '15px', alignItems: 'center' }}>
+                    <div className="trade-toolbar" style={{ marginBottom: '1.25rem', backgroundColor: '#f8fafc', padding: '12px 15px', borderRadius: '12px', border: '1px solid #e2e8f0', display: 'flex', justifyContent: 'center', gap: '15px', alignItems: 'center' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <span style={{ fontWeight: 600, color: '#475569', fontSize: '0.9rem' }}>조회 기간</span>
+                            <span style={{ fontWeight: 600, color: '#475569', fontSize: '0.85rem' }}>조회 기간</span>
                             <input
                                 type="date"
                                 value={startDate}
@@ -123,13 +159,33 @@ const SalesLookupModal = ({
                                 style={{ width: '130px', border: '1px solid #cbd5e1', borderRadius: '6px' }}
                             />
                         </div>
+
                         <button
                             className="premium-modal-btn premium-btn-primary"
                             onClick={searchSales}
-                            style={{ padding: '0 20px', height: '36px', flex: 'none', maxWidth: '100px', fontSize: '0.9rem' }}
+                            style={{ padding: '0 25px', height: '34px', flex: 'none', maxWidth: '100px', fontSize: '0.85rem' }}
                         >
                             조회
                         </button>
+                    </div>
+
+                    {/* 실시간 목록 필터 (목록 바로 위) */}
+                    <div style={{ padding: '0 5px 10px 5px' }}>
+                        <input
+                            type="text"
+                            placeholder="🔍 품목명, 비고 검색..."
+                            value={filterText}
+                            onChange={e => setFilterText(e.target.value)}
+                            style={{
+                                width: '100%',
+                                padding: '10px 15px',
+                                border: '1px solid #e2e8f0',
+                                borderRadius: '8px',
+                                fontSize: '0.9rem',
+                                backgroundColor: '#fff',
+                                boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.02)'
+                            }}
+                        />
                     </div>
 
                     {/* 결과 테이블 */}
@@ -138,47 +194,62 @@ const SalesLookupModal = ({
                             <thead style={{ position: 'sticky', top: 0, zIndex: 10, background: '#f1f5f9' }}>
                                 <tr>
                                     <th style={{ width: '80px', padding: '12px', color: '#64748b' }}>선택</th>
-                                    <th style={{ width: '110px', padding: '12px', color: '#64748b' }}>날짜</th>
-                                    <th style={{ width: '140px', padding: '12px', color: '#64748b' }}>전표번호</th>
-                                    <th style={{ textAlign: 'left', padding: '12px', color: '#64748b' }}>품목 내역</th>
-                                    <th style={{ width: '110px', textAlign: 'right', padding: '12px', color: '#64748b' }}>합계금액</th>
-                                    <th style={{ width: '80px', padding: '12px', color: '#64748b' }}>품목수</th>
+                                    <th style={{ width: '100px', padding: '12px', color: '#64748b' }}>날짜</th>
+                                    <th style={{ textAlign: 'left', padding: '12px', color: '#64748b' }}>품목</th>
+                                    <th style={{ width: '80px', textAlign: 'right', padding: '12px', color: '#64748b' }}>매출수량</th>
+                                    <th style={{ width: '80px', textAlign: 'right', padding: '12px', color: '#64748b', backgroundColor: '#fff7ed' }}>반품가능</th>
+                                    <th style={{ width: '90px', textAlign: 'right', padding: '12px', color: '#64748b' }}>단가</th>
+                                    <th style={{ width: '100px', textAlign: 'right', padding: '12px', color: '#64748b' }}>금액</th>
+                                    <th style={{ textAlign: 'left', padding: '12px', color: '#64748b' }}>비고</th>
+
                                 </tr>
                             </thead>
                             <tbody>
                                 {loading ? (
-                                    <tr><td colSpan="6" style={{ padding: '40px', textAlign: 'center', color: '#94a3b8' }}>검색 중...</td></tr>
-                                ) : salesList.length === 0 ? (
-                                    <tr><td colSpan="6" style={{ padding: '40px', textAlign: 'center', color: '#94a3b8' }}>매출 내역이 없습니다.</td></tr>
+                                    <tr><td colSpan="7" style={{ padding: '40px', textAlign: 'center', color: '#94a3b8' }}>상세 품목을 불러오는 중...</td></tr>
+                                ) : itemsList.length === 0 ? (
+                                    <tr><td colSpan="7" style={{ padding: '40px', textAlign: 'center', color: '#94a3b8' }}>매출 내역이 없습니다.</td></tr>
                                 ) : (
-                                    salesList.map(sale => (
-                                        <tr key={sale.id} className="trade-table-row" style={{ borderBottom: '1px solid #f1f5f9' }}>
-                                            <td className="text-center" style={{ padding: '10px' }}>
-                                                <button
-                                                    className="btn btn-success btn-sm"
-                                                    onClick={() => onSelect(sale)}
-                                                    style={{ borderRadius: '6px', padding: '4px 12px' }}
-                                                >
-                                                    선택
-                                                </button>
-                                            </td>
-                                            <td className="text-center" style={{ padding: '10px', color: '#475569' }}>{sale.trade_date}</td>
-                                            <td className="text-center" style={{ padding: '10px', color: '#3b82f6', fontWeight: 500 }}>{sale.trade_number}</td>
-                                            <td style={{ padding: '10px', textAlign: 'left' }}>
-                                                <div style={{ fontWeight: 500, color: '#1e293b' }}>
-                                                    {sale.product_names || <span style={{ color: '#cbd5e1' }}>(품목 정보 없음)</span>}
-                                                </div>
-                                            </td>
-                                            <td className="text-right" style={{ padding: '10px', fontWeight: 700, color: '#0f172a' }}>
-                                                {Number(sale.total_price).toLocaleString()}원
-                                            </td>
-                                            <td className="text-center" style={{ padding: '10px' }}>
-                                                <span style={{ fontSize: '0.85rem', color: '#64748b', background: '#f1f5f9', padding: '2px 8px', borderRadius: '4px' }}>
-                                                    {sale.item_count}건
-                                                </span>
-                                            </td>
-                                        </tr>
-                                    ))
+                                    itemsList
+                                        .filter(item =>
+                                            item.product_name?.toLowerCase().includes(filterText.toLowerCase()) ||
+                                            item.notes?.toLowerCase().includes(filterText.toLowerCase())
+                                        )
+                                        .map((item, index) => (
+                                            <tr key={`${item.master_id}-${index}`} className="trade-table-row" style={{ borderBottom: '1px solid #f1f5f9' }}>
+                                                <td className="text-center" style={{ padding: '10px' }}>
+                                                    <button
+                                                        className="btn btn-success btn-sm"
+                                                        onClick={() => handleItemSelect(item)}
+                                                        style={{ borderRadius: '6px', padding: '4px 12px' }}
+                                                    >
+                                                        선택
+                                                    </button>
+                                                </td>
+                                                <td className="text-center" style={{ padding: '10px', color: '#475569', fontSize: '0.85rem' }}>{item.trade_date}</td>
+                                                <td style={{ padding: '10px', textAlign: 'left' }}>
+                                                    <div style={{ fontWeight: 600, color: '#1e293b' }}>
+                                                        {item.product_name} {(item.product_weight && parseFloat(item.product_weight) > 0) ? `${parseFloat(item.product_weight)}kg` : ''} {item.grade ? `(${item.grade})` : ''}
+                                                    </div>
+                                                </td>
+                                                <td className="text-right" style={{ padding: '10px', fontWeight: 500, color: '#475569' }}>
+                                                    {parseFloat(item.quantity).toLocaleString()}
+                                                </td>
+                                                <td className="text-right" style={{ padding: '10px', fontWeight: 700, color: '#f97316', backgroundColor: '#fff7ed' }}>
+                                                    {Math.max(0, parseFloat(item.quantity) - (parseFloat(item.item_returned_quantity) || 0)).toLocaleString()}
+                                                </td>
+                                                <td className="text-right" style={{ padding: '10px', color: '#64748b' }}>
+                                                    {parseFloat(item.unit_price).toLocaleString()}
+                                                </td>
+                                                <td className="text-right" style={{ padding: '10px', fontWeight: 700, color: '#0f172a' }}>
+                                                    {Math.round(item.total_amount || 0).toLocaleString()}원
+                                                </td>
+
+                                                <td style={{ padding: '10px', textAlign: 'left', color: '#64748b', fontSize: '0.85rem' }}>
+                                                    {item.notes || '-'}
+                                                </td>
+                                            </tr>
+                                        ))
                                 )}
                             </tbody>
                         </table>

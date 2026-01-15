@@ -4,6 +4,8 @@ const serverStatus = {
     frontend: 'stopped'
 };
 
+let isStartingAll = false; // [NEW] 통합 시작 중인지 추적
+
 function toggleServer(type) {
     if (serverStatus[type] === 'running') {
         window.api.stopProcess(type);
@@ -13,6 +15,20 @@ function toggleServer(type) {
         } else {
             window.api.startProcess('frontend', 'npm run dev', 'frontend', 3000);
         }
+    }
+}
+
+function toggleAll() {
+    const isAnyRunning = serverStatus.backend === 'running' || serverStatus.frontend === 'running';
+
+    if (isAnyRunning) {
+        isStartingAll = false; // 중지 시에는 플래그 초기화
+        if (serverStatus.backend === 'running') window.api.stopProcess('backend');
+        if (serverStatus.frontend === 'running') window.api.stopProcess('frontend');
+    } else {
+        isStartingAll = true;
+        // 백엔드 먼저 실행
+        window.api.startProcess('backend', 'npm start', 'backend', 5000);
     }
 }
 
@@ -101,6 +117,16 @@ function appendLog(type, data, isError) {
 // IPC Listeners
 window.api.onLog(({ type, data, isError }) => {
     appendLog(type, data, isError);
+
+    // [NEW] 통합 시작 중이고, 백엔드 로그에 특정 키워드가 나타나면 프론트엔드 실행
+    if (isStartingAll && type === 'backend' && (data.includes('Server running') || data.includes('Connected to MySQL'))) {
+        if (serverStatus.frontend !== 'running') {
+            isStartingAll = false; // 시퀀스 완료
+            setTimeout(() => {
+                window.api.startProcess('frontend', 'npm run dev', 'frontend', 3000);
+            }, 1000); // UI 안정화를 위해 1초 대기
+        }
+    }
 });
 
 window.api.onStatusChange(({ type, status }) => {
@@ -119,4 +145,29 @@ window.api.onStatusChange(({ type, status }) => {
         btn.classList.remove('stop');
         btn.classList.add('start');
     }
+
+    // 통합 버튼 상태 업데이트
+    updateAllButtonStatus();
 });
+
+function updateAllButtonStatus() {
+    const btnAll = document.getElementById('btn-all');
+    const isAnyRunning = serverStatus.backend === 'running' || serverStatus.frontend === 'running';
+
+    if (isAnyRunning) {
+        btnAll.textContent = 'ALL STOP';
+        btnAll.classList.remove('start');
+        btnAll.classList.add('stop');
+    } else {
+        btnAll.textContent = 'ALL START';
+        btnAll.classList.remove('stop');
+        btnAll.classList.add('start');
+    }
+}
+// [NEW] 런처 실행 시 자동 시작 트리거
+window.onload = () => {
+    console.log('--- 자동 시작 시퀀스 가동 ---');
+    setTimeout(() => {
+        toggleAll();
+    }, 1000); // 윈도우 초기 안정화를 위해 1초 후 시작
+};

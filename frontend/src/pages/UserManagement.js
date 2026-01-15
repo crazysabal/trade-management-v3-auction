@@ -154,6 +154,9 @@ const UserManagement = () => {
     };
 
     // Helper to render modal via Portal (MDI Standard)
+    const renderModal = (content) => {
+        return ReactDOM.createPortal(content, document.body);
+    };
 
     return (
         <div className="user-management-container fade-in">

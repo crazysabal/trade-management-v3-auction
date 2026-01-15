@@ -145,6 +145,35 @@
             color: #f85149;
         }
 
+        /* All Control Section */
+        .control-all-section {
+            margin-bottom: 25px;
+            padding: 15px;
+            background-color: #3e3e42;
+            border-radius: 8px;
+            border: 1px solid #444;
+        }
+
+        .btn-all {
+            width: 100%;
+            padding: 12px;
+            font-size: 15px;
+            letter-spacing: 1px;
+            background-color: #0969da;
+        }
+
+        .btn-all:hover {
+            background-color: #106eba;
+        }
+
+        .btn-all.stop {
+            background-color: #8250df;
+        }
+
+        .btn-all.stop:hover {
+            background-color: #8c5ada;
+        }
+
         .header-bar {
             padding: 10px 20px;
             background-color: #252526;
@@ -174,6 +203,10 @@
 <body>
     <div class="sidebar">
         <h2 style="text-align: center; margin-bottom: 30px; color: #fff; letter-spacing: 1px;">SERVER MANAGER</h2>
+
+        <div class="control-all-section">
+            <button id="btn-all" class="btn-toggle btn-all start" onclick="toggleAll()">ALL START</button>
+        </div>
 
         <div id="status-backend" class="control-group">
             <h3><span class="status-indicator"></span>Backend</h3>

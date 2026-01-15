@@ -69,8 +69,11 @@ const InventoryHistory = ({ onOpenTrade }) => {
                         return pB - pA;
                     }
 
-                    // 3. Tie-breaker: ID
-                    return (b.id || 0) - (a.id || 0);
+                    // 3. Tie-breaker: ID or Reference ID (Consistent with Backend)
+                    const idA = a.id || a.reference_id || 0;
+                    const idB = b.id || b.reference_id || 0;
+                    return (idB || 0) - (idA || 0);
+
                 });
                 setHistory(sortedData);
             }
@@ -86,10 +89,13 @@ const InventoryHistory = ({ onOpenTrade }) => {
         }
     };
 
-    const getTypeLabel = (type) => {
+    const getTypeLabel = (item) => {
+        const type = typeof item === 'string' ? item : item.transaction_type;
+        const qty = typeof item === 'string' ? 0 : Number(item.quantity);
+
         switch (type) {
             case 'PURCHASE': return '매입 입고';
-            case 'SALE': return '매출 출고';
+            case 'SALE': return qty < 0 ? '반품 입고' : '매출 출고';
             case 'PRODUCTION_IN': return '생산 입고';
             case 'PRODUCTION_OUT': return '생산 출고';
             case 'IN': return '입고';
@@ -101,19 +107,23 @@ const InventoryHistory = ({ onOpenTrade }) => {
         }
     };
 
-    const getTypeBadgeClass = (type) => {
+    const getTypeBadgeClass = (item) => {
+        const type = typeof item === 'string' ? item : item.transaction_type;
+        const qty = typeof item === 'string' ? 0 : Number(item.quantity);
+
         switch (type) {
             case 'PURCHASE':
             case 'PRODUCTION_IN':
             case 'IN':
+            case 'TRANSFER_IN':
                 return 'in';
             case 'SALE':
+                return qty < 0 ? 'in' : 'out';
             case 'PRODUCTION_OUT':
             case 'OUT':
+            case 'TRANSFER_OUT':
                 return 'out';
             case 'ADJUST': return 'adjust';
-            case 'TRANSFER_IN': return 'transfer-in';
-            case 'TRANSFER_OUT': return 'transfer-out';
             default: return '';
         }
     };
@@ -126,7 +136,7 @@ const InventoryHistory = ({ onOpenTrade }) => {
 
         return history.filter(item => {
             const primaryText = `${item.product_name || ''} ${item.product_weight ? Number(item.product_weight) + 'kg' : ''} ${item.grade || ''} ${item.company_name || ''} ${item.sender || ''}`.toLowerCase();
-            const secondaryText = `${item.warehouse_name || ''} ${item.shipper_location || ''} ${item.trade_number || ''} ${item.transaction_date || ''} ${getTypeLabel(item.transaction_type)}`.toLowerCase();
+            const secondaryText = `${item.warehouse_name || ''} ${item.shipper_location || ''} ${item.trade_number || ''} ${item.transaction_date || ''} ${getTypeLabel(item)}`.toLowerCase();
 
             // 모든 키워드가 항목 내에 존재해야 함 (AND 조건)
             return keywords.every(kw => {
@@ -418,149 +428,167 @@ const InventoryHistory = ({ onOpenTrade }) => {
                     </thead>
                     <tbody>
                         {displayedHistory.length > 0 ? (
-                            displayedHistory.map((item, index) => (
-                                <tr key={`${item.transaction_type}-${item.reference_id}-${index}`}>
-                                    <td>
-                                        {item.transaction_date ? item.transaction_date.substring(0, 10) : '-'}
-                                        <div style={{ fontSize: '0.8em', color: '#999' }}>
-                                            {item.detail_date ? new Date(item.detail_date).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }) : ''}
-                                        </div>
-                                    </td>
-                                    <td>
-                                        <span className={`type-badge ${getTypeBadgeClass(item.transaction_type)}`}>
-                                            {getTypeLabel(item.transaction_type)}
-                                        </span>
-                                    </td>
-                                    <td>
-                                        {item.warehouse_name || '-'}
-                                    </td>
-                                    <td>
-                                        {item.product_name}
-                                        {item.product_weight ? ` ${Number(item.product_weight)}kg` : ''}
-                                    </td>
-                                    <td>
-                                        {item.sender || '-'}
-                                    </td>
-                                    <td className="text-center">
-                                        {item.grade || '-'}
-                                    </td>
-                                    <td>
-                                        <strong style={{ color: ['IN', 'PURCHASE', 'PRODUCTION_IN', 'TRANSFER_IN', 'ADJUST'].includes(item.transaction_type) && Number(item.quantity) > 0 ? '#2ecc71' : '#e74c3c' }}>
-                                            {/* Logic for Sign */}
-                                            {(() => {
-                                                const qty = Number(item.quantity);
-                                                // 1. Outgoing types (always negative)
-                                                if (['SALE', 'OUT', 'PRODUCTION_OUT', 'TRANSFER_OUT'].includes(item.transaction_type)) {
-                                                    return `-${formatNumber(Math.abs(qty))}`;
-                                                }
-                                                // 2. Incoming types (always positive)
-                                                if (['IN', 'PURCHASE', 'PRODUCTION_IN', 'TRANSFER_IN'].includes(item.transaction_type)) {
-                                                    return `+${formatNumber(Math.abs(qty))}`;
-                                                }
-                                                // 3. Adjust (signed)
-                                                return (qty > 0 ? '+' : '') + formatNumber(qty);
-                                            })()}
-                                        </strong>
-                                    </td>
-                                    <td style={{ color: '#7f8c8d' }}>
-                                        {formatNumber(item.running_stock)}
-                                    </td>
-                                    <td>
-                                        {item.company_name || '-'}
-                                    </td>
-                                    <td>
-                                        <span
-                                            className={item.trade_master_id || item.production_id ? 'trade-link' : ''}
-                                            style={{
-                                                fontFamily: 'monospace',
-                                                fontSize: '0.9em',
-                                                cursor: (item.trade_master_id || item.production_id) ? 'pointer' : 'default',
-                                                color: (item.trade_master_id || item.production_id) ? '#339af0' : 'inherit', // Blue color like TradeList
-                                                textDecoration: (item.trade_master_id || item.production_id) ? 'none' : 'none'
-                                            }}
-                                            onClick={(e) => {
-                                                if (item.production_id) {
-                                                    e.stopPropagation();
-                                                    // use reference_id (ipi.id or pi.id) for highlighting in the production detail
-                                                    setProdDetailModal({
-                                                        isOpen: true,
-                                                        productionId: item.production_id,
-                                                        highlightId: item.reference_id
-                                                    });
-                                                } else if (item.trade_master_id) {
-                                                    e.stopPropagation();
-                                                    // use trade_detail_id for highlighting in the slip detail
-                                                    setDetailModal({
-                                                        isOpen: true,
-                                                        tradeId: item.trade_master_id,
-                                                        highlightId: item.trade_detail_id || item.reference_id
-                                                    });
-                                                }
-                                            }}
-                                        >
-                                            {item.trade_number || '-'}
-                                        </span>
-                                        {/* Cancel Button (Inline) */}
-                                        {(item.transaction_type === 'ADJUST' || ['TRANSFER_IN', 'TRANSFER_OUT', 'PRODUCTION_IN', 'PRODUCTION_OUT'].includes(item.transaction_type)) && (
-                                            <button
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    if (item.transaction_type === 'ADJUST') {
-                                                        handleCancelAdjustment(item);
-                                                    } else if (['PRODUCTION_IN', 'PRODUCTION_OUT'].includes(item.transaction_type)) {
-                                                        handleCancelProduction(item);
-                                                    } else {
-                                                        handleCancelTransfer(item);
+                            displayedHistory.map((item, index) => {
+                                const isReturn = item.transaction_type === 'SALE' && Number(item.quantity) < 0;
+                                return (
+                                    <tr
+                                        key={`${item.transaction_type}-${item.reference_id}-${index}`}
+                                        className={isReturn ? 'return-row' : ''}
+                                    >
+
+                                        <td>
+                                            {item.transaction_date ? item.transaction_date.substring(0, 10) : '-'}
+                                            <div style={{ fontSize: '0.8em', color: '#999' }}>
+                                                {item.detail_date ? new Date(item.detail_date).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }) : ''}
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <span className={`type-badge ${getTypeBadgeClass(item)}`}>
+                                                {getTypeLabel(item)}
+                                            </span>
+                                        </td>
+                                        <td>
+                                            {item.warehouse_name || '-'}
+                                        </td>
+                                        <td>
+                                            {item.product_name}
+                                            {item.product_weight ? ` ${Number(item.product_weight)}kg` : ''}
+                                        </td>
+                                        <td>
+                                            {item.sender || '-'}
+                                        </td>
+                                        <td className="text-center">
+                                            {item.grade || '-'}
+                                        </td>
+                                        <td>
+                                            <strong style={{
+                                                color: (() => {
+                                                    const qty = Number(item.quantity);
+                                                    const type = item.transaction_type;
+                                                    // 입고 계열이거나, 출고 계열인데 수량이 음수(반품)인 경우, 조정인데 양수인 경우 -> 초록색
+                                                    if (['IN', 'PURCHASE', 'PRODUCTION_IN', 'TRANSFER_IN'].includes(type) && qty > 0) return '#2ecc71';
+                                                    if (['SALE', 'OUT', 'PRODUCTION_OUT', 'TRANSFER_OUT'].includes(type) && qty < 0) return '#2ecc71';
+                                                    if (type === 'ADJUST' && qty > 0) return '#2ecc71';
+                                                    return '#e74c3c'; // 그 외(출고, 반품 취소 등)는 빨간색
+                                                })()
+                                            }}>
+                                                {/* Logic for Sign */}
+                                                {(() => {
+                                                    const qty = Number(item.quantity);
+                                                    // 1. 출고 계열
+                                                    if (['SALE', 'OUT', 'PRODUCTION_OUT', 'TRANSFER_OUT'].includes(item.transaction_type)) {
+                                                        // 수량이 음수면 반품 입고이므로 + 기호, 양수면 일반 출고이므로 - 기호
+                                                        return (qty < 0 ? '+' : '-') + formatNumber(Math.abs(qty));
                                                     }
-                                                }}
+                                                    // 2. 입고 계열
+                                                    if (['IN', 'PURCHASE', 'PRODUCTION_IN', 'TRANSFER_IN'].includes(item.transaction_type)) {
+                                                        return (qty >= 0 ? '+' : '-') + formatNumber(Math.abs(qty));
+                                                    }
+                                                    // 3. 조정 (기호 포함)
+                                                    return (qty > 0 ? '+' : '') + formatNumber(qty);
+                                                })()}
+                                            </strong>
+                                        </td>
+                                        <td style={{ color: '#7f8c8d' }}>
+                                            {formatNumber(item.running_stock)}
+                                        </td>
+                                        <td>
+                                            {item.company_name || '-'}
+                                        </td>
+                                        <td>
+                                            <span
+                                                className={item.trade_master_id || item.production_id ? 'trade-link' : ''}
                                                 style={{
-                                                    marginLeft: '6px',
-                                                    backgroundColor: '#ff6b6b',
-                                                    color: 'white',
-                                                    border: 'none',
-                                                    borderRadius: '4px',
-                                                    padding: '2px 6px',
-                                                    fontSize: '0.75rem',
-                                                    cursor: 'pointer',
-                                                    verticalAlign: 'middle'
+                                                    fontFamily: 'monospace',
+                                                    fontSize: '0.9em',
+                                                    cursor: (item.trade_master_id || item.production_id) ? 'pointer' : 'default',
+                                                    color: (item.trade_master_id || item.production_id) ? '#339af0' : 'inherit', // Blue color like TradeList
+                                                    textDecoration: (item.trade_master_id || item.production_id) ? 'none' : 'none'
                                                 }}
-                                            >
-                                                취소
-                                            </button>
-                                        )}
-                                        {/* [NEW] Source Trade Link */}
-                                        {item.source_trade_id && (
-                                            <div style={{ fontSize: '0.75rem', marginTop: '2px', color: '#6c757d' }}>
-                                                <span style={{ marginRight: '4px' }}>매입:</span>
-                                                <span
-                                                    className="trade-link"
-                                                    style={{ color: '#6c757d', textDecoration: 'underline', cursor: 'pointer' }}
-                                                    onClick={(e) => {
+                                                onClick={(e) => {
+                                                    if (item.production_id) {
                                                         e.stopPropagation();
+                                                        // use reference_id (ipi.id or pi.id) for highlighting in the production detail
+                                                        setProdDetailModal({
+                                                            isOpen: true,
+                                                            productionId: item.production_id,
+                                                            highlightId: item.reference_id
+                                                        });
+                                                    } else if (item.trade_master_id) {
+                                                        e.stopPropagation();
+                                                        // use trade_detail_id for highlighting in the slip detail
                                                         setDetailModal({
                                                             isOpen: true,
-                                                            tradeId: item.source_trade_id,
-                                                            highlightId: item.source_trade_detail_id
+                                                            tradeId: item.trade_master_id,
+                                                            highlightId: item.trade_detail_id || item.reference_id
                                                         });
+                                                    }
+                                                }}
+                                            >
+                                                {item.trade_number || '-'}
+                                            </span>
+                                            {/* Cancel Button (Inline) */}
+                                            {(item.transaction_type === 'ADJUST' || ['TRANSFER_IN', 'TRANSFER_OUT', 'PRODUCTION_IN', 'PRODUCTION_OUT'].includes(item.transaction_type)) && (
+                                                <button
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        if (item.transaction_type === 'ADJUST') {
+                                                            handleCancelAdjustment(item);
+                                                        } else if (['PRODUCTION_IN', 'PRODUCTION_OUT'].includes(item.transaction_type)) {
+                                                            handleCancelProduction(item);
+                                                        } else {
+                                                            handleCancelTransfer(item);
+                                                        }
+                                                    }}
+                                                    style={{
+                                                        marginLeft: '6px',
+                                                        backgroundColor: '#ff6b6b',
+                                                        color: 'white',
+                                                        border: 'none',
+                                                        borderRadius: '4px',
+                                                        padding: '2px 6px',
+                                                        fontSize: '0.75rem',
+                                                        cursor: 'pointer',
+                                                        verticalAlign: 'middle'
                                                     }}
                                                 >
-                                                    {item.source_trade_number}
-                                                </span>
-                                            </div>
-                                        )}
+                                                    취소
+                                                </button>
+                                            )}
+                                            {/* [NEW] Source Trade Link */}
+                                            {item.source_trade_id && (
+                                                <div style={{ fontSize: '0.75rem', marginTop: '2px', color: '#6c757d' }}>
+                                                    <span style={{ marginRight: '4px' }}>매입:</span>
+                                                    <span
+                                                        className="trade-link"
+                                                        style={{ color: '#6c757d', textDecoration: 'underline', cursor: 'pointer' }}
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            setDetailModal({
+                                                                isOpen: true,
+                                                                tradeId: item.source_trade_id,
+                                                                highlightId: item.source_trade_detail_id
+                                                            });
+                                                        }}
+                                                    >
+                                                        {item.source_trade_number}
+                                                    </span>
+                                                </div>
+                                            )}
 
 
-                                    </td>
-                                    <td style={{ color: '#868e96', fontSize: '0.9em' }}>
-                                        {item.transaction_type === 'ADJUST' ? item.adjustment_reason : item.notes}
-                                        {item.transaction_type === 'TRANSFER_OUT' && (
-                                            <div style={{ color: '#7950f2' }}>
-                                                {item.shipper_location}
-                                            </div>
-                                        )}
-                                    </td>
-                                </tr>
-                            ))
+                                        </td>
+                                        <td style={{ color: '#868e96', fontSize: '0.9em' }}>
+                                            {item.transaction_type === 'ADJUST' ? item.adjustment_reason : item.notes}
+                                            {item.transaction_type === 'TRANSFER_OUT' && (
+                                                <div style={{ color: '#7950f2' }}>
+                                                    {item.shipper_location}
+                                                </div>
+                                            )}
+                                        </td>
+                                    </tr>
+                                );
+                            })
                         ) : (
                             <tr>
                                 <td colSpan="9" className="empty-state">
