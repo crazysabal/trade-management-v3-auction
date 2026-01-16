@@ -42,23 +42,26 @@ class UpdateManager {
     async downloadPatch(url, dest) {
         console.log(`[Update] 패치 다운로드 중: ${url}`);
         return new Promise((resolve, reject) => {
-            const file = fs.createWriteStream(dest);
-            https.get(url, (res) => {
-                res.pipe(file);
-                file.on('finish', () => {
-                    file.close();
-                    resolve();
-                });
-            }).on('error', (err) => {
-                fs.unlink(dest, () => { });
+            try {
+                // [FIX] 깃허브 리디렉션 대응을 위해 PowerShell의 Invoke-WebRequest 사용
+                const psCommand = `Invoke-WebRequest -Uri "${url}" -OutFile "${dest}" -MaximumRedirection 10`;
+                execSync(`powershell -Command "${psCommand}"`, { stdio: 'inherit' });
+                resolve();
+            } catch (err) {
+                console.error('[Update] 다운로드 실패:', err.message);
                 reject(err);
-            });
+            }
         });
     }
 
     async applyPatch() {
         const extractedDir = path.join(this.tempDir, 'extracted');
-        // GitHub ZIP은 보통 'repo-main' 같은 폴더로 한 번 더 감싸여 있음
+
+        // [FIX] 압축 해제가 실제로 성공했는지 확인
+        if (!fs.existsSync(extractedDir) || fs.readdirSync(extractedDir).length === 0) {
+            throw new Error('압축 해제된 파일이 없습니다. 패치 파일이 손상되었을 수 있습니다.');
+        }
+
         const subDirs = fs.readdirSync(extractedDir);
         const sourceDir = subDirs.length === 1 ? path.join(extractedDir, subDirs[0]) : extractedDir;
         const projectRoot = path.join(__dirname, '..');
@@ -116,8 +119,13 @@ class UpdateManager {
             await this.downloadPatch(this.patchDownloadUrl, zipFile);
 
             console.log('[Update] 패치 압축 해제 중...');
-            const psCommand = `Expand-Archive -Path "${zipFile}" -DestinationPath "${this.tempDir}/extracted" -Force`;
-            execSync(`powershell -Command "${psCommand}"`);
+            // [FIX] PowerShell 중단 로직($ErrorActionPreference) 추가 및 상세 로그 출력
+            const psCommand = `$ErrorActionPreference = 'Stop'; Expand-Archive -Path "${zipFile}" -DestinationPath "${this.tempDir}/extracted" -Force`;
+            try {
+                execSync(`powershell -Command "${psCommand}"`, { stdio: 'inherit' });
+            } catch (extErr) {
+                throw new Error(`압축 해제 실패: ${extErr.message}`);
+            }
 
             await this.applyPatch();
 
