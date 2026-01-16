@@ -182,23 +182,28 @@ app.on('window-all-closed', function () {
     if (process.platform !== 'darwin') app.quit();
 });
 
+// [추가] 앱이 종료되기 직전에 한 번 더 확실하게 청소
+app.on('before-quit', () => {
+    killAllProcesses();
+});
+
 function killAllProcesses() {
-    if (processes.backend) {
-        process.kill(processes.backend.pid);
-        processes.backend = null;
-    }
-    if (processes.frontend) {
-        // Windows에서 kill을 확실히 하기 위해 tree-kill 같은 걸 쓸 수도 있지만,
-        // 일단 기본 process.kill 사용. Windows에서는 taskkill이 필요할 수도 있음.
-        if (os.platform() === 'win32') {
+    Object.keys(processes).forEach(type => {
+        const child = processes[type];
+        if (child && child.pid) {
             try {
-                spawn("taskkill", ["/pid", processes.frontend.pid, '/f', '/t']);
-            } catch (e) { console.error(e) }
-        } else {
-            process.kill(processes.frontend.pid);
+                if (os.platform() === 'win32') {
+                    // /f: 강제 종료, /t: 자식 프로세스까지 모두 종료 (Tree-kill)
+                    spawn("taskkill", ["/pid", child.pid, '/f', '/t']);
+                } else {
+                    child.kill('SIGTERM');
+                }
+            } catch (e) {
+                console.error(`Error killing ${type} process:`, e);
+            }
+            processes[type] = null;
         }
-        processes.frontend = null;
-    }
+    });
 }
 
 // [GLOBAL ERROR HANDLER] 프로그램이 갑자기 꺼지는 것을 방지

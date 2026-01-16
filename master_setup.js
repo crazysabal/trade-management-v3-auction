@@ -46,6 +46,7 @@ async function createDesktopShortcut() {
         $Shortcut = $WshShell.CreateShortcut('${shortcutPath}');
         $Shortcut.TargetPath = '${targetPath}';
         $Shortcut.WorkingDirectory = '${path.dirname(targetPath)}';
+        $Shortcut.IconLocation = '${targetPath},0';
         $Shortcut.Description = '홍다 비즈 (Hongda Biz) 통합 시스템';
         $Shortcut.Save();
     `.replace(/\n/g, ' ').trim();
