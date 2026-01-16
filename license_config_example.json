@@ -1,0 +1,12 @@
+{
+    "ALLOWED_MACHINES": {
+        "HDB-12345678": {
+            "expires_at": "2026-12-31",
+            "memo": "A사 사무실 PC"
+        },
+        "HDB-ABCDEFGH": {
+            "expires_at": "2026-06-30",
+            "memo": "B사 테스트용 기기"
+        }
+    }
+}

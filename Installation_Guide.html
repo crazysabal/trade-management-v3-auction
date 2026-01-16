@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>홍다 비즈 (Hongda Biz) 통합 설치 가이드</title>
+    <title>홍다 비즈 (Hongda Biz) 통합 설치 및 운영 가이드 v4.1</title>
     <link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@400;600;700&display=swap" rel="stylesheet">
     <style>
         :root {
@@ -34,120 +34,177 @@
         }
 
         .container {
-            max-width: 800px;
+            max-width: 850px;
             margin: 0 auto;
         }
 
         header {
             text-align: center;
             margin-bottom: 3rem;
+            padding: 2rem 0;
+            background: white;
+            border-radius: 1.5rem;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
         }
 
         h1 {
-            font-size: 2.5rem;
+            font-size: 2.8rem;
             color: var(--primary);
             margin-bottom: 0.5rem;
-            font-weight: 700;
+            font-weight: 800;
+            letter-spacing: -0.05rem;
         }
 
         .subtitle {
-            font-size: 1.1rem;
+            font-size: 1.25rem;
             color: var(--secondary);
+            font-weight: 500;
         }
 
         .card {
             background: var(--card-bg);
-            border-radius: 1rem;
-            padding: 2rem;
+            border-radius: 1.25rem;
+            padding: 2.5rem;
             margin-bottom: 2rem;
-            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
-            border: 1px solid #e2e8f0;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05);
+            border: 1px solid #edf2f7;
+            transition: transform 0.2s ease;
         }
 
         h2 {
-            font-size: 1.5rem;
+            font-size: 1.7rem;
             margin-bottom: 1.5rem;
             display: flex;
             align-items: center;
-            gap: 0.5rem;
-            border-bottom: 2px solid #f1f5f9;
-            padding-bottom: 0.5rem;
+            gap: 0.75rem;
+            color: #0f172a;
+            border-bottom: 3px solid #f1f5f9;
+            padding-bottom: 0.75rem;
+        }
+
+        .mandatory-badge {
+            background: var(--danger);
+            color: white;
+            padding: 0.3rem 1rem;
+            border-radius: 2rem;
+            font-size: 0.95rem;
+            font-weight: 700;
         }
 
         .step-badge {
             background: var(--primary);
             color: white;
-            padding: 0.2rem 0.8rem;
+            padding: 0.3rem 1rem;
             border-radius: 2rem;
-            font-size: 0.9rem;
-            font-weight: 600;
+            font-size: 0.95rem;
+            font-weight: 700;
+        }
+
+        .quick-badge {
+            background: var(--success);
+            color: white;
+            padding: 0.3rem 1rem;
+            border-radius: 2rem;
+            font-size: 0.95rem;
+            font-weight: 700;
+        }
+
+        p {
+            margin-bottom: 1rem;
+            color: #475569;
         }
 
         ul,
         ol {
-            margin-left: 1.5rem;
-            margin-bottom: 1rem;
+            margin-left: 1.8rem;
+            margin-bottom: 1.5rem;
         }
 
         li {
-            margin-bottom: 0.5rem;
+            margin-bottom: 0.75rem;
+        }
+
+        strong {
+            color: #1e293b;
+            font-weight: 700;
         }
 
         code {
             background: #f1f5f9;
-            padding: 0.2rem 0.4rem;
-            border-radius: 0.3rem;
-            font-family: 'Courier New', Courier, monospace;
+            padding: 0.25rem 0.5rem;
+            border-radius: 0.4rem;
+            font-family: 'JetBrains Mono', 'Fira Code', monospace;
             font-weight: 600;
             color: var(--danger);
+            font-size: 0.9em;
         }
 
-        .command-box {
-            background: #1e293b;
-            color: #f8fafc;
-            padding: 1rem;
-            border-radius: 0.5rem;
-            font-family: 'Courier New', Courier, monospace;
-            margin: 1rem 0;
-            position: relative;
+        .mandatory-card {
+            border-left: 8px solid var(--danger);
+            background: #fef2f2;
         }
 
         .quick-start {
-            border-left: 5px solid var(--success);
+            border-left: 8px solid var(--success);
+            background: #f0fdf4;
         }
 
-        .login-info {
+        .license-card {
+            border-left: 8px solid var(--primary);
             background: #eff6ff;
-            border: 1px solid #bfdbfe;
         }
 
         .alert {
-            padding: 1rem;
-            border-radius: 0.5rem;
-            margin-top: 1rem;
-            font-size: 0.95rem;
+            padding: 1.25rem;
+            border-radius: 0.75rem;
+            margin: 1.5rem 0;
+            display: flex;
+            align-items: flex-start;
+            gap: 1rem;
+        }
+
+        .alert-tip {
+            background: #f0fdfa;
+            border: 1px solid #99f6e4;
+            color: #0d9488;
         }
 
         .alert-warning {
             background: #fffbeb;
-            border: 1px solid #fef3c7;
-            color: #92400e;
+            border: 1px solid #fde68a;
+            color: #b45309;
         }
 
         .footer {
             text-align: center;
-            margin-top: 4rem;
+            margin-top: 5rem;
             color: var(--secondary);
-            font-size: 0.9rem;
+            font-size: 0.95rem;
+            padding: 2rem 0;
+            border-top: 1px solid #e2e8f0;
+        }
+
+        a {
+            color: var(--primary);
+            text-decoration: none;
+            font-weight: 600;
+        }
+
+        a:hover {
+            text-decoration: underline;
         }
 
         @media (max-width: 640px) {
             h1 {
-                font-size: 1.8rem;
+                font-size: 2rem;
             }
 
             .card {
                 padding: 1.5rem;
+            }
+
+            h2 {
+                font-size: 1.4rem;
             }
         }
     </style>
@@ -157,64 +214,112 @@
     <div class="container">
         <header>
             <h1>🚀 홍다 비즈 (Hongda Biz)</h1>
-            <p class="subtitle">통합 설치 및 서버 가동 가이드</p>
+            <p class="subtitle">통합 설치 및 운영 가이드 v4.1</p>
         </header>
 
-        <section class="card">
-            <h2><span class="step-badge">1단계</span> 사전 준비</h2>
-            <p>설치 전 아래 핵심 프로그램들을 먼저 설치해 주세요.</p>
+        <section class="card" style="background: #f8fafc; border: 1px dashed #cbd5e1;">
+            <h2>💻 권장 시스템 사양</h2>
+            <p>프로그램의 원활한 구동(특히 경매 크롤링)을 위한 사양입니다.</p>
+            <table style="width: 100%; border-collapse: collapse; font-size: 0.95rem;">
+                <tr style="border-bottom: 1px solid #e2e8f0;">
+                    <th style="text-align: left; padding: 0.5rem; color: var(--secondary);">항목</th>
+                    <th style="text-align: left; padding: 0.5rem;">최소 사양</th>
+                    <th style="text-align: left; padding: 0.5rem; color: var(--primary);">권장 사양 (추천)</th>
+                </tr>
+                <tr style="border-bottom: 1px solid #f1f5f9;">
+                    <td style="padding: 0.5rem; font-weight: 600;">운영체제</td>
+                    <td style="padding: 0.5rem;">Windows 10 (64비트)</td>
+                    <td style="padding: 0.5rem;">Windows 11 (64비트)</td>
+                </tr>
+                <tr style="border-bottom: 1px solid #f1f5f9;">
+                    <td style="padding: 0.5rem; font-weight: 600;">CPU</td>
+                    <td style="padding: 0.5rem;">Dual Core (i3급)</td>
+                    <td style="padding: 0.5rem;">Quad Core (i5급 이상)</td>
+                </tr>
+                <tr style="border-bottom: 1px solid #f1f5f9;">
+                    <td style="padding: 0.5rem; font-weight: 600;">메모리(RAM)</td>
+                    <td style="padding: 0.5rem;">4GB</td>
+                    <td style="padding: 0.5rem; font-weight: 700;">8GB 이상</td>
+                </tr>
+                <tr>
+                    <td style="padding: 0.5rem; font-weight: 600;">저장공간</td>
+                    <td style="padding: 0.5rem;">SSD 2GB 여유</td>
+                    <td style="padding: 0.5rem;">NVMe SSD 권장</td>
+                </tr>
+            </table>
+            <p style="font-size: 0.85rem; margin-top: 0.5rem; color: var(--secondary);">* 경매 크롤링 시 일시적으로 메모리 사용량이 높아질 수
+                있습니다.</p>
+        </section>
+
+        <section class="card mandatory-card">
+            <h2><span class="mandatory-badge">필수</span> 1. 사전 준비 (이것부터 설치하세요)</h2>
+            <p>프로그램 실행을 위해 아래 두 프로그램은 <strong>반드시</strong> 컴퓨터에 설치되어 있어야 합니다.</p>
             <ul>
-                <li><strong>Node.js (v20 이상 LTS 권장)</strong>: <a href="https://nodejs.org/" target="_blank">다운로드</a>
+                <li><strong>Node.js (v20 이상 LTS)</strong>: <a href="https://nodejs.org/" target="_blank">공식 다운로드 페이지</a>
                 </li>
-                <li><strong>MySQL Server (8.4 LTS 권장)</strong>: 8.0 또는 8.4 LTS 버전 <a
-                        href="https://dev.mysql.com/downloads/mysql/" target="_blank">다운로드</a></li>
+                <li><strong>MySQL Server (8.0 또는 8.4 LTS)</strong>: <a href="https://dev.mysql.com/downloads/mysql/"
+                        target="_blank">다운로드 및 설치</a>
+                    <br><small>* 설치 중 설정한 <strong>root 비밀번호</strong>를 절대 잊지 마세요.</small>
+                </li>
             </ul>
         </section>
 
         <section class="card quick-start">
-            <h2><span class="step-badge">추천</span> 원스톱 자동 설치 (Quick Start)</h2>
-            <p>신규 PC나 가상환경에서 모든 과정을 단 한 번의 실행으로 끝내는 방법입니다.</p>
+            <h2><span class="quick-badge">추천</span> 2. 원스톱 자동 설치 (Quick Start)</h2>
+            <p>필수 프로그램이 설치되었다면, 아래 단계를 통해 모든 설정을 클릭 한 번으로 끝낼 수 있습니다.</p>
             <ol>
-                <li>프로젝트 루트 폴더의 <code>Initial_Setup.bat</code> 파일을 실행합니다.</li>
-                <li>안내에 따라 <strong>MySQL root 비밀번호</strong>를 입력합니다.</li>
-                <li>아래 과정이 자동으로 진행됩니다:
+                <li>프로젝트 폴더의 <strong><code>Initial_Setup.bat</code></strong>를 실행합니다.</li>
+                <li>안내에 따라 MySQL 비밀번호를 입력하면 아래 작업이 <strong>자동</strong>으로 완료됩니다:
                     <ul>
-                        <li>Backend, Frontend, Launcher 의존성 자동 설치</li>
-                        <li><code>.env</code> 환경 설정 파일 자동 생성</li>
-                        <li>데이터베이스 스키마 및 기초 데이터 구축</li>
-                        <li>Puppeteer 브라우저 엔진 및 관리자 계정 초기화</li>
+                        <li>필수 라이브러리(node_modules) 전수 설치</li>
+                        <li>데이터베이스 구축 및 기초 데이터 입력</li>
+                        <li>경매 크롤러 엔진 및 관리자 계정(admin1234) 초기화</li>
                     </ul>
                 </li>
+                <li>모든 과정이 끝나면 런처 빌드까지 마무리됩니다.</li>
             </ol>
-            <div class="alert alert-warning">
-                💡 <strong>한글 깨짐 시</strong>: CMD에서 <code>chcp 65001</code>을 먼저 실행하세요.
-            </div>
+        </section>
+
+        <section class="card license-card">
+            <h2><span class="step-badge">보안</span> 3. 기기 인증 및 라이선스 활성화</h2>
+            <p>본 프로그램은 보안을 위해 승인된 기기에서만 작동합니다.</p>
+            <ol>
+                <li><code>hongda-biz-launcher/dist/...</code> 폴더 내 <strong><code>HongdaBiz.exe</code></strong>를 실행합니다.
+                </li>
+                <li>런처 왼쪽 하단 <strong>[기기 라이선스 정보]</strong> 영역에서 기기 ID를 확인합니다.</li>
+                <li>해당 ID를 클릭하여 복사한 후, 관리자(사장님)에게 전달하여 <strong>등록 요청</strong>을 하세요.</li>
+            </ol>
         </section>
 
         <section class="card">
-            <h2>⚙️ 시스템 실행 방법</h2>
-            <p>설치가 완료된 후 시스템을 가동하는 방법입니다.</p>
+            <h2>🚀 시스템 운영 및 업데이트</h2>
             <ul>
-                <li><strong>방법 A (권장)</strong>: <code>hongda-biz-launcher/dist/HongdaBiz-win32-x64</code> 폴더의
-                    <code>HongdaBiz.exe</code>를 실행하세요.
+                <li><strong>서버 가동</strong>: 라이선스 승인 후 런처를 켜면 서버가 자동으로 즉시 가동됩니다.</li>
+                <li><strong>온라인 업데이트</strong>: 새로운 버전이 출시되면 런처 상단에 알람이 뜹니다. <code>지금 업데이트</code> 버튼을 클릭하면 원클릭으로 최신화됩니다.
                 </li>
-                <li><strong>방법 B</strong>: 루트 폴더의 <code>Run Launcher.bat</code>을 실행하세요.</li>
             </ul>
+            <div class="alert alert-tip">
+                💡 <strong>팁</strong>: 설치 후 바탕화면에 생성된 바로가기를 사용하면 더욱 편리합니다.
+            </div>
         </section>
 
-        <section class="card login-info">
-            <h2>🔑 로그인 정보</h2>
-            <p>초기 접속 및 관리자 정보입니다.</p>
+        <section class="card" style="background: #f8fafc;">
+            <h2>🔑 접속 정보</h2>
             <ul>
-                <li><strong>주소</strong>: <a href="http://localhost:3000" target="_blank">http://localhost:3000</a></li>
+                <li><strong>접속 주소</strong>: <a href="http://localhost:3000" target="_blank">http://localhost:3000</a>
+                </li>
                 <li><strong>아이디</strong>: <code>admin</code></li>
                 <li><strong>비밀번호</strong>: <code>admin1234</code></li>
             </ul>
         </section>
 
+        <div class="alert alert-warning">
+            ⚠️ <strong>보안 권장</strong>: 최초 로그인 후 반드시 [사용자 관리] 메뉴에서 관리자 비밀번호를 변경해 주세요.
+        </div>
+
         <div class="footer">
             <p>© 2026 Hongda Biz System. All rights reserved.</p>
-            <p>Zero-Click Auto-Start Architecture 기반</p>
+            <p>Hybrid Cloud-Based License & Update Architecture</p>
         </div>
     </div>
 </body>

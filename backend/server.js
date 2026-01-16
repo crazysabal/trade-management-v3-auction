@@ -84,9 +84,23 @@ app.use((req, res) => {
 
 const PORT = process.env.PORT || 5000;
 
-app.listen(PORT, () => {
-  console.log('---------------------------------');
-  console.log(`Server running on port ${PORT}`);
-  console.log(`http://localhost:${PORT}`);
-  console.log('---------------------------------');
-});
+// [Update] 서버 시작 시 자동 마이그레이션 실행
+const migrationRunner = require('./utils/MigrationRunner');
+
+async function startServer() {
+  try {
+    await migrationRunner.run();
+
+    app.listen(PORT, () => {
+      console.log('---------------------------------');
+      console.log(`Server running on port ${PORT}`);
+      console.log(`http://localhost:${PORT}`);
+      console.log('---------------------------------');
+    });
+  } catch (error) {
+    console.error('❌ 서버 시작 실패 (마이그레이션 오류):', error.message);
+    process.exit(1);
+  }
+}
+
+startServer();

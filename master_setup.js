@@ -228,6 +228,26 @@ ENCRYPTION_KEY=secure-auction-key-v1-super-secret
 
     // 6. 관리자 계정 초기화 및 런처 빌드
     console.log('\n--- [5/5] 관리자 계정 초기화 및 런처 빌드 ---');
+
+    // [PRE-CHECK] 실행 중인 런처 프로세스 종료 (EBUSY 오류 방지)
+    try {
+        if (os.platform() === 'win32') {
+            console.log('! 기존 실행 중인 런처 프로세스를 정리합니다...');
+            execSync('taskkill /f /im HongdaBiz.exe /t /fi "status eq running"', { stdio: 'ignore' });
+
+            // [중요] 프로세스 종료 후 윈도우가 파일 잠금을 해제할 때까지 잠시 대기 (2초)
+            console.log('! 파일 잠금 해제를 대기 중입니다 (2초)...');
+            await new Promise(resolve => setTimeout(resolve, 2000));
+
+            // [추가] 빌드 방해 요소인 dist 폴더 강제 삭제 시도
+            const distPath = path.join(__dirname, 'hongda-biz-launcher', 'dist');
+            if (fs.existsSync(distPath)) {
+                console.log('! 기존 빌드 폴더를 강제 정리합니다...');
+                execSync(`powershell -Command "Remove-Item -Path '${distPath}' -Recurse -Force -ErrorAction SilentlyContinue"`);
+            }
+        }
+    } catch (e) { /* 무시 */ }
+
     // 관리자 비밀번호 리셋 스크립트 실행
     await runCommand('node scripts/emergency_reset_admin.js', path.join(__dirname, 'backend'));
 

@@ -4,9 +4,18 @@ const serverStatus = {
     frontend: 'stopped'
 };
 
+let isLicensed = false; // [LICENSE] 승인 여부
+let licenseMsg = '';
+
 let isStartingAll = false; // [NEW] 통합 시작 중인지 추적
 
 function toggleServer(type) {
+    // [LICENSE] 가드 추가
+    if (!isLicensed && serverStatus[type] !== 'running') {
+        alert('라이선스 오류:\n' + licenseMsg);
+        return;
+    }
+
     if (serverStatus[type] === 'running') {
         window.api.stopProcess(type);
     } else {
@@ -19,6 +28,15 @@ function toggleServer(type) {
 }
 
 function toggleAll() {
+    // [LICENSE] 가드 추가
+    if (!isLicensed) {
+        const isAnyRunning = serverStatus.backend === 'running' || serverStatus.frontend === 'running';
+        if (!isAnyRunning) {
+            console.warn('License not valid. Auto-start aborted.');
+            return;
+        }
+    }
+
     const isAnyRunning = serverStatus.backend === 'running' || serverStatus.frontend === 'running';
 
     if (isAnyRunning) {
@@ -181,10 +199,86 @@ function updateAllButtonStatus() {
         btnAll.classList.add('start');
     }
 }
+
+// [UPDATE] 온라인 업데이트 알림 수신
+window.api.onUpdateAvailable(({ local, remote }) => {
+    const banner = document.getElementById('update-banner');
+    const verSpan = document.getElementById('remote-ver');
+    if (banner && verSpan) {
+        verSpan.textContent = remote;
+        banner.style.display = 'block';
+        appendLog('system', `🚀 새로운 업데이트가 발견되었습니다! (v${local} -> v${remote})`, false);
+        appendLog('system', `💡 [업데이트 방법 보기] 버튼을 클릭해 안내를 확인하세요.`, false);
+    }
+});
+
+function startAutoUpdate() {
+    if (confirm('신규 업데이트를 설치하기 위해 프로그램을 종료하고 업데이트를 시작하시겠습니까?')) {
+        appendLog('system', '🚀 자동 업데이트를 시작합니다. 런처가 곧 종료됩니다...', false);
+        window.api.runUpdate();
+    }
+}
+// [LICENSE] 기기 ID 처리
+let currentMachineId = '';
+window.api.onMachineId((id) => {
+    currentMachineId = id;
+    const display = document.getElementById('machine-id-display');
+    if (display) display.textContent = id;
+});
+
+window.api.onLicenseInfo((info) => {
+    isLicensed = info.isLicensed;
+    licenseMsg = info.message;
+    console.log('[License Info]', info);
+
+    // [NEW] 만료일 전용 UI 업데이트
+    const expiryDisplay = document.getElementById('license-expiry-display');
+    if (expiryDisplay) {
+        if (info.expiresAt && info.expiresAt !== '미승인') {
+            expiryDisplay.textContent = `만료일: ${info.expiresAt}`;
+            expiryDisplay.style.color = '#238636'; // GitHub green
+        } else {
+            expiryDisplay.textContent = `만료일: ${info.expiresAt || '확인 불가'}`;
+            expiryDisplay.style.color = isLicensed ? '#888' : '#da3633'; // normal or GitHub red
+        }
+    }
+
+    // UI에 상태 표시
+    if (!isLicensed) {
+        appendLog('system', '⚠️ ' + licenseMsg, true);
+    } else {
+        appendLog('system', '✅ ' + licenseMsg, false);
+
+        // [NEW] 라이선스 승인 완료 시 자동 시작 트리거 (최초 1회)
+        if (!hasAutoStarted && !isStartingAll) {
+            hasAutoStarted = true;
+            appendLog('system', '🚀 라이선스 확인됨. 자동 시작 시퀀스를 가동합니다...', false);
+            setTimeout(() => {
+                toggleAll();
+            }, 500); // UI 안정화를 위한 짧은 지연
+        }
+    }
+});
+
+async function copyMachineId() {
+    if (currentMachineId) {
+        const success = await copyToClipboard(currentMachineId);
+        if (success) {
+            const confirm = document.getElementById('copy-confirm');
+            if (confirm) {
+                confirm.style.display = 'block';
+                setTimeout(() => confirm.style.display = 'none', 2000);
+            }
+        }
+    }
+}
+
 // [NEW] 런처 실행 시 자동 시작 트리거
+let hasAutoStarted = false;
 window.onload = () => {
-    console.log('--- 자동 시작 시퀀스 가동 ---');
-    setTimeout(() => {
-        toggleAll();
-    }, 1000); // 윈도우 초기 안정화를 위해 1초 후 시작
+    console.log('--- 시스템 초기화 및 라이선스 체크 ---');
+
+    // 정보 요청 (응답이 오면 위 onLicenseInfo에서 자동 시작 트리거됨)
+    window.api.getMachineId();
+    window.api.getLicenseInfo();
 };

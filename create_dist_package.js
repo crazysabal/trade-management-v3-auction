@@ -22,9 +22,12 @@ const INCLUDE_LIST = [
     'Installation_Guide.html',
     'Installation_Guide.txt',
     'Run Launcher.bat',
+    'Update_System.bat',      // 업데이트용 배치파일
     'database_schema.sql',
     'master_setup.js',
-    'package.json'
+    'package.json',
+    'version.json',          // 버젼 정보 파일
+    'scripts'                // 업데이트 매니저 포함
 ];
 
 // 2. 제외 규칙 (폴더명/파일명)
@@ -39,7 +42,8 @@ const EXCLUDE_LIST = [
     '.env',             // 보안을 위해 제외 (setup에서 자동 생성됨)
     'cookies',          // 경매 세션 정보 유출 방지
     'puppeteer_data',   // 브라우저 프로필 유출 방지
-    'logs'              // 시스템 로그 제외
+    'logs',             // 시스템 로그 제외
+    'temp_update'       // 업데이트 임시 폴더 제외
 ];
 
 function deleteFolderRecursive(directoryPath) {
@@ -87,6 +91,15 @@ async function createPackage() {
     // 기존 작업 폴더 삭제
     if (fs.existsSync(DIST_DIR)) {
         console.log('! 이전 작업 폴더 정리 중...');
+        // [PRE-CHECK] 실행 중인 런처 프로세스 종료 (EBUSY 오류 방지)
+        try {
+            if (process.platform === 'win32') {
+                execSync('taskkill /f /im HongdaBiz.exe /t /fi "status eq running"', { stdio: 'ignore' });
+                // [중요] 프로세스 종료 후 윈도우가 파일 잠금을 해제할 때까지 잠시 대기 (2초)
+                console.log('! 파일 잠금 해제를 대기 중입니다 (2초)...');
+                execSync('powershell -Command "Start-Sleep -Seconds 2"');
+            }
+        } catch (e) { /* ignore */ }
         deleteFolderRecursive(DIST_DIR);
     }
     fs.mkdirSync(DIST_DIR);

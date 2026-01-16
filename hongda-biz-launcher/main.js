@@ -9,8 +9,17 @@ const processes = {
     frontend: null
 };
 
+// [LICENSE] 기기 및 라이선스 정보 전역 변수 (최상단 배치로 초기화 오류 방지)
+const HardwareInfo = require('./HardwareInfo'); // 런처 내부 복사본 사용 (패키징 호환성)
+const MACHINE_ID = HardwareInfo.getMachineId();
+let IS_LICENSED = false;
+let LICENSE_MESSAGE = '라이선스 확인 중...';
+let LICENSE_EXPIRY = ''; // [NEW] 라이선스 만료일 저장
+
 // 윈도우 생성
-function createWindow() {
+async function createWindow() {
+    await verifyLicense(); // [NEW] 창 띄우기 전 라이선스 먼저 확인
+
     mainWindow = new BrowserWindow({
         width: 1000,
         height: 800,
@@ -38,13 +47,118 @@ if (!gotTheLock) {
         }
     });
 
-    app.whenReady().then(() => {
-        createWindow();
+    app.whenReady().then(async () => {
+        // [CLEAN START] 런처 시작 전 혹시 남아있을 수 있는 잔류 프로세스 정리 (포트 3000, 5000)
+        try {
+            console.log('--- Checking for dangling processes (Port 3000, 5000) ---');
+            await killPort(3000).catch(() => { });
+            await killPort(5000).catch(() => { });
+        } catch (e) { /* ignore cleanup errors */ }
+
+        await createWindow();
+
+        // [UPDATE CHECK] 온라인 버전 체크
+        setTimeout(checkUpdateOnline, 3000); // 실행 3초 후 체크
 
         app.on('activate', function () {
             if (BrowserWindow.getAllWindows().length === 0) createWindow();
         });
     });
+}
+
+ipcMain.on('get-license-info', (event) => {
+    event.reply('license-info', {
+        isLicensed: IS_LICENSED,
+        message: LICENSE_MESSAGE,
+        expiresAt: LICENSE_EXPIRY // [NEW] 만료일 정보 추가
+    });
+});
+
+// [LICENSE] 기기 ID 전달
+ipcMain.on('get-machine-id', (event) => {
+    event.reply('machine-id', MACHINE_ID);
+});
+
+
+// 라이선스 검증 함수
+async function verifyLicense() {
+    const https = require('https');
+    // [UPDATE] 사장님의 라이선스 관리 Gist 주소 (항상 최신본을 읽도록 타임스탬프 추가)
+    const LICENSE_URL = `https://gist.githubusercontent.com/crazysabal/923caedede033de2dcdc9153a0fe25e3/raw/license_config.json?t=${Date.now()}`;
+
+    return new Promise((resolve) => {
+        https.get(LICENSE_URL, (res) => {
+            let data = '';
+            res.on('data', (d) => data += d);
+            res.on('end', () => {
+                try {
+                    const config = JSON.parse(data);
+                    const license = config.ALLOWED_MACHINES[MACHINE_ID];
+
+                    if (!license) {
+                        IS_LICENSED = false;
+                        LICENSE_MESSAGE = `[미등록 기기] 라이선스가 승인되지 않았습니다. 관리자에게 등록을 요청하세요. (ID: ${MACHINE_ID})`;
+                        LICENSE_EXPIRY = '미승인';
+                        console.log('--- [License Result] NOT LICENSED (Unregistered ID) ---');
+                    } else {
+                        LICENSE_EXPIRY = license.expires_at; // 만료일 저장
+                        const expiresAt = new Date(license.expires_at);
+                        const today = new Date();
+                        if (today > expiresAt) {
+                            IS_LICENSED = false;
+                            LICENSE_MESSAGE = `[기간 만료] 사용 기간이 종료되었습니다. (${license.expires_at}) 연장을 위해 관리자에게 문의하세요.`;
+                            console.log('--- [License Result] EXPIRED ---');
+                        } else {
+                            IS_LICENSED = true;
+                            LICENSE_MESSAGE = `[승인 완료] 유효 기간: ${license.expires_at}`;
+                            console.log('--- [License Result] SUCCESS (Licensed) ---');
+                        }
+                    }
+                } catch (e) {
+                    // 서버 연결 실패나 JSON 파싱 실패 시 오프라인 유예 정책 (안전하게 허용)
+                    IS_LICENSED = true;
+                    LICENSE_MESSAGE = '[승인 성공] 라이선스 서버 연결 실패. 로컬 모드로 실행됩니다.';
+                    LICENSE_EXPIRY = '서버 통신 오류';
+                    console.log('--- [License Result] FALLBACK (Server Error) ---');
+                }
+                resolve();
+            });
+        }).on('error', () => {
+            IS_LICENSED = true; // 서버 에러 시 일단 실행 (사용자 불편 방지)
+            LICENSE_MESSAGE = '[승인 성공] 오프라인 상태입니다.';
+            LICENSE_EXPIRY = '오프라인 (확인 불가)';
+            resolve();
+        });
+    });
+}
+
+// 온라인 버전 체크 함수
+async function checkUpdateOnline() {
+    const https = require('https');
+    const fs = require('fs');
+    const rootPath = getProjectRoot();
+    const versionPath = path.join(rootPath, 'version.json');
+
+    // [UPDATE] 사장님의 실제 레포 주소 (캐시 방지 타임스탬프 추가)
+    const REMOTE_VERSION_URL = `https://raw.githubusercontent.com/crazysabal/hongda-biz/main/version.json?t=${Date.now()}`;
+
+    try {
+        if (!fs.existsSync(versionPath)) return;
+        const localVersion = JSON.parse(fs.readFileSync(versionPath, 'utf8')).version;
+
+        https.get(REMOTE_VERSION_URL, (res) => {
+            let data = '';
+            res.on('data', d => data += d);
+            res.on('end', () => {
+                try {
+                    const remoteVersion = JSON.parse(data).version;
+                    if (localVersion !== remoteVersion) {
+                        mainWindow.webContents.send('update-available', { local: localVersion, remote: remoteVersion });
+                    }
+                } catch (e) { /* ignore */ }
+            });
+        }).on('error', () => { /* ignore */ });
+    } catch (err) { /* ignore */ }
 }
 
 app.on('window-all-closed', function () {
@@ -219,4 +333,30 @@ ipcMain.on('open-external', (event, url) => {
 
 ipcMain.on('minimize-window', () => {
     if (mainWindow) mainWindow.minimize();
+});
+
+// [UPDATE] 자동 업데이트 실행 연동
+ipcMain.on('run-update', () => {
+    const fs = require('fs');
+    const rootPath = getProjectRoot();
+    const updateBatPath = path.join(rootPath, 'Update_System.bat');
+
+    if (fs.existsSync(updateBatPath)) {
+        console.log('[Update] 자동 업데이트 배치 실행:', updateBatPath);
+
+        // 새로운 cmd 창에서 배치 파일 실행 (detached: true 해야 런처가 꺼져도 계속됨)
+        const { spawn } = require('child_process');
+        spawn('cmd.exe', ['/c', 'start', '', updateBatPath], {
+            cwd: rootPath,
+            detached: true,
+            stdio: 'ignore'
+        }).unref();
+
+        // 런처 종료
+        setTimeout(() => {
+            app.quit();
+        }, 1000);
+    } else {
+        console.error('[Update] 업데이트 파일을 찾을 수 없습니다:', updateBatPath);
+    }
 });

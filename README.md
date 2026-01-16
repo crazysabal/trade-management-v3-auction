@@ -1,197 +1,68 @@
-# 매입/매출 거래명세서 관리 시스템
+# 🚀 홍다 비즈 (Hongda Biz) - 통합 거래 관리 시스템
 
-웹 기반 매입/매출 거래명세서 관리 프로그램입니다.
+홍다 비즈는 매입/매출 거래명세서 관리, 재고 추적, 그리고 경매 데이터 자동 수집을 통합한 비즈니스 솔루션입니다.
 
-## 기술 스택
+---
 
-### 백엔드
-- Node.js + Express
-- MySQL
+## � 시스템 권장 사양
 
-### 프론트엔드
-- React
-- React Router
-- Axios
+- **운영체제**: Windows 10/11 (64비트)
+- **CPU**: i3급 이상 (i5급 이상 권장)
+- **메모리(RAM)**: 4GB 이상 (**8GB 이상 강력 권장**)
+- **저장장치**: SSD (여유 공간 2GB 이상)
 
-## 설치 및 실행 방법
+---
 
-### 1. 사전 준비
+## �📋 0. 필수 설치 프로그램 (먼저 설치해 주세요)
 
-다음 프로그램들이 설치되어 있어야 합니다:
-- Node.js (v14 이상) - https://nodejs.org/
-- MySQL (이미 설치되어 있음)
+시스템 가동을 위해 아래 두 프로그램은 **반드시** 설치되어 있어야 합니다.
 
-### 2. 데이터베이스 설정
+1.  **Node.js (v20 이상 LTS)**: [공식 홈페이지](https://nodejs.org/)에서 다운로드 후 설치
+2.  **MySQL Server (8.0 또는 8.4 LTS)**: [다운로드](https://dev.mysql.com/downloads/mysql/) 및 설치 (비밀번호를 꼭 기억하세요)
 
-MySQL에 접속하여 데이터베이스를 생성하고 스키마를 import합니다.
+---
 
-```bash
-# MySQL 접속
-mysql -u root -p
+## ⚡ 1. 퀵 스타트 (원스톱 설치)
 
-# 또는 MySQL Workbench를 사용하여 database_schema.sql 파일을 실행
-```
+1.  본 저장소를 다운로드하거나 복사합니다.
+2.  루트 폴더의 **`Initial_Setup.bat`**를 실행합니다.
+3.  안내에 따라 MySQL 비밀번호를 입력하면 모든 설정이 자동으로 완료됩니다.
+4.  설치 완료 후 바탕화면의 **'홍다 비즈 (Hongda Biz)'** 아이콘을 실행하세요.
 
-루트 디렉토리의 `database_schema.sql` 파일을 실행하세요.
+---
 
-### 3. 백엔드 설치 및 실행
+## 🔑 2. 기기 등록 및 라이선스
 
-```bash
-# backend 폴더로 이동
-cd backend
+본 프로그램은 기기 인증이 필요합니다. 런처 실행 후 하단에 표시되는 **기기 ID**를 관리자(사장님)에게 전달하여 등록을 요청하세요. 승인 후에는 모든 기능을 자유롭게 사용하실 수 있습니다.
 
-# 패키지 설치
-npm install
+---
 
-# 환경변수 파일 생성
-# .env.example 파일을 .env로 복사하고 MySQL 정보 입력
-cp .env.example .env
+## 🚀 3. 주요 기능
 
-# .env 파일 수정 (메모장 또는 편집기로 열어서 수정)
-# DB_PASSWORD=your_mysql_password
-# 다른 설정은 기본값 사용 가능
+- **통합 전표 관리**: 매입/매출 전표 작성 및 거래명세서 출력
+- **스마트 재고 관리**: Lot 단위 재고 추적 및 창고 간 이동 관리
+- **경매 데이터 크롤링**: 외부 경매 사이트의 낙찰 데이터를 자동으로 수집 및 연동
+- **온라인 자동 업데이트**: 클릭 한 번으로 최신 패치 적용 및 DB 마이그레이션
+- **하드웨어 기반 보안**: 기기 인증을 통한 안전한 데이터 보호
 
-# 서버 실행
-npm start
-```
+---
 
-서버가 http://localhost:5000 에서 실행됩니다.
+## 🛠 4. 기술 스택
 
-### 4. 프론트엔드 설치 및 실행
+- **Backend**: Node.js, Express, MySQL, Puppeteer (Crawl)
+- **Frontend**: React, Material UI, CSS3
+- **Launcher**: Electron (Node.js API integration)
+- **Deployment**: Windows Batch, PowerShell Automation
 
-새 터미널(또는 명령 프롬프트)을 열어서:
+---
 
-```bash
-# frontend 폴더로 이동
-cd frontend
+## 📚 5. 상세 안내 문서
 
-# 패키지 설치 (시간이 좀 걸립니다)
-npm install
+더 자세한 설치 및 운영 방법은 아래 링크를 참조하세요.
 
-# 개발 서버 실행
-npm start
-```
+- [통합 설치 가이드 (HTML)](./Installation_Guide.html)
+- [상세 운영 가이드 (Markdown)](./Installation_Guide.md)
 
-브라우저가 자동으로 열리며 http://localhost:3000 에서 실행됩니다.
+---
 
-### 5. 로컬 네트워크에서 접속하기 (선택사항)
-
-같은 네트워크의 다른 컴퓨터나 모바일에서 접속하려면:
-
-1. 현재 컴퓨터의 IP 주소 확인:
-   - Windows: `ipconfig` 명령어 실행
-   - IPv4 주소 확인 (예: 192.168.0.10)
-
-2. 프론트엔드 설정 수정:
-   - `frontend/src/services/api.js` 파일을 열어서
-   - `API_BASE_URL`을 `http://[컴퓨터IP]:5000/api`로 변경
-   
-3. 다른 기기에서 `http://[컴퓨터IP]:3000` 으로 접속
-
-## 주요 기능
-
-### 1. 거래처 관리
-- 거래처 등록/수정/삭제
-- 거래처 검색 및 필터링
-- 매입처/매출처 구분 관리
-
-### 2. 품목 관리
-- 품목 등록/수정/삭제
-- 품목별 단가 관리 (기준/매입/매출)
-- 품목 검색 및 분류
-
-### 3. 거래 전표 관리
-- 매입/매출 전표 등록
-- 전표 수정 및 삭제
-- 거래명세서 출력
-- 전표 상태 관리 (임시저장/확정/완료/취소)
-
-### 4. 통계
-- 거래처별 집계
-- 기간별 매입/매출 통계
-- 거래처별 비중 분석
-
-### 5. 대시보드
-- 오늘/이번 달 매입/매출 요약
-- 최근 거래 내역
-- 거래처/품목 수 현황
-
-## 기본 계정
-
-- ID: admin
-- Password: admin123
-
-## 폴더 구조
-
-```
-project/
-├── database_schema.sql      # 데이터베이스 스키마
-├── backend/                 # 백엔드 (API 서버)
-│   ├── config/
-│   │   └── database.js     # DB 연결 설정
-│   ├── routes/
-│   │   ├── companies.js    # 거래처 API
-│   │   ├── products.js     # 품목 API
-│   │   └── trades.js       # 거래전표 API
-│   ├── server.js           # 메인 서버 파일
-│   ├── package.json
-│   └── .env                # 환경변수 (직접 생성)
-│
-└── frontend/               # 프론트엔드 (웹 UI)
-    ├── public/
-    │   └── index.html
-    ├── src/
-    │   ├── pages/          # 페이지 컴포넌트들
-    │   ├── services/       # API 통신
-    │   ├── App.js          # 메인 앱
-    │   ├── App.css         # 스타일
-    │   └── index.js        # 진입점
-    └── package.json
-```
-
-## 프로덕션 배포
-
-### 백엔드
-```bash
-cd backend
-npm start
-```
-
-### 프론트엔드
-```bash
-cd frontend
-npm run build
-```
-
-빌드된 파일은 `frontend/build` 폴더에 생성됩니다.
-이 폴더를 웹 서버(Apache, Nginx 등)에 배포하면 됩니다.
-
-## 문제 해결
-
-### 포트 충돌
-- 백엔드: `.env` 파일에서 PORT 변경
-- 프론트엔드: `package.json`의 start 스크립트 수정
-
-### 데이터베이스 연결 오류
-- MySQL이 실행 중인지 확인
-- `.env` 파일의 DB 정보가 정확한지 확인
-
-### CORS 오류
-- 백엔드의 `server.js`에 cors 설정이 포함되어 있음
-- 다른 도메인에서 접속 시 허용 도메인 추가 필요
-
-## 향후 개선 사항
-
-- [ ] 사용자 로그인/권한 관리
-- [ ] 엑셀 내보내기
-- [ ] PDF 생성
-- [ ] 대시보드 차트 추가
-- [ ] 모바일 반응형 개선
-
-## 라이선스
-
-MIT License
-
-## 문의
-
-문제가 발생하거나 개선 사항이 있으면 이슈를 등록해주세요.
+© 2026 Hongda Biz. All rights reserved.

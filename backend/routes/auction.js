@@ -124,7 +124,7 @@ async function saveCookies(page, accountId) {
     path.join(COOKIES_PATH, `account_${accountId}.json`),
     JSON.stringify(cookies, null, 2)
   );
-  console.log(`✓ 쿠키 저장 완료 (계정 ID: ${accountId})`);
+  // console.log(`✓ 쿠키 저장 완료 (계정 ID: ${accountId})`);
 }
 
 // 쿠키 로드 함수
@@ -133,7 +133,7 @@ async function loadCookies(page, accountId) {
   if (fs.existsSync(cookieFile)) {
     const cookies = JSON.parse(fs.readFileSync(cookieFile, 'utf8'));
     await page.setCookie(...cookies);
-    console.log(`✓ 저장된 쿠키 로드 완료 (계정 ID: ${accountId})`);
+    // console.log(`✓ 저장된 쿠키 로드 완료 (계정 ID: ${accountId})`);
     return true;
   }
   return false;
@@ -194,7 +194,7 @@ router.post('/crawl', async (req, res) => {
     // 계정별로 브라우저 프로필(userDataDir)을 격리하여 세션 간섭 방지
     const baseUserDataDir = path.join(__dirname, '../puppeteer_data');
     const accountSpecificDir = path.join(baseUserDataDir, `account_${account_id}`);
-    
+
     if (!fs.existsSync(accountSpecificDir)) {
       fs.mkdirSync(accountSpecificDir, { recursive: true });
     }
@@ -289,18 +289,9 @@ router.post('/crawl', async (req, res) => {
         let idInput = null;
         let pwInput = null;
 
-        for (const selector of idSelectors) {
-          idInput = await page.$(selector);
-          if (idInput) {
-            console.log(`   ID 입력 필드 발견: ${selector}`);
-            break;
-          }
-        }
-
         for (const selector of pwSelectors) {
           pwInput = await page.$(selector);
           if (pwInput) {
-            console.log(`   PW 입력 필드 발견: ${selector}`);
             break;
           }
         }
@@ -403,7 +394,7 @@ router.post('/crawl', async (req, res) => {
     }
 
     // 낙찰 내역 페이지 이동 (날짜 파라미터 포함)
-    console.log('📋 낙찰 내역 페이지로 이동합니다...');
+    // console.log('📋 낙찰 내역 페이지로 이동합니다...');
     const targetDate = crawl_date || new Date().toISOString().split('T')[0];
 
     // URL에 날짜 파라미터 추가 시도 (일반적인 파라미터명들 시도)
@@ -613,7 +604,7 @@ router.post('/crawl', async (req, res) => {
     // 쿠키 저장 (세션 유지용)
     await saveCookies(page, account_id);
 
-    console.log(`✓ ${auctionData.length}건의 데이터를 파싱했습니다.`);
+    // console.log(`✓ ${auctionData.length}건의 데이터를 파싱했습니다.`);
 
     await browser.close();
 

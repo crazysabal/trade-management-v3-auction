@@ -202,12 +202,38 @@
             background-color: #444;
             color: white;
         }
+
+        @keyframes pulse {
+            0% {
+                transform: scale(1);
+                box-shadow: 0 0 0 0 rgba(241, 196, 15, 0.4);
+            }
+
+            70% {
+                transform: scale(1.02);
+                box-shadow: 0 0 0 10px rgba(241, 196, 15, 0);
+            }
+
+            100% {
+                transform: scale(1);
+                box-shadow: 0 0 0 0 rgba(241, 196, 15, 0);
+            }
+        }
     </style>
 </head>
 
 <body>
     <div class="sidebar">
         <h2 style="text-align: center; margin-bottom: 30px; color: #fff; letter-spacing: 1px;">HONGDA BIZ LAUNCHER</h2>
+
+        <div id="update-banner"
+            style="display: none; background-color: #f1c40f; color: #000; padding: 10px; border-radius: 8px; margin-bottom: 20px; font-size: 13px; font-weight: bold; text-align: center; animation: pulse 2s infinite;">
+            🚀 신규 업데이트 발견! <br />
+            (v<span id="remote-ver"></span>) <br />
+            <button onclick="startAutoUpdate()"
+                style="margin-top: 5px; background: #000; color: #fff; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: bold;">지금
+                업데이트</button>
+        </div>
 
         <div class="control-all-section">
             <button id="btn-all" class="btn-toggle btn-all start" onclick="toggleAll()">ALL START</button>
@@ -221,6 +247,17 @@
         <div id="status-frontend" class="control-group">
             <h3><span class="status-indicator"></span>Frontend</h3>
             <button id="btn-frontend" class="btn-toggle start" onclick="toggleServer('frontend')">START</button>
+        </div>
+
+        <div
+            style="margin-top: auto; padding: 15px; background-color: #1a1a1b; border-radius: 8px; font-size: 11px; color: #888; border: 1px dashed #333;">
+            <div style="margin-bottom: 5px; color: #aaa; font-weight: bold;">기기 라이선스 정보</div>
+            <div id="machine-id-display" onclick="copyMachineId()"
+                style="font-family: monospace; cursor: pointer; color: #555;" title="클릭하여 복사">
+                불러오는 중...
+            </div>
+            <div id="copy-confirm" style="color: #238636; margin-top: 3px; display: none;">ID가 복사되었습니다!</div>
+            <div id="license-expiry-display" style="margin-top: 8px; color: #666;">만료일: 확인 중...</div>
         </div>
     </div>
 
