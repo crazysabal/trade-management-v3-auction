@@ -188,18 +188,20 @@ app.on('before-quit', () => {
 });
 
 function killAllProcesses() {
+    const { execSync } = require('child_process');
     Object.keys(processes).forEach(type => {
         const child = processes[type];
         if (child && child.pid) {
             try {
                 if (os.platform() === 'win32') {
+                    // [중요] execSync를 사용하여 종료 명령이 완료될 때까지 기다림
                     // /f: 강제 종료, /t: 자식 프로세스까지 모두 종료 (Tree-kill)
-                    spawn("taskkill", ["/pid", child.pid, '/f', '/t']);
+                    execSync(`taskkill /pid ${child.pid} /f /t`, { stdio: 'ignore' });
                 } else {
-                    child.kill('SIGTERM');
+                    child.kill('SIGKILL');
                 }
             } catch (e) {
-                console.error(`Error killing ${type} process:`, e);
+                // 이미 종료된 경우 등 에러 무시
             }
             processes[type] = null;
         }
