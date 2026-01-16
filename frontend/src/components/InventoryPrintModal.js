@@ -165,7 +165,9 @@ const InventoryPrintModal = ({ isOpen, onClose, inventory, warehouses }) => {
                 backgroundColor: 'rgba(0, 0, 0, 0.5)',
                 display: 'flex',
                 justifyContent: 'center',
-                alignItems: 'center',
+                alignItems: 'flex-start',
+                paddingTop: '60px',
+                paddingBottom: '50px',
                 zIndex: 9999
             }}
             onClick={(e) => { e.stopPropagation(); onClose(); }}
@@ -179,7 +181,7 @@ const InventoryPrintModal = ({ isOpen, onClose, inventory, warehouses }) => {
                     width: 'fit-content',
                     minWidth: '600px',
                     maxWidth: '95vw',
-                    height: '85vh',
+                    maxHeight: 'calc(100vh - 110px)',
                     display: 'flex',
                     flexDirection: 'column',
                     boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',

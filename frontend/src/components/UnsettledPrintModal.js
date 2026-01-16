@@ -125,7 +125,12 @@ const UnsettledPrintModal = ({ isOpen, onClose, data }) => {
     return createPortal(
         <div
             className="premium-modal-overlay"
-            style={{ display: 'flex' }}
+            style={{
+                display: 'flex',
+                alignItems: 'flex-start',
+                paddingTop: '60px',
+                paddingBottom: '50px'
+            }}
             onClick={onClose}
         >
             <div
@@ -135,7 +140,7 @@ const UnsettledPrintModal = ({ isOpen, onClose, data }) => {
                     width: 'fit-content',
                     minWidth: '600px',
                     maxWidth: '95vw',
-                    height: '95vh',
+                    maxHeight: 'calc(100vh - 110px)',
                     ...draggableStyle
                 }}
             >

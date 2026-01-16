@@ -95,7 +95,7 @@ const ProductInputModal = ({ isOpen, onClose, onSuccess, initialData = null, isE
             product_code: '',
             product_name: '',
             grade: '',
-            grades: '',
+            grades: [],
 
             category_id: '',
             weight: '',
@@ -513,8 +513,8 @@ const ProductInputModal = ({ isOpen, onClose, onSuccess, initialData = null, isE
                                                         product_name: p.product_name,
                                                         category_id: p.category_id,
                                                         weight: p.weight || '',
-                                                        weights: '',
-                                                        grades: ''
+                                                        weights: [],
+                                                        grades: []
                                                     });
                                                     setIsAddingGrade(true);
                                                 }
@@ -581,7 +581,7 @@ const ProductInputModal = ({ isOpen, onClose, onSuccess, initialData = null, isE
                                             minHeight: '42px',
                                             alignItems: 'center'
                                         }}>
-                                            {formData.grades.map((g, idx) => (
+                                            {Array.isArray(formData.grades) && formData.grades.map((g, idx) => (
                                                 <Tag key={idx} text={g} onRemove={() => removeTag(idx, 'grades')} />
                                             ))}
                                             <input
@@ -636,7 +636,7 @@ const ProductInputModal = ({ isOpen, onClose, onSuccess, initialData = null, isE
                                             minHeight: '42px',
                                             alignItems: 'center'
                                         }}>
-                                            {formData.weights.map((w, idx) => (
+                                            {Array.isArray(formData.weights) && formData.weights.map((w, idx) => (
                                                 <Tag key={idx} text={`${w}kg`} onRemove={() => removeTag(idx, 'weights')} />
                                             ))}
                                             <input

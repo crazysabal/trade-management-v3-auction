@@ -738,7 +738,9 @@ function TradePrintModal({ isOpen, onClose, tradeId }) {
         backgroundColor: 'rgba(0, 0, 0, 0.5)',
         display: 'flex',
         justifyContent: 'center',
-        alignItems: 'center',
+        alignItems: 'flex-start',
+        paddingTop: '60px',
+        paddingBottom: '50px',
         zIndex: 9999
       }}
     >
@@ -750,7 +752,7 @@ function TradePrintModal({ isOpen, onClose, tradeId }) {
           borderRadius: '8px',
           width: '95%',
           maxWidth: '800px',
-          maxHeight: '98vh',
+          maxHeight: 'calc(100vh - 110px)',
           display: 'flex',
           flexDirection: 'column',
           boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',

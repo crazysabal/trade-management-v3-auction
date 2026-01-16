@@ -1,5 +1,6 @@
 @echo off
 setlocal enabledelayedexpansion
+:: 인코딩 안정성을 위해 65001(UTF-8) 설정
 chcp 65001 > nul
 
 echo ================================================
@@ -17,12 +18,7 @@ timeout /t 2 /nobreak > nul
 :: 2. 업데이트 매니저 실행
 echo [2/4] 최신 버전을 확인하고 파일을 교체합니다...
 node scripts/update_manager.js
-if %errorlevel% neq 0 (
-    echo.
-    echo ❌ 업데이트 도중 오류가 발생했습니다.
-    pause
-    exit /b %errorlevel%
-)
+if errorlevel 1 goto :error
 
 :: 3. 의존성 갱신
 echo.
@@ -46,3 +42,10 @@ echo    프로그램을 다시 실행해 주세요.
 echo ================================================
 echo.
 pause
+exit /b 0
+
+:error
+echo.
+echo ❌ 업데이트 도중 오류가 발생했습니다.
+pause
+exit /b 1

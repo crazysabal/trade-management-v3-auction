@@ -220,6 +220,7 @@ function TradePanel({
   const notesRefs = useRef([]);
   const modalConfirmRef = useRef(null);
   const isSaving = useRef(false); // 저장 중 중복 클릭 방지
+  const tableContainerRef = useRef(null); // [NEW] 상세 행 추가 시 스크롤 제어용
 
 
 
@@ -327,6 +328,20 @@ function TradePanel({
     // currentTradeId는 내부 네비게이션 시 변경되므로 의존성에서 제외 (자동 리로드 방지)
   }, [initialTradeId, timestamp]);
 
+  // [NEW] 상세 행 추가 시 자동 스크롤 하단 이동
+  const prevDetailsLength = useRef(details.length);
+  useEffect(() => {
+    if (details.length > prevDetailsLength.current) {
+      // 행이 추가된 경우에만 스크롤 (삭제 시에는 유지)
+      if (tableContainerRef.current) {
+        setTimeout(() => {
+          tableContainerRef.current.scrollTop = tableContainerRef.current.scrollHeight;
+        }, 50); // 렌더링 완료 후 스크롤을 위해 약간의 지연
+      }
+    }
+    prevDetailsLength.current = details.length;
+  }, [details.length]);
+
   const loadInitialData = async () => {
     try {
       setLoading(true);
@@ -383,18 +398,6 @@ function TradePanel({
     }
   };
 
-  // 거래처 새로고침
-  const refreshCompanies = async () => {
-    try {
-      const typeFilter = isPurchase ? 'SUPPLIER' : 'CUSTOMER';
-      const companiesRes = await companyAPI.getAll({ is_active: 'true', type: typeFilter });
-      setCompanies(companiesRes.data?.data || []);
-      showModal('success', '새로고침 완료', '거래처 목록이 갱신되었습니다.');
-    } catch (error) {
-      console.error('거래처 새로고침 오류:', error);
-      showModal('warning', '새로고침 실패', '거래처 목록을 가져오지 못했습니다.');
-    }
-  };
 
   // 거래처 잔고 정보 로드
   const loadCompanySummary = async (companyId, type, date, excludeTradeId = null) => {
@@ -1555,14 +1558,6 @@ function TradePanel({
                   menuPortalTarget={document.body}
                 />
               </div>
-              <button
-                type="button"
-                className="btn btn-sm btn-icon"
-                style={{ height: '100%', padding: '0 8px', marginLeft: '-4px' }}
-                onClick={refreshCompanies}
-                title="거래처 목록 새로고침"
-                disabled={isViewMode}
-              >🔄</button>
             </div>
             {isPurchase && (
               <div className="trade-form-group" style={{ width: '180px', display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '8px', height: '36px' }}>
@@ -1694,6 +1689,7 @@ function TradePanel({
 
             <div
               className="trade-table-container"
+              ref={tableContainerRef}
               onDragOver={(e) => handleDragOver(e, details.length)}
               onDrop={(e) => handleDrop(e, details.length)}
             >
@@ -2047,7 +2043,7 @@ function TradePanel({
                         </div>
                       );
                     })}
-                    {/* 저장 대기 중인 입금 내역 */}
+                    {/* 대기 중인 입금 내역 */}
                     {pendingPayments.map(payment => (
                       <div key={payment.tempId} style={{
                         display: 'flex',
@@ -2071,7 +2067,7 @@ function TradePanel({
                               padding: '1px 4px',
                               borderRadius: '3px'
                             }}>
-                              저장 대기
+                              대기
                             </span>
                             <span style={{
                               fontSize: '0.75rem',
