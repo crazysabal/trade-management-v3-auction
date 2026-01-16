@@ -21,12 +21,20 @@ async function runCommand(command, cwd) {
 }
 
 async function createDesktopShortcut() {
-    const desktopPath = path.join(os.homedir(), 'Desktop');
+    let desktopPath = path.join(os.homedir(), 'Desktop');
+
+    // OneDrive 바탕화면 경로 체크
+    const onedriveDesktop = path.join(os.homedir(), 'OneDrive', 'Desktop');
+    if (!fs.existsSync(desktopPath) && fs.existsSync(onedriveDesktop)) {
+        desktopPath = onedriveDesktop;
+    }
+
     const targetPath = path.join(__dirname, 'hongda-biz-launcher', 'dist', 'HongdaBiz-win32-x64', 'HongdaBiz.exe');
     const shortcutPath = path.join(desktopPath, '홍다 비즈 (Hongda Biz).lnk');
 
     if (!fs.existsSync(targetPath)) {
         console.log('\n[INFO] 실행 파일을 찾을 수 없어 바로가기를 생성하지 않습니다.');
+        console.log(`(기대 경로: ${targetPath})`);
         return;
     }
 
@@ -261,7 +269,8 @@ ENCRYPTION_KEY=secure-auction-key-v1-super-secret
     console.log('\n================================================');
     console.log('   🎉 모든 설정이 완료되었습니다!');
     console.log('================================================');
-    console.log('\n1. hongda-biz-launcher/dist 폴더 안의 HongdaBiz.exe를 실행하세요.');
+    console.log('\n1. 바탕화면에 생성된 [홍다 비즈 (Hongda Biz)] 바로가기를 실행하세요.');
+    console.log('   (또는 hongda-biz-launcher/dist/HongdaBiz-win32-x64 폴더 안의 HongdaBiz.exe 실행)');
     console.log('2. 관리자 ID: admin / PW: admin1234');
     console.log('\n엔터를 누르면 종료됩니다.');
 
