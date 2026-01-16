@@ -21,12 +21,15 @@ const INCLUDE_LIST = [
     'Initial_Setup.bat',
     'Installation_Guide.html',
     'Installation_Guide.txt',
+    'Installation_Guide.md',   // 마크다운 가이드 추가
+    'README.md',               // 메인 설명서 추가
     'Run Launcher.bat',
     'Update_System.bat',      // 업데이트용 배치파일
     'database_schema.sql',
     'master_setup.js',
     'package.json',
     'version.json',          // 버젼 정보 파일
+    'license_config_example.json', // 라이선스 설정 예시 추가
     'scripts'                // 업데이트 매니저 포함
 ];
 
