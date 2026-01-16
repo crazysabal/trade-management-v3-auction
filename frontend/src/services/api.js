@@ -70,6 +70,7 @@ export const settingsAPI = {
   addPaymentMethod: (data) => api.post('/settings/payment-methods', data),
   updatePaymentMethod: (id, data) => api.put(`/settings/payment-methods/${id}`, data),
   reorderPaymentMethods: (items) => api.put('/settings/payment-methods/reorder', { items }),
+  deletePaymentMethod: (id) => api.delete(`/settings/payment-methods/${id}`),
 };
 
 // 품목분류 API

@@ -73,15 +73,56 @@ router.post('/', async (req, res) => {
 });
 
 // Update User (including role/status)
-// Note: Password update is separate usually, or handled here if provided
-// Here we follow REST pattern or existing code style
 router.put('/:id', async (req, res) => {
-    const { role_id, is_active } = req.body;
+    const { role_id, is_active, password } = req.body;
+    const userId = req.params.id;
+
+    console.log(`[DEBUG] Update User ID: ${userId}, PW exists: ${!!password}`);
+
     try {
-        await db.query('UPDATE users SET role_id = ?, is_active = ? WHERE id = ?', [role_id, is_active, req.params.id]);
-        res.json({ message: 'User updated' });
+        // [SAFETY] Check if target is 'admin'
+        const [[targetUser]] = await db.query('SELECT username FROM users WHERE id = ?', [userId]);
+        if (!targetUser) {
+            console.log(`[DEBUG] User not found: ${userId}`);
+            return res.status(404).json({ message: '사용자를 찾을 수 없습니다.' });
+        }
+
+        const isAdminAccount = targetUser.username === 'admin';
+        console.log(`[DEBUG] Target User: ${targetUser.username}, Is Admin Account: ${isAdminAccount}`);
+
+        let query = 'UPDATE users SET ';
+        let params = [];
+        let sets = [];
+
+        // admin 계정은 role_id와 is_active 수정을 원천 차단
+        if (!isAdminAccount) {
+            sets.push('role_id = ?', 'is_active = ?');
+            params.push(role_id, is_active);
+        }
+
+        if (password) {
+            console.log(`[DEBUG] Hashing new password for ${targetUser.username}`);
+            const hashedPassword = await bcrypt.hash(password, 10);
+            sets.push('password_hash = ?');
+            params.push(hashedPassword);
+        }
+
+        if (sets.length === 0) {
+            console.log(`[DEBUG] No changes to apply for ${targetUser.username}`);
+            return res.json({ message: '변경할 정보가 없거나 보호된 계정입니다.' });
+        }
+
+        query += sets.join(', ') + ' WHERE id = ?';
+        params.push(userId);
+
+        console.log(`[DEBUG] Executing Query: ${query}`);
+        const [result] = await db.query(query, params);
+        console.log(`[DEBUG] Update Result: ${result.affectedRows} row(s) updated`);
+
+        res.json({ message: '사용자 정보가 업데이트되었습니다.', affected: result.affectedRows });
     } catch (err) {
-        res.status(500).json({ message: 'Error updating user' });
+        console.error('Update user error:', err);
+        res.status(500).json({ message: '사용자 정보 수정 중 오류가 발생했습니다.' });
     }
 });
 
@@ -89,19 +130,23 @@ router.put('/:id', async (req, res) => {
 router.delete('/:id', async (req, res) => {
     const userId = req.params.id;
 
-    // 본인 삭제 방지 (선택 사항)
-    if (req.user.id == userId) {
-        return res.status(400).json({ message: '자기 자신은 삭제할 수 없습니다.' });
-    }
-
-    // [SECURITY] 일반 직원은 삭제 권한 없음 (관리자만 가능)
-    // role check is case-insensitive for safety
-    if (!req.user.role || req.user.role.toLowerCase() !== 'admin') {
-        return res.status(403).json({ message: '사용자 삭제 권한이 없습니다. (관리자 전용)' });
-    }
-
     try {
-        // TODO: 전표 등 연관 데이터 확인 로직 추가 가능 (현재는 삭제만 수행)
+        // [SAFETY] admin 계정 삭제 시도 원천 차단
+        const [[targetUser]] = await db.query('SELECT username FROM users WHERE id = ?', [userId]);
+        if (targetUser && targetUser.username === 'admin') {
+            return res.status(403).json({ message: '최고 관리자(admin) 계정은 삭제할 수 없습니다.' });
+        }
+
+        // 본인 삭제 방지
+        if (req.user.id == userId) {
+            return res.status(400).json({ message: '자기 자신은 삭제할 수 없습니다.' });
+        }
+
+        // [SECURITY] 관리자만 삭제 가능
+        if (!req.user.role || req.user.role.toLowerCase() !== 'admin') {
+            return res.status(403).json({ message: '사용자 삭제 권한이 없습니다. (관리자 전용)' });
+        }
+
         const [result] = await db.query('DELETE FROM users WHERE id = ?', [userId]);
 
         if (result.affectedRows === 0) {

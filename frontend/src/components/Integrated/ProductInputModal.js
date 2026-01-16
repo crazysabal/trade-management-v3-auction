@@ -13,11 +13,11 @@ const ProductInputModal = ({ isOpen, onClose, onSuccess, initialData = null, isE
         product_code: '',
         product_name: '',
         grade: '',
-        grades: '',
+        grades: [], // Array for tags
 
         category_id: '',
         weight: '',
-        weights: '',
+        weights: [], // Array for tags
         notes: '',
         is_active: true
     };
@@ -33,6 +33,10 @@ const ProductInputModal = ({ isOpen, onClose, onSuccess, initialData = null, isE
     // const [updateAllGrades, setUpdateAllGrades] = useState(true); // Removed: Handled by Group Rename Feature
     const [updateAllWeights, setUpdateAllWeights] = useState(true);
     const [isMultiWeight, setIsMultiWeight] = useState(false);
+
+    // Temp inputs for tags
+    const [gradeInput, setGradeInput] = useState('');
+    const [weightInput, setWeightInput] = useState('');
 
     // Internal Modal (Confirmations)
     const [confirmModal, setConfirmModal] = useState({
@@ -59,8 +63,8 @@ const ProductInputModal = ({ isOpen, onClose, onSuccess, initialData = null, isE
                     category_id: initialData.category_id || '',
                     weight: initialData.weight !== null ? parseFloat(initialData.weight) : '',
                     notes: initialData.notes || '',
-                    weights: '', // Edit mode doesn't support bulk weights currently
-                    grades: ''
+                    weights: [],
+                    grades: []
                 };
                 setFormData(data);
                 setOriginalProductName(data.product_name);
@@ -95,10 +99,12 @@ const ProductInputModal = ({ isOpen, onClose, onSuccess, initialData = null, isE
 
             category_id: '',
             weight: '',
-            weights: '',
+            weights: [],
             notes: '',
             is_active: true
         });
+        setGradeInput('');
+        setWeightInput('');
         setIsMultiGrade(false);
         setIsMultiWeight(false);
         setIsAddingGrade(false);
@@ -146,7 +152,7 @@ const ProductInputModal = ({ isOpen, onClose, onSuccess, initialData = null, isE
                     ...formData,
                     product_name: p.product_name,
                     category_id: p.category_id,
-                    weight: p.weight || '',
+                    weight: p.weight !== null ? parseFloat(p.weight) : '',
                 });
                 setIsAddingGrade(true);
             }
@@ -170,6 +176,144 @@ const ProductInputModal = ({ isOpen, onClose, onSuccess, initialData = null, isE
             // checkSameNameProducts(value, initialData.id);
         }
     };
+
+    // --- Tag System Logic ---
+    const handleTagKeyDown = (e, field) => {
+        const input = field === 'grades' ? gradeInput : weightInput;
+        const setInput = field === 'grades' ? setGradeInput : setWeightInput;
+
+        if ((e.key === 'Enter' || e.key === ',') && input.trim()) {
+            e.preventDefault();
+            const val = input.trim();
+            if (!formData[field].includes(val)) {
+                setFormData(prev => ({
+                    ...prev,
+                    [field]: [...prev[field], val]
+                }));
+            }
+            setInput('');
+        } else if (e.key === 'Backspace' && !input && formData[field].length > 0) {
+            // Remove last tag
+            const newList = [...formData[field]];
+            newList.pop();
+            setFormData(prev => ({ ...prev, [field]: newList }));
+        }
+    };
+
+    const handleTagPaste = (e, field) => {
+        e.preventDefault();
+        const paste = e.clipboardData.getData('text');
+        const items = paste.split(/[,|\n\t]/).map(s => s.trim()).filter(Boolean);
+
+        setFormData(prev => {
+            const current = prev[field];
+            const uniqueNew = items.filter(it => !current.includes(it));
+            return {
+                ...prev,
+                [field]: [...current, ...uniqueNew]
+            };
+        });
+    };
+
+    const removeTag = (index, field) => {
+        setFormData(prev => {
+            const newList = [...prev[field]];
+            newList.splice(index, 1);
+            return { ...prev, [field]: newList };
+        });
+    };
+
+    const toggleMultiInput = (field, enable) => {
+        if (field === 'grades') {
+            if (enable && !isMultiGrade) {
+                // Single -> Multi: move single value to list
+                if (formData.grade && !formData.grades.includes(formData.grade)) {
+                    setFormData(prev => ({ ...prev, grades: [...prev.grades, prev.grade] }));
+                }
+                setIsMultiGrade(true);
+            } else if (!enable && isMultiGrade) {
+                // Multi -> Single: pick first tag if available
+                if (formData.grades.length > 0 && !formData.grade) {
+                    setFormData(prev => ({ ...prev, grade: prev.grades[0] }));
+                }
+                setIsMultiGrade(false);
+            }
+        } else if (field === 'weights') {
+            if (enable && !isMultiWeight) {
+                // Single -> Multi
+                if (formData.weight && !formData.weights.includes(String(formData.weight))) {
+                    setFormData(prev => ({ ...prev, weights: [...prev.weights, String(prev.weight)] }));
+                }
+                setIsMultiWeight(true);
+            } else if (!enable && isMultiWeight) {
+                // Multi -> Single
+                if (formData.weights.length > 0 && !formData.weight) {
+                    setFormData(prev => ({ ...prev, weight: parseFloat(formData.weights[0]) }));
+                }
+                setIsMultiWeight(false);
+            }
+        }
+    };
+
+    const SegmentedControl = ({ value, onChange, options }) => (
+        <div style={{
+            display: 'inline-flex',
+            backgroundColor: '#f1f5f9',
+            padding: '2px',
+            borderRadius: '8px',
+            border: '1px solid #e2e8f0',
+            userSelect: 'none'
+        }}>
+            {options.map(opt => {
+                const isActive = value === opt.value;
+                return (
+                    <div
+                        key={opt.value}
+                        onClick={() => onChange(opt.value)}
+                        style={{
+                            padding: '4px 12px',
+                            borderRadius: '6px',
+                            fontSize: '0.8rem',
+                            fontWeight: '600',
+                            cursor: 'pointer',
+                            backgroundColor: isActive ? 'white' : 'transparent',
+                            color: isActive ? '#3b82f6' : '#64748b',
+                            boxShadow: isActive ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+                            transition: 'all 0.2s',
+                            whiteSpace: 'nowrap'
+                        }}
+                    >
+                        {opt.label}
+                    </div>
+                );
+            })}
+        </div>
+    );
+
+    const Tag = ({ text, onRemove }) => (
+        <span style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            backgroundColor: '#f1f5f9',
+            color: '#334155',
+            padding: '2px 8px',
+            borderRadius: '4px',
+            fontSize: '0.85rem',
+            gap: '6px',
+            border: '1px solid #e2e8f0',
+            fontWeight: '600'
+        }}>
+            {text}
+            <span
+                onClick={onRemove}
+                style={{ cursor: 'pointer', fontSize: '1.1rem', lineHeight: 1, color: '#94a3b8' }}
+                onMouseEnter={e => e.target.style.color = '#ef4444'}
+                onMouseLeave={e => e.target.style.color = '#94a3b8'}
+            >
+                &times;
+            </span>
+        </span>
+    );
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -199,14 +343,26 @@ const ProductInputModal = ({ isOpen, onClose, onSuccess, initialData = null, isE
                 // Create Logic (Multi-Grade / Multi-Weight Support)
                 // Parse grades input
                 let targetGrades = [formData.grade];
-                if (isMultiGrade && formData.grades) {
-                    targetGrades = formData.grades.split(',').map(s => s.trim()).filter(Boolean);
+                if (isMultiGrade) {
+                    targetGrades = formData.grades;
+                    // If user left something in input but didn't press enter
+                    if (gradeInput.trim() && !targetGrades.includes(gradeInput.trim())) {
+                        targetGrades = [...targetGrades, gradeInput.trim()];
+                    }
                 }
 
                 // Parse weights input
                 let targetWeights = [formData.weight];
-                if (isMultiWeight && formData.weights) {
-                    targetWeights = formData.weights.split(',').map(s => s.trim()).filter(Boolean);
+                if (isMultiWeight) {
+                    targetWeights = formData.weights;
+                    if (weightInput.trim() && !targetWeights.includes(weightInput.trim())) {
+                        targetWeights = [...targetWeights, weightInput.trim()];
+                    }
+                }
+
+                if (targetGrades.length === 0 || (isMultiGrade && targetGrades.length === 1 && !targetGrades[0])) {
+                    alert('등급을 최소 하나 이상 입력해주세요.');
+                    return;
                 }
 
                 let submitData = { ...formData };
@@ -313,7 +469,7 @@ const ProductInputModal = ({ isOpen, onClose, onSuccess, initialData = null, isE
             <div
                 className="styled-modal"
                 style={{
-                    maxWidth: '600px',
+                    maxWidth: '800px',
                     ...draggableStyle
                 }}
                 onClick={e => e.stopPropagation()}
@@ -335,7 +491,7 @@ const ProductInputModal = ({ isOpen, onClose, onSuccess, initialData = null, isE
                             <div style={{ marginBottom: '1.5rem', padding: '0.75rem', backgroundColor: isAddingGrade ? '#fffbeb' : '#f8fafc', borderRadius: '8px', border: isAddingGrade ? '1px solid #fcd34d' : '1px solid #e2e8f0' }}>
                                 <p style={{ margin: 0, fontSize: '0.9rem', color: isAddingGrade ? '#92400e' : '#475569' }}>
                                     {isAddingGrade
-                                        ? `📌 "${formData.product_name}" 품목에 새로운 등급을 추가합니다.`
+                                        ? `📌 "${formData.product_name}${formData.weight ? ` (${parseFloat(formData.weight)}kg)` : ''}" 품목에 새로운 등급을 추가합니다.`
                                         : '💡 품목코드는 자동 생성됩니다.'}
                                 </p>
                             </div>
@@ -343,8 +499,8 @@ const ProductInputModal = ({ isOpen, onClose, onSuccess, initialData = null, isE
 
                         {/* Existing Product Select (Only New Mode) */}
                         {!isEdit && existingProducts.length > 0 && !isAddingGrade && (
-                            <div className="form-group">
-                                <label>기존 품목 복사</label>
+                            <div className="form-group" style={{ display: 'flex', alignItems: 'center', marginBottom: '1rem', gap: '12px' }}>
+                                <label style={{ width: '100px', flexShrink: 0, fontWeight: '600', color: '#475569' }}>기존 품목 복사</label>
                                 <div style={{ flex: 1 }}>
                                     <SearchableSelect
                                         options={existingProducts.map(p => ({ value: p.product_name, label: `${p.product_name} (${p.category_name || '-'})` }))}
@@ -372,15 +528,15 @@ const ProductInputModal = ({ isOpen, onClose, onSuccess, initialData = null, isE
                         )}
 
                         {/* Main Form */}
-                        <div className="form-group">
-                            <label>품목명</label>
+                        <div className="form-group" style={{ display: 'flex', alignItems: 'center', marginBottom: '1rem', gap: '12px' }}>
+                            <label style={{ width: '100px', flexShrink: 0, fontWeight: '600', color: '#475569' }}>품목명</label>
                             <div style={{ flex: 1 }}>
                                 <input
                                     type="text"
                                     name="product_name"
                                     value={formData.product_name || ''}
                                     onChange={handleChange}
-                                    style={{ backgroundColor: (isAddingGrade || isEdit) ? '#f1f5f9' : 'white', cursor: (isAddingGrade || isEdit) ? 'not-allowed' : 'text' }}
+                                    style={{ width: '100%', height: '40px', backgroundColor: (isAddingGrade || isEdit) ? '#f1f5f9' : 'white', cursor: (isAddingGrade || isEdit) ? 'not-allowed' : 'text' }}
                                     disabled={isAddingGrade || isEdit}
                                     placeholder="예: 사과"
                                 />
@@ -390,10 +546,12 @@ const ProductInputModal = ({ isOpen, onClose, onSuccess, initialData = null, isE
                                     </p>
                                 )}
                             </div>
+                            {/* Symmetry spacer */}
+                            {!isEdit && <div style={{ width: '110px', flexShrink: 0 }} />}
                         </div>
 
-                        <div className="form-group">
-                            <label>분류</label>
+                        <div className="form-group" style={{ display: 'flex', alignItems: 'center', marginBottom: '1rem', gap: '12px' }}>
+                            <label style={{ width: '100px', flexShrink: 0, fontWeight: '600', color: '#475569' }}>분류</label>
                             <div style={{ flex: 1 }}>
                                 <SearchableSelect
                                     options={categoryOptions}
@@ -403,29 +561,38 @@ const ProductInputModal = ({ isOpen, onClose, onSuccess, initialData = null, isE
                                     isDisabled={isAddingGrade || isEdit}
                                 />
                             </div>
+                            {/* Symmetry spacer */}
+                            {!isEdit && <div style={{ width: '110px', flexShrink: 0 }} />}
                         </div>
 
-                        <div className="form-group">
-                            <label>
-                                등급
-                                {!isEdit && !isMultiGrade && (
-                                    <div style={{ fontWeight: 'normal', fontSize: '0.8rem', color: '#3b82f6', cursor: 'pointer', marginTop: '0.25rem' }} onClick={() => setIsMultiGrade(true)}>
-                                        + 여러 등급 입력
-                                    </div>
-                                )}
-                            </label>
+                        <div className="form-group" style={{ display: 'flex', alignItems: 'center', marginBottom: '1rem', gap: '12px' }}>
+                            <label style={{ width: '100px', flexShrink: 0, fontWeight: '600', color: '#475569' }}>등급</label>
                             <div style={{ flex: 1 }}>
                                 {isMultiGrade && !isEdit ? (
-                                    <div style={{ display: 'flex', flexDirection: 'column' }}>
-                                        <input
-                                            type="text"
-                                            name="grades"
-                                            value={formData.grades || ''}
-                                            onChange={handleChange}
-                                            placeholder="예: 특, 상, 중 (쉼표로 구분)"
-                                        />
-                                        <div style={{ fontSize: '0.8rem', color: '#64748b', marginTop: '0.25rem', textAlign: 'right' }}>
-                                            <span style={{ cursor: 'pointer', textDecoration: 'underline' }} onClick={() => setIsMultiGrade(false)}>단일 등급 입력으로 전환</span>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                        <div style={{
+                                            display: 'flex',
+                                            flexWrap: 'wrap',
+                                            gap: '6px',
+                                            padding: '8px',
+                                            border: '1px solid #cbd5e1',
+                                            borderRadius: '8px',
+                                            backgroundColor: 'white',
+                                            minHeight: '42px',
+                                            alignItems: 'center'
+                                        }}>
+                                            {formData.grades.map((g, idx) => (
+                                                <Tag key={idx} text={g} onRemove={() => removeTag(idx, 'grades')} />
+                                            ))}
+                                            <input
+                                                type="text"
+                                                value={gradeInput}
+                                                onChange={(e) => setGradeInput(e.target.value)}
+                                                onKeyDown={(e) => handleTagKeyDown(e, 'grades')}
+                                                onPaste={(e) => handleTagPaste(e, 'grades')}
+                                                placeholder={formData.grades.length === 0 ? "예: 특, 상, 중 (엔터/쉼표)" : ""}
+                                                style={{ border: 'none', padding: '4px', outline: 'none', flex: 1, minWidth: '120px', margin: 0, height: 'auto' }}
+                                            />
                                         </div>
                                     </div>
                                 ) : (
@@ -435,32 +602,52 @@ const ProductInputModal = ({ isOpen, onClose, onSuccess, initialData = null, isE
                                         value={formData.grade || ''}
                                         onChange={handleChange}
                                         placeholder="예: 특"
+                                        style={{ width: '100%', height: '40px' }}
                                     />
                                 )}
                             </div>
+                            {!isEdit && (
+                                <div style={{ width: '110px', flexShrink: 0, display: 'flex', justifyContent: 'flex-end' }}>
+                                    <SegmentedControl
+                                        value={isMultiGrade}
+                                        onChange={val => toggleMultiInput('grades', val)}
+                                        options={[
+                                            { label: '단일', value: false },
+                                            { label: '다중', value: true }
+                                        ]}
+                                    />
+                                </div>
+                            )}
                         </div>
 
-                        <div className="form-group">
-                            <label>
-                                중량 (kg)
-                                {!isEdit && !isMultiWeight && (
-                                    <div style={{ fontWeight: 'normal', fontSize: '0.8rem', color: '#3b82f6', cursor: 'pointer', marginTop: '0.25rem' }} onClick={() => setIsMultiWeight(true)}>
-                                        + 여러 중량 입력
-                                    </div>
-                                )}
-                            </label>
+                        <div className="form-group" style={{ display: 'flex', alignItems: 'center', marginBottom: '1rem', gap: '12px' }}>
+                            <label style={{ width: '100px', flexShrink: 0, fontWeight: '600', color: '#475569' }}>중량 (kg)</label>
                             <div style={{ flex: 1 }}>
                                 {isMultiWeight && !isEdit ? (
-                                    <div style={{ display: 'flex', flexDirection: 'column' }}>
-                                        <input
-                                            type="text"
-                                            name="weights"
-                                            value={formData.weights || ''}
-                                            onChange={handleChange}
-                                            placeholder="예: 5, 10"
-                                        />
-                                        <div style={{ fontSize: '0.8rem', color: '#64748b', marginTop: '0.25rem', textAlign: 'right' }}>
-                                            <span style={{ cursor: 'pointer', textDecoration: 'underline' }} onClick={() => setIsMultiWeight(false)}>단일 중량 입력으로 전환</span>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                        <div style={{
+                                            display: 'flex',
+                                            flexWrap: 'wrap',
+                                            gap: '6px',
+                                            padding: '8px',
+                                            border: '1px solid #cbd5e1',
+                                            borderRadius: '8px',
+                                            backgroundColor: 'white',
+                                            minHeight: '42px',
+                                            alignItems: 'center'
+                                        }}>
+                                            {formData.weights.map((w, idx) => (
+                                                <Tag key={idx} text={`${w}kg`} onRemove={() => removeTag(idx, 'weights')} />
+                                            ))}
+                                            <input
+                                                type="text"
+                                                value={weightInput}
+                                                onChange={(e) => setWeightInput(e.target.value)}
+                                                onKeyDown={(e) => handleTagKeyDown(e, 'weights')}
+                                                onPaste={(e) => handleTagPaste(e, 'weights')}
+                                                placeholder={formData.weights.length === 0 ? "예: 5, 10 (쉼표/엔터 입력)" : ""}
+                                                style={{ border: 'none', padding: '4px', outline: 'none', flex: 1, minWidth: '120px', margin: 0, height: 'auto' }}
+                                            />
                                         </div>
                                     </div>
                                 ) : (
@@ -470,17 +657,30 @@ const ProductInputModal = ({ isOpen, onClose, onSuccess, initialData = null, isE
                                         name="weight"
                                         value={formData.weight || ''}
                                         onChange={handleChange}
+                                        style={{ width: '100%', height: '40px' }}
                                     />
                                 )}
-
-                                {isEdit && sameNameCount > 0 && String(formData.weight || '') !== String(originalWeight || '') && (
-                                    <label style={{ fontSize: '0.8rem', color: '#1d4ed8', display: 'flex', alignItems: 'center', gap: '0.25rem', marginTop: '0.5rem', cursor: 'pointer', width: 'auto', marginBottom: 0 }}>
-                                        <input type="checkbox" checked={updateAllWeights} onChange={e => setUpdateAllWeights(e.target.checked)} style={{ width: 'auto', marginBottom: 0 }} />
-                                        <span>같은 이름의 다른 등급({sameNameCount}개)도 중량 변경</span>
-                                    </label>
-                                )}
                             </div>
+                            {!isEdit && (
+                                <div style={{ width: '110px', flexShrink: 0, display: 'flex', justifyContent: 'flex-end' }}>
+                                    <SegmentedControl
+                                        value={isMultiWeight}
+                                        onChange={val => toggleMultiInput('weights', val)}
+                                        options={[
+                                            { label: '단일', value: false },
+                                            { label: '다중', value: true }
+                                        ]}
+                                    />
+                                </div>
+                            )}
                         </div>
+
+                        {isEdit && sameNameCount > 0 && String(formData.weight || '') !== String(originalWeight || '') && (
+                            <label style={{ fontSize: '0.8rem', color: '#1d4ed8', display: 'flex', alignItems: 'center', gap: '0.25rem', marginTop: '0.5rem', cursor: 'pointer', width: 'auto', marginBottom: 0 }}>
+                                <input type="checkbox" checked={updateAllWeights} onChange={e => setUpdateAllWeights(e.target.checked)} style={{ width: 'auto', marginBottom: 0 }} />
+                                <span>같은 이름의 다른 등급({sameNameCount}개)도 중량 변경</span>
+                            </label>
+                        )}
                     </form>
                 </div>
 

@@ -28,10 +28,27 @@ router.get('/payment-methods', async (req, res) => {
 // 결제 방법 추가
 router.post('/payment-methods', async (req, res) => {
     try {
-        const { code, name, sort_order } = req.body;
+        let { code, name, sort_order } = req.body;
 
-        if (!code || !name) {
-            return res.status(400).json({ success: false, message: '코드와 이름은 필수입니다.' });
+        if (!name) {
+            return res.status(400).json({ success: false, message: '이름은 필수입니다.' });
+        }
+
+        // [AUTO CODE] 코드가 없는 경우 자동 생성 (PM001 계열)
+        if (!code) {
+            const [lastRows] = await db.query(
+                "SELECT code FROM payment_methods WHERE code LIKE 'PM%' ORDER BY code DESC LIMIT 1"
+            );
+
+            let nextNum = 1;
+            if (lastRows.length > 0) {
+                const lastCode = lastRows[0].code; // PM005
+                const numPart = parseInt(lastCode.replace('PM', ''));
+                if (!isNaN(numPart)) {
+                    nextNum = numPart + 1;
+                }
+            }
+            code = `PM${nextNum.toString().padStart(3, '0')}`;
         }
 
         // 코드 중복 체크
@@ -42,7 +59,7 @@ router.post('/payment-methods', async (req, res) => {
 
         // 순서가 없으면 가장 마지막 + 10으로 설정
         let order = sort_order;
-        if (order === undefined || order === null) {
+        if (order === undefined || order === null || order === '') {
             const [maxOrder] = await db.query('SELECT MAX(sort_order) as max_order FROM payment_methods');
             order = (maxOrder[0].max_order || 0) + 10;
         }
@@ -128,6 +145,25 @@ router.put('/payment-methods/:id', async (req, res) => {
         res.json({ success: true, message: '결제 방법이 수정되었습니다.' });
     } catch (error) {
         console.error('결제 방법 수정 오류:', error);
+        res.status(500).json({ success: false, message: '서버 오류가 발생했습니다.' });
+    }
+});
+
+// 결제 방법 삭제
+router.delete('/payment-methods/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        // 해당 결제 방법을 사용 중인 거래가 있는지 체크하는 로직은 DB 외래키 제약조건에 맡기거나 명시적으로 추가 가능
+        // 현재는 단순 삭제 수행 (제약조건 위반 시 에러 발생)
+        await db.query('DELETE FROM payment_methods WHERE id = ?', [id]);
+
+        res.json({ success: true, message: '결제 방법이 삭제되었습니다.' });
+    } catch (error) {
+        console.error('결제 방법 삭제 오류:', error);
+        if (error.code === 'ER_ROW_IS_REFERENCED_2') {
+            return res.status(400).json({ success: false, message: '이미 사용 중인 결제 방법은 삭제할 수 없습니다. (미사용 처리 권장)' });
+        }
         res.status(500).json({ success: false, message: '서버 오류가 발생했습니다.' });
     }
 });

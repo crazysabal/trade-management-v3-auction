@@ -7,6 +7,7 @@ const UserFormModal = ({ isOpen, onClose, onSubmit, initialData }) => {
     const [formData, setFormData] = useState({
         username: '',
         password: '',
+        passwordConfirm: '',
         role_id: '',
         is_active: true
     });
@@ -36,6 +37,7 @@ const UserFormModal = ({ isOpen, onClose, onSubmit, initialData }) => {
                 setFormData({
                     username: initialData.username || '',
                     password: '', // 비밀번호는 수정 시 비워둠 (입력 시에만 변경)
+                    passwordConfirm: '',
                     role_id: initialData.role_id || '', // role_id 사용
                     is_active: initialData.is_active !== false
                 });
@@ -43,6 +45,7 @@ const UserFormModal = ({ isOpen, onClose, onSubmit, initialData }) => {
                 setFormData({
                     username: '',
                     password: '',
+                    passwordConfirm: '',
                     role_id: '',
                     is_active: true
                 });
@@ -61,6 +64,12 @@ const UserFormModal = ({ isOpen, onClose, onSubmit, initialData }) => {
     const handleSubmit = async (e) => {
         e.preventDefault();
         setError('');
+
+        if (formData.password !== formData.passwordConfirm) {
+            setError('비밀번호와 비밀번호 확인이 일치하지 않습니다.');
+            return;
+        }
+
         try {
             await onSubmit(formData);
         } catch (err) {
@@ -121,15 +130,63 @@ const UserFormModal = ({ isOpen, onClose, onSubmit, initialData }) => {
                                 onChange={handleChange}
                                 required={!initialData}
                                 placeholder="비밀번호"
+                                autoComplete="new-password"
+                                style={{
+                                    backgroundColor: (formData.password || formData.passwordConfirm)
+                                        ? (formData.password === formData.passwordConfirm ? '#f0fdf4' : '#fef2f2')
+                                        : '#fff',
+                                    borderColor: (formData.password || formData.passwordConfirm)
+                                        ? (formData.password === formData.passwordConfirm ? '#22c55e' : '#ef4444')
+                                        : '#cbd5e1',
+                                    transition: 'background-color 0.1s ease, border-color 0.1s ease'
+                                }}
                             />
                         </div>
                         <div className="form-group">
+                            <label>비밀번호 확인</label>
+                            <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+                                <input
+                                    type="password"
+                                    name="passwordConfirm"
+                                    className="form-input"
+                                    value={formData.passwordConfirm}
+                                    onChange={handleChange}
+                                    required={!!formData.password || !initialData}
+                                    placeholder="비밀번호 확인"
+                                    autoComplete="new-password"
+                                    style={{
+                                        backgroundColor: (formData.password || formData.passwordConfirm)
+                                            ? (formData.password === formData.passwordConfirm ? '#f0fdf4' : '#fef2f2')
+                                            : '#fff',
+                                        borderColor: (formData.password || formData.passwordConfirm)
+                                            ? (formData.password === formData.passwordConfirm ? '#22c55e' : '#ef4444')
+                                            : '#cbd5e1',
+                                        transition: 'background-color 0.1s ease, border-color 0.1s ease',
+                                        width: '100%'
+                                    }}
+                                />
+                                {(formData.password || formData.passwordConfirm) && (
+                                    <p style={{
+                                        fontSize: '0.75rem',
+                                        marginTop: '4px',
+                                        color: formData.password === formData.passwordConfirm ? '#166534' : '#991b1b',
+                                        whiteSpace: 'nowrap',
+                                        fontWeight: '500'
+                                    }}>
+                                        {formData.password === formData.passwordConfirm ? '✓ 비밀번호가 일치합니다.' : '✗ 비밀번호가 일치하지 않습니다.'}
+                                    </p>
+                                )}
+                            </div>
+                        </div>
+                        <div className="form-group" style={{ opacity: initialData?.username === 'admin' ? 0.7 : 1 }}>
                             <label>권한 (역할)</label>
                             <select
                                 name="role_id"
                                 className="form-select"
                                 value={formData.role_id || ''}
                                 onChange={handleChange}
+                                disabled={initialData?.username === 'admin'}
+                                style={{ backgroundColor: initialData?.username === 'admin' ? '#f1f5f9' : '#fff' }}
                             >
                                 <option value="">역할 선택</option>
                                 {roles.map(role => (
@@ -139,17 +196,33 @@ const UserFormModal = ({ isOpen, onClose, onSubmit, initialData }) => {
                                 ))}
                             </select>
                         </div>
-                        <div className="form-group">
-                            <label className="checkbox-label" style={{ justifyContent: 'flex-start', marginLeft: '100px' }}>
+                        <div className="form-group" style={{ opacity: initialData?.username === 'admin' ? 0.7 : 1 }}>
+                            {/* Label spacer for alignment */}
+                            <div style={{ width: '100px', minWidth: '100px', marginRight: '1rem' }} />
+                            <label className="checkbox-label" style={{
+                                flex: 1,
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '8px',
+                                cursor: initialData?.username === 'admin' ? 'not-allowed' : 'pointer',
+                                margin: 0
+                            }}>
                                 <input
                                     type="checkbox"
                                     name="is_active"
                                     checked={formData.is_active}
                                     onChange={handleChange}
+                                    disabled={initialData?.username === 'admin'}
+                                    style={{ width: 'auto', height: 'auto', flex: 'none' }}
                                 />
-                                계정 활성화 (접속 허용)
+                                <span>계정 활성화 (접속 허용)</span>
                             </label>
                         </div>
+                        {initialData?.username === 'admin' && (
+                            <div style={{ fontSize: '0.8rem', color: '#64748b', paddingLeft: '115px', marginTop: '-5px' }}>
+                                🛡️ 최고 관리자 계정의 권한 및 상태는 고정되어 있습니다.
+                            </div>
+                        )}
                     </div>
                     <div className="modal-footer">
                         <button type="button" className="modal-btn modal-btn-cancel" onClick={onClose}>취소</button>

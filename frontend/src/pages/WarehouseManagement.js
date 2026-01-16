@@ -228,12 +228,6 @@ const WarehouseManagement = () => {
                                         <span
                                             className={`badge ${wh.is_active ? 'badge-success' : 'badge-secondary'}`}
                                             onClick={() => toggleActive(wh)}
-                                            style={{
-                                                cursor: 'pointer',
-                                                padding: '0.4em 0.8em',
-                                                borderRadius: '10px',
-                                                userSelect: 'none'
-                                            }}
                                         >
                                             {wh.is_active ? '사용' : '미사용'}
                                         </span>

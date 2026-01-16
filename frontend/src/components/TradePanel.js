@@ -383,6 +383,19 @@ function TradePanel({
     }
   };
 
+  // 거래처 새로고침
+  const refreshCompanies = async () => {
+    try {
+      const typeFilter = isPurchase ? 'SUPPLIER' : 'CUSTOMER';
+      const companiesRes = await companyAPI.getAll({ is_active: 'true', type: typeFilter });
+      setCompanies(companiesRes.data?.data || []);
+      showModal('success', '새로고침 완료', '거래처 목록이 갱신되었습니다.');
+    } catch (error) {
+      console.error('거래처 새로고침 오류:', error);
+      showModal('warning', '새로고침 실패', '거래처 목록을 가져오지 못했습니다.');
+    }
+  };
+
   // 거래처 잔고 정보 로드
   const loadCompanySummary = async (companyId, type, date, excludeTradeId = null) => {
     if (!companyId) {
@@ -518,14 +531,14 @@ function TradePanel({
         onConfirm: async () => {
           await loadInitialData();
           setLoading(false);
-          resetForm(master.trade_date);
+          resetForm(); // 날짜 인자를 전달하지 않으면 금일 일자로 초기화됨
         }
       });
     } else {
       (async () => {
         await loadInitialData();
         setLoading(false);
-        resetForm(master.trade_date);
+        resetForm(); // 날짜 인자를 전달하지 않으면 금일 일자로 초기화됨
       })();
     }
   };
@@ -1542,6 +1555,14 @@ function TradePanel({
                   menuPortalTarget={document.body}
                 />
               </div>
+              <button
+                type="button"
+                className="btn btn-sm btn-icon"
+                style={{ height: '100%', padding: '0 8px', marginLeft: '-4px' }}
+                onClick={refreshCompanies}
+                title="거래처 목록 새로고침"
+                disabled={isViewMode}
+              >🔄</button>
             </div>
             {isPurchase && (
               <div className="trade-form-group" style={{ width: '180px', display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '8px', height: '36px' }}>

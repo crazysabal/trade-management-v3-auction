@@ -27,37 +27,66 @@ export const useModalDraggable = (isOpen, options = { isCentered: false }) => {
             return;
         }
 
+        // 드래그 대상 요소(헤더)와 그 부모(모달 전체) 정보 획득
+        const header = e.currentTarget;
+        const modal = header.parentElement;
+        const modalRect = modal.getBoundingClientRect();
+        const headerHeight = header.offsetHeight;
+
         isDragging.current = true;
         dragStartPos.current = { x: e.clientX, y: e.clientY };
         initialPos.current = position;
 
-        document.addEventListener('mousemove', handleMouseMove);
-        document.addEventListener('mouseup', handleMouseUp);
+        // 드래그 시작 시점의 절대 좌표 및 헤더 높이 저장
+        const taskbarHeight = 38;
+        const screenHeight = window.innerHeight;
+        const screenWidth = window.innerWidth;
+
+        const moveHandler = (moveEvent) => {
+            if (!isDragging.current) return;
+
+            const deltaX = moveEvent.clientX - dragStartPos.current.x;
+            const deltaY = moveEvent.clientY - dragStartPos.current.y;
+
+            let newX = initialPos.current.x + deltaX;
+            let newY = initialPos.current.y + deltaY;
+
+            // [BOUNDARY GUARD] 뷰포트 절대 좌표 기준으로 경계 체크
+            const taskbarHeight = 38;
+            const navbarHeight = 50;
+            const screenHeight = window.innerHeight;
+
+            const currentModalTop = modalRect.top + deltaY;
+            const currentHeaderBottom = currentModalTop + headerHeight;
+
+            // 상단 경계 (Navbar 침범 방지)
+            if (currentModalTop < navbarHeight) {
+                newY = initialPos.current.y + (navbarHeight - modalRect.top);
+            }
+
+            // 하단 경계 (제목표시줄 하단이 태스크바 위에서 멈춤)
+            const bottomLimit = screenHeight - taskbarHeight;
+            if (currentHeaderBottom > bottomLimit) {
+                newY = initialPos.current.y + (bottomLimit - modalRect.top - headerHeight);
+            }
+
+            setPosition({ x: newX, y: newY });
+        };
+
+        const upHandler = () => {
+            isDragging.current = false;
+            document.removeEventListener('mousemove', moveHandler);
+            document.removeEventListener('mouseup', upHandler);
+            document.body.style.userSelect = '';
+            document.body.style.cursor = '';
+        };
+
+        document.addEventListener('mousemove', moveHandler);
+        document.addEventListener('mouseup', upHandler);
 
         // 텍스트 선택 방지
         document.body.style.userSelect = 'none';
         document.body.style.cursor = 'grabbing';
-    };
-
-    const handleMouseMove = (e) => {
-        if (!isDragging.current) return;
-
-        const deltaX = e.clientX - dragStartPos.current.x;
-        const deltaY = e.clientY - dragStartPos.current.y;
-
-        setPosition({
-            x: initialPos.current.x + deltaX,
-            y: initialPos.current.y + deltaY
-        });
-    };
-
-    const handleMouseUp = () => {
-        isDragging.current = false;
-        document.removeEventListener('mousemove', handleMouseMove);
-        document.removeEventListener('mouseup', handleMouseUp);
-
-        document.body.style.userSelect = '';
-        document.body.style.cursor = '';
     };
 
     return {

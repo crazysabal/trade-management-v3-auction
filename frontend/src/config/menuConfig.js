@@ -19,6 +19,7 @@ export const MENU_CONFIG = [
             { id: 'COMPANY_LIST', label: '거래처 관리', icon: '🏢' },
             { id: 'PRODUCT_LIST', label: '품목 관리', icon: '📦' },
             { id: 'WAREHOUSES', label: '창고 관리', icon: '🏭' },
+            { id: 'PAYMENT_METHODS', label: '결제 방법 관리', icon: '💳' },
             { id: 'EXPENSE_CATEGORIES', label: '지출 관리', icon: '🏷️' },
         ]
     },

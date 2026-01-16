@@ -95,13 +95,31 @@ const CompanyRow = memo(function CompanyRow({
           <button
             onClick={() => onEdit(company)}
             className="btn btn-sm btn-primary"
-            style={{ marginRight: '0.5rem' }}
+            style={{
+              padding: '2px 8px',
+              fontSize: '0.8rem',
+              width: 'auto',
+              minWidth: '0',
+              height: '28px',
+              whiteSpace: 'nowrap',
+              flex: 'none',
+              marginRight: '0.4rem'
+            }}
           >
             수정
           </button>
           <button
             onClick={onDelete}
             className="btn btn-sm btn-danger"
+            style={{
+              padding: '2px 8px',
+              fontSize: '0.8rem',
+              width: 'auto',
+              minWidth: '0',
+              height: '28px',
+              whiteSpace: 'nowrap',
+              flex: 'none'
+            }}
           >
             삭제
           </button>

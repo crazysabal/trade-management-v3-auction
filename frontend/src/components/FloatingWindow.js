@@ -120,23 +120,29 @@ const FloatingWindow = ({ title, icon, onClose, initialPosition = { x: 100, y: 1
     const handleMouseMove = (e) => {
         if (!isDragging.current) return;
 
+        // 비동기 콜백(RAF) 밖에서 필요한 값을 미리 캡처 (이벤트 풀링 및 null화 방지)
+        const clientX = e.clientX;
+        const clientY = e.clientY;
+        const screenHeight = window.innerHeight;
+        const taskbarHeight = 38;
+        const safeTop = 50; // Navbar height
+        // 헤더 높이는 드래그 시작 시점이나 고정값으로 처리하는 것이 안전함
+        const headerHeight = 35;
+
         requestAnimationFrame(() => {
-            const deltaX = e.clientX - dragStartPos.current.x;
-            const deltaY = e.clientY - dragStartPos.current.y;
+            if (!isDragging.current) return;
+
+            const deltaX = clientX - dragStartPos.current.x;
+            const deltaY = clientY - dragStartPos.current.y;
 
             let newX = windowStartPos.current.x + deltaX;
             let newY = windowStartPos.current.y + deltaY;
 
             if (windowRef.current) {
-                // 화면 경계 제한
-                // 상단(Navbar)만 제한하고, 좌우/하단은 자유롭게 이동 가능하도록 변경 (사용자 요청)
-                const safeTop = 50; // Navbar height
-
-                // X축 제한 해제 (자유롭게 이동)
-                // newX = Math.max(0, Math.min(newX, safeRight - width));
-
-                // Y축 제한 (상단 Navbar만 침범 금지, 하단은 자유)
-                newY = Math.max(safeTop, newY);
+                // Y축 제한: 상단 Navbar 침범 금지 + 하단 Taskbar 위로 제목줄 유지
+                // 하단 제한값: 전체높이 - 태스크바(38) - 제목줄높이(35)
+                const bottomLimit = screenHeight - taskbarHeight - headerHeight;
+                newY = Math.max(safeTop, Math.min(newY, bottomLimit));
 
                 windowRef.current.style.left = `${newX}px`;
                 windowRef.current.style.top = `${newY}px`;

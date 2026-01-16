@@ -23,24 +23,17 @@ async function fixAdmin() {
                 "INSERT INTO users (username, password_hash, role, full_name, role_id) VALUES (?, ?, ?, ?, ?)",
                 ['admin', hash, 'admin', '관리자', adminRoleId]
             );
-            console.log('2. 관리자 계정이 새로 생성되었습니다.');
+            console.log('2. 관리자 계정이 새로 생성되었습니다. (PW: admin1234)');
         } else {
+            // [Safety] 기존 계정이 있으면 비활성화된 경우 활성화만 시키고 비밀번호는 건드리지 않음
             await db.query(
-                "UPDATE users SET password_hash = ?, role_id = ?, is_active = 1 WHERE username = 'admin'",
-                [hash, adminRoleId]
+                "UPDATE users SET role_id = ?, is_active = 1 WHERE username = 'admin'",
+                [adminRoleId]
             );
-            console.log('2. 기존 관리자 계정의 비밀번호와 권한이 초기화되었습니다.');
+            console.log('2. 기존 관리자 계정의 권한과 활성 상태를 복구했습니다. (비밀번호는 유지됨)');
         }
 
-        console.log('3. 최종 검증 중...');
-        const [finalUser] = await db.query("SELECT password_hash FROM users WHERE username = 'admin'");
-        const isMatch = bcrypt.compareSync(password, finalUser[0].password_hash);
-
-        if (isMatch) {
-            console.log('✅ 성공: 이제 admin / admin1234 로 로그인이 가능합니다.');
-        } else {
-            console.log('❌ 실패: 원인 불명의 이유로 해시가 일치하지 않습니다.');
-        }
+        console.log('3. 복구 작업이 성공적으로 완료되었습니다.');
 
     } catch (err) {
         console.error('⚠️ 오류 발생:', err.message);

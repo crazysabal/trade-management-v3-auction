@@ -34,6 +34,7 @@ import MessageTestPage from './MessageTestPage';
 import AuctionImportV2 from './AuctionImportV2';
 import AuctionAccounts from './AuctionAccounts';
 import UserManagement from './UserManagement';
+import PaymentMethodManagement from './PaymentMethodManagement';
 import { RESOURCE_METADATA } from '../config/menuConfig';
 import RoleManagement from './RoleManagement'; // RBAC Page
 
@@ -191,7 +192,7 @@ const DesktopManager = () => {
         // 크기 예외 처리 (config로 옮길 수도 있지만 일단 유지)
         if (appType === 'ROLE_MANAGEMENT' || appType === 'USER_MANAGEMENT') size = { width: 1000, height: 750 };
         if (appType === 'SETTLEMENT_HISTORY' || appType === 'WAREHOUSES') size = { width: 900, height: 600 };
-        if (appType === 'SETTINGS' || appType === 'EXPENSE_CATEGORIES') size = { width: 800, height: 600 };
+        if (appType === 'SETTINGS' || appType === 'EXPENSE_CATEGORIES' || appType === 'PAYMENT_METHODS') size = { width: 800, height: 630 };
         if (appType === 'COMPANY_INFO') size = { width: 600, height: 500 };
 
         // [DEBUG] Append App Type for User Identification
@@ -393,6 +394,7 @@ const DesktopManager = () => {
             case 'MESSAGE_TEST': return <MessageTestPage isWindow={true} {...componentProps} />;
             case 'USER_MANAGEMENT': return <UserManagement isWindow={true} {...componentProps} />;
             case 'ROLE_MANAGEMENT': return <RoleManagement isWindow={true} {...componentProps} />;
+            case 'PAYMENT_METHODS': return <PaymentMethodManagement isWindow={true} {...componentProps} />;
             default: return <div>Unknown App: {type}</div>;
         }
     };

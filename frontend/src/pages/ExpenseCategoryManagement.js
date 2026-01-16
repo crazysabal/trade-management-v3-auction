@@ -260,12 +260,6 @@ const ExpenseCategoryManagement = () => {
                                     <td style={{ textAlign: 'center', padding: '0.5rem', fontSize: '0.85rem' }}>
                                         <span
                                             className={`badge ${cat.is_active ? 'badge-success' : 'badge-secondary'}`}
-                                            style={{
-                                                padding: '0.4em 0.8em',
-                                                borderRadius: '10px',
-                                                cursor: 'pointer',
-                                                userSelect: 'none'
-                                            }}
                                             onClick={() => handleToggleActive(cat)}
                                             title="클릭하여 상태 변경"
                                         >
