@@ -283,21 +283,43 @@ router.post('/crawl', async (req, res) => {
       // 이미 로그인 상태가 아니면 로그인 진행
       if (!isLoggedIn) {
         // 로그인 폼 요소 찾기 (여러 가능한 셀렉터 시도)
-        const idSelectors = ['input[name="id"]', 'input[id="var_id"]', 'input[name="user_id"]', 'input[name="mb_id"]'];
+        const idSelectors = ['input[name="id"]', 'input[id="var_id"]', 'input[id="user_id"]', 'input[name="user_id"]', 'input[name="mb_id"]'];
         const pwSelectors = ['input[name="passwd"]', 'input[id="var_passwd"]', 'input[type="password"]', 'input[name="user_pw"]'];
 
         let idInput = null;
         let pwInput = null;
 
+        // ID 필드 탐색
+        for (const selector of idSelectors) {
+          try {
+            idInput = await page.$(selector);
+            if (idInput) break;
+          } catch (e) { }
+        }
+
+        // PW 필드 탐색
         for (const selector of pwSelectors) {
-          pwInput = await page.$(selector);
-          if (pwInput) {
-            break;
+          try {
+            pwInput = await page.$(selector);
+            if (pwInput) break;
+          } catch (e) { }
+        }
+
+        // 만약 못 찾았다면 1초 더 기다려보고 다시 시도 (네트워크 지연 대비)
+        if (!idInput || !pwInput) {
+          await new Promise(r => setTimeout(r, 1500));
+          for (const selector of idSelectors) {
+            idInput = await page.$(selector);
+            if (idInput) break;
+          }
+          for (const selector of pwSelectors) {
+            pwInput = await page.$(selector);
+            if (pwInput) break;
           }
         }
 
         if (!idInput || !pwInput) {
-          // 디버깅용: 현재 페이지 정보 출력
+          // 디버깅용: 현재 페이지 정보 출력 (런처 로그에 표시됨)
           const debugUrl = page.url();
           console.log('현재 URL:', debugUrl);
           // console.log('페이지에서 찾은 input 요소들:');
