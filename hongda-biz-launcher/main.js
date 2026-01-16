@@ -66,6 +66,21 @@ if (!gotTheLock) {
     });
 }
 
+ipcMain.on('get-version', (event) => {
+    const fs = require('fs');
+    const versionPath = path.join(PROJECT_ROOT, 'version.json');
+    let version = 'unknown';
+    if (fs.existsSync(versionPath)) {
+        try {
+            const data = JSON.parse(fs.readFileSync(versionPath, 'utf8'));
+            version = data.version;
+        } catch (e) {
+            console.error('Failed to read version.json', e);
+        }
+    }
+    event.reply('version-info', version);
+});
+
 ipcMain.on('get-license-info', (event) => {
     event.reply('license-info', {
         isLicensed: IS_LICENSED,

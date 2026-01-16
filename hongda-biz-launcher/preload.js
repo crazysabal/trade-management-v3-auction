@@ -11,6 +11,8 @@ contextBridge.exposeInMainWorld('api', {
     onMachineId: (callback) => ipcRenderer.on('machine-id', (event, data) => callback(data)),
     getLicenseInfo: () => ipcRenderer.send('get-license-info'),
     onLicenseInfo: (callback) => ipcRenderer.on('license-info', (event, data) => callback(data)),
+    getVersion: () => ipcRenderer.send('get-version'),
+    onVersion: (callback) => ipcRenderer.on('version-info', (event, data) => callback(data)),
     openExternal: (url) => ipcRenderer.send('open-external', url),
     minimizeWindow: () => ipcRenderer.send('minimize-window')
 });

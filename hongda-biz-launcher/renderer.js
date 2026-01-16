@@ -226,6 +226,11 @@ window.api.onMachineId((id) => {
     if (display) display.textContent = id;
 });
 
+window.api.onVersion((ver) => {
+    const display = document.getElementById('system-version-display');
+    if (display) display.textContent = `Version: ${ver}`;
+});
+
 window.api.onLicenseInfo((info) => {
     isLicensed = info.isLicensed;
     licenseMsg = info.message;
@@ -281,4 +286,5 @@ window.onload = () => {
     // 정보 요청 (응답이 오면 위 onLicenseInfo에서 자동 시작 트리거됨)
     window.api.getMachineId();
     window.api.getLicenseInfo();
+    window.api.getVersion();
 };
