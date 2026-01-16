@@ -10,9 +10,9 @@ const { execSync, spawn } = require('child_process');
 class UpdateManager {
     constructor() {
         this.localVersionFile = path.join(__dirname, '../version.json');
-        // TODO: 실제 사장님의 GitHub 저장소 URL로 변경 필요
-        this.remoteVersionUrl = 'https://raw.githubusercontent.com/crazysabal/hongda-biz/main/version.json';
-        this.patchDownloadUrl = 'https://github.com/crazysabal/hongda-biz/archive/refs/heads/main.zip';
+        // 실제 사장님의 GitHub 저장소 URL로 수정 완료 (리포지토리: hongda-biz, 브랜치: master)
+        this.remoteVersionUrl = 'https://raw.githubusercontent.com/crazysabal/hongda-biz/master/version.json';
+        this.patchDownloadUrl = 'https://github.com/crazysabal/hongda-biz/archive/refs/heads/master.zip';
         this.tempDir = path.join(__dirname, '../temp_update');
     }
 

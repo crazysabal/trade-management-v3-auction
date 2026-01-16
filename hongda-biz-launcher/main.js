@@ -155,7 +155,8 @@ async function checkUpdateOnline() {
     const versionPath = path.join(rootPath, 'version.json');
 
     // [UPDATE] 사장님의 실제 레포 주소 (캐시 방지 타임스탬프 추가)
-    const REMOTE_VERSION_URL = `https://raw.githubusercontent.com/crazysabal/hongda-biz/main/version.json?t=${Date.now()}`;
+    // 실제 레포: crazysabal/hongda-biz, 브랜치: master
+    const REMOTE_VERSION_URL = `https://raw.githubusercontent.com/crazysabal/hongda-biz/master/version.json?t=${Date.now()}`;
 
     try {
         if (!fs.existsSync(versionPath)) return;
