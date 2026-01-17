@@ -639,19 +639,19 @@ router.post('/crawl', async (req, res) => {
 
     // 기존 데이터 한 번에 조회 (중복 체크용)
     const [existingData] = await db.query(
-      `SELECT arrive_no, product_name, count, unit_price 
+      `SELECT account_id, arrive_no, product_name, count, unit_price 
        FROM auction_raw_data WHERE auction_date = ?`,
       [targetDate]
     );
 
-    // 중복 체크용 Set 생성 (모든 값을 문자열로 통일)
+    // 중복 체크용 Set 생성 (계정 ID를 포함하여 격리된 중복 체크 수행)
     const existingSet = new Set(
-      existingData.map(e => `${e.arrive_no}_${e.product_name}_${e.count}_${Math.floor(Number(e.unit_price))}`)
+      existingData.map(e => `${e.account_id}_${e.arrive_no}_${e.product_name}_${e.count}_${Math.floor(Number(e.unit_price))}`)
     );
 
     // 중복 제외한 데이터 필터링
     const newItems = auctionData.filter(item => {
-      const key = `${item.arrive_no}_${item.product_name}_${item.count}_${Math.floor(Number(item.unit_price))}`;
+      const key = `${account_id}_${item.arrive_no}_${item.product_name}_${item.count}_${Math.floor(Number(item.unit_price))}`;
       if (existingSet.has(key)) {
         skippedCount++;
         return false;
@@ -669,6 +669,7 @@ router.post('/crawl', async (req, res) => {
       try {
         const values = batch.map(item => [
           targetDate,
+          account_id, // 계정 ID 추가
           item.arrive_no,
           item.shipper_location || '',
           item.sender || '',
@@ -682,12 +683,12 @@ router.post('/crawl', async (req, res) => {
           'PENDING'
         ]);
 
-        const placeholders = batch.map(() => '(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').join(', ');
+        const placeholders = batch.map(() => '(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').join(', ');
         const flatValues = values.flat();
 
         await db.query(
           `INSERT INTO auction_raw_data 
-           (auction_date, arrive_no, shipper_location, sender, product_name, grade, weight, unit_name, 
+           (auction_date, account_id, arrive_no, shipper_location, sender, product_name, grade, weight, unit_name, 
             count, unit_price, total_price, status)
            VALUES ${placeholders}`,
           flatValues
@@ -768,7 +769,7 @@ router.post('/crawl', async (req, res) => {
 // 크롤링된 원본 데이터 조회
 router.get('/raw-data', async (req, res) => {
   try {
-    const { auction_date, status } = req.query;
+    const { auction_date, account_id, status } = req.query;
 
     let query = 'SELECT * FROM auction_raw_data WHERE 1=1';
     const params = [];
@@ -776,6 +777,11 @@ router.get('/raw-data', async (req, res) => {
     if (auction_date) {
       query += ' AND auction_date = ?';
       params.push(auction_date);
+    }
+
+    if (account_id) {
+      query += ' AND account_id = ?';
+      params.push(account_id);
     }
 
     if (status) {
