@@ -26,11 +26,13 @@ echo [4/4] Optimizing system and finishing...
 echo.
 echo ================================================
 echo     Update successful!
-echo    Please restart the program.
+echo    Starting program automatically...
 echo ================================================
 echo.
-pause
+timeout /t 3 /nobreak > nul
+start "" "Run Launcher.bat"
 exit /b 0
+
 :error
 echo.
 echo  An error occurred during the update.
