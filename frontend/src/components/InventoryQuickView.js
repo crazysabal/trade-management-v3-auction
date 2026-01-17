@@ -1,14 +1,62 @@
 import React, { useState, useEffect } from 'react';
 import { purchaseInventoryAPI } from '../services/api';
+import { useConfirmModal } from './ConfirmModal';
 
 const InventoryQuickView = ({ inventoryAdjustments = {}, refreshKey, onInventoryLoaded }) => {
     const [inventory, setInventory] = useState([]);
     const [filteredInventory, setFilteredInventory] = useState([]);
     const [loading, setLoading] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
+    const { openModal, ConfirmModalComponent } = useConfirmModal();
+    const [isSalesPanelActive, setIsSalesPanelActive] = useState(
+        window.__activeSalesPanels ? window.__activeSalesPanels.size > 0 : false
+    );
+    const [selectedId, setSelectedId] = useState(null);
 
     useEffect(() => {
         loadInventory();
+
+        // 목록 포커스 복구 함수
+        const recoverListFocus = () => {
+            // 작업이 끝나고 창이 다시 활성화되었을 때 마지막 선택 행에 포커스
+            setTimeout(() => {
+                const selectedRow = document.querySelector('.inventory-row.is-selected');
+                if (selectedRow) {
+                    selectedRow.focus();
+                }
+            }, 50); // 반응성을 위해 지연 시간 단축
+        };
+
+        // 전표 상태 변경 리스너
+        const handlePanelsUpdate = (e) => {
+            setIsSalesPanelActive(e.detail.count > 0);
+        };
+
+        // 퀵 추가 완료 후 포커스 복구 리스너
+        const handleAddComplete = () => {
+            recoverListFocus();
+        };
+
+        // [NEW] 퀵 추가 중 오류 발생 시 모달 표시 리스너
+        const handleAddError = (e) => {
+            openModal({
+                type: 'warning',
+                title: '추가 실패',
+                message: e.detail.message,
+                showCancel: false,
+                onClose: recoverListFocus // 모달 닫힐 때 포커스 원복
+            });
+        };
+
+        window.addEventListener('sales-panels-updated', handlePanelsUpdate);
+        window.addEventListener('inventory-quick-add-complete', handleAddComplete);
+        window.addEventListener('inventory-quick-add-error', handleAddError);
+
+        return () => {
+            window.removeEventListener('sales-panels-updated', handlePanelsUpdate);
+            window.removeEventListener('inventory-quick-add-complete', handleAddComplete);
+            window.removeEventListener('inventory-quick-add-error', handleAddError);
+        };
     }, [refreshKey]);
 
     // 조정 내역(inventoryAdjustments)에 있지만 목록에 없는(소진된) 재고 불러오기
@@ -156,8 +204,48 @@ const InventoryQuickView = ({ inventoryAdjustments = {}, refreshKey, onInventory
 
     // 헬퍼 함수들 (SaleFromInventory.js와 동일)
     const formatNumber = (value) => new Intl.NumberFormat('ko-KR').format(value || 0);
-    const formatCurrency = (value) => new Intl.NumberFormat('ko-KR').format(value || 0);
+    const formatCurrency = (amount) => {
+        if (!amount && amount !== 0) return '-';
+        return new Intl.NumberFormat('ko-KR').format(Math.floor(amount)) + '원';
+    };
 
+    // 퀵 추가 로직 보완: 매출 전표 상태 사전 체크
+    const handleQuickAdd = (item) => {
+        // 이미 버튼이 비활성화되어 있겠지만, 키보드 Enter 등의 경로를 위해 한번 더 체크
+        if (!isSalesPanelActive) {
+            openModal({
+                type: 'warning',
+                title: '활성 전표 없음',
+                message: '현재 열려 있는 매출 전표 창이 없습니다.\n먼저 매출 전표 등록 창을 열어주세요.',
+                showCancel: false
+            });
+            return;
+        }
+
+        // 1.5. 잔량 체크
+        if (item.remaining_quantity <= 0) {
+            openModal({
+                type: 'warning',
+                title: '재고 부족',
+                message: '해당 품목의 잔량이 없습니다.\n잔량이 0인 품목은 추가할 수 없습니다.',
+                showCancel: false,
+                onClose: () => {
+                    // 경고창 닫을 때 포커스 다시 행으로 돌려줌
+                    setTimeout(() => {
+                        const selectedRow = document.querySelector('.inventory-row.is-selected');
+                        if (selectedRow) selectedRow.focus();
+                    }, 50);
+                }
+            });
+            return;
+        }
+
+        // 2. 이벤트 발송
+        const event = new CustomEvent('inventory-quick-add', {
+            detail: { inventory: item }
+        });
+        window.dispatchEvent(event);
+    };
     // 날짜 포맷 (MM-DD)
     const formatDateShort = (dateString) => {
         if (!dateString) return '-';
@@ -213,6 +301,7 @@ const InventoryQuickView = ({ inventoryAdjustments = {}, refreshKey, onInventory
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
                         <thead style={{ position: 'sticky', top: 0, backgroundColor: '#f8f9fa', zIndex: 1 }}>
                             <tr style={{ backgroundColor: '#34495e', color: 'white' }}>
+                                <th style={{ width: '40px' }}></th>
                                 <th style={{ padding: '0.6rem 0.5rem', textAlign: 'left', whiteSpace: 'nowrap' }}>품목명</th>
                                 <th style={{ padding: '0.6rem 0.5rem', textAlign: 'left', whiteSpace: 'nowrap' }}>출하주</th>
                                 <th style={{ padding: '0.6rem 0.5rem', textAlign: 'center', whiteSpace: 'nowrap' }}>등급</th>
@@ -229,14 +318,88 @@ const InventoryQuickView = ({ inventoryAdjustments = {}, refreshKey, onInventory
                                 return (
                                     <tr
                                         key={item.id}
+                                        className={`inventory-row ${selectedId === item.id ? 'is-selected' : ''}`}
                                         style={{ borderBottom: '1px solid #eee', cursor: 'grab' }}
+                                        tabIndex={0} // 키보드 포커스 허용
                                         draggable={true}
+                                        onClick={(e) => {
+                                            setSelectedId(item.id);
+                                            e.currentTarget.focus();
+                                        }}
                                         onDragStart={(e) => {
+                                            // 드래그 시작 시에도 해당 행을 선택 상태로 만듦
+                                            setSelectedId(item.id);
                                             // 표준 드래그 데이터 설정
                                             e.dataTransfer.effectAllowed = 'copy';
                                             e.dataTransfer.setData('application/json', JSON.stringify(item));
                                         }}
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter') {
+                                                e.preventDefault();
+                                                setSelectedId(item.id);
+                                                handleQuickAdd(item);
+                                            } else if (e.key === 'ArrowDown') {
+                                                e.preventDefault();
+                                                const nextIndex = index + 1;
+                                                if (nextIndex < filteredInventory.length) {
+                                                    const nextItem = filteredInventory[nextIndex];
+                                                    setSelectedId(nextItem.id);
+                                                    e.currentTarget.nextElementSibling?.focus();
+                                                }
+                                            } else if (e.key === 'ArrowUp') {
+                                                e.preventDefault();
+                                                const prevIndex = index - 1;
+                                                if (prevIndex >= 0) {
+                                                    const prevItem = filteredInventory[prevIndex];
+                                                    setSelectedId(prevItem.id);
+                                                    e.currentTarget.previousElementSibling?.focus();
+                                                }
+                                            }
+                                        }}
                                     >
+                                        <td style={{ padding: '0.5rem', textAlign: 'center' }}>
+                                            <button
+                                                className="btn-quick-add"
+                                                title={isSalesPanelActive ? "전표에 추가 (Enter)" : "활성화된 매출 전표 창이 없습니다"}
+                                                disabled={!isSalesPanelActive}
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    // 버튼 클릭 시에도 해당 행을 선택 상태로 만듦
+                                                    setSelectedId(item.id);
+                                                    e.currentTarget.closest('.inventory-row')?.focus();
+                                                    handleQuickAdd(item);
+                                                }}
+                                                style={{
+                                                    background: 'none',
+                                                    border: 'none',
+                                                    padding: '4px',
+                                                    cursor: isSalesPanelActive ? 'pointer' : 'not-allowed',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'center',
+                                                    transition: 'all 0.2s ease',
+                                                    color: isSalesPanelActive ? '#3498db' : '#ccc',
+                                                    filter: isSalesPanelActive ? 'none' : 'grayscale(100%)',
+                                                    opacity: isSalesPanelActive ? 1 : 0.5,
+                                                    outline: 'none'
+                                                }}
+                                            >
+                                                <svg
+                                                    viewBox="0 0 24 24"
+                                                    width="18"
+                                                    height="18"
+                                                    fill="none"
+                                                    stroke="currentColor"
+                                                    strokeWidth="2.5"
+                                                    strokeLinecap="round"
+                                                    strokeLinejoin="round"
+                                                    style={{ filter: 'drop-shadow(0 1px 1px rgba(0,0,0,0.1))' }}
+                                                >
+                                                    <line x1="19" y1="12" x2="5" y2="12"></line>
+                                                    <polyline points="12 19 5 12 12 5"></polyline>
+                                                </svg>
+                                            </button>
+                                        </td>
                                         <td style={{ padding: '0.5rem', whiteSpace: 'nowrap' }}>
                                             <div style={{ fontWeight: '500' }}>{formatProductName(item)}</div>
                                         </td>
@@ -281,6 +444,7 @@ const InventoryQuickView = ({ inventoryAdjustments = {}, refreshKey, onInventory
             <div style={{ marginTop: '10px', textAlign: 'right', fontSize: '0.8rem', color: '#888' }}>
                 총 {filteredInventory.length}건 / 재고합계: {formatNumber(filteredInventory.reduce((sum, item) => sum + (parseFloat(item.remaining_quantity) || 0), 0))}
             </div>
+            {ConfirmModalComponent}
         </div>
     );
 };

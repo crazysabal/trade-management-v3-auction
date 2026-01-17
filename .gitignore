@@ -36,3 +36,7 @@ yarn-error.log*
 backend/puppeteer_data/
 backend/cookies/
 backend/uploads/
+
+# Build Artifacts
+*.zip
+HongdaBiz_Package.zip

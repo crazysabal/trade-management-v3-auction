@@ -99,8 +99,86 @@ function TradePanel({
   const [modifiedPayments, setModifiedPayments] = useState({}); // 수정 대기 중인 입출금 {id: {amount, payment_method, notes}}
   const [editingPayment, setEditingPayment] = useState(null); // 수정 중인 입출금 (저장된 것)
   const [editingPendingPayment, setEditingPendingPayment] = useState(null); // 수정 중인 대기 입출금
-  const [matchingInfoModal, setMatchingInfoModal] = useState({ isOpen: false, data: null }); // 매칭 정보 모달
+  // 매칭 정보 모달
+  const [matchingInfoModal, setMatchingInfoModal] = useState({ isOpen: false, data: null });
   const [deleteConfirmModal, setDeleteConfirmModal] = useState({ isOpen: false }); // 삭제 확인 모달
+
+  // [NEW] 전역적으로 마지막 활성화된 전표를 추적하기 위한 ID
+  // (여러 창이 뜰 수 있는 MDI 환경에서 퀵 추가 버튼의 대상을 찾기 위함)
+  const markPanelActive = useCallback(() => {
+    window.__lastActiveTradePanelId = panelId;
+    // 재고 퀵 추가를 위해 마지막으로 활성화된 '매출' 전표를 별도로 추적
+    if (!isPurchase) {
+      window.__lastActiveSalesPanelId = panelId;
+    }
+  }, [panelId, isPurchase]);
+
+  // 컴포넌트 마운트 시 리스너 등록 및 활성화
+  useEffect(() => {
+    // 마운트 시 현재 패널을 활성 대상으로 설정
+    markPanelActive();
+
+    // 전역 매출 전표 레지스트리 업데이트
+    if (!isPurchase) {
+      if (!window.__activeSalesPanels) window.__activeSalesPanels = new Set();
+      window.__activeSalesPanels.add(panelId);
+      // 상태 변경 알림발송
+      window.dispatchEvent(new CustomEvent('sales-panels-updated', { detail: { count: window.__activeSalesPanels.size } }));
+    }
+    const handleQuickAdd = (e) => {
+      // 매입 전표는 재고 퀵 추가 이벤트에 반응하지 않음 (불필요한 오류 메시지 노출 방지)
+      if (isPurchase) return;
+
+      const { targetPanelId, inventory } = e.detail;
+
+      // 로그 추가 (디버깅)
+      console.log(`[TradePanel:${panelId}] QuickAdd Event Received. Target: ${targetPanelId}, Last Active Sales: ${window.__lastActiveSalesPanelId}`);
+
+      // 특정 타겟이 없으면 마지막 활성 Sales 패널이 본인인지 확인
+      const isTarget = targetPanelId ? (targetPanelId === panelId) : (window.__lastActiveSalesPanelId === panelId);
+
+      if (isTarget) {
+        // 1. 보기 모드 검증
+        if (isViewMode) {
+          const msg = '현재 전표가 보기 전용입니다. 수정 모드로 전환 후 다시 시도해주세요.';
+          // 재고 목록 창에 오류 메시지만 전달 (중복 방지를 위해 본인 모달은 띄우지 않음)
+          window.dispatchEvent(new CustomEvent('inventory-quick-add-error', { detail: { message: msg } }));
+          return;
+        }
+
+        // 2. 거래처 선택 검증
+        if (!master.company_id) {
+          const msg = '전표에 품목을 추가하려면 먼저 거래처를 선택해주세요.';
+          // 재고 목록 창에 오류 메시지만 전달
+          window.dispatchEvent(new CustomEvent('inventory-quick-add-error', { detail: { message: msg } }));
+          return;
+        }
+
+        // 모든 검증 통과 시 모달 오픈
+        setInventoryInputModal({
+          isOpen: true,
+          inventory: inventory,
+          quantity: (parseFloat(inventory.remaining_quantity) || 0).toString(),
+          unitPrice: inventory.unit_price ? Math.floor(inventory.unit_price).toString() : '',
+          maxQuantity: parseFloat(inventory.remaining_quantity) || 0,
+          dropIndex: details.length
+        });
+
+        // if (window.__bringToFront) window.__bringToFront(panelId); // [REMOVED] 재고 목록 포커스 유지를 위해 제거
+      }
+    };
+
+    window.addEventListener('inventory-quick-add', handleQuickAdd);
+    return () => {
+      window.removeEventListener('inventory-quick-add', handleQuickAdd);
+      // 언마운트 시 레지스트리에서 제거
+      if (!isPurchase && window.__activeSalesPanels) {
+        window.__activeSalesPanels.delete(panelId);
+        // 상태 변경 알림발송
+        window.dispatchEvent(new CustomEvent('sales-panels-updated', { detail: { count: window.__activeSalesPanels.size } }));
+      }
+    };
+  }, [panelId, isViewMode, isPurchase, details.length, markPanelActive]);
   const [addPaymentModal, setAddPaymentModal] = useState({
     isOpen: false,
     amount: '',
@@ -899,6 +977,10 @@ function TradePanel({
     // 모달 닫기
     setInventoryInputModal({ isOpen: false, inventory: null, quantity: '', unitPrice: '', maxQuantity: 0, dropIndex: null });
 
+    // 작업 완료 후 재고 목록 창에 포커스 반환
+    if (window.__bringToFront) window.__bringToFront('INVENTORY_QUICK');
+    window.dispatchEvent(new CustomEvent('inventory-quick-add-complete', { detail: { success: true } }));
+
     // 재고 수량 임시 차감 알림
     if (onInventoryUpdate && item.id) {
       onInventoryUpdate(item.id, -qty);
@@ -1493,22 +1575,15 @@ function TradePanel({
 
   // 폰트 스케일에 따른 크기 계산 헬퍼
   // 고정 폰트 크기 (전표 목록과 동일하게 0.8rem 기준)
-  const fs = (size) => `${(size * 0.85).toFixed(2)} rem`;
+  const fs = (size) => `${(size * 0.85).toFixed(2)}rem`;
 
   return (
-    <div className="trade-panel" style={{
-      display: 'flex',
-      flexDirection: 'column',
-      width: '100%',
-      height: '100%',
-      backgroundColor: '#f8f9fa',
-      overflow: 'hidden',
-      fontSize: fs(1)
-    }}>
-      {/* 페이지 헤더 제거됨 (Floating Window 타이틀바로 통합) */}
-
-      {/* 메인 콘텐츠 영역 */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: '0.5rem', minHeight: 0, overflow: 'hidden' }}>
+    <div
+      className={`trade-panel-container ${isViewMode ? 'view-mode' : ''}`}
+      onMouseDown={markPanelActive}
+      style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', minHeight: 0, boxSizing: 'border-box' }}
+    >
+      <div className="trade-header-section">
         {/* 기본 정보 카드 */}
         <div className="card" style={{ marginBottom: '0.5rem', padding: '9px', flexShrink: 0, backgroundColor: cardColor }}>
           <div className="trade-form-row">
@@ -1646,426 +1721,363 @@ function TradePanel({
             </div>
           </div>
         </div>
+      </div>
 
-        {/* 메인 콘텐츠 영역 (품목 상세 + 잔고) */}
-        {/* 메인 콘텐츠 영역 (품목 상세 + 잔고) */}
-        <div className="trade-content-area" style={{ flexDirection: 'column' }}>
+      {/* 메인 콘텐츠 영역 (품목 상세 + 잔고) */}
+      <div className="trade-content-area" style={{ flexDirection: 'column', flex: 1, minHeight: 0 }}>
 
-          {/* 왼쪽: 품목 상세 카드 */}
-          <div className="trade-detail-card" style={{ backgroundColor: cardColor }}>
-            <div className="trade-card-header">
-              <h2 className="trade-card-title">품목 상세</h2>
-              <div className="trade-card-actions">
+        {/* 왼쪽: 품목 상세 카드 */}
+        <div className="trade-detail-card" style={{ backgroundColor: cardColor }}>
+          <div className="trade-card-header">
+            <h2 className="trade-card-title">품목 상세</h2>
+            <div className="trade-card-actions">
+              <button
+                type="button"
+                className="btn btn-secondary btn-custom btn-sm"
+                onClick={refreshProducts}
+                disabled={isViewMode}
+              >
+                🔄 새로고침
+              </button>
+              {/* 반품 버튼 (매출일 때만 표시) */}
+              {!isPurchase && (
                 <button
                   type="button"
-                  className="btn btn-secondary btn-custom btn-sm"
-                  onClick={refreshProducts}
-                  disabled={isViewMode}
-                >
-                  🔄 새로고침
-                </button>
-                {/* 반품 버튼 (매출일 때만 표시) */}
-                {!isPurchase && (
-                  <button
-                    type="button"
-                    className="btn btn-warning btn-custom btn-sm"
-                    onClick={() => setIsSalesLookupOpen(true)}
-                    disabled={!master.company_id || isViewMode}
-                    style={{ backgroundColor: '#f39c12', color: 'white', border: 'none' }}
-                  >
-                    ↩️ 반품등록
-                  </button>
-                )}
-                <button
-                  type="button"
-                  className="btn btn-success btn-custom btn-sm"
-                  onClick={addDetailRow}
+                  className="btn btn-warning btn-custom btn-sm"
+                  onClick={() => setIsSalesLookupOpen(true)}
                   disabled={!master.company_id || isViewMode}
+                  style={{ backgroundColor: '#f39c12', color: 'white', border: 'none' }}
                 >
-                  + 추가
+                  ↩️ 반품등록
                 </button>
-              </div>
+              )}
+              <button
+                type="button"
+                className="btn btn-success btn-custom btn-sm"
+                onClick={addDetailRow}
+                disabled={!master.company_id || isViewMode}
+              >
+                + 추가
+              </button>
             </div>
+          </div>
 
-            <div
-              className="trade-table-container"
-              ref={tableContainerRef}
-              onDragOver={(e) => handleDragOver(e, details.length)}
-              onDrop={(e) => handleDrop(e, details.length)}
-            >
-              <table className="trade-table">
-                <thead>
-                  <tr>
-                    <th className="col-no">No</th>
-                    <th className="col-product">품목</th>
-                    <th className="col-qty">수량</th>
-                    <th className="col-price">단가</th>
-                    <th className="col-amount">금액</th>
-                    {isPurchase && <th className="col-owner">출하주</th>}
-                    {isPurchase && <th className="col-location">출하지</th>}
-                    <th className="col-remarks">비고</th>
-                    <th className="col-action"></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {details.map((detail, index) => (
-                    <tr
-                      key={index}
-                      draggable={!isMobile}
-                      onDragStart={(e) => {
-                        // 핸들(삼선)을 잡았을 때만 드래그 시작 (Ref 체크)
-                        if (!dragHandleRef.current) {
-                          e.preventDefault();
-                          return;
-                        }
-                        handleDragStart(e, index);
-                      }}
-                      onDragOver={(e) => {
-                        e.stopPropagation();
-                        handleDragOver(e, index);
-                      }}
-                      onDrop={(e) => {
-                        e.stopPropagation();
-                        handleDrop(e, index);
-                      }}
-                      onDragEnd={handleDragEnd}
-                      onClick={() => setSelectedRowIndex(index)}
-                      className={`trade-table-row ${selectedRowIndex === index ? 'selected' : ''} ${draggedIndex === index ? 'is-dragging' : ''} ${dragOverIndex === index ? 'is-over' : ''}`}
-                      style={{ transition: 'background-color 0.15s' }}
-                    >
-                      <td>
-                        <span className="trade-index-cell">
-                          <span
-                            className="trade-drag-handle"
-                            onMouseDown={() => { dragHandleRef.current = true; }}
-                            onMouseUp={() => { dragHandleRef.current = false; }}
-                            onMouseLeave={() => { dragHandleRef.current = false; }}
-                          >☰</span>
-                          {index + 1}
-                        </span>
-                      </td>
-                      <td>
-                        <SearchableSelect
-                          ref={el => productRefs.current[index] = el}
-                          options={productOptions}
-                          value={detail.product_id}
-                          onChange={(option) => handleDetailSelectChange(index, option)}
-                          placeholder="품목 검색..."
-                          noOptionsMessage="품목 없음"
-                          menuPortalTarget={document.body}
-                          size="small"
-                          isDisabled={!!detail.inventory_id || isViewMode} // 재고 드롭 항목은 품목 변경 불가
-                        />
-                      </td>
-                      <td>
-                        <input
-                          ref={el => quantityRefs.current[index] = el}
-                          type="text"
-                          value={detail.quantity !== undefined && detail.quantity !== null ? formatCurrency(detail.quantity) : ''}
-                          onChange={(e) => {
-                            const inputValue = e.target.value;
-                            const isNegative = inputValue.startsWith('-');
-                            const numericPart = inputValue.replace(/[^0-9.]/g, ''); // 숫자와 소수점만 허용
-                            const val = (isNegative ? '-' : '') + numericPart;
-                            handleDetailChange(index, 'quantity', val);
-                          }}
-                          onFocus={(e) => {
-                            // 포커스 시점의 값을 저장 (입력 취소 시 복원용)
-                            focusValueRef.current[index] = detail.quantity;
-                          }}
-                          onKeyDown={(e) => handleQuantityKeyDown(e, index)}
-                          className="trade-input-table trade-input-right"
-                          placeholder="0"
-                          disabled={isViewMode}
-                        />
-                      </td>
-                      <td>
-                        <input
-                          ref={el => unitPriceRefs.current[index] = el}
-                          type="text"
-                          value={detail.unit_price !== undefined && detail.unit_price !== null ? formatCurrency(detail.unit_price) : ''}
-                          onChange={(e) => {
-                            const inputValue = e.target.value;
-                            const isNegative = inputValue.startsWith('-');
-                            const numericPart = inputValue.replace(/[^0-9.]/g, '');
-                            const val = (isNegative ? '-' : '') + numericPart;
-                            handleDetailChange(index, 'unit_price', val);
-                          }}
-                          onKeyDown={(e) => handleUnitPriceKeyDown(e, index)}
-                          className="trade-input-table trade-input-right"
-                          placeholder="0"
-                          disabled={isViewMode}
-                        />
-                      </td>
-                      <td className="trade-input-right" style={{ padding: '4px 8px', fontWeight: '600', color: isPurchase ? '#c0392b' : '#2980b9' }}>
-                        {formatCurrency(detail.supply_amount)}
-                      </td>
-                      {isPurchase && (
-                        <td>
-                          <input
-                            ref={el => senderRefs.current[index] = el}
-                            type="text"
-                            value={detail.sender_name || ''}
-                            onChange={(e) => handleDetailChange(index, 'sender_name', e.target.value)}
-                            onKeyDown={(e) => handleSenderKeyDown(e, index)}
-                            className="trade-input-table"
-                            disabled={isViewMode}
-                          />
-                        </td>
-                      )}
-                      {isPurchase && (
-                        <td>
-                          <input
-                            ref={el => shipperLocationRefs.current[index] = el}
-                            type="text"
-                            value={detail.shipper_location || ''}
-                            onChange={(e) => handleDetailChange(index, 'shipper_location', e.target.value)}
-                            onKeyDown={(e) => handleShipperLocationKeyDown(e, index)}
-                            className="trade-input-table"
-                            disabled={isViewMode}
-                          />
-                        </td>
-                      )}
+          <div
+            className="trade-table-container"
+            ref={tableContainerRef}
+            onDragOver={(e) => handleDragOver(e, details.length)}
+            onDrop={(e) => handleDrop(e, details.length)}
+          >
+            <table className="trade-table">
+              <thead>
+                <tr>
+                  <th className="col-no">No</th>
+                  <th className="col-product">품목</th>
+                  <th className="col-qty">수량</th>
+                  <th className="col-price">단가</th>
+                  <th className="col-amount">금액</th>
+                  {isPurchase && <th className="col-owner">출하주</th>}
+                  {isPurchase && <th className="col-location">출하지</th>}
+                  <th className="col-remarks">비고</th>
+                  <th className="col-action"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {details.map((detail, index) => (
+                  <tr
+                    key={index}
+                    draggable={!isMobile}
+                    onDragStart={(e) => {
+                      // 핸들(삼선)을 잡았을 때만 드래그 시작 (Ref 체크)
+                      if (!dragHandleRef.current) {
+                        e.preventDefault();
+                        return;
+                      }
+                      handleDragStart(e, index);
+                    }}
+                    onDragOver={(e) => {
+                      e.stopPropagation();
+                      handleDragOver(e, index);
+                    }}
+                    onDrop={(e) => {
+                      e.stopPropagation();
+                      handleDrop(e, index);
+                    }}
+                    onDragEnd={handleDragEnd}
+                    onClick={() => setSelectedRowIndex(index)}
+                    className={`trade-table-row ${selectedRowIndex === index ? 'selected' : ''} ${draggedIndex === index ? 'is-dragging' : ''} ${dragOverIndex === index ? 'is-over' : ''}`}
+                    style={{ transition: 'background-color 0.15s' }}
+                  >
+                    <td>
+                      <span className="trade-index-cell">
+                        <span
+                          className="trade-drag-handle"
+                          onMouseDown={() => { dragHandleRef.current = true; }}
+                          onMouseUp={() => { dragHandleRef.current = false; }}
+                          onMouseLeave={() => { dragHandleRef.current = false; }}
+                        >☰</span>
+                        {index + 1}
+                      </span>
+                    </td>
+                    <td>
+                      <SearchableSelect
+                        ref={el => productRefs.current[index] = el}
+                        options={productOptions}
+                        value={detail.product_id}
+                        onChange={(option) => handleDetailSelectChange(index, option)}
+                        placeholder="품목 검색..."
+                        noOptionsMessage="품목 없음"
+                        menuPortalTarget={document.body}
+                        size="small"
+                        isDisabled={!!detail.inventory_id || isViewMode} // 재고 드롭 항목은 품목 변경 불가
+                      />
+                    </td>
+                    <td>
+                      <input
+                        ref={el => quantityRefs.current[index] = el}
+                        type="text"
+                        value={detail.quantity !== undefined && detail.quantity !== null ? formatCurrency(detail.quantity) : ''}
+                        onChange={(e) => {
+                          const inputValue = e.target.value;
+                          const isNegative = inputValue.startsWith('-');
+                          const numericPart = inputValue.replace(/[^0-9.]/g, ''); // 숫자와 소수점만 허용
+                          const val = (isNegative ? '-' : '') + numericPart;
+                          handleDetailChange(index, 'quantity', val);
+                        }}
+                        onFocus={(e) => {
+                          // 포커스 시점의 값을 저장 (입력 취소 시 복원용)
+                          focusValueRef.current[index] = detail.quantity;
+                        }}
+                        onKeyDown={(e) => handleQuantityKeyDown(e, index)}
+                        className="trade-input-table trade-input-right"
+                        placeholder="0"
+                        disabled={isViewMode}
+                      />
+                    </td>
+                    <td>
+                      <input
+                        ref={el => unitPriceRefs.current[index] = el}
+                        type="text"
+                        value={detail.unit_price !== undefined && detail.unit_price !== null ? formatCurrency(detail.unit_price) : ''}
+                        onChange={(e) => {
+                          const inputValue = e.target.value;
+                          const isNegative = inputValue.startsWith('-');
+                          const numericPart = inputValue.replace(/[^0-9.]/g, '');
+                          const val = (isNegative ? '-' : '') + numericPart;
+                          handleDetailChange(index, 'unit_price', val);
+                        }}
+                        onKeyDown={(e) => handleUnitPriceKeyDown(e, index)}
+                        className="trade-input-table trade-input-right"
+                        placeholder="0"
+                        disabled={isViewMode}
+                      />
+                    </td>
+                    <td className="trade-input-right" style={{ padding: '4px 8px', fontWeight: '600', color: isPurchase ? '#c0392b' : '#2980b9' }}>
+                      {formatCurrency(detail.supply_amount)}
+                    </td>
+                    {isPurchase && (
                       <td>
                         <input
-                          ref={el => notesRefs.current[index] = el}
+                          ref={el => senderRefs.current[index] = el}
                           type="text"
-                          value={detail.notes || ''}
-                          onChange={(e) => handleDetailChange(index, 'notes', e.target.value)}
-                          onKeyDown={(e) => handleNotesKeyDown(e, index)}
+                          value={detail.sender_name || ''}
+                          onChange={(e) => handleDetailChange(index, 'sender_name', e.target.value)}
+                          onKeyDown={(e) => handleSenderKeyDown(e, index)}
                           className="trade-input-table"
                           disabled={isViewMode}
                         />
                       </td>
-                      <td className="cell-action">
-                        <button
-                          type="button"
-                          className="btn-delete-row"
-                          onClick={(e) => {
-                            e.stopPropagation(); // 행 선택 방지
-                            handleDeleteRow(index);
-                          }}
-                          tabIndex="-1"
+                    )}
+                    {isPurchase && (
+                      <td>
+                        <input
+                          ref={el => shipperLocationRefs.current[index] = el}
+                          type="text"
+                          value={detail.shipper_location || ''}
+                          onChange={(e) => handleDetailChange(index, 'shipper_location', e.target.value)}
+                          onKeyDown={(e) => handleShipperLocationKeyDown(e, index)}
+                          className="trade-input-table"
                           disabled={isViewMode}
-                        >
-                          ✕
-                        </button>
+                        />
                       </td>
-                    </tr>
-                  ))}
-                  {/* 빈 행 표시 제거됨 */}
-                  {/* Spacer Row to push footer to bottom */}
-                  <tr style={{ height: '100%', background: 'transparent' }} onDragOver={(e) => handleDragOver(e, details.length)} onDrop={(e) => handleDrop(e, details.length)}>
-                    <td colSpan="10" style={{ border: 'none', padding: 0 }}></td>
-                  </tr>
-                </tbody>
-                <tfoot>
-                  <tr className="trade-table-footer">
-                    <td colSpan={isPurchase ? 4 : 4} className="trade-total-label">합계</td>
-                    <td className="trade-total-value">
-                      {formatCurrency(totalAmount)}
+                    )}
+                    <td>
+                      <input
+                        ref={el => notesRefs.current[index] = el}
+                        type="text"
+                        value={detail.notes || ''}
+                        onChange={(e) => handleDetailChange(index, 'notes', e.target.value)}
+                        onKeyDown={(e) => handleNotesKeyDown(e, index)}
+                        className="trade-input-table"
+                        disabled={isViewMode}
+                      />
                     </td>
-                    {isPurchase && <td></td>}
-                    {isPurchase && <td></td>}
-                    <td></td>
+                    <td className="cell-action">
+                      <button
+                        type="button"
+                        className="btn-delete-row"
+                        onClick={(e) => {
+                          e.stopPropagation(); // 행 선택 방지
+                          handleDeleteRow(index);
+                        }}
+                        tabIndex="-1"
+                        disabled={isViewMode}
+                      >
+                        ✕
+                      </button>
+                    </td>
                   </tr>
-                </tfoot>
-              </table>
-            </div>
-
+                ))}
+                {/* 빈 행 표시 제거됨 */}
+                {/* Spacer Row to push footer to bottom */}
+                <tr style={{ height: '100%', background: 'transparent' }} onDragOver={(e) => handleDragOver(e, details.length)} onDrop={(e) => handleDrop(e, details.length)}>
+                  <td colSpan="10" style={{ border: 'none', padding: 0 }}></td>
+                </tr>
+              </tbody>
+              <tfoot>
+                <tr className="trade-table-footer">
+                  <td colSpan={isPurchase ? 4 : 4} className="trade-total-label">합계</td>
+                  <td className="trade-total-value">
+                    {formatCurrency(totalAmount)}
+                  </td>
+                  {isPurchase && <td></td>}
+                  {isPurchase && <td></td>}
+                  <td></td>
+                </tr>
+              </tfoot>
+            </table>
           </div>
 
-          {/* 하단 영역: 비고 및 잔고 */}
-          <div style={{ display: 'flex', gap: '0.5rem', flexShrink: 0, alignItems: 'stretch', width: '100%' }}>
+        </div>
 
-            {/* 왼쪽: 비고 카드 (새로 생성) */}
-            <div className="card" style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: '9px', backgroundColor: cardColor, marginBottom: 0 }}>
-              <h2 className="card-title trade-card-title" style={{ marginBottom: '0.5rem' }}>비고</h2>
-              <textarea
-                value={master.notes}
-                onChange={(e) => setMaster({ ...master, notes: e.target.value })}
-                className="trade-textarea"
-                placeholder="메모 입력..."
-                style={{ flex: 1, resize: 'none', width: '100%', height: '100%' }}
-                disabled={!master.company_id || isViewMode}
-              />
-            </div>
+        {/* 하단 영역: 비고 및 잔고 */}
+        <div style={{ display: 'flex', gap: '0.5rem', flexShrink: 0, alignItems: 'stretch', width: '100%', minHeight: '220px', marginTop: '0.5rem' }}>
 
-            {/* 오른쪽: 잔고 정보 카드 */}
-            <div className="trade-balance-card" style={{ backgroundColor: cardColor }}>
+          {/* 왼쪽: 비고 카드 (새로 생성) */}
+          <div className="card" style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: '9px', backgroundColor: cardColor, marginBottom: 0 }}>
+            <h2 className="card-title trade-card-title" style={{ marginBottom: '0.5rem' }}>비고</h2>
+            <textarea
+              value={master.notes}
+              onChange={(e) => setMaster({ ...master, notes: e.target.value })}
+              className="trade-textarea"
+              placeholder="메모 입력..."
+              style={{ flex: 1, resize: 'none', width: '100%', height: '100%' }}
+              disabled={!master.company_id || isViewMode}
+            />
+          </div>
+
+          {/* 오른쪽: 잔고 정보 카드 */}
+          <div className="trade-balance-card" style={{ backgroundColor: cardColor }}>
 
 
-              {/* 잔고 정보 리스트 */}
-              <div className="balance-list">
-                <div className="balance-item">
-                  <span className="balance-text-label">금일 합계</span>
-                  <span className="balance-text-value">
-                    {formatCurrency(currentTodayTotal)}원
-                  </span>
-                </div>
-                <div className="balance-item">
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                    <span className="balance-text-label">전잔고</span>
-                    {summary.last_trade_date && (
-                      <span style={{ fontSize: '0.75rem', color: '#888', fontWeight: 'normal' }}>
-                        {summary.last_trade_date.substring(5).replace('-', '/')}
-                      </span>
-                    )}
-                  </div>
-                  <span className="balance-text-value">{formatCurrency(summary.previous_balance)}원</span>
-                </div>
-                <div className="balance-item">
-                  <span className="balance-text-label">전잔고 + 금일</span>
-                  <span className="balance-text-value">{formatCurrency(currentSubtotal)}원</span>
-                </div>
-
-                <div className="balance-item">
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                    <span className="balance-text-label">
-                      {isPurchase ? '출금' : '입금'}
-                      {pendingTotal > 0 && <span className="tag-pending-count"> ({pendingPayments.length}건)</span>}
+            {/* 잔고 정보 리스트 */}
+            <div className="balance-list">
+              <div className="balance-item">
+                <span className="balance-text-label">금일 합계</span>
+                <span className="balance-text-value">
+                  {formatCurrency(currentTodayTotal)}원
+                </span>
+              </div>
+              <div className="balance-item">
+                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <span className="balance-text-label">전잔고</span>
+                  {summary.last_trade_date && (
+                    <span style={{ fontSize: '0.75rem', color: '#888', fontWeight: 'normal' }}>
+                      {summary.last_trade_date.substring(5).replace('-', '/')}
                     </span>
-                    {summary.last_payment_date && (
-                      <span style={{ fontSize: '0.75rem', color: '#888', fontWeight: 'normal' }}>
-                        {summary.last_payment_date.substring(5).replace('-', '/')}
-                      </span>
-                    )}
-                  </div>
-                  <span className="balance-text-value text-green">
-                    {formatCurrency(displayPayment)}원
-                  </span>
+                  )}
                 </div>
+                <span className="balance-text-value">{formatCurrency(summary.previous_balance)}원</span>
+              </div>
+              <div className="balance-item">
+                <span className="balance-text-label">전잔고 + 금일</span>
+                <span className="balance-text-value">{formatCurrency(currentSubtotal)}원</span>
               </div>
 
-              {/* 잔고 */}
-              {(() => {
-                // 잔고 상태별 색상 클래스
-                const balanceClass = displayBalance > 0 ? 'positive' : displayBalance < 0 ? 'negative' : 'zero';
-
-                return (
-                  <div className={`balance-box ${balanceClass}`}>
-                    <span className="balance-box-label">
-                      잔고{pendingTotal > 0 ? ' (예정)' : ''}
+              <div className="balance-item">
+                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <span className="balance-text-label">
+                    {isPurchase ? '출금' : '입금'}
+                    {pendingTotal > 0 && <span className="tag-pending-count"> ({pendingPayments.length}건)</span>}
+                  </span>
+                  {summary.last_payment_date && (
+                    <span style={{ fontSize: '0.75rem', color: '#888', fontWeight: 'normal' }}>
+                      {summary.last_payment_date.substring(5).replace('-', '/')}
                     </span>
-                    <span className="balance-box-value">
-                      {displayBalance < 0 ? '-' : ''}{formatCurrency(Math.abs(displayBalance))}원
-                    </span>
-                  </div>
-                );
-              })()}
-
-              {/* 입출금 내역 섹션 */}
-              <div className="payment-section-wrapper">
-                <div className="payment-section-header">
-                  <h3 className="trade-section-label m-0">
-                    📋 {isPurchase ? '출금' : '입금'} 내역
-                  </h3>
-                  <button
-                    type="button"
-                    onClick={handleOpenAddPayment}
-                    disabled={!master.company_id || isViewMode}
-                    className="payment-add-btn"
-                    style={{
-                      backgroundColor: master.company_id ? (isPurchase ? '#3498db' : '#27ae60') : '#ccc',
-                    }}
-                  >
-                    + {isPurchase ? '출금' : '입금'} 추가
-                  </button>
+                  )}
                 </div>
+                <span className="balance-text-value text-green">
+                  {formatCurrency(displayPayment)}원
+                </span>
+              </div>
+            </div>
 
-                {/* 입출금 내역 리스트 제거됨 (기존 방식 복귀) */}
+            {/* 잔고 */}
+            {(() => {
+              // 잔고 상태별 색상 클래스
+              const balanceClass = displayBalance > 0 ? 'positive' : displayBalance < 0 ? 'negative' : 'zero';
 
-                {/* 연결된 입금 내역 */}
-                {(linkedPayments.length > 0 || pendingPayments.length > 0) ? (
-                  <div className="payment-list-container">
-                    {linkedPayments.map(payment => {
-                      const linkType = payment.link_type;
-                      const displayAmount = linkType === 'allocated' ? payment.allocated_amount : payment.amount;
-                      // 직접 연결 또는 수금/지급에서 등록한 것은 삭제 가능 (배분된 것은 불가)
-                      const canDelete = linkType === 'direct' || linkType === 'general';
-                      const isModified = modifiedPayments[payment.id]; // 수정 대기 중인지 확인
+              return (
+                <div className={`balance-box ${balanceClass}`}>
+                  <span className="balance-box-label">
+                    잔고{pendingTotal > 0 ? ' (예정)' : ''}
+                  </span>
+                  <span className="balance-box-value">
+                    {displayBalance < 0 ? '-' : ''}{formatCurrency(Math.abs(displayBalance))}원
+                  </span>
+                </div>
+              );
+            })()}
 
-                      // 유형별 스타일
-                      return (
-                        <div key={`${payment.id}-${linkType}`} className={`payment-item ${linkType}`}>
-                          <div className="flex-1" style={{ overflow: 'hidden' }}>
-                            <div className="payment-detail-row">
-                              {formatCurrency(displayAmount)}원
-                              {linkType !== 'direct' && (
-                                <span className={`payment-badge ${linkType}`}>
-                                  {linkType === 'allocated' ? '배분' : '수금/지급'}
-                                </span>
-                              )}
-                              <span style={{
-                                fontSize: '0.75rem',
-                                padding: '1px 6px',
-                                borderRadius: '4px',
-                                backgroundColor: '#f1f5f9',
-                                color: '#475569',
-                                border: '1px solid #e2e8f0',
-                                whiteSpace: 'nowrap',
-                                flexShrink: 0
-                              }}>
-                                {payment.payment_method || '미지정'}
-                              </span>
-                              {payment.notes && (
-                                <span style={{ fontSize: '0.8rem', color: '#888', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                  ({payment.notes})
-                                </span>
-                              )}
-                              {isModified && (
-                                <span className="tag-modified">
-                                  수정됨
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                          {
-                            canDelete && !isViewMode && (
-                              <div className="payment-actions">
-                                <button
-                                  type="button"
-                                  onClick={() => setEditingPayment(payment)}
-                                  className="btn btn-custom btn-primary btn-xs"
-                                >
-                                  수정
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setDeletedPaymentIds(prev => [...prev, payment.id]);
-                                    setLinkedPayments(prev => prev.filter(p => p.id !== payment.id));
-                                  }}
-                                  className="btn btn-custom btn-danger btn-xs"
-                                >
-                                  삭제
-                                </button>
-                              </div>
-                            )
-                          }
-                        </div>
-                      );
-                    })}
-                    {/* 대기 중인 입금 내역 */}
-                    {pendingPayments.map(payment => (
-                      <div key={payment.tempId} className="payment-item" style={{
-                        backgroundColor: '#fff3cd',
-                        borderLeftColor: '#ffc107',
-                        borderStyle: 'dashed'
-                      }}>
+            {/* 입출금 내역 섹션 */}
+            <div className="payment-section-wrapper" style={{ flex: 1, display: 'flex', flexDirection: 'column', marginTop: '0.5rem' }}>
+              <div className="payment-section-header">
+                <h3 className="trade-section-label m-0">
+                  📋 {isPurchase ? '출금' : '입금'} 내역
+                </h3>
+                <button
+                  type="button"
+                  onClick={handleOpenAddPayment}
+                  disabled={!master.company_id || isViewMode}
+                  className="payment-add-btn"
+                  style={{
+                    backgroundColor: master.company_id ? (isPurchase ? '#3498db' : '#27ae60') : '#ccc',
+                  }}
+                >
+                  + {isPurchase ? '출금' : '입금'} 추가
+                </button>
+              </div>
+
+              {/* 입출금 내역 리스트 제거됨 (기존 방식 복귀) */}
+
+              {/* 연결된 입금 내역 */}
+              {(linkedPayments.length > 0 || pendingPayments.length > 0) ? (
+                <div className="payment-list-container">
+                  {linkedPayments.map(payment => {
+                    const linkType = payment.link_type;
+                    const displayAmount = linkType === 'allocated' ? payment.allocated_amount : payment.amount;
+                    // 직접 연결 또는 수금/지급에서 등록한 것은 삭제 가능 (배분된 것은 불가)
+                    const canDelete = linkType === 'direct' || linkType === 'general';
+                    const isModified = modifiedPayments[payment.id]; // 수정 대기 중인지 확인
+
+                    // 유형별 스타일
+                    return (
+                      <div key={`${payment.id}-${linkType}`} className={`payment-item ${linkType}`}>
                         <div className="flex-1" style={{ overflow: 'hidden' }}>
                           <div className="payment-detail-row">
-                            {formatCurrency(payment.amount)}원
-                            <span className="payment-badge" style={{ backgroundColor: '#ffc107', color: '#333', flexShrink: 0 }}>
-                              대기
-                            </span>
+                            {formatCurrency(displayAmount)}원
+                            {linkType !== 'direct' && (
+                              <span className={`payment-badge ${linkType}`}>
+                                {linkType === 'allocated' ? '배분' : '수금/지급'}
+                              </span>
+                            )}
                             <span style={{
                               fontSize: '0.75rem',
                               padding: '1px 6px',
                               borderRadius: '4px',
-                              backgroundColor: '#fff',
-                              color: '#666',
-                              border: '1px solid #ddd',
+                              backgroundColor: '#f1f5f9',
+                              color: '#475569',
+                              border: '1px solid #e2e8f0',
                               whiteSpace: 'nowrap',
                               flexShrink: 0
                             }}>
@@ -2076,43 +2088,104 @@ function TradePanel({
                                 ({payment.notes})
                               </span>
                             )}
+                            {isModified && (
+                              <span className="tag-modified">
+                                수정됨
+                              </span>
+                            )}
                           </div>
                         </div>
-                        <div className="payment-actions">
-                          {!isViewMode && (
-                            <>
+                        {
+                          canDelete && !isViewMode && (
+                            <div className="payment-actions">
                               <button
                                 type="button"
-                                onClick={() => setEditingPendingPayment({
-                                  ...payment,
-                                  displayAmount: new Intl.NumberFormat('ko-KR').format(Math.abs(payment.amount))
-                                })}
+                                onClick={() => setEditingPayment(payment)}
                                 className="btn btn-custom btn-primary btn-xs"
                               >
                                 수정
                               </button>
                               <button
                                 type="button"
-                                onClick={() => handleRemovePendingPayment(payment.tempId)}
+                                onClick={() => {
+                                  setDeletedPaymentIds(prev => [...prev, payment.id]);
+                                  setLinkedPayments(prev => prev.filter(p => p.id !== payment.id));
+                                }}
                                 className="btn btn-custom btn-danger btn-xs"
                               >
-                                취소
+                                삭제
                               </button>
-                            </>
+                            </div>
+                          )
+                        }
+                      </div>
+                    );
+                  })}
+                  {/* 대기 중인 입금 내역 */}
+                  {pendingPayments.map(payment => (
+                    <div key={payment.tempId} className="payment-item" style={{
+                      backgroundColor: '#fff3cd',
+                      borderLeftColor: '#ffc107',
+                      borderStyle: 'dashed'
+                    }}>
+                      <div className="flex-1" style={{ overflow: 'hidden' }}>
+                        <div className="payment-detail-row">
+                          {formatCurrency(payment.amount)}원
+                          <span className="payment-badge" style={{ backgroundColor: '#ffc107', color: '#333', flexShrink: 0 }}>
+                            대기
+                          </span>
+                          <span style={{
+                            fontSize: '0.75rem',
+                            padding: '1px 6px',
+                            borderRadius: '4px',
+                            backgroundColor: '#fff',
+                            color: '#666',
+                            border: '1px solid #ddd',
+                            whiteSpace: 'nowrap',
+                            flexShrink: 0
+                          }}>
+                            {payment.payment_method || '미지정'}
+                          </span>
+                          {payment.notes && (
+                            <span style={{ fontSize: '0.8rem', color: '#888', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                              ({payment.notes})
+                            </span>
                           )}
                         </div>
                       </div>
-                    ))}
-                  </div>
-                ) : null}
+                      <div className="payment-actions">
+                        {!isViewMode && (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => setEditingPendingPayment({
+                                ...payment,
+                                displayAmount: new Intl.NumberFormat('ko-KR').format(Math.abs(payment.amount))
+                              })}
+                              className="btn btn-custom btn-primary btn-xs"
+                            >
+                              수정
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleRemovePendingPayment(payment.tempId)}
+                              className="btn btn-custom btn-danger btn-xs"
+                            >
+                              취소
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
 
 
-              </div>
             </div>
           </div>
         </div>
-      </div >
-
+      </div>
       {/* 공통 Confirm Modal */}
       < ConfirmModal
         isOpen={modal.isOpen}
@@ -2756,6 +2829,8 @@ function TradePanel({
         inventoryInputModal.isOpen && createPortal(
           <div
             className="modal-overlay"
+            onMouseDown={(e) => e.stopPropagation()} // 이벤트 버블링 차단하여 뒤의 전표 창이 앞으로 튀어나오지 않게 함
+            onClick={(e) => e.stopPropagation()}
             style={{
               position: 'fixed',
               top: 0,
@@ -2766,7 +2841,7 @@ function TradePanel({
               display: 'flex',
               justifyContent: 'center',
               alignItems: 'center',
-              zIndex: 99999
+              zIndex: 10000 // ConfirmModal(11000)보다 확실히 낮게 설정
             }}
           >
             <div
@@ -2871,6 +2946,20 @@ function TradePanel({
                     onFocus={(e) => e.target.select()}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') {
+                        e.preventDefault();
+                        const qty = parseFloat(inventoryInputModal.quantity) || 0;
+                        const limit = inventoryInputModal.maxQuantity ?? 0;
+
+                        if (qty <= 0) {
+                          showModal('warning', '입력 오류', '수량을 입력하세요.');
+                          return;
+                        }
+
+                        if (qty > limit) {
+                          showModal('warning', '수량 초과', `재고 잔량을 초과할 수 없습니다.\n(최대: ${limit})`);
+                          return;
+                        }
+
                         const priceInput = document.getElementById('modal-price-input');
                         if (priceInput) {
                           priceInput.focus();
@@ -2914,7 +3003,12 @@ function TradePanel({
               {/* 버튼 */}
               <div style={{ display: 'flex', gap: '0.5rem' }}>
                 <button
-                  onClick={() => setInventoryInputModal(prev => ({ ...prev, isOpen: false }))}
+                  onClick={() => {
+                    setInventoryInputModal(prev => ({ ...prev, isOpen: false }));
+                    // 취소 시에도 재고 목록 창에 포커스 반환
+                    if (window.__bringToFront) window.__bringToFront('INVENTORY_QUICK');
+                    window.dispatchEvent(new CustomEvent('inventory-quick-add-complete', { detail: { success: false } }));
+                  }}
                   className="modal-btn modal-btn-cancel"
                   style={{ flex: 1 }}
                 >

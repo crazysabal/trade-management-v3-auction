@@ -194,16 +194,18 @@ export const useConfirmModal = () => {
     message: '',
     type: 'confirm',
     onConfirm: () => { },
+    onClose: () => { },
     showCancel: true
   });
 
-  const openModal = ({ type = 'confirm', title, message, onConfirm, showCancel = true }) => {
+  const openModal = ({ type = 'confirm', title, message, onConfirm, onClose, showCancel = true }) => {
     setModalState({
       isOpen: true,
       title,
       message,
       type,
       onConfirm: onConfirm || (() => { }),
+      onClose: onClose || (() => { }),
       showCancel
     });
   };
@@ -216,7 +218,10 @@ export const useConfirmModal = () => {
   const ConfirmModalComponent = (
     <ConfirmModal
       {...modalState}
-      onClose={closeModal}
+      onClose={() => {
+        if (modalState.onClose) modalState.onClose();
+        closeModal();
+      }}
     />
   );
 
