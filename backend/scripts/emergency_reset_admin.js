@@ -25,12 +25,12 @@ async function fixAdmin() {
             );
             console.log('2. 관리자 계정이 새로 생성되었습니다. (PW: admin1234)');
         } else {
-            // [Safety] 기존 계정이 있으면 비활성화된 경우 활성화만 시키고 비밀번호는 건드리지 않음
+            // [Fix] 기존 계정이 있더라도 비밀번호를 admin1234로 강제 초기화 (신규 PC 설치 및 복구 대응)
             await db.query(
-                "UPDATE users SET role_id = ?, is_active = 1 WHERE username = 'admin'",
-                [adminRoleId]
+                "UPDATE users SET password_hash = ?, role_id = ?, is_active = 1 WHERE username = 'admin'",
+                [hash, adminRoleId]
             );
-            console.log('2. 기존 관리자 계정의 권한과 활성 상태를 복구했습니다. (비밀번호는 유지됨)');
+            console.log('2. 기존 관리자 계정의 비밀번호와 권한을 초기화했습니다. (PW: admin1234)');
         }
 
         console.log('3. 복구 작업이 성공적으로 완료되었습니다.');
