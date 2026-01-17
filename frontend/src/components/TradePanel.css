@@ -441,10 +441,10 @@
 
 /* --- Balance Card (Right Side) --- */
 .trade-balance-card {
-    flex: 0 0 320px;
-    width: 320px;
-    min-width: 320px;
-    max-width: 320px;
+    flex: 0 0 auto;
+    width: fit-content;
+    min-width: auto;
+    max-width: 600px;
     padding: 9px;
     display: flex;
     flex-direction: column;
@@ -550,13 +550,14 @@
     justify-content: space-between;
     align-items: center;
     margin-bottom: 0.4rem;
-    padding: 0.5rem 0.75rem;
+    padding: 0.4rem 0.6rem;
     border-radius: 6px;
     border: 1px solid #f1f5f9;
     border-left: 4px solid #ccc;
     background-color: #ffffff;
     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+    flex-wrap: nowrap;
+    gap: 4px;
 }
 
 /* Hover effect removed by user request */
@@ -586,6 +587,7 @@
     font-size: 0.75rem;
     /* Unified small badge */
     margin-right: 6px;
+    flex-shrink: 0;
 }
 
 .payment-badge.direct {
@@ -603,13 +605,14 @@
 .payment-amount {
     font-weight: 600;
     font-size: 0.9rem;
+    white-space: nowrap;
 }
 
 .payment-actions {
     display: flex;
     gap: 4px;
     align-items: center;
-    /* Vertical alignment */
+    flex-shrink: 0;
 }
 
 .payment-actions .btn {
@@ -690,11 +693,17 @@
     align-items: center;
     gap: 0.4rem;
     font-size: 0.9rem;
+    flex-wrap: nowrap;
+    white-space: nowrap;
+    overflow: hidden;
 }
 
 .payment-meta-row {
     font-size: 0.8rem;
     color: #888;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .tag-modified {

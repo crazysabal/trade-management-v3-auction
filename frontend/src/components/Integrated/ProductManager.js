@@ -49,6 +49,8 @@ function ProductManager({ selectedCategoryId }) {
         product: null
     });
 
+    const fileInputRef = useRef(null);
+
     // Styles
     const styles = {
         container: {
@@ -533,6 +535,51 @@ function ProductManager({ selectedCategoryId }) {
     const openAddGrade = (id) => setInputModal({ isOpen: true, isEdit: false, initialData: null, copyFromId: id });
     const closeInputModal = () => setInputModal({ ...inputModal, isOpen: false });
 
+    // --- Excel Handlers ---
+    const handleExportExcel = async () => {
+        try {
+            const response = await productAPI.exportExcel();
+            const url = window.URL.createObjectURL(new Blob([response.data]));
+            const link = document.createElement('a');
+            link.href = url;
+            link.setAttribute('download', '품목관리_내보내기.xlsx');
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+        } catch (error) {
+            console.error('엑셀 내보내기 오류:', error);
+            alert('엑셀 파일 생성 중 오류가 발생했습니다.');
+        }
+    };
+
+    const handleImportClick = () => {
+        if (fileInputRef.current) {
+            fileInputRef.current.click();
+        }
+    };
+
+    const handleFileChange = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const formData = new FormData();
+        formData.append('file', file);
+
+        try {
+            setLoading(true);
+            const response = await productAPI.importExcel(formData);
+            alert(response.data.message || '가져오기가 완료되었습니다.');
+            loadProducts();
+            loadCategories(); // New categories might have been created
+        } catch (error) {
+            console.error('엑셀 가져오기 오류:', error);
+            alert(error.response?.data?.message || '엑셀 처리 중 오류가 발생했습니다.');
+        } finally {
+            setLoading(false);
+            e.target.value = ''; // Reset input
+        }
+    };
+
     // Category Options for Rename Modal
     const categoryOptions = categories.map(c => ({
         value: c.id,
@@ -580,23 +627,62 @@ function ProductManager({ selectedCategoryId }) {
                     </div>
                 </div>
 
-                <button
-                    onClick={openNew}
-                    className="btn btn-primary"
-                    style={{
-                        textDecoration: 'none',
-                        padding: '0.6rem 1.2rem',
-                        borderRadius: '8px',
-                        fontWeight: '600',
-                        boxShadow: '0 4px 6px -1px rgba(37, 99, 235, 0.2)',
-                        border: 'none',
-                        cursor: 'pointer',
-                        flex: 'none', // Prevent stretching
-                        whiteSpace: 'nowrap'
-                    }}
-                >
-                    + 신규 등록
-                </button>
+                <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                    <button
+                        onClick={handleExportExcel}
+                        className="btn btn-secondary"
+                        style={{
+                            height: '38px',
+                            padding: '0 0.75rem',
+                            borderRadius: '8px',
+                            fontWeight: '600',
+                            cursor: 'pointer',
+                            whiteSpace: 'nowrap',
+                            marginRight: '0.5rem'
+                        }}
+                    >
+                        📤 내보내기
+                    </button>
+                    <button
+                        onClick={handleImportClick}
+                        className="btn btn-success"
+                        style={{
+                            height: '38px',
+                            padding: '0 0.75rem',
+                            borderRadius: '8px',
+                            fontWeight: '600',
+                            cursor: 'pointer',
+                            whiteSpace: 'nowrap',
+                            marginRight: '0.5rem'
+                        }}
+                    >
+                        📥 가져오기
+                    </button>
+                    <input
+                        type="file"
+                        ref={fileInputRef}
+                        onChange={handleFileChange}
+                        accept=".xlsx, .xls"
+                        style={{ display: 'none' }}
+                    />
+                    <button
+                        onClick={openNew}
+                        className="btn btn-primary"
+                        style={{
+                            textDecoration: 'none',
+                            padding: '0.6rem 1.2rem',
+                            borderRadius: '8px',
+                            fontWeight: '600',
+                            boxShadow: '0 4px 6px -1px rgba(37, 99, 235, 0.2)',
+                            border: 'none',
+                            cursor: 'pointer',
+                            flex: 'none', // Prevent stretching
+                            whiteSpace: 'nowrap'
+                        }}
+                    >
+                        + 신규 등록
+                    </button>
+                </div>
             </header>
 
             <div style={styles.grid}>

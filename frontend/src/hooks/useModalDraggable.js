@@ -53,22 +53,24 @@ export const useModalDraggable = (isOpen, options = { isCentered: false }) => {
 
             // [BOUNDARY GUARD] 뷰포트 절대 좌표 기준으로 경계 체크
             const taskbarHeight = 38;
-            const navbarHeight = 50;
+            const navbarHeight = 60; // Standard 9: 60px Navbar
             const screenHeight = window.innerHeight;
-
-            const currentModalTop = modalRect.top + deltaY;
-            const currentHeaderBottom = currentModalTop + headerHeight;
-
-            // 상단 경계 (Navbar 침범 방지)
-            if (currentModalTop < navbarHeight) {
-                newY = initialPos.current.y + (navbarHeight - modalRect.top);
-            }
-
-            // 하단 경계 (제목표시줄 하단이 태스크바 위에서 멈춤)
             const bottomLimit = screenHeight - taskbarHeight;
-            if (currentHeaderBottom > bottomLimit) {
-                newY = initialPos.current.y + (bottomLimit - modalRect.top - headerHeight);
+
+            let targetTop = modalRect.top + deltaY;
+
+            // 하단 경계 (모달 전체가 태스크바 위 유지) - 먼저 적용 (상단 우선순위를 위해)
+            if (targetTop + modalRect.height > bottomLimit) {
+                targetTop = bottomLimit - modalRect.height;
             }
+
+            // 상단 경계 (Navbar 침범 방지) - 최우선 순위
+            if (targetTop < navbarHeight) {
+                targetTop = navbarHeight;
+            }
+
+            // 새로운 Y 좌표 계산 (초기 위치 + 델타)
+            newY = initialPos.current.y + (targetTop - modalRect.top);
 
             setPosition({ x: newX, y: newY });
         };

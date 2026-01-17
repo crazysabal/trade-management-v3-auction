@@ -17,7 +17,7 @@
     },
     "build": {
         "appId": "com.tm.launcher",
-        "productName": "Hongda Biz Launcher",
+        "productName": "홍다 Biz 런쳐",
         "win": {
             "target": "portable"
         },

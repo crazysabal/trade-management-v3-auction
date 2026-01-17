@@ -1876,7 +1876,7 @@ function TradePanel({
           </div>
 
           {/* 하단 영역: 비고 및 잔고 */}
-          <div style={{ display: 'flex', gap: '0.5rem', flexShrink: 0, alignItems: 'stretch' }}>
+          <div style={{ display: 'flex', gap: '0.5rem', flexShrink: 0, alignItems: 'stretch', width: '100%' }}>
 
             {/* 왼쪽: 비고 카드 (새로 생성) */}
             <div className="card" style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: '9px', backgroundColor: cardColor, marginBottom: 0 }}>
@@ -1988,7 +1988,7 @@ function TradePanel({
                       // 유형별 스타일
                       return (
                         <div key={`${payment.id}-${linkType}`} className={`payment-item ${linkType}`}>
-                          <div className="flex-1">
+                          <div className="flex-1" style={{ overflow: 'hidden' }}>
                             <div className="payment-detail-row">
                               {formatCurrency(displayAmount)}원
                               {linkType !== 'direct' && (
@@ -2002,71 +2002,61 @@ function TradePanel({
                                 borderRadius: '4px',
                                 backgroundColor: '#f1f5f9',
                                 color: '#475569',
-                                border: '1px solid #e2e8f0'
+                                border: '1px solid #e2e8f0',
+                                whiteSpace: 'nowrap',
+                                flexShrink: 0
                               }}>
                                 {payment.payment_method || '미지정'}
                               </span>
+                              {payment.notes && (
+                                <span style={{ fontSize: '0.8rem', color: '#888', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                  ({payment.notes})
+                                </span>
+                              )}
                               {isModified && (
                                 <span className="tag-modified">
                                   수정됨
                                 </span>
                               )}
                             </div>
-                            <div className="payment-meta-row">
-                              {/* 날짜 제거됨 */}
-                              {linkType === 'allocated' && payment.amount !== displayAmount && (
-                                <span>(총 {formatCurrency(payment.amount)}원 중)</span>
-                              )}
-                            </div>
                           </div>
-                          {canDelete && !isViewMode && (
-                            <div className="payment-actions">
-                              <button
-                                type="button"
-                                onClick={() => setEditingPayment(payment)}
-                                className="btn btn-custom btn-primary btn-xs"
-                              >
-                                수정
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setDeletedPaymentIds(prev => [...prev, payment.id]);
-                                  setLinkedPayments(prev => prev.filter(p => p.id !== payment.id));
-                                }}
-                                className="btn btn-custom btn-danger btn-xs"
-                              >
-                                삭제
-                              </button>
-                            </div>
-                          )}
+                          {
+                            canDelete && !isViewMode && (
+                              <div className="payment-actions">
+                                <button
+                                  type="button"
+                                  onClick={() => setEditingPayment(payment)}
+                                  className="btn btn-custom btn-primary btn-xs"
+                                >
+                                  수정
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setDeletedPaymentIds(prev => [...prev, payment.id]);
+                                    setLinkedPayments(prev => prev.filter(p => p.id !== payment.id));
+                                  }}
+                                  className="btn btn-custom btn-danger btn-xs"
+                                >
+                                  삭제
+                                </button>
+                              </div>
+                            )
+                          }
                         </div>
                       );
                     })}
                     {/* 대기 중인 입금 내역 */}
                     {pendingPayments.map(payment => (
-                      <div key={payment.tempId} style={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        padding: '0.5rem',
+                      <div key={payment.tempId} className="payment-item" style={{
                         backgroundColor: '#fff3cd',
-                        borderRadius: '4px',
-                        marginBottom: '0.4rem',
-                        fontSize: fs(0.95),
-                        borderLeft: '3px solid #ffc107',
-                        border: '1px dashed #ffc107'
+                        borderLeftColor: '#ffc107',
+                        borderStyle: 'dashed'
                       }}>
-                        <div style={{ flex: 1 }}>
-                          <div style={{ fontWeight: '500', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                        <div className="flex-1" style={{ overflow: 'hidden' }}>
+                          <div className="payment-detail-row">
                             {formatCurrency(payment.amount)}원
-                            <span style={{
-                              fontSize: fs(0.8),
-                              backgroundColor: '#ffc107',
-                              color: '#333',
-                              padding: '1px 4px',
-                              borderRadius: '3px'
-                            }}>
+                            <span className="payment-badge" style={{ backgroundColor: '#ffc107', color: '#333', flexShrink: 0 }}>
                               대기
                             </span>
                             <span style={{
@@ -2075,16 +2065,20 @@ function TradePanel({
                               borderRadius: '4px',
                               backgroundColor: '#fff',
                               color: '#666',
-                              border: '1px solid #ddd'
+                              border: '1px solid #ddd',
+                              whiteSpace: 'nowrap',
+                              flexShrink: 0
                             }}>
                               {payment.payment_method || '미지정'}
                             </span>
-                          </div>
-                          <div style={{ fontSize: fs(0.85), color: '#888' }}>
-                            {payment.notes}
+                            {payment.notes && (
+                              <span style={{ fontSize: '0.8rem', color: '#888', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                ({payment.notes})
+                              </span>
+                            )}
                           </div>
                         </div>
-                        <div style={{ display: 'flex', gap: '0.25rem' }}>
+                        <div className="payment-actions">
                           {!isViewMode && (
                             <>
                               <button
@@ -2093,30 +2087,14 @@ function TradePanel({
                                   ...payment,
                                   displayAmount: new Intl.NumberFormat('ko-KR').format(Math.abs(payment.amount))
                                 })}
-                                style={{
-                                  padding: '3px 8px',
-                                  fontSize: fs(0.85),
-                                  backgroundColor: '#3498db',
-                                  color: 'white',
-                                  border: 'none',
-                                  borderRadius: '3px',
-                                  cursor: 'pointer'
-                                }}
+                                className="btn btn-custom btn-primary btn-xs"
                               >
                                 수정
                               </button>
                               <button
                                 type="button"
                                 onClick={() => handleRemovePendingPayment(payment.tempId)}
-                                style={{
-                                  padding: '3px 8px',
-                                  fontSize: fs(0.85),
-                                  backgroundColor: '#e74c3c',
-                                  color: 'white',
-                                  border: 'none',
-                                  borderRadius: '3px',
-                                  cursor: 'pointer'
-                                }}
+                                className="btn btn-custom btn-danger btn-xs"
                               >
                                 취소
                               </button>
@@ -2133,12 +2111,13 @@ function TradePanel({
             </div>
           </div>
         </div>
-      </div>
+      </div >
 
       {/* 공통 Confirm Modal */}
-      <ConfirmModal
+      < ConfirmModal
         isOpen={modal.isOpen}
-        onClose={() => setModal(prev => ({ ...prev, isOpen: false }))}
+        onClose={() => setModal(prev => ({ ...prev, isOpen: false }))
+        }
         onConfirm={modal.onConfirm}
         title={modal.title}
         message={modal.message}

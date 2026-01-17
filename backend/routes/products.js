@@ -1,6 +1,142 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../config/database');
+const multer = require('multer');
+const xlsx = require('xlsx');
+const path = require('path');
+const fs = require('fs');
+
+// 업로드 설정
+const upload = multer({ dest: 'uploads/' });
+
+// [NEW] 엑셀 내보내기
+router.get('/export/excel', async (req, res) => {
+  try {
+    const query = `
+      SELECT pc.category_name as parent_category, c.category_name as sub_category, 
+             p.product_name, p.grade, p.weight, p.product_code, p.notes, p.is_active
+      FROM products p
+      LEFT JOIN categories c ON p.category_id = c.id
+      LEFT JOIN categories pc ON c.parent_id = pc.id
+      ORDER BY p.sort_order, p.product_code
+    `;
+    const [rows] = await db.query(query);
+
+    const data = rows.map(row => ({
+      '대분류': row.parent_category || '',
+      '소분류': row.sub_category || '',
+      '품목명': row.product_name,
+      '등급': row.grade || '',
+      '중량(kg)': row.weight || '',
+      '품목코드': row.product_code,
+      '비고': row.notes || '',
+      '사용여부': row.is_active ? '사용' : '미사용'
+    }));
+
+    const wb = xlsx.utils.book_new();
+    const ws = xlsx.utils.json_to_sheet(data);
+    xlsx.utils.book_append_sheet(wb, ws, '품목목록');
+
+    const buffer = xlsx.write(wb, { type: 'buffer', bookType: 'xlsx' });
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', 'attachment; filename=products.xlsx');
+    res.send(buffer);
+  } catch (error) {
+    console.error('엑셀 내보내기 오류:', error);
+    res.status(500).json({ success: false, message: '엑셀 생성 중 오류가 발생했습니다.' });
+  }
+});
+
+// [NEW] 엑셀 가져오기
+router.post('/import/excel', upload.single('file'), async (req, res) => {
+  const connection = await db.getConnection();
+  try {
+    if (!req.file) {
+      return res.status(400).json({ success: false, message: '파일이 업로드되지 않았습니다.' });
+    }
+
+    const workbook = xlsx.readFile(req.file.path);
+    const sheetName = workbook.SheetNames[0];
+    const sheet = workbook.Sheets[sheetName];
+    const data = xlsx.utils.sheet_to_json(sheet);
+
+    await connection.beginTransaction();
+
+    let updatedCount = 0;
+    let insertedCount = 0;
+
+    for (const item of data) {
+      const parentCatName = item['대분류'];
+      const subCatName = item['소분류'];
+      const productName = item['품목명'];
+      const grade = item['등급'];
+      const weight = item['중량(kg)'];
+      const productCode = item['품목코드'];
+      const notes = item['비고'];
+      const isActive = item['사용여부'] === '사용' ? 1 : 0;
+
+      if (!productName || !productCode) continue;
+
+      // 1. 카테고리 처리
+      let categoryId = null;
+      if (parentCatName && subCatName) {
+        // 대분류 찾기 또는 생성
+        let [parents] = await connection.query('SELECT id FROM categories WHERE category_name = ? AND parent_id IS NULL', [parentCatName]);
+        let parentId;
+        if (parents.length === 0) {
+          const [res] = await connection.query('INSERT INTO categories (category_name) VALUES (?)', [parentCatName]);
+          parentId = res.insertId;
+        } else {
+          parentId = parents[0].id;
+        }
+
+        // 소분류 찾기 또는 생성
+        let [subs] = await connection.query('SELECT id FROM categories WHERE category_name = ? AND parent_id = ?', [subCatName, parentId]);
+        if (subs.length === 0) {
+          const [res] = await connection.query('INSERT INTO categories (category_name, parent_id) VALUES (?, ?)', [subCatName, parentId]);
+          categoryId = res.insertId;
+        } else {
+          categoryId = subs[0].id;
+        }
+      }
+
+      // 2. 품목 등록 또는 수정 (품목코드 기준)
+      const [existing] = await connection.query('SELECT id FROM products WHERE product_code = ?', [productCode]);
+
+      if (existing.length > 0) {
+        await connection.query(
+          `UPDATE products SET product_name = ?, grade = ?, weight = ?, category_id = ?, notes = ?, is_active = ? WHERE id = ?`,
+          [productName, grade || null, weight || null, categoryId, notes || '', isActive, existing[0].id]
+        );
+        updatedCount++;
+      } else {
+        await connection.query(
+          `INSERT INTO products (product_code, product_name, grade, weight, category_id, notes, is_active) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          [productCode, productName, grade || null, weight || null, categoryId, notes || '', isActive]
+        );
+        insertedCount++;
+      }
+    }
+
+    await connection.commit();
+
+    // 임시 파일 삭제
+    fs.unlinkSync(req.file.path);
+
+    res.json({
+      success: true,
+      message: `엑셀 가져오기가 완료되었습니다. (신규: ${insertedCount}건, 수정: ${updatedCount}건)`
+    });
+  } catch (error) {
+    if (connection) await connection.rollback();
+    if (req.file) fs.unlinkSync(req.file.path);
+    console.error('엑셀 가져오기 오류:', error);
+    res.status(500).json({ success: false, message: '엑셀 처리 중 오류가 발생했습니다.' });
+  } finally {
+    if (connection) connection.release();
+  }
+});
 
 // 품목 목록 조회
 router.get('/', async (req, res) => {
@@ -289,32 +425,7 @@ router.put('/:id', async (req, res) => {
   }
 });
 
-// 품목 순서 변경 (일괄 업데이트)
-router.put('/reorder', async (req, res) => {
-  try {
-    const { items } = req.body; // [{ id, sort_order }, ...]
-
-    if (!items || !Array.isArray(items)) {
-      return res.status(400).json({ success: false, message: '잘못된 요청입니다.' });
-    }
-
-    // 트랜잭션 대신 개별 업데이트 (간단 구현)
-    // 성능 이슈 시 Bulk Update Query로 변경 고려:
-    // UPDATE products SET sort_order = CASE id WHEN 1 THEN 1 WHEN 2 THEN 2 ... END WHERE id IN (1,2...)
-
-    // For now, simpler await all
-    const promises = items.map(item =>
-      db.query('UPDATE products SET sort_order = ? WHERE id = ?', [item.sort_order, item.id])
-    );
-
-    await Promise.all(promises);
-
-    res.json({ success: true, message: '순서가 변경되었습니다.' });
-  } catch (error) {
-    console.error('품목 순서 변경 오류:', error);
-    res.status(500).json({ success: false, message: '서버 오류가 발생했습니다.' });
-  }
-});
+// (중복 제거됨 - 상단에 정의됨)
 
 // 품목 그룹 삭제 (일괄 삭제)
 router.delete('/group', async (req, res) => {
@@ -387,5 +498,7 @@ router.delete('/:id', async (req, res) => {
     res.status(500).json({ success: false, message: '서버 오류가 발생했습니다.' });
   }
 });
+
+// 라우트 끝
 
 module.exports = router;

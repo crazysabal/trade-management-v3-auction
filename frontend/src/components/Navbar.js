@@ -70,7 +70,7 @@ const Navbar = ({ onLaunchApp }) => {
         <nav className="navbar">
             <div className="navbar-container">
                 <div className="navbar-logo" onClick={() => handleLaunch('DASHBOARD')}>
-                    📊 거래명세서 관리
+                    📊 홍다 Biz
                 </div>
 
                 {/* [NEW] Logout Button (Visible on Desktop) */}

@@ -62,6 +62,10 @@ export const productAPI = {
   delete: (id) => api.delete(`/products/${id}`),
   deleteGroup: (productName) => api.delete('/products/group', { params: { product_name: productName } }),
   reorder: (data) => api.put('/products/reorder', data),
+  exportExcel: () => api.get('/products/export/excel', { responseType: 'blob' }),
+  importExcel: (formData) => api.post('/products/import/excel', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' }
+  }),
 };
 
 // 설정 API
