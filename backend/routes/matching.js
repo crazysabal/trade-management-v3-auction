@@ -305,15 +305,21 @@ router.post('/', async (req, res) => {
         VALUES (?, ?, ?)
       `, [sale_detail_id, purchase_inventory_id, matchQty]);
 
-      // 매입 재고 차감
-      const newRemainingQty = remainingQty - matchQty;
-      const newStatus = newRemainingQty <= 0 ? 'DEPLETED' : 'AVAILABLE';
-
-      await connection.query(`
+      // 매입 재고 차감 (음수 방지 가드 포함)
+      const [invUpd] = await connection.query(`
         UPDATE purchase_inventory 
-        SET remaining_quantity = ?, status = ?
-        WHERE id = ?
-      `, [newRemainingQty, newStatus, purchase_inventory_id]);
+        SET remaining_quantity = remaining_quantity - ?, 
+            status = CASE WHEN remaining_quantity - ? <= 0 THEN 'DEPLETED' ELSE 'AVAILABLE' END
+        WHERE id = ? AND remaining_quantity >= ?
+      `, [matchQty, matchQty, purchase_inventory_id, matchQty]);
+
+      if (invUpd.affectedRows === 0) {
+        await connection.rollback();
+        return res.status(400).json({
+          success: false,
+          message: `매입 재고(ID: ${purchase_inventory_id})의 남은 수량이 부족하여 매칭할 수 없습니다.`
+        });
+      }
     }
 
     // 5. 매출 상세 매칭 상태 업데이트
@@ -453,15 +459,22 @@ router.post('/auto', async (req, res) => {
         VALUES (?, ?, ?)
       `, [sale_detail_id, inventory.id, matchQty]);
 
-      // 매입 재고 차감
-      const newRemainingQty = availableQty - matchQty;
-      const newStatus = newRemainingQty <= 0 ? 'DEPLETED' : 'AVAILABLE';
-
-      await connection.query(`
+      // 매입 재고 차감 (음수 방지 가드 포함)
+      const [invUpd] = await connection.query(`
         UPDATE purchase_inventory 
-        SET remaining_quantity = ?, status = ?
-        WHERE id = ?
-      `, [newRemainingQty, newStatus, inventory.id]);
+        SET remaining_quantity = remaining_quantity - ?, 
+            status = CASE WHEN remaining_quantity - ? <= 0 THEN 'DEPLETED' ELSE 'AVAILABLE' END
+        WHERE id = ? AND remaining_quantity >= ?
+      `, [matchQty, matchQty, inventory.id, matchQty]);
+
+      if (invUpd.affectedRows === 0) {
+        // 루프 도중 재고 부족 발생 시 중단 (FOR UPDATE로 이미 잠갔으므로 이론상 발생 안함)
+        await connection.rollback();
+        return res.status(400).json({
+          success: false,
+          message: `매입 재고(ID: ${inventory.id})의 남은 수량이 부족하여 자동 매칭을 진행할 수 없습니다.`
+        });
+      }
 
       matchedItems.push({
         purchase_inventory_id: inventory.id,

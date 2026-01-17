@@ -12,19 +12,42 @@ const InventoryQuickView = ({ inventoryAdjustments = {}, refreshKey, onInventory
         window.__activeSalesPanels ? window.__activeSalesPanels.size > 0 : false
     );
     const [selectedId, setSelectedId] = useState(null);
+    const filteredInventoryRef = React.useRef(filteredInventory);
+    const selectedIdRef = React.useRef(selectedId);
+
+    // Ref 동기화: 이벤트 리스너 내에서 최신 상태 참조를 위함
+    useEffect(() => {
+        filteredInventoryRef.current = filteredInventory;
+    }, [filteredInventory]);
+
+    useEffect(() => {
+        selectedIdRef.current = selectedId;
+    }, [selectedId]);
 
     useEffect(() => {
         loadInventory();
 
-        // 목록 포커스 복구 함수
-        const recoverListFocus = () => {
-            // 작업이 끝나고 창이 다시 활성화되었을 때 마지막 선택 행에 포커스
+        // 목록 포커스 복구 및 자동 다음 행 이동
+        const recoverListFocus = (shouldAdvance = false) => {
+            // 성공 시 다음 행으로 자동 이동 (Auto-Advance)
+            if (shouldAdvance) {
+                const currentFiltered = filteredInventoryRef.current;
+                const currentSelectedId = selectedIdRef.current;
+                const currentIndex = currentFiltered.findIndex(item => item.id === currentSelectedId);
+
+                if (currentIndex !== -1 && currentIndex < currentFiltered.length - 1) {
+                    const nextItem = currentFiltered[currentIndex + 1];
+                    setSelectedId(nextItem.id);
+                }
+            }
+
+            // 작업이 끝나고 창이 다시 활성화되었을 때 선택된 행에 포커스
             setTimeout(() => {
                 const selectedRow = document.querySelector('.inventory-row.is-selected');
                 if (selectedRow) {
                     selectedRow.focus();
                 }
-            }, 50); // 반응성을 위해 지연 시간 단축
+            }, 60); // DOM 업데이트 및 렌더링 대기를 위해 지연 시간 소폭 조정
         };
 
         // 전표 상태 변경 리스너
@@ -32,9 +55,9 @@ const InventoryQuickView = ({ inventoryAdjustments = {}, refreshKey, onInventory
             setIsSalesPanelActive(e.detail.count > 0);
         };
 
-        // 퀵 추가 완료 후 포커스 복구 리스너
+        // 퀵 추가 완료 후 포커스 복구 및 "자동 다음 행 이동"
         const handleAddComplete = () => {
-            recoverListFocus();
+            recoverListFocus(true);
         };
 
         // [NEW] 퀵 추가 중 오류 발생 시 모달 표시 리스너
@@ -260,11 +283,11 @@ const InventoryQuickView = ({ inventoryAdjustments = {}, refreshKey, onInventory
         if (!item) return '';
         const parts = [item.product_name];
         const weight = item.weight || item.product_weight;
+        const unit = item.weight_unit || item.product_weight_unit || 'kg';
         if (weight) {
             // parseFloat를 사용하여 불필요한 소수점 0 제거 (5.00 -> 5, 5.50 -> 5.5)
-            parts.push(`${parseFloat(weight)}kg`);
+            parts.push(`${parseFloat(weight)}${unit}`);
         }
-        if (item.grade) { /* 등급은 별도 컬럼으로 분리됨 */ }
         return parts.join(' ');
     };
 

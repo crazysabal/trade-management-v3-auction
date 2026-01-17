@@ -135,7 +135,8 @@ const InventoryHistory = ({ onOpenTrade }) => {
         const keywords = searchTerm.toLowerCase().split(/\s+/).filter(k => k.length > 0);
 
         return history.filter(item => {
-            const primaryText = `${item.product_name || ''} ${item.product_weight ? Number(item.product_weight) + 'kg' : ''} ${item.grade || ''} ${item.company_name || ''} ${item.sender || ''}`.toLowerCase();
+            const unit = item.weight_unit || item.product_weight_unit || 'kg';
+            const primaryText = `${item.product_name || ''} ${item.product_weight ? Number(item.product_weight) + unit : ''} ${item.grade || ''} ${item.company_name || ''} ${item.sender || ''}`.toLowerCase();
             const secondaryText = `${item.warehouse_name || ''} ${item.shipper_location || ''} ${item.trade_number || ''} ${item.transaction_date || ''} ${getTypeLabel(item)}`.toLowerCase();
 
             // 모든 키워드가 항목 내에 존재해야 함 (AND 조건)
@@ -220,7 +221,7 @@ const InventoryHistory = ({ onOpenTrade }) => {
                     margin: '0 0 24px 0',
                     color: '#343a40'
                 }}>
-                    {item.product_name} {item.product_weight ? `${Number(item.product_weight)}kg` : ''} {item.grade ? `(${item.grade})` : ''}
+                    {item.product_name} {item.product_weight ? `${Number(item.product_weight)}${item.weight_unit || item.product_weight_unit || 'kg'}` : ''} {item.grade ? `(${item.grade})` : ''}
                 </h3>
 
                 <div style={{ fontSize: '0.95rem', color: '#495057', lineHeight: '1.8' }}>
@@ -452,7 +453,7 @@ const InventoryHistory = ({ onOpenTrade }) => {
                                         </td>
                                         <td>
                                             {item.product_name}
-                                            {item.product_weight ? ` ${Number(item.product_weight)}kg` : ''}
+                                            {item.product_weight ? ` ${Number(item.product_weight)}${item.weight_unit || item.product_weight_unit || 'kg'}` : ''}
                                         </td>
                                         <td>
                                             {item.sender || '-'}

@@ -20,6 +20,7 @@ function TradePanel({
   onInventoryUpdate,
   onTradeChange,
   onClose,
+  updateProps, // [NEW] Props 동기화 콜백
   inventoryMap = {},
   cardColor = '#ffffff',
   timestamp // 리로드 트리거용
@@ -728,12 +729,15 @@ function TradePanel({
       setCompanySummary(null);
     }
 
-    // 단순 조회/전환 시에는 목록 새로고침을 유도하지 않음 (사용자 요청)
-    /*
+    // [FIX] 초기화 시 재고 현황 목록의 임시 조정 수치를 초기화하기 위해 알림 발송
     if (onTradeChange) {
       onTradeChange();
     }
-    */
+
+    // [NEW] Persisted initialTradeId 제거 (데스크탑 새로고침 시 로딩 방지)
+    if (updateProps && initialTradeId) {
+      updateProps({ initialTradeId: null, initialViewMode: false });
+    }
   };
 
   // 거래처 변경
@@ -1289,15 +1293,15 @@ function TradePanel({
         return;
       }
 
-      // 새 전표: 품목 또는 새 입출금 필요
-      // 기존 전표 수정: 품목, 새 입출금, 수정/삭제된 입출금 중 하나라도 있으면 됨
-      if (!isEdit && validDetails.length === 0 && pendingPayments.length === 0) {
-        showModal('warning', '입력 오류', '최소 1개의 품목을 입력하거나 입출금을 추가하세요.');
+      // 1. 변경 사항이 아예 없는 경우 (기존 전표 수정 시)
+      if (isEdit && !hasChanges) {
+        showModal('warning', '입력 오류', '저장할 변경 사항이 없습니다.');
         return;
       }
 
-      if (isEdit && validDetails.length === 0 && pendingPayments.length === 0 && !hasModifiedPayments && !hasDeletedPayments) {
-        showModal('warning', '입력 오류', '저장할 변경 사항이 없습니다.');
+      // 2. 변경을 시도했으나(또는 새 전표이나) 결과적으로 필수 데이터가 없는 경우
+      if (validDetails.length === 0 && !hasPendingPayments && !hasModifiedPayments && !hasDeletedPayments) {
+        showModal('warning', '입력 오류', '최소 1개의 품목을 입력하거나 입출금을 추가하세요.');
         return;
       }
 
@@ -1447,6 +1451,11 @@ function TradePanel({
       if (onTradeChange) {
         onTradeChange();
       }
+
+      // [NEW] Persisted initialTradeId 제거
+      if (updateProps && initialTradeId) {
+        updateProps({ initialTradeId: null, initialViewMode: false });
+      }
     } catch (error) {
       console.error('삭제 오류:', error);
       setDeleteConfirmModal({ isOpen: false, confirmText: '' });
@@ -1533,7 +1542,8 @@ function TradePanel({
     });
 
     return sorted.map(product => {
-      const weightStr = product.weight ? `${parseFloat(product.weight)} kg` : '';
+      const unit = product.weight_unit || 'kg';
+      const weightStr = product.weight ? `${parseFloat(product.weight)} ${unit}` : '';
       return {
         value: product.id,
         label: `${product.product_name}${weightStr ? ` ${weightStr}` : ''}${product.grade ? ` (${product.grade})` : ''} `
@@ -1554,6 +1564,8 @@ function TradePanel({
   // 금일합계: 현재 입력 중인 품목의 합계 (실시간 반영)
   const currentTodayTotal = totalAmount;
   // 전잔고 + 금일 타 전표 + 금일 현재 전표 (실시간 계산)
+  // [FIX] summary.today_total은 현재 전표를 제외한 다른 전표들의 합계이므로, 여기에 현재 전표(currentTodayTotal)를 더하는 것이 맞으나
+  // UI상 '금일합계'로 표시되고 있어 혼동이 있으므로, 명확하게 '현재 전표 실시간 합계'와 '다른 전표 포함 총합'을 구분함.
   const currentSubtotal = (Number(summary.previous_balance) || 0) + (Number(summary.today_total) || 0) + currentTodayTotal;
   // 입출금 대기 금액
   const pendingTotal = pendingPayments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
@@ -1973,8 +1985,8 @@ function TradePanel({
             {/* 잔고 정보 리스트 */}
             <div className="balance-list">
               <div className="balance-item">
-                <span className="balance-text-label">금일 합계</span>
-                <span className="balance-text-value">
+                <span className="balance-text-label">현재 전표 합계</span>
+                <span className="balance-text-value" style={{ color: isPurchase ? '#2980b9' : '#e67e22', fontWeight: '800' }}>
                   {formatCurrency(currentTodayTotal)}원
                 </span>
               </div>
@@ -1990,7 +2002,7 @@ function TradePanel({
                 <span className="balance-text-value">{formatCurrency(summary.previous_balance)}원</span>
               </div>
               <div className="balance-item">
-                <span className="balance-text-label">전잔고 + 금일</span>
+                <span className="balance-text-label">전잔고 + 오늘 총계</span>
                 <span className="balance-text-value">{formatCurrency(currentSubtotal)}원</span>
               </div>
 

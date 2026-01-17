@@ -266,7 +266,8 @@ function MatchingPage({ isWindow, refreshKey, onTradeChange }) {
   // 품목 표시 형식: "품목명 중량kg (등급)" - 전표 등록 화면과 동일
   const formatProductName = (item) => {
     const name = item.product_name || '';
-    const weight = item.product_weight ? `${parseFloat(item.product_weight)}kg` : '';
+    const unit = item.weight_unit || item.product_weight_unit || 'kg';
+    const weight = item.product_weight ? `${parseFloat(item.product_weight)}${unit}` : '';
     const grade = item.grade ? `(${item.grade})` : '';
     return `${name}${weight ? ` ${weight}` : ''}${grade ? ` ${grade}` : ''}`.trim();
   };
@@ -1254,7 +1255,7 @@ function MatchingPage({ isWindow, refreshKey, onTradeChange }) {
                                     {matchStatus === 'PERFECT' && <span style={{ fontSize: '0.75rem', padding: '2px 6px', fontWeight: '600', borderRadius: '4px', backgroundColor: '#22c55e', color: 'white' }}>추천</span>}
                                     {matchStatus === 'PARTIAL' && <span style={{ fontSize: '0.75rem', padding: '2px 6px', fontWeight: '600', borderRadius: '4px', backgroundColor: '#eab308', color: 'white' }}>유사</span>}
                                     <span style={{ fontWeight: matchStatus ? '600' : '400' }}>
-                                      {inv.product_name} {inv.product_weight ? `${parseFloat(inv.product_weight)}kg` : ''}
+                                      {inv.product_name} {inv.product_weight ? `${parseFloat(inv.product_weight)}${inv.weight_unit || inv.product_weight_unit || 'kg'}` : ''}
                                     </span>
                                   </div>
                                 </td>

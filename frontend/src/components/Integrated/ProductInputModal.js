@@ -3,6 +3,7 @@ import { productAPI, categoryAPI } from '../../services/api';
 import SearchableSelect from '../SearchableSelect';
 import ConfirmModal from '../ConfirmModal';
 import { useModalDraggable } from '../../hooks/useModalDraggable';
+import SegmentedControl from '../SegmentedControl';
 
 const ProductInputModal = ({ isOpen, onClose, onSuccess, initialData = null, isEdit = false, copyFromId = null }) => {
     // Logic adapted from ProductForm.js
@@ -17,6 +18,7 @@ const ProductInputModal = ({ isOpen, onClose, onSuccess, initialData = null, isE
 
         category_id: '',
         weight: '',
+        weight_unit: 'kg',
         weights: [], // Array for tags
         notes: '',
         is_active: true
@@ -62,6 +64,7 @@ const ProductInputModal = ({ isOpen, onClose, onSuccess, initialData = null, isE
 
                     category_id: initialData.category_id || '',
                     weight: initialData.weight !== null ? parseFloat(initialData.weight) : '',
+                    weight_unit: initialData.weight_unit || 'kg',
                     notes: initialData.notes || '',
                     weights: [],
                     grades: []
@@ -148,12 +151,17 @@ const ProductInputModal = ({ isOpen, onClose, onSuccess, initialData = null, isE
             const res = await productAPI.getById(id);
             if (res.data) {
                 const p = res.data.data || res.data;
-                setFormData({
-                    ...formData,
+                setFormData(prev => ({
+                    ...prev,
                     product_name: p.product_name,
                     category_id: p.category_id,
                     weight: p.weight !== null ? parseFloat(p.weight) : '',
-                });
+                    weight_unit: p.weight_unit || 'kg',
+                    grade: '',         // 등급 초기화
+                    grades: [],
+                    product_code: '',  // 품목코드 초기화
+                    notes: ''          // 비고 초기화
+                }));
                 setIsAddingGrade(true);
             }
         } catch (err) {
@@ -255,40 +263,7 @@ const ProductInputModal = ({ isOpen, onClose, onSuccess, initialData = null, isE
         }
     };
 
-    const SegmentedControl = ({ value, onChange, options }) => (
-        <div style={{
-            display: 'inline-flex',
-            backgroundColor: '#f1f5f9',
-            padding: '2px',
-            borderRadius: '8px',
-            border: '1px solid #e2e8f0',
-            userSelect: 'none'
-        }}>
-            {options.map(opt => {
-                const isActive = value === opt.value;
-                return (
-                    <div
-                        key={opt.value}
-                        onClick={() => onChange(opt.value)}
-                        style={{
-                            padding: '4px 12px',
-                            borderRadius: '6px',
-                            fontSize: '0.8rem',
-                            fontWeight: '600',
-                            cursor: 'pointer',
-                            backgroundColor: isActive ? 'white' : 'transparent',
-                            color: isActive ? '#3b82f6' : '#64748b',
-                            boxShadow: isActive ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
-                            transition: 'all 0.2s',
-                            whiteSpace: 'nowrap'
-                        }}
-                    >
-                        {opt.label}
-                    </div>
-                );
-            })}
-        </div>
-    );
+    // Local SegmentedControl was removed in favor of global one
 
     const Tag = ({ text, onRemove }) => (
         <span style={{
@@ -486,46 +461,15 @@ const ProductInputModal = ({ isOpen, onClose, onSuccess, initialData = null, isE
 
                 <div className="modal-body">
                     <form id="product-form" onSubmit={handleSubmit}>
-                        {/* Mode Info */}
-                        {!isEdit && (
-                            <div style={{ marginBottom: '1.5rem', padding: '0.75rem', backgroundColor: isAddingGrade ? '#fffbeb' : '#f8fafc', borderRadius: '8px', border: isAddingGrade ? '1px solid #fcd34d' : '1px solid #e2e8f0' }}>
-                                <p style={{ margin: 0, fontSize: '0.9rem', color: isAddingGrade ? '#92400e' : '#475569' }}>
-                                    {isAddingGrade
-                                        ? `📌 "${formData.product_name}${formData.weight ? ` (${parseFloat(formData.weight)}kg)` : ''}" 품목에 새로운 등급을 추가합니다.`
-                                        : '💡 품목코드는 자동 생성됩니다.'}
+                        {/* Mode Info (Only for adding grade) */}
+                        {!isEdit && isAddingGrade && (
+                            <div style={{ marginBottom: '1.5rem', padding: '0.75rem', backgroundColor: '#fffbeb', borderRadius: '8px', border: '1px solid #fcd34d' }}>
+                                <p style={{ margin: 0, fontSize: '0.9rem', color: '#92400e' }}>
+                                    📌 "{formData.product_name}${formData.weight ? ` (${parseFloat(formData.weight)}${formData.weight_unit || 'kg'})` : ''}" 품목에 새로운 등급을 추가합니다.
                                 </p>
                             </div>
                         )}
 
-                        {/* Existing Product Select (Only New Mode) */}
-                        {!isEdit && existingProducts.length > 0 && !isAddingGrade && (
-                            <div className="form-group" style={{ display: 'flex', alignItems: 'center', marginBottom: '1rem', gap: '12px' }}>
-                                <label style={{ width: '100px', flexShrink: 0, fontWeight: '600', color: '#475569' }}>기존 품목 복사</label>
-                                <div style={{ flex: 1 }}>
-                                    <SearchableSelect
-                                        options={existingProducts.map(p => ({ value: p.product_name, label: `${p.product_name} (${p.category_name || '-'})` }))}
-                                        onChange={(opt) => {
-                                            if (opt) {
-                                                const p = existingProducts.find(x => x.product_name === opt.value);
-                                                if (p) {
-                                                    setFormData({
-                                                        ...formData,
-                                                        product_name: p.product_name,
-                                                        category_id: p.category_id,
-                                                        weight: p.weight || '',
-                                                        weights: [],
-                                                        grades: []
-                                                    });
-                                                    setIsAddingGrade(true);
-                                                }
-                                            }
-                                        }}
-                                        placeholder="기존 품목 검색..."
-                                    />
-                                    <p style={{ fontSize: '0.8rem', color: '#64748b', marginTop: '0.25rem' }}>* 등급 추가 시 선택</p>
-                                </div>
-                            </div>
-                        )}
 
                         {/* Main Form */}
                         <div className="form-group" style={{ display: 'flex', alignItems: 'center', marginBottom: '1rem', gap: '12px' }}>
@@ -621,66 +565,80 @@ const ProductInputModal = ({ isOpen, onClose, onSuccess, initialData = null, isE
                         </div>
 
                         <div className="form-group" style={{ display: 'flex', alignItems: 'center', marginBottom: '1rem', gap: '12px' }}>
-                            <label style={{ width: '100px', flexShrink: 0, fontWeight: '600', color: '#475569' }}>중량 (kg)</label>
-                            <div style={{ flex: 1 }}>
-                                {isMultiWeight && !isEdit ? (
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                        <div style={{
-                                            display: 'flex',
-                                            flexWrap: 'wrap',
-                                            gap: '6px',
-                                            padding: '8px',
-                                            border: '1px solid #cbd5e1',
-                                            borderRadius: '8px',
-                                            backgroundColor: 'white',
-                                            minHeight: '42px',
-                                            alignItems: 'center'
-                                        }}>
-                                            {Array.isArray(formData.weights) && formData.weights.map((w, idx) => (
-                                                <Tag key={idx} text={`${w}kg`} onRemove={() => removeTag(idx, 'weights')} />
-                                            ))}
-                                            <input
-                                                type="text"
-                                                value={weightInput}
-                                                onChange={(e) => setWeightInput(e.target.value)}
-                                                onKeyDown={(e) => handleTagKeyDown(e, 'weights')}
-                                                onPaste={(e) => handleTagPaste(e, 'weights')}
-                                                placeholder={formData.weights.length === 0 ? "예: 5, 10 (쉼표/엔터 입력)" : ""}
-                                                style={{ border: 'none', padding: '4px', outline: 'none', flex: 1, minWidth: '120px', margin: 0, height: 'auto' }}
-                                            />
+                            <label style={{ width: '100px', flexShrink: 0, fontWeight: '600', color: '#475569' }}>중량</label>
+                            <div style={{ flex: 1, display: 'flex', gap: '8px', alignItems: 'flex-start' }}>
+                                <div style={{ flex: 1 }}>
+                                    {isMultiWeight && !isEdit ? (
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                            <div style={{
+                                                display: 'flex',
+                                                flexWrap: 'wrap',
+                                                gap: '6px',
+                                                padding: '8px',
+                                                border: '1px solid #cbd5e1',
+                                                borderRadius: '8px',
+                                                backgroundColor: 'white',
+                                                minHeight: '42px',
+                                                alignItems: 'center'
+                                            }}>
+                                                {Array.isArray(formData.weights) && formData.weights.map((w, idx) => (
+                                                    <Tag key={idx} text={`${w}${formData.weight_unit || 'kg'}`} onRemove={() => removeTag(idx, 'weights')} />
+                                                ))}
+                                                <input
+                                                    type="text"
+                                                    value={weightInput}
+                                                    onChange={(e) => setWeightInput(e.target.value)}
+                                                    onKeyDown={(e) => handleTagKeyDown(e, 'weights')}
+                                                    onPaste={(e) => handleTagPaste(e, 'weights')}
+                                                    placeholder={formData.weights.length === 0 ? `예: 5, 10 (단위: ${formData.weight_unit || 'kg'})` : ""}
+                                                    style={{ border: 'none', padding: '4px', outline: 'none', flex: 1, minWidth: '120px', margin: 0, height: 'auto' }}
+                                                />
+                                            </div>
                                         </div>
-                                    </div>
-                                ) : (
-                                    <input
-                                        type="number"
-                                        step="0.1"
-                                        name="weight"
-                                        value={formData.weight || ''}
-                                        onChange={handleChange}
-                                        style={{ width: '100%', height: '40px' }}
+                                    ) : (
+                                        <input
+                                            type="number"
+                                            step="0.1"
+                                            name="weight"
+                                            value={formData.weight || ''}
+                                            onChange={handleChange}
+                                            style={{ width: '100%', height: '40px' }}
+                                        />
+                                    )}
+                                </div>
+                                <div style={{ flex: 'none' }}>
+                                    <SegmentedControl
+                                        options={[
+                                            { label: 'kg', value: 'kg' },
+                                            { label: 'g', value: 'g' }
+                                        ]}
+                                        value={formData.weight_unit || 'kg'}
+                                        onChange={(val) => setFormData(prev => ({ ...prev, weight_unit: val }))}
                                     />
+                                </div>
+                                {!isEdit && (
+                                    <div style={{ width: '110px', flexShrink: 0, display: 'flex', justifyContent: 'flex-end' }}>
+                                        <SegmentedControl
+                                            value={isMultiWeight}
+                                            onChange={val => toggleMultiInput('weights', val)}
+                                            options={[
+                                                { label: '단일', value: false },
+                                                { label: '다중', value: true }
+                                            ]}
+                                        />
+                                    </div>
                                 )}
                             </div>
-                            {!isEdit && (
-                                <div style={{ width: '110px', flexShrink: 0, display: 'flex', justifyContent: 'flex-end' }}>
-                                    <SegmentedControl
-                                        value={isMultiWeight}
-                                        onChange={val => toggleMultiInput('weights', val)}
-                                        options={[
-                                            { label: '단일', value: false },
-                                            { label: '다중', value: true }
-                                        ]}
-                                    />
+
+                            {isEdit && sameNameCount > 0 && String(formData.weight || '') !== String(originalWeight || '') && (
+                                <div style={{ paddingLeft: '112px', marginTop: '0.5rem' }}>
+                                    <label style={{ fontSize: '0.8rem', color: '#1d4ed8', display: 'flex', alignItems: 'center', gap: '0.25rem', cursor: 'pointer', width: 'auto', marginBottom: 0 }}>
+                                        <input type="checkbox" checked={updateAllWeights} onChange={e => setUpdateAllWeights(e.target.checked)} style={{ width: 'auto', marginBottom: 0 }} />
+                                        <span>같은 이름의 다른 등급({sameNameCount}개)도 중량 변경</span>
+                                    </label>
                                 </div>
                             )}
                         </div>
-
-                        {isEdit && sameNameCount > 0 && String(formData.weight || '') !== String(originalWeight || '') && (
-                            <label style={{ fontSize: '0.8rem', color: '#1d4ed8', display: 'flex', alignItems: 'center', gap: '0.25rem', marginTop: '0.5rem', cursor: 'pointer', width: 'auto', marginBottom: 0 }}>
-                                <input type="checkbox" checked={updateAllWeights} onChange={e => setUpdateAllWeights(e.target.checked)} style={{ width: 'auto', marginBottom: 0 }} />
-                                <span>같은 이름의 다른 등급({sameNameCount}개)도 중량 변경</span>
-                            </label>
-                        )}
                     </form>
                 </div>
 

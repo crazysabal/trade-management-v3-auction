@@ -14,7 +14,7 @@ router.get('/export/excel', async (req, res) => {
   try {
     const query = `
       SELECT pc.category_name as parent_category, c.category_name as sub_category, 
-             p.product_name, p.grade, p.weight, p.product_code, p.notes, p.is_active
+             p.product_name, p.grade, p.weight, p.weight_unit, p.product_code, p.notes, p.is_active
       FROM products p
       LEFT JOIN categories c ON p.category_id = c.id
       LEFT JOIN categories pc ON c.parent_id = pc.id
@@ -27,7 +27,8 @@ router.get('/export/excel', async (req, res) => {
       '소분류': row.sub_category || '',
       '품목명': row.product_name,
       '등급': row.grade || '',
-      '중량(kg)': row.weight || '',
+      '중량': row.weight || '',
+      '단위': row.weight_unit || 'kg',
       '품목코드': row.product_code,
       '비고': row.notes || '',
       '사용여부': row.is_active ? '사용' : '미사용'
@@ -71,7 +72,8 @@ router.post('/import/excel', upload.single('file'), async (req, res) => {
       const subCatName = item['소분류'];
       const productName = item['품목명'];
       const grade = item['등급'];
-      const weight = item['중량(kg)'];
+      const weight = item['중량'] || item['중량(kg)']; // 하위 호환성 유지
+      const weightUnit = item['단위'] || 'kg';
       const productCode = item['품목코드'];
       const notes = item['비고'];
       const isActive = item['사용여부'] === '사용' ? 1 : 0;
@@ -106,14 +108,14 @@ router.post('/import/excel', upload.single('file'), async (req, res) => {
 
       if (existing.length > 0) {
         await connection.query(
-          `UPDATE products SET product_name = ?, grade = ?, weight = ?, category_id = ?, notes = ?, is_active = ? WHERE id = ?`,
-          [productName, grade || null, weight || null, categoryId, notes || '', isActive, existing[0].id]
+          `UPDATE products SET product_name = ?, grade = ?, weight = ?, weight_unit = ?, category_id = ?, notes = ?, is_active = ? WHERE id = ?`,
+          [productName, grade || null, weight || null, weightUnit, categoryId, notes || '', isActive, existing[0].id]
         );
         updatedCount++;
       } else {
         await connection.query(
-          `INSERT INTO products (product_code, product_name, grade, weight, category_id, notes, is_active) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-          [productCode, productName, grade || null, weight || null, categoryId, notes || '', isActive]
+          `INSERT INTO products (product_code, product_name, grade, weight, weight_unit, category_id, notes, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          [productCode, productName, grade || null, weight || null, weightUnit, categoryId, notes || '', isActive]
         );
         insertedCount++;
       }
@@ -262,7 +264,7 @@ router.get('/:id', async (req, res) => {
 // 품목 등록 (다중 등급 지원)
 router.post('/', async (req, res) => {
   try {
-    const { product_name, grades, category_id, weight, notes } = req.body;
+    const { product_name, grades, category_id, weight, weight_unit, notes } = req.body;
 
     // grades 파싱 (배열 또는 콤마 구분 문자열 지원)
     let gradeList = [req.body.grade || null];
@@ -318,9 +320,9 @@ router.post('/', async (req, res) => {
           const finalWeight = (w !== null && w !== undefined && w !== '') ? parseFloat(w) : null;
 
           const [result] = await db.query(
-            `INSERT INTO products (product_code, product_name, grade, category_id, weight, notes)
-             VALUES (?, ?, ?, ?, ?, ?)`,
-            [nextCode, product_name, grade || null, category_id || null, finalWeight, notes]
+            `INSERT INTO products (product_code, product_name, grade, category_id, weight, weight_unit, notes)
+             VALUES (?, ?, ?, ?, ?, ?, ?)`,
+            [nextCode, product_name, grade || null, category_id || null, finalWeight, weight_unit || 'kg', notes]
           );
 
           createdProducts.push({
@@ -358,7 +360,7 @@ router.post('/', async (req, res) => {
 // 품목 수정
 router.put('/:id', async (req, res) => {
   try {
-    const { product_code, product_name, grade, category_id, weight, notes, is_active, updateAllGrades, updateAllWeights, originalProductName } = req.body;
+    const { product_code, product_name, grade, category_id, weight, weight_unit, notes, is_active, updateAllGrades, updateAllWeights, originalProductName } = req.body;
 
     // 품목코드 중복 체크 (자기 자신 제외)
     const [existing] = await db.query(
@@ -373,9 +375,9 @@ router.put('/:id', async (req, res) => {
     const [result] = await db.query(
       `UPDATE products SET
         product_code = ?, product_name = ?, grade = ?,
-        category_id = ?, weight = ?, notes = ?, is_active = ?
+        category_id = ?, weight = ?, weight_unit = ?, notes = ?, is_active = ?
       WHERE id = ?`,
-      [product_code, product_name, grade || null, category_id || null, weight || null, notes, is_active, req.params.id]
+      [product_code, product_name, grade || null, category_id || null, weight || null, weight_unit || 'kg', notes, is_active, req.params.id]
     );
 
     if (result.affectedRows === 0) {

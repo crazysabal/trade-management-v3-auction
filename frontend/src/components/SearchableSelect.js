@@ -26,7 +26,11 @@ const customStyles = {
   input: (base) => ({
     ...base,
     margin: 0,
-    padding: 0
+    padding: 0,
+    '& input': {
+      outline: 'none !important',
+      boxShadow: 'none !important'
+    }
   }),
   placeholder: (base, state) => ({
     ...base,

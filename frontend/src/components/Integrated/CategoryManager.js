@@ -67,13 +67,9 @@ const CategoryItem = ({
                             }
                         }}
                     >
-                        {isChild ? '└' : (hasChildren ? (isCollapsed ? '📁' : '📂') : '📁')}
+                        {isChild ? '└ ' : (hasChildren ? (isCollapsed ? '📁' : '📂') : '📁')}
                     </span>
-                    <span style={{
-                        whiteSpace: 'nowrap',
-                        flex: 1,
-                        marginRight: '0.5rem'
-                    }}>
+                    <span style={{ whiteSpace: 'nowrap' }}>
                         {category.category_name}
                     </span>
                     <span
@@ -221,8 +217,9 @@ function CategoryManager({ onSelectCategory, selectedCategoryId }) {
             color: '#334155',
             display: 'flex',
             alignItems: 'center',
-            gap: '0.5rem',
-            flex: 1
+            gap: '0.4rem',
+            flex: 1,
+            minWidth: 0
         },
         subList: {
             paddingLeft: '1.5rem',
@@ -261,18 +258,30 @@ function CategoryManager({ onSelectCategory, selectedCategoryId }) {
         }),
         dragHandle: {
             cursor: 'grab',
-            marginRight: '0.5rem',
             color: '#94a3b8',
-            fontSize: '1.2rem',
+            fontSize: '1.1rem',
             lineHeight: '1',
             userSelect: 'none',
             display: 'flex',
-            alignItems: 'center'
+            alignItems: 'center',
+            width: '24px',
+            justifyContent: 'center',
+            flexShrink: 0
         }
     };
 
     useEffect(() => {
         loadCategories();
+
+        // 제품 관리자(ProductManager)에서 엑셀 임포트 완료 시 보내는 이벤트 수신
+        const handleRefresh = () => {
+            loadCategories(true); // 배경(무음) 새로고침
+        };
+        window.addEventListener('refresh-categories', handleRefresh);
+
+        return () => {
+            window.removeEventListener('refresh-categories', handleRefresh);
+        };
     }, []);
 
     const loadCategories = async (isBackground = false) => {

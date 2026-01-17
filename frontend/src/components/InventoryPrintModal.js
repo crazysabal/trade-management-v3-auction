@@ -515,7 +515,7 @@ const InventoryPrintModal = ({ isOpen, onClose, inventory, warehouses }) => {
                                                     const dateStr = d.created_at ? new Date(d.created_at).toLocaleDateString('ko-KR', { month: '2-digit', day: '2-digit' }).replace(/\./g, '-').replace(/\s/g, '').slice(0, -1) : '-';
                                                     maxLens.date = Math.max(maxLens.date, getWeight(dateStr));
                                                 }
-                                                maxLens.weight = Math.max(maxLens.weight, getWeight(d.product_weight) + 2); // 'kg'
+                                                maxLens.weight = Math.max(maxLens.weight, getWeight(d.product_weight) + (d.weight_unit || d.product_weight_unit || 'kg').length);
                                                 maxLens.sender = Math.max(maxLens.sender, getWeight(d.sender));
                                                 maxLens.grade = Math.max(maxLens.grade, getWeight(d.grade));
                                                 maxLens.qty = Math.max(maxLens.qty, getWeight(d.remaining_quantity)); // commas?
@@ -689,7 +689,7 @@ const InventoryPrintModal = ({ isOpen, onClose, inventory, warehouses }) => {
                                                                     </td>
                                                                 )}
                                                                 <td style={{ textAlign: 'center', padding: '0', border: 'none' }}>
-                                                                    {row.hideWeight ? '' : (Number(item.product_weight) > 0 ? Number(item.product_weight) + 'kg' : '-')}
+                                                                    {row.hideWeight ? '' : (Number(item.product_weight) > 0 ? Number(item.product_weight) + (item.weight_unit || item.product_weight_unit || 'kg') : '-')}
                                                                 </td>
                                                                 <td style={{ textAlign: 'center', padding: '0', border: 'none', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                                                     {row.hideSender ? '' : (item.sender || '-')}

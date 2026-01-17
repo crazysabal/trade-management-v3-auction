@@ -48,7 +48,8 @@ const formatProductName = (detail) => {
     // 소수점 이하가 0이면 정수로 표시, 아니면 소수점 포함
     const weight = parseFloat(detail.product_weight);
     const weightStr = weight % 1 === 0 ? weight.toFixed(0) : weight.toString().replace(/\.?0+$/, '');
-    parts.push(`${weightStr}kg`);
+    const unit = detail.weight_unit || detail.product_weight_unit || 'kg';
+    parts.push(`${weightStr}${unit}`);
   }
   if (detail.grade) {
     return `${parts.join(' ')} (${detail.grade})`;

@@ -571,6 +571,8 @@ function ProductManager({ selectedCategoryId }) {
             alert(response.data.message || '가져오기가 완료되었습니다.');
             loadProducts();
             loadCategories(); // New categories might have been created
+            // 전역 이벤트 발송하여 좌측 분류 관리 패널(CategoryManager) 동기화
+            window.dispatchEvent(new CustomEvent('refresh-categories'));
         } catch (error) {
             console.error('엑셀 가져오기 오류:', error);
             alert(error.response?.data?.message || '엑셀 처리 중 오류가 발생했습니다.');
@@ -797,7 +799,7 @@ function ProductManager({ selectedCategoryId }) {
                                             {product.grade || '-'}
                                         </span>
                                         <span style={{ color: '#475569' }}>
-                                            {product.weight ? `${parseFloat(product.weight)}kg` : '-'}
+                                            {product.weight ? `${parseFloat(product.weight)}${product.weight_unit || 'kg'}` : '-'}
                                         </span>
                                     </div>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>

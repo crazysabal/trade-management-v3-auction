@@ -325,7 +325,7 @@ function InventoryList() {
                       {item.product_name}
                       {originalWeight > 0 && (
                         <span style={{ fontSize: '0.75rem', color: '#666', marginLeft: '4px' }}>
-                          {formatNumber(originalWeight)}kg
+                          {formatNumber(originalWeight)}{item.weight_unit || item.product_weight_unit || 'kg'}
                         </span>
                       )}
                     </td>

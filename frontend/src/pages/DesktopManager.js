@@ -360,13 +360,22 @@ const DesktopManager = () => {
         setWindows(prev => prev.map(w => w.id === id ? { ...w, isDirty } : w));
     }, []);
 
+    // [NEW] 윈도우의 Props(상태 저장용)를 외부에서 업데이트하는 핸들러
+    const updateActiveWindowProps = useCallback((windowId, newProps) => {
+        const id = parseInt(windowId.replace('win-', ''));
+        setWindows(prev => prev ? prev.map(w => w.id === id ? {
+            ...w,
+            componentProps: { ...w.componentProps, ...newProps }
+        } : w) : prev);
+    }, []);
+
     // 앱 렌더링 헬퍼
     const renderAppContent = (win) => {
         const { type, componentProps } = win;
 
         switch (type) {
-            case 'PURCHASE': return <TradePanel tradeType="PURCHASE" panelId={`win-${win.id}`} onClose={() => closeWindow(win.id)} onPrint={handlePrint} onInventoryUpdate={handleInventoryUpdate} onTradeChange={handleTradeChange} onDirtyChange={(isDirty) => handleWindowDirtyChange(`win-${win.id}`, isDirty)} {...componentProps} />;
-            case 'SALE': return <TradePanel tradeType="SALE" panelId={`win-${win.id}`} onClose={() => closeWindow(win.id)} onPrint={handlePrint} onInventoryUpdate={handleInventoryUpdate} onTradeChange={handleTradeChange} onDirtyChange={(isDirty) => handleWindowDirtyChange(`win-${win.id}`, isDirty)} {...componentProps} />;
+            case 'PURCHASE': return <TradePanel tradeType="PURCHASE" panelId={`win-${win.id}`} onClose={() => closeWindow(win.id)} onPrint={handlePrint} onInventoryUpdate={handleInventoryUpdate} onTradeChange={handleTradeChange} onDirtyChange={(isDirty) => handleWindowDirtyChange(`win-${win.id}`, isDirty)} updateProps={(props) => updateActiveWindowProps(`win-${win.id}`, props)} {...componentProps} />;
+            case 'SALE': return <TradePanel tradeType="SALE" panelId={`win-${win.id}`} onClose={() => closeWindow(win.id)} onPrint={handlePrint} onInventoryUpdate={handleInventoryUpdate} onTradeChange={handleTradeChange} onDirtyChange={(isDirty) => handleWindowDirtyChange(`win-${win.id}`, isDirty)} updateProps={(props) => updateActiveWindowProps(`win-${win.id}`, props)} {...componentProps} />;
             case 'TRADE_LIST': return <TradeList isWindow={true} refreshKey={tradeRefreshKey} onOpenTradeEdit={(type, tradeId, viewMode = false) => launchApp(type, { initialTradeId: tradeId, initialViewMode: viewMode })} {...componentProps} />;
             case 'COMPANY_LIST': return <CompanyList isWindow={true} {...componentProps} />;
             case 'PRODUCT_LIST': return <IntegratedProductManagement isWindow={true} {...componentProps} />;

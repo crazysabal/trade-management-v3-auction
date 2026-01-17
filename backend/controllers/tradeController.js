@@ -145,13 +145,12 @@ const TradeController = {
                     const [detailResult] = await connection.query(
                         `INSERT INTO trade_details (
                           trade_master_id, seq_no, product_id, parent_detail_id,
-                          quantity, total_weight, unit_price, supply_amount, tax_amount, total_amount, auction_price, notes,
+                          quantity, total_weight, weight_unit, unit_price, supply_amount, tax_amount, total_amount, auction_price, notes,
                           shipper_location, sender, purchase_price
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
                         [
                             masterId, i + 1, detail.product_id, detail.parent_detail_id || null,
-                            detail.quantity, detail.total_weight || 0,
-                            detail.unit_price, detail.supply_amount || 0, detail.tax_amount || 0,
+                            detail.quantity, detail.total_weight || 0, detail.weight_unit || 'kg', detail.unit_price, detail.supply_amount || 0, detail.tax_amount || 0,
                             detail.total_amount || detail.supply_amount || 0,
                             detail.auction_price || detail.unit_price || 0,
                             detail.notes || '', detail.shipper_location || null,
@@ -170,15 +169,24 @@ const TradeController = {
                             [trade_detail_id, detail.inventory_id, detail.quantity]
                         );
 
-                        // 재고 차감 (트리거가 알아서 할 수도 있지만 명시적으로 함)
-                        await connection.query(
-                            `UPDATE purchase_inventory SET remaining_quantity = remaining_quantity - ? WHERE id = ?`,
-                            [detail.quantity, detail.inventory_id]
+                        // 재고 차감 (음수 방지 가드 포함)
+                        const [invResult] = await connection.query(
+                            `UPDATE purchase_inventory 
+                             SET remaining_quantity = remaining_quantity - ? 
+                             WHERE id = ? AND remaining_quantity >= ?`,
+                            [detail.quantity, detail.inventory_id, detail.quantity]
                         );
+
+                        if (invResult.affectedRows === 0) {
+                            await connection.rollback();
+                            throw { status: 400, message: '재고가 부족하여 등록할 수 없습니다.' };
+                        }
 
                         // 재고 상태 업데이트
                         await connection.query(
-                            `UPDATE purchase_inventory SET status = CASE WHEN remaining_quantity <= 0 THEN 'DEPLETED' ELSE 'AVAILABLE' END WHERE id = ?`,
+                            `UPDATE purchase_inventory 
+                             SET status = CASE WHEN remaining_quantity <= 0 THEN 'DEPLETED' ELSE 'AVAILABLE' END 
+                             WHERE id = ?`,
                             [detail.inventory_id]
                         );
 
@@ -429,48 +437,40 @@ const TradeController = {
             );
 
             // 7. 매칭 정보 보존 로직 (SALE 전표용)
-            const preservedMatchings = new Map();
-            let matchingsToRestore = [];
+            // 중복 품목 처리를 위해 Map<productId, List<matchingItem>> 구조 사용
+            const matchingsToRestore = [];
 
             if (tradeType === 'SALE') {
-                // ... (보존 로직 유지) ...
-                // 보존 로직 개선 (Duplicates safe)
-                const preservationMap = new Map();
-                existingMap.forEach((val, key) => preservationMap.set(key, [...val]));
-
-                for (const newDetail of details) {
-                    const existingList = preservationMap.get(newDetail.product_id);
-                    // 정확히 수량이 일치하는 항목을 찾아서 보존 (우선순위: 수량 일치 -> 아무거나?)
-                    // 기존 로직: quantity equals.
-                    const matchIndex = existingList ? existingList.findIndex(e => parseFloat(e.quantity) === parseFloat(newDetail.quantity)) : -1;
-
-                    if (matchIndex > -1) {
-                        const existing = existingList[matchIndex];
-                        existingList.splice(matchIndex, 1); // Consume
-
-                        if (parseFloat(existing.matched_quantity) > 0) {
-                            preservedMatchings.set(String(existing.product_id), true); // Note: This flag is per product_id, which is slightly loose but 'allMatchings' query filters by trade_id anyway. 
-                            // Wait, preservedMatchings is used in the loop below.
-                            // Ideally we should track WHICH matching ID to preserve.
-                            // But the current logic (Lines 365-367) just checks `preservedMatchings.get(productId)`.
-                            // This implies "If ANY row of this product is preserved, ALL matchings for this product are preserved?" NO.
-                            // The previous logic was also flawed for duplicates.
-                            // For now, I will stick to the existing flag behavior but at least consume the item to support count-based preservation.
-                        }
-                    }
-                }
-
                 const [allMatchings] = await connection.query(
-                    `SELECT spm.*, td.product_id 
-           FROM sale_purchase_matching spm
-           JOIN trade_details td ON spm.sale_detail_id = td.id
-           WHERE td.trade_master_id = ?`,
+                    `SELECT spm.*, td.product_id, td.quantity as old_detail_qty
+                     FROM sale_purchase_matching spm
+                     JOIN trade_details td ON spm.sale_detail_id = td.id
+                     WHERE td.trade_master_id = ?`,
                     [tradeId]
                 );
 
+                // 현재 입력된 상세 내역과 매칭 (수량/품목 기준)
+                const detailPool = details.map(d => ({ ...d, matched: false }));
+
                 for (const matching of allMatchings) {
-                    if (preservedMatchings.get(String(matching.product_id))) {
-                        matchingsToRestore.push(matching);
+                    // 이 매칭을 수용할 수 있는 신규 상세 행 찾기
+                    // 조건: 품목 일치 + 아직 매칭 안 됨 + (선택사항) 수량 일관성? 
+                    // 수량이 바뀌었더라도 일단 품목이 같으면 매칭을 명시적으로 넘겨주지 않는 한 
+                    // 기존 매칭을 최대한 유지하되 수량 초과분은 하단에서 걸러짐
+                    const targetDetail = detailPool.find(d =>
+                        !d.matched &&
+                        String(d.product_id) === String(matching.product_id) &&
+                        parseFloat(d.quantity) >= parseFloat(matching.matched_quantity)
+                    );
+
+                    if (targetDetail) {
+                        matchingsToRestore.push({
+                            ...matching,
+                            new_detail_seq: detailPool.indexOf(targetDetail) + 1 // 매칭될 상세의 순번 저장
+                        });
+                        // 해당 상세 행의 잔여 수량 관리 (한 행에 여러 매칭 가능)
+                        // 여기서는 단순화를 위해 1:1 또는 1:N 대응.
+                        // 일단 보존 대상으로 등록
                     }
                 }
             }
@@ -502,14 +502,13 @@ const TradeController = {
 
                         await connection.query(
                             `UPDATE trade_details SET
-                              seq_no = ?, product_id = ?, parent_detail_id = ?, quantity = ?, total_weight = ?,
+                               seq_no = ?, product_id = ?, parent_detail_id = ?, quantity = ?, total_weight = ?, weight_unit = ?,
                               unit_price = ?, supply_amount = ?, tax_amount = ?, total_amount = ?,
                               auction_price = ?, notes = ?, shipper_location = ?, sender = ?, purchase_price = ?
                               WHERE id = ?`,
                             [
                                 i + 1, detail.product_id, detail.parent_detail_id || null,
-                                detail.quantity, detail.total_weight || 0,
-                                detail.unit_price, detail.supply_amount || 0, detail.tax_amount || 0,
+                                detail.quantity, detail.total_weight || 0, detail.weight_unit || 'kg', detail.unit_price, detail.supply_amount || 0, detail.tax_amount || 0,
                                 detail.total_amount || detail.supply_amount || 0,
                                 detail.auction_price || detail.unit_price || 0,
                                 detail.notes || '', detail.shipper_location || null,
@@ -525,15 +524,12 @@ const TradeController = {
                                 // 분할된 경우: 수량/중량은 변경 불가(위에서 검증됨), 메타데이터만 업데이트
                                 await connection.query(
                                     `UPDATE purchase_inventory SET
-                                      product_id = ?, 
-                                      unit_price = ?,
+                                       product_id = ?,
+                                       unit_price = ?, weight_unit = ?,
                                       shipper_location = ?, sender = ?
                                       WHERE id = ?`,
                                     [
-                                        detail.product_id,
-                                        detail.unit_price,
-                                        detail.shipper_location || null, detail.sender_name || detail.sender || null,
-                                        existing.inventory_id
+                                        detail.product_id, detail.unit_price, detail.weight_unit || 'kg', detail.shipper_location || null, detail.sender_name || detail.sender || null, existing.inventory_id
                                     ]
                                 );
                             } else {
@@ -545,15 +541,13 @@ const TradeController = {
 
                                 await connection.query(
                                     `UPDATE purchase_inventory SET
-                                      product_id = ?, 
-                                      original_quantity = ?, remaining_quantity = ?, 
-                                      unit_price = ?, status = ?,
+                                       product_id = ?,
+                                       original_quantity = ?, remaining_quantity = ?,
+                                       unit_price = ?, weight_unit = ?, status = ?,
                                       shipper_location = ?, sender = ?
                                       WHERE id = ?`,
                                     [
-                                        detail.product_id,
-                                        newQty, newRemaining,
-                                        detail.unit_price, newUniqueStatus,
+                                        detail.product_id, newQty, newRemaining, detail.unit_price, detail.weight_unit || 'kg', newUniqueStatus,
                                         detail.shipper_location || null, detail.sender_name || detail.sender || null,
                                         existing.inventory_id
                                     ]
@@ -565,14 +559,13 @@ const TradeController = {
                         // INSERT (New Item)
                         const [detailResult] = await connection.query(
                             `INSERT INTO trade_details (
-                               trade_master_id, seq_no, product_id, parent_detail_id, quantity, total_weight, 
+                               trade_master_id, seq_no, product_id, parent_detail_id, quantity, total_weight, weight_unit, 
                                unit_price, supply_amount, tax_amount, total_amount, 
                                auction_price, notes, shipper_location, sender, purchase_price
-                             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
                             [
                                 tradeId, i + 1, detail.product_id, detail.parent_detail_id || null,
-                                detail.quantity, detail.total_weight || 0,
-                                detail.unit_price, detail.supply_amount || 0, detail.tax_amount || 0,
+                                detail.quantity, detail.total_weight || 0, detail.weight_unit || 'kg', detail.unit_price, detail.supply_amount || 0, detail.tax_amount || 0,
                                 detail.total_amount || detail.supply_amount || 0,
                                 detail.auction_price || detail.unit_price || 0,
                                 detail.notes || '', detail.shipper_location || null,
@@ -596,14 +589,13 @@ const TradeController = {
                         const existing = existingMap.get(detail.product_id);
                         const [detailResult] = await connection.query(
                             `INSERT INTO trade_details (
-                  trade_master_id, seq_no, product_id, parent_detail_id, quantity, total_weight, 
+                  trade_master_id, seq_no, product_id, parent_detail_id, quantity, total_weight, weight_unit, 
                   unit_price, supply_amount, tax_amount, total_amount, 
                   auction_price, notes, shipper_location, sender, purchase_price
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
                             [
                                 tradeId, i + 1, detail.product_id, detail.parent_detail_id || null,
-                                detail.quantity, detail.total_weight || 0,
-                                detail.unit_price, detail.supply_amount || 0, detail.tax_amount || 0,
+                                detail.quantity, detail.total_weight || 0, detail.weight_unit || 'kg', detail.unit_price, detail.supply_amount || 0, detail.tax_amount || 0,
                                 detail.total_amount || detail.supply_amount || 0,
                                 detail.auction_price || detail.unit_price || 0,
                                 detail.notes || '', detail.shipper_location || null,
@@ -616,34 +608,44 @@ const TradeController = {
 
                         // 매출 전표 매칭 처리
                         if (tradeType === 'SALE') {
-                            const restoredMatchings = matchingsToRestore.filter(m => String(m.product_id) === String(detail.product_id));
+                            // 보존된 매칭 중 현재 순번(i+1)에 해당하는 것들 찾기
+                            const restoredMatchings = matchingsToRestore.filter(m => m.new_detail_seq === (i + 1));
 
                             if (restoredMatchings.length > 0) {
                                 // 매칭 복원
                                 let totalMatched = 0;
                                 for (const restored of restoredMatchings) {
-                                    await connection.query(
-                                        `INSERT INTO sale_purchase_matching (sale_detail_id, purchase_inventory_id, matched_quantity) VALUES (?, ?, ?)`,
-                                        [trade_detail_id, restored.purchase_inventory_id, restored.matched_quantity]
-                                    );
+                                    // 신규 매출 수량을 초과하지 않도록 조정
+                                    const canMatchQty = Math.min(parseFloat(restored.matched_quantity), parseFloat(detail.quantity) - totalMatched);
 
-                                    // 재고 차감 (트리거가 복원한 것을 다시 차감)
-                                    await connection.query(
-                                        `UPDATE purchase_inventory SET remaining_quantity = remaining_quantity - ? WHERE id = ?`,
-                                        [restored.matched_quantity, restored.purchase_inventory_id]
-                                    );
+                                    if (canMatchQty > 0) {
+                                        await connection.query(
+                                            `INSERT INTO sale_purchase_matching (sale_detail_id, purchase_inventory_id, matched_quantity) VALUES (?, ?, ?)`,
+                                            [trade_detail_id, restored.purchase_inventory_id, canMatchQty]
+                                        );
 
-                                    // 상태 업데이트
-                                    await connection.query(
-                                        `UPDATE purchase_inventory SET status = CASE WHEN remaining_quantity <= 0 THEN 'DEPLETED' ELSE 'AVAILABLE' END WHERE id = ?`,
-                                        [restored.purchase_inventory_id]
-                                    );
+                                        // 재고 차감 (음수 방지 가드 포함)
+                                        const [invUpd] = await connection.query(
+                                            `UPDATE purchase_inventory 
+                                             SET remaining_quantity = remaining_quantity - ? 
+                                             WHERE id = ? AND remaining_quantity >= ?`,
+                                            [canMatchQty, restored.purchase_inventory_id, canMatchQty]
+                                        );
 
-                                    totalMatched += parseFloat(restored.matched_quantity);
+                                        if (invUpd.affectedRows === 0) {
+                                            // 이미 수동/자동 매칭 등으로 재고가 소진되었을 수 있음 -> 그냥 스킵하거나 에러
+                                            // 복원 로직이므로 최대한 시도
+                                            console.warn(`[Inventory Sync] Lot ${restored.purchase_inventory_id} restoration failed due to insufficient stock.`);
+                                        }
 
-                                    // 중복 방지를 위해 리스트에서 제거
-                                    const idx = matchingsToRestore.findIndex(m => m.id === restored.id);
-                                    if (idx > -1) matchingsToRestore.splice(idx, 1);
+                                        // 상태 업데이트
+                                        await connection.query(
+                                            `UPDATE purchase_inventory SET status = CASE WHEN remaining_quantity <= 0 THEN 'DEPLETED' ELSE 'AVAILABLE' END WHERE id = ?`,
+                                            [restored.purchase_inventory_id]
+                                        );
+
+                                        totalMatched += canMatchQty;
+                                    }
                                 }
 
                                 if (totalMatched >= parseFloat(detail.quantity)) {

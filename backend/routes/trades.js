@@ -165,7 +165,6 @@ router.get('/:id', async (req, res) => {
       return res.status(404).json({ success: false, message: '거래전표를 찾을 수 없습니다.' });
     }
 
-    // 상세 내역 조회 (매칭 정보, 매입 단가, 및 반품 관련 메타데이터 포함)
     const [details] = await db.query(
       `SELECT 
         td.*,
@@ -174,11 +173,24 @@ router.get('/:id', async (req, res) => {
         p.product_name,
         p.grade,
         p.weight as product_weight,
+        p.weight_unit as product_weight_unit,
 
-        spm.purchase_inventory_id as matched_inventory_id,
-        spm.matched_quantity,
-        pi.remaining_quantity as inventory_remaining, -- 현재 재고 잔량 (검증용)
-        COALESCE(td.purchase_price, pi.unit_price) as purchase_price,
+        (SELECT spm.purchase_inventory_id FROM sale_purchase_matching spm WHERE spm.sale_detail_id = td.id LIMIT 1) as matched_inventory_id,
+        (SELECT SUM(spm.matched_quantity) FROM sale_purchase_matching spm WHERE spm.sale_detail_id = td.id) as matched_quantity,
+        (
+          SELECT pi.remaining_quantity 
+          FROM purchase_inventory pi 
+          JOIN sale_purchase_matching spm ON pi.id = spm.purchase_inventory_id 
+          WHERE spm.sale_detail_id = td.id 
+          LIMIT 1
+        ) as inventory_remaining,
+        COALESCE(td.purchase_price, (
+          SELECT pi.unit_price 
+          FROM purchase_inventory pi 
+          JOIN sale_purchase_matching spm ON pi.id = spm.purchase_inventory_id 
+          WHERE spm.sale_detail_id = td.id 
+          LIMIT 1
+        )) as purchase_price,
 
         -- 1. 이 품목이 매출 항목인 경우: 여기에 달린 총 반품 수량
         (
@@ -204,8 +216,6 @@ router.get('/:id', async (req, res) => {
 
       FROM trade_details td
       LEFT JOIN products p ON td.product_id = p.id
-      LEFT JOIN sale_purchase_matching spm ON td.id = spm.sale_detail_id
-      LEFT JOIN purchase_inventory pi ON spm.purchase_inventory_id = pi.id
       LEFT JOIN trade_details parent_td ON td.parent_detail_id = parent_td.id
       WHERE td.trade_master_id = ?
       ORDER BY td.seq_no`,
@@ -300,13 +310,13 @@ router.delete('/:id', async (req, res) => {
       const [matchedItems] = await connection.query(
         `SELECT 
              td.seq_no,
-             p.product_name, 
-             p.grade,
-             p.weight as product_weight,
-             spm.matched_quantity,
-             tm_sale.trade_number as sale_trade_number,
-             tm_sale.trade_date as sale_date,
-             c.company_name as customer_name
+      p.product_name,
+      p.grade,
+      p.weight as product_weight,
+      spm.matched_quantity,
+      tm_sale.trade_number as sale_trade_number,
+      tm_sale.trade_date as sale_date,
+      c.company_name as customer_name
            FROM trade_details td
            JOIN purchase_inventory pi ON td.id = pi.trade_detail_id
            JOIN sale_purchase_matching spm ON pi.id = spm.purchase_inventory_id
@@ -315,7 +325,7 @@ router.delete('/:id', async (req, res) => {
            JOIN trade_masters tm_sale ON td_sale.trade_master_id = tm_sale.id
            JOIN companies c ON tm_sale.company_id = c.id
            WHERE td.trade_master_id = ?
-           ORDER BY td.seq_no ASC, tm_sale.trade_date DESC`,
+      ORDER BY td.seq_no ASC, tm_sale.trade_date DESC`,
         [req.params.id]
       );
 
@@ -354,17 +364,17 @@ router.delete('/:id', async (req, res) => {
       const [usedInProduction] = await connection.query(
         `SELECT 
            p.product_name,
-           p.grade,
-           p.weight as product_weight,
-           ipi.used_quantity,
-           ip.created_at as production_date,
-           ip.id as production_id
+      p.grade,
+      p.weight as product_weight,
+      ipi.used_quantity,
+      ip.created_at as production_date,
+      ip.id as production_id
          FROM trade_details td
          JOIN purchase_inventory pi ON td.id = pi.trade_detail_id
          JOIN inventory_production_ingredients ipi ON pi.id = ipi.used_inventory_id
          JOIN inventory_productions ip ON ipi.production_id = ip.id
          JOIN products p ON td.product_id = p.id
-         WHERE td.trade_master_id = ?`,
+         WHERE td.trade_master_id = ? `,
         [req.params.id]
       );
 
@@ -383,7 +393,7 @@ router.delete('/:id', async (req, res) => {
          JOIN purchase_inventory pi ON td.id = pi.trade_detail_id
          JOIN inventory_audit_items iai ON pi.id = iai.inventory_id
          JOIN inventory_audits ia ON iai.audit_id = ia.id
-         WHERE td.trade_master_id = ?`,
+         WHERE td.trade_master_id = ? `,
         [req.params.id]
       );
 
@@ -401,7 +411,7 @@ router.delete('/:id', async (req, res) => {
       if (auditItems.length > 0) {
         const auditItemIds = auditItems.map(item => item.audit_item_id);
         await connection.query(
-          `DELETE FROM inventory_audit_items WHERE id IN (?)`,
+          `DELETE FROM inventory_audit_items WHERE id IN(?)`,
           [auditItemIds]
         );
       }
@@ -409,17 +419,17 @@ router.delete('/:id', async (req, res) => {
       // 3-0. 매입 전표: 연관된 purchase_inventory의 이력(adjustments) 먼저 삭제
       await connection.query(
         `DELETE FROM inventory_adjustments 
-         WHERE purchase_inventory_id IN (
-            SELECT id FROM purchase_inventory 
-            WHERE trade_detail_id IN (SELECT id FROM trade_details WHERE trade_master_id = ?)
-         )`,
+         WHERE purchase_inventory_id IN(
+        SELECT id FROM purchase_inventory 
+            WHERE trade_detail_id IN(SELECT id FROM trade_details WHERE trade_master_id = ?)
+      )`,
         [req.params.id]
       );
 
       // 3. 매입 전표: 연관된 purchase_inventory 먼저 삭제
       await connection.query(
         `DELETE FROM purchase_inventory 
-         WHERE trade_detail_id IN (SELECT id FROM trade_details WHERE trade_master_id = ?)`,
+         WHERE trade_detail_id IN(SELECT id FROM trade_details WHERE trade_master_id = ?)`,
         [req.params.id]
       );
     }
@@ -431,7 +441,7 @@ router.delete('/:id', async (req, res) => {
         `SELECT spm.id, spm.purchase_inventory_id, spm.matched_quantity
          FROM sale_purchase_matching spm
          JOIN trade_details td ON spm.sale_detail_id = td.id
-         WHERE td.trade_master_id = ?`,
+         WHERE td.trade_master_id = ? `,
         [req.params.id]
       );
 
@@ -440,8 +450,8 @@ router.delete('/:id', async (req, res) => {
         await connection.query(
           `UPDATE purchase_inventory 
            SET remaining_quantity = remaining_quantity + ?,
-               status = 'AVAILABLE'
-           WHERE id = ?`,
+      status = 'AVAILABLE'
+           WHERE id = ? `,
           [matching.matched_quantity, matching.purchase_inventory_id]
         );
       }
@@ -449,7 +459,7 @@ router.delete('/:id', async (req, res) => {
       // 매칭 기록 삭제
       await connection.query(
         `DELETE FROM sale_purchase_matching 
-         WHERE sale_detail_id IN (SELECT id FROM trade_details WHERE trade_master_id = ?)`,
+         WHERE sale_detail_id IN(SELECT id FROM trade_details WHERE trade_master_id = ?)`,
         [req.params.id]
       );
     }
@@ -457,7 +467,7 @@ router.delete('/:id', async (req, res) => {
     // 5. 연결된 입출금 기록 삭제 (trade_master_id로 연결된 payment_transactions)
     // 5-1. 먼저 해당 payment_transactions의 ID 조회
     const [linkedPayments] = await connection.query(
-      `SELECT id, transaction_type, amount, company_id FROM payment_transactions WHERE trade_master_id = ?`,
+      `SELECT id, transaction_type, amount, company_id FROM payment_transactions WHERE trade_master_id = ? `,
       [req.params.id]
     );
 
@@ -465,13 +475,13 @@ router.delete('/:id', async (req, res) => {
     for (const payment of linkedPayments) {
       // payment_allocations 삭제
       await connection.query(
-        `DELETE FROM payment_allocations WHERE payment_id = ?`,
+        `DELETE FROM payment_allocations WHERE payment_id = ? `,
         [payment.id]
       );
 
       // payment_transactions 삭제
       await connection.query(
-        `DELETE FROM payment_transactions WHERE id = ?`,
+        `DELETE FROM payment_transactions WHERE id = ? `,
         [payment.id]
       );
     }
@@ -508,16 +518,16 @@ router.get('/stats/by-company', async (req, res) => {
     let query = `
       SELECT 
         c.id,
-        c.company_code,
-        c.company_name,
-        COUNT(tm.id) as trade_count,
-        SUM(tm.total_amount) as total_amount,
-        SUM(tm.tax_amount) as tax_amount,
-        SUM(tm.total_price) as total_price
+      c.company_code,
+      c.company_name,
+      COUNT(tm.id) as trade_count,
+      SUM(tm.total_amount) as total_amount,
+      SUM(tm.tax_amount) as tax_amount,
+      SUM(tm.total_price) as total_price
       FROM companies c
       LEFT JOIN trade_masters tm ON c.id = tm.company_id
-      WHERE 1=1
-    `;
+      WHERE 1 = 1
+      `;
     const params = [];
 
     if (trade_type) {
@@ -576,9 +586,9 @@ router.post('/sale-from-inventory', async (req, res) => {
 
     const [lastNumber] = await connection.query(
       `SELECT trade_number FROM trade_masters 
-       WHERE trade_number LIKE ? 
-       ORDER BY trade_number DESC LIMIT 1`,
-      [`SAL-${today}-%`]
+       WHERE trade_number LIKE ?
+      ORDER BY trade_number DESC LIMIT 1`,
+      [`SAL - ${today} -% `]
     );
 
     let seqNo = 1;
@@ -587,7 +597,7 @@ router.post('/sale-from-inventory', async (req, res) => {
       seqNo = lastSeq + 1;
     }
 
-    const trade_number = `SAL-${today}-${String(seqNo).padStart(3, '0')}`;
+    const trade_number = `SAL - ${today} - ${String(seqNo).padStart(3, '0')}`;
 
     // 합계 계산
     let total_amount = 0;
@@ -597,10 +607,10 @@ router.post('/sale-from-inventory', async (req, res) => {
 
     // trade_masters 등록
     const [masterResult] = await connection.query(
-      `INSERT INTO trade_masters (
+      `INSERT INTO trade_masters(
         trade_number, trade_date, company_id, trade_type,
         total_amount, tax_amount, total_price, notes, status
-      ) VALUES (?, ?, ?, 'SALE', ?, 0, ?, ?, 'CONFIRMED')`,
+      ) VALUES(?, ?, ?, 'SALE', ?, 0, ?, ?, 'CONFIRMED')`,
       [trade_number, master.trade_date, master.company_id, total_amount, total_amount, master.notes || '']
     );
 
@@ -612,17 +622,18 @@ router.post('/sale-from-inventory', async (req, res) => {
 
       // trade_details 등록 (purchase_price 포함)
       const [detailResult] = await connection.query(
-        `INSERT INTO trade_details (
-          trade_master_id, seq_no, product_id,
-          quantity, total_weight, unit_price, supply_amount, tax_amount, total_amount, auction_price, notes,
-          shipper_location, sender, purchase_price
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO trade_details(
+        trade_master_id, seq_no, product_id,
+        quantity, total_weight, weight_unit, unit_price, supply_amount, tax_amount, total_amount, auction_price, notes,
+        shipper_location, sender, purchase_price
+      ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?)`,
         [
           trade_master_id,
           i + 1,
           detail.product_id,
           detail.quantity,
           0,  // total_weight
+          detail.weight_unit || 'kg',
           detail.unit_price,
           detail.supply_amount,
           detail.supply_amount,  // total_amount
@@ -640,15 +651,15 @@ router.post('/sale-from-inventory', async (req, res) => {
       if (detail.inventory_id) {
         // sale_purchase_matching 등록
         await connection.query(
-          `INSERT INTO sale_purchase_matching (
-            sale_detail_id, purchase_inventory_id, matched_quantity
-          ) VALUES (?, ?, ?)`,
+          `INSERT INTO sale_purchase_matching(
+        sale_detail_id, purchase_inventory_id, matched_quantity
+      ) VALUES(?, ?, ?)`,
           [trade_detail_id, detail.inventory_id, detail.quantity]
         );
 
         // purchase_inventory remaining_quantity 감소 및 상태 업데이트
         const [invResult] = await connection.query(
-          `SELECT remaining_quantity FROM purchase_inventory WHERE id = ?`,
+          `SELECT remaining_quantity FROM purchase_inventory WHERE id = ? `,
           [detail.inventory_id]
         );
         const currentQty = parseFloat(invResult[0]?.remaining_quantity || 0);
@@ -658,13 +669,13 @@ router.post('/sale-from-inventory', async (req, res) => {
         await connection.query(
           `UPDATE purchase_inventory 
            SET remaining_quantity = ?, status = ?
-           WHERE id = ?`,
+      WHERE id = ? `,
           [newQty, newStatus, detail.inventory_id]
         );
 
         // ★ matching_status 업데이트 (전량 매칭이므로 MATCHED)
         await connection.query(
-          `UPDATE trade_details SET matching_status = 'MATCHED' WHERE id = ?`,
+          `UPDATE trade_details SET matching_status = 'MATCHED' WHERE id = ? `,
           [trade_detail_id]
         );
       }
