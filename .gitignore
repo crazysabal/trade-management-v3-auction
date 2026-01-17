@@ -32,4 +32,7 @@ yarn-error.log*
 # Misc
 *.bak
 *.tmp
-
+# Sensitive Data
+backend/puppeteer_data/
+backend/cookies/
+backend/uploads/
