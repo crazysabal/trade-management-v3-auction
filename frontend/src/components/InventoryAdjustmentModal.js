@@ -1,12 +1,20 @@
 import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useModalDraggable } from '../hooks/useModalDraggable';
+import ConfirmModal from './ConfirmModal';
 
 const InventoryAdjustmentModal = ({ isOpen, onClose, inventory, onConfirm }) => {
     const [adjustmentType, setAdjustmentType] = useState('DISPOSAL'); // DISPOSAL, LOSS, CORRECTION
     const [quantity, setQuantity] = useState('');
     const [reason, setReason] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [confirmModal, setConfirmModal] = useState({
+        isOpen: false,
+        type: 'warning',
+        title: '',
+        message: '',
+        onConfirm: () => setConfirmModal(prev => ({ ...prev, isOpen: false }))
+    });
     const { handleMouseDown, draggableStyle } = useModalDraggable(isOpen);
 
     // ESC handling
@@ -29,11 +37,25 @@ const InventoryAdjustmentModal = ({ isOpen, onClose, inventory, onConfirm }) => 
 
         const qtyNum = Number(quantity);
         if (!qtyNum || qtyNum <= 0) {
-            alert('유효한 수량을 입력하세요.');
+            setConfirmModal({
+                isOpen: true,
+                type: 'warning',
+                title: '수량 입력',
+                message: '유효한 수량을 입력하세요.',
+                onConfirm: () => setConfirmModal(prev => ({ ...prev, isOpen: false })),
+                showCancel: false
+            });
             return;
         }
         if (qtyNum > Number(inventory.remaining_quantity)) {
-            alert('차감하려는 수량이 남은 수량보다 많습니다.');
+            setConfirmModal({
+                isOpen: true,
+                type: 'warning',
+                title: '수량 초과',
+                message: '차감하려는 수량이 남은 수량보다 많습니다.',
+                onConfirm: () => setConfirmModal(prev => ({ ...prev, isOpen: false })),
+                showCancel: false
+            });
             return;
         }
 
@@ -52,7 +74,14 @@ const InventoryAdjustmentModal = ({ isOpen, onClose, inventory, onConfirm }) => 
             onClose();
         } catch (error) {
             console.error(error);
-            alert('조정 처리에 실패했습니다.');
+            setConfirmModal({
+                isOpen: true,
+                type: 'error',
+                title: '조정 실패',
+                message: '재고 조정 처리에 실패했습니다.',
+                onConfirm: () => setConfirmModal(prev => ({ ...prev, isOpen: false })),
+                showCancel: false
+            });
         } finally {
             setIsSubmitting(false);
             setQuantity('');
@@ -79,12 +108,42 @@ const InventoryAdjustmentModal = ({ isOpen, onClose, inventory, onConfirm }) => 
                 </div>
 
                 <div className="modal-body">
-                    <div style={{ marginBottom: '1.5rem', padding: '1rem', backgroundColor: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-                        <div style={{ fontSize: '0.95rem', color: '#1e293b', marginBottom: '0.25rem' }}>
-                            <strong>{inventory.product_name}</strong> ({inventory.grade})
+                    {/* 정보 카드 (Premium Standard) */}
+                    <div style={{
+                        backgroundColor: '#f8fafc',
+                        borderRadius: '12px',
+                        padding: '1rem',
+                        marginBottom: '1.5rem',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '0.5rem',
+                        fontSize: '0.9rem',
+                        border: '1px solid #e2e8f0'
+                    }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                            <span style={{ color: '#64748b' }}>품목/중량</span>
+                            <span style={{ fontWeight: '600', color: '#1e293b' }}>
+                                {inventory.product_name} {inventory.product_weight ? `${parseFloat(inventory.product_weight)}${inventory.weight_unit || inventory.product_weight_unit || 'kg'}` : ''}
+                            </span>
                         </div>
-                        <div style={{ fontSize: '0.9rem', color: '#64748b' }}>
-                            현재 잔고: <span style={{ color: '#2563eb', fontWeight: 'bold' }}>{inventory.remaining_quantity}</span> 개
+                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                            <span style={{ color: '#64748b' }}>출하주/등급</span>
+                            <span style={{ fontWeight: '600', color: '#1e293b' }}>
+                                {inventory.sender || '-'} / {inventory.grade || '-'}
+                            </span>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                            <span style={{ color: '#64748b' }}>매입처/일자</span>
+                            <span style={{ fontWeight: '600', color: '#1e293b' }}>
+                                {inventory.company_name} <span style={{ color: '#94a3b8', fontWeight: '400' }}>({inventory.purchase_date?.substring(0, 10)})</span>
+                            </span>
+                        </div>
+                        <div style={{ height: '1px', backgroundColor: '#e2e8f0', margin: '0.5rem 0' }}></div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                            <span style={{ color: '#64748b' }}>현재 잔고</span>
+                            <span style={{ fontWeight: 'bold', color: '#2563eb', fontSize: '1.1rem' }}>
+                                {parseFloat(inventory.remaining_quantity).toString()} 개
+                            </span>
                         </div>
                     </div>
 
@@ -145,6 +204,17 @@ const InventoryAdjustmentModal = ({ isOpen, onClose, inventory, onConfirm }) => 
                     </button>
                 </div>
             </div>
+
+            <ConfirmModal
+                isOpen={confirmModal.isOpen}
+                type={confirmModal.type}
+                title={confirmModal.title}
+                message={confirmModal.message}
+                onConfirm={confirmModal.onConfirm}
+                onCancel={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+                confirmText="확인"
+                showCancel={false}
+            />
         </div>,
         document.body
     );

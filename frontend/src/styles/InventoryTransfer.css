@@ -253,6 +253,27 @@
     background-color: #fff5f5;
 }
 
+.btn-detail {
+    padding: 4px 8px;
+    font-size: 0.75rem;
+    background-color: #fff;
+    border: 1px solid #3498db;
+    color: #3498db;
+    border-radius: 4px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    transition: all 0.2s;
+    margin-left: 4px;
+}
+
+.btn-detail:hover {
+    background-color: #f0f7ff;
+    border-color: #2980b9;
+    color: #2980b9;
+}
+
 /* Buttons */
 .btn-reorder {
     padding: 0.5rem 1rem;

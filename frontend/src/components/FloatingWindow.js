@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import ReactDOM from 'react-dom';
 import html2canvas from 'html2canvas';
+import ConfirmModal from './ConfirmModal';
 
 /**
  * FloatingWindow - 드래그 및 크기 조절 가능한 플로팅 윈도우
@@ -29,6 +30,13 @@ const FloatingWindow = ({ title, icon, onClose, initialPosition = { x: 100, y: 1
     const [showCopyFeedback, setShowCopyFeedback] = useState(false);
     const [showScreenshotFeedback, setShowScreenshotFeedback] = useState(false);
     const [isCapturing, setIsCapturing] = useState(false);
+    const [confirmModal, setConfirmModal] = useState({
+        isOpen: false,
+        type: 'info',
+        title: '',
+        message: '',
+        onConfirm: () => setConfirmModal(prev => ({ ...prev, isOpen: false }))
+    });
 
     useEffect(() => {
         // 모바일이면 위치/크기 조절 로직 스킵 (항상 전체화면)
@@ -345,7 +353,14 @@ const FloatingWindow = ({ title, icon, onClose, initialPosition = { x: 100, y: 1
                     setTimeout(() => setShowScreenshotFeedback(false), 2000);
                 } catch (err) {
                     console.error('Clipboard copy failed:', err);
-                    alert('클립보드 복사에 실패했습니다. 브라우저 설정을 확인해주세요.');
+                    setConfirmModal({
+                        isOpen: true,
+                        type: 'warning',
+                        title: '복사 실패',
+                        message: '클립보드 복사에 실패했습니다. 브라우저 설정을 확인해주세요.',
+                        onConfirm: () => setConfirmModal(prev => ({ ...prev, isOpen: false })),
+                        showCancel: false
+                    });
                 } finally {
                     setIsCapturing(false);
                 }
@@ -353,7 +368,14 @@ const FloatingWindow = ({ title, icon, onClose, initialPosition = { x: 100, y: 1
 
         } catch (err) {
             console.error('Screenshot failed:', err);
-            alert('스크린샷 캡처에 실패했습니다.');
+            setConfirmModal({
+                isOpen: true,
+                type: 'error',
+                title: '캡처 실패',
+                message: '스크린샷 캡처에 실패했습니다.',
+                onConfirm: () => setConfirmModal(prev => ({ ...prev, isOpen: false })),
+                showCancel: false
+            });
             setIsCapturing(false);
         }
     };
@@ -594,6 +616,16 @@ const FloatingWindow = ({ title, icon, onClose, initialPosition = { x: 100, y: 1
                 />
             </div>
 
+            <ConfirmModal
+                isOpen={confirmModal.isOpen}
+                type={confirmModal.type}
+                title={confirmModal.title}
+                message={confirmModal.message}
+                onConfirm={confirmModal.onConfirm}
+                onCancel={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+                confirmText="확인"
+                showCancel={false}
+            />
         </div>,
         document.body
     );

@@ -434,7 +434,15 @@ function ProductManager({ selectedCategoryId }) {
 
     const handleRenameSubmit = async () => {
         if (!renameModal.newName || !renameModal.newName.trim()) {
-            alert('새 품목명을 입력하세요.');
+            setModal({
+                isOpen: true,
+                type: 'warning',
+                title: '입력 확인',
+                message: '새 품목명을 입력하세요.',
+                confirmText: '확인',
+                showCancel: false,
+                onConfirm: () => setModal(prev => ({ ...prev, isOpen: false }))
+            });
             return;
         }
 
@@ -548,7 +556,15 @@ function ProductManager({ selectedCategoryId }) {
             link.remove();
         } catch (error) {
             console.error('엑셀 내보내기 오류:', error);
-            alert('엑셀 파일 생성 중 오류가 발생했습니다.');
+            setModal({
+                isOpen: true,
+                type: 'error',
+                title: '내보내기 실패',
+                message: '엑셀 파일 생성 중 오류가 발생했습니다.',
+                confirmText: '확인',
+                showCancel: false,
+                onConfirm: () => setModal(prev => ({ ...prev, isOpen: false }))
+            });
         }
     };
 
@@ -568,14 +584,30 @@ function ProductManager({ selectedCategoryId }) {
         try {
             setLoading(true);
             const response = await productAPI.importExcel(formData);
-            alert(response.data.message || '가져오기가 완료되었습니다.');
+            setModal({
+                isOpen: true,
+                type: 'success',
+                title: '가져오기 완료',
+                message: response.data.message || '가져오기가 완료되었습니다.',
+                confirmText: '확인',
+                showCancel: false,
+                onConfirm: () => setModal(prev => ({ ...prev, isOpen: false }))
+            });
             loadProducts();
             loadCategories(); // New categories might have been created
             // 전역 이벤트 발송하여 좌측 분류 관리 패널(CategoryManager) 동기화
             window.dispatchEvent(new CustomEvent('refresh-categories'));
         } catch (error) {
             console.error('엑셀 가져오기 오류:', error);
-            alert(error.response?.data?.message || '엑셀 처리 중 오류가 발생했습니다.');
+            setModal({
+                isOpen: true,
+                type: 'error',
+                title: '가져오기 실패',
+                message: error.response?.data?.message || '엑셀 처리 중 오류가 발생했습니다.',
+                confirmText: '확인',
+                showCancel: false,
+                onConfirm: () => setModal(prev => ({ ...prev, isOpen: false }))
+            });
         } finally {
             setLoading(false);
             e.target.value = ''; // Reset input

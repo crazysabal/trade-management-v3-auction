@@ -152,7 +152,7 @@ const AuctionItemRow = React.memo(({
 });
 
 // --- Main Component ---
-function AuctionImportV2({ isWindow, onTradeChange }) {
+function AuctionImportV2({ isWindow, onTradeChange, onClose }) {
     const navigate = useNavigate();
     const [accounts, setAccounts] = useState([]);
     const [rawData, setRawData] = useState([]);
@@ -234,6 +234,11 @@ function AuctionImportV2({ isWindow, onTradeChange }) {
 
     const today = formatLocalDate(new Date());
 
+    const allMapped = useMemo(() => {
+        if (rawData.length === 0) return false;
+        return rawData.every(item => getMappedProductId(item.product_name, item.weight, item.grade));
+    }, [rawData, getMappedProductId]);
+
     useEffect(() => {
         loadInitialData();
     }, []);
@@ -301,7 +306,11 @@ function AuctionImportV2({ isWindow, onTradeChange }) {
                 onConfirm: () => setModal(prev => ({ ...prev, isOpen: false }))
             });
 
-            const rawDataRes = await auctionAPI.getRawData({ auction_date: crawlData.crawl_date, status: 'PENDING' });
+            const rawDataRes = await auctionAPI.getRawData({
+                auction_date: crawlData.crawl_date,
+                account_id: crawlData.account_id,
+                status: 'PENDING'
+            });
             // Sort by arrive_no (Entry Number) ascending
             const sortedData = (rawDataRes.data.data || []).sort((a, b) => {
                 const numA = parseInt(a.arrive_no, 10) || 0;
@@ -421,25 +430,26 @@ function AuctionImportV2({ isWindow, onTradeChange }) {
         setLoading(true);
         setLoadingMessage('매입 전표를 생성하는 중입니다...');
         try {
-            const details = rawData
-                .filter(item => getMappedProductId(item.product_name, item.weight, item.grade))
-                .map((item, index) => {
-                    const mappedId = getMappedProductId(item.product_name, item.weight, item.grade);
-                    return {
-                        seq_no: index + 1,
-                        product_id: mappedId,
-                        quantity: item.count || 1,
-                        total_weight: parseFloat(item.weight) || 0,
-                        unit_price: Math.floor(item.unit_price || 0),
-                        supply_amount: Math.floor(item.total_price || 0),
-                        tax_amount: 0,
-                        total_amount: Math.floor(item.total_price || 0),
-                        auction_price: Math.floor(item.unit_price || 0),
-                        shipper_location: item.shipper_location || null,
-                        sender: item.sender || null,
-                        notes: ''
-                    };
-                });
+            const importItems = rawData.filter(item => getMappedProductId(item.product_name, item.weight, item.grade));
+            const importIds = importItems.map(item => item.id);
+
+            const details = importItems.map((item, index) => {
+                const mappedId = getMappedProductId(item.product_name, item.weight, item.grade);
+                return {
+                    seq_no: index + 1,
+                    product_id: mappedId,
+                    quantity: item.count || 1,
+                    total_weight: parseFloat(item.weight) || 0,
+                    unit_price: Math.floor(item.unit_price || 0),
+                    supply_amount: Math.floor(item.total_price || 0),
+                    tax_amount: 0,
+                    total_amount: Math.floor(item.total_price || 0),
+                    auction_price: Math.floor(item.unit_price || 0),
+                    shipper_location: item.shipper_location || null,
+                    sender: item.sender || null,
+                    notes: ''
+                };
+            });
 
             const master = {
                 trade_type: 'PURCHASE',
@@ -452,7 +462,16 @@ function AuctionImportV2({ isWindow, onTradeChange }) {
                 notes: `경매 낙찰 자동 임포트 (${crawlData.crawl_date})`,
                 warehouse_id: importConfig.warehouse_id || null
             };
+
             await tradeAPI.create({ master, details });
+
+            // Mark items as IMPORTED to prevent duplicates
+            try {
+                await auctionAPI.updateStatusBulk(importIds, 'IMPORTED');
+            } catch (statusError) {
+                console.warn('경매 데이터 상태 업데이트 실패 (수동 삭제 권장):', statusError);
+            }
+
             setModal({
                 isOpen: true,
                 type: 'success',
@@ -461,7 +480,11 @@ function AuctionImportV2({ isWindow, onTradeChange }) {
                 showCancel: false,
                 onConfirm: () => {
                     if (onTradeChange) onTradeChange();
-                    navigate('/trades?type=PURCHASE');
+                    if (onClose) {
+                        onClose();
+                    } else {
+                        navigate('/trades?type=PURCHASE');
+                    }
                 }
             });
 
@@ -822,7 +845,7 @@ function AuctionImportV2({ isWindow, onTradeChange }) {
 
                             <button
                                 className="btn btn-primary"
-                                disabled={mappedCount === 0}
+                                disabled={rawData.length === 0 || !allMapped}
                                 style={{
                                     height: '40px',
                                     width: 'auto',
@@ -834,11 +857,14 @@ function AuctionImportV2({ isWindow, onTradeChange }) {
                                     marginLeft: 'auto',
                                     fontWeight: 'bold',
                                     padding: '0 20px',
-                                    margin: 0
+                                    margin: 0,
+                                    backgroundColor: (!allMapped && rawData.length > 0) ? '#94a3b8' : undefined,
+                                    cursor: (!allMapped && rawData.length > 0) ? 'not-allowed' : 'pointer'
                                 }}
-                                onClick={handleImport}
+                                onClick={processImport}
+                                title={!allMapped && rawData.length > 0 ? "모든 품목을 매칭해야 전표 생성이 가능합니다." : ""}
                             >
-                                매입 전표 생성
+                                {!allMapped && rawData.length > 0 ? '미매칭 품목 존재' : '매입 전표 생성'}
                             </button>
                         </div>
                     </div>

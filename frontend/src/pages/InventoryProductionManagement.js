@@ -402,12 +402,26 @@ const InventoryProductionManagement = () => {
         const qty = parseFloat(inputModal.quantity) || 0;
 
         if (qty <= 0) {
-            alert('수량을 입력하세요.');
+            setConfirmModal({
+                isOpen: true,
+                type: 'warning',
+                title: '수량 입력',
+                message: '수량을 입력하세요.',
+                onConfirm: () => setConfirmModal(prev => ({ ...prev, isOpen: false })),
+                showCancel: false
+            });
             return;
         }
 
         if (qty > inputModal.maxQuantity) {
-            alert(`최대 ${inputModal.maxQuantity}개까지 가능합니다.`);
+            setConfirmModal({
+                isOpen: true,
+                type: 'warning',
+                title: '수량 초과',
+                message: `최대 ${inputModal.maxQuantity}개까지 가능합니다.`,
+                onConfirm: () => setConfirmModal(prev => ({ ...prev, isOpen: false })),
+                showCancel: false
+            });
             return;
         }
 
@@ -730,28 +744,47 @@ const InventoryProductionManagement = () => {
                             </div>
 
                             <div className="modal-body-premium">
-                                <div className="modal-card-summary">
-                                    <div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#1e293b', marginBottom: '1.25rem', textAlign: 'center' }}>
-                                        {inputModal.inventory?.product_name}
-                                        {Number(inputModal.inventory?.product_weight) > 0 && ` ${Number(inputModal.inventory?.product_weight)}kg`}
-                                        {inputModal.inventory?.grade && ` (${inputModal.inventory?.grade})`}
+                                <div style={{
+                                    backgroundColor: '#f8fafc',
+                                    borderRadius: '12px',
+                                    padding: '1rem',
+                                    marginBottom: '1.5rem',
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    gap: '0.6rem',
+                                    fontSize: '0.9rem',
+                                    border: '1px solid #e2e8f0'
+                                }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                        <span style={{ color: '#64748b' }}>품목/중량</span>
+                                        <span style={{ fontWeight: '600', color: '#1e293b' }}>
+                                            {inputModal.inventory?.product_name} {inputModal.inventory?.product_weight ? `${parseFloat(inputModal.inventory?.product_weight)}${inputModal.inventory?.weight_unit || inputModal.inventory?.product_weight_unit || 'kg'}` : ''}
+                                        </span>
                                     </div>
-
-                                    <div className="modal-card-row">
-                                        <span className="modal-label">출하주:</span>
-                                        <span className="modal-value">{inputModal.inventory?.sender}</span>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                        <span style={{ color: '#64748b' }}>출하주/등급</span>
+                                        <span style={{ fontWeight: '600', color: '#1e293b' }}>
+                                            {inputModal.inventory?.sender || '-'} / {inputModal.inventory?.grade || '-'}
+                                        </span>
                                     </div>
-                                    <div className="modal-card-row">
-                                        <span className="modal-label">매입처 / 창고:</span>
-                                        <span className="modal-value">{inputModal.inventory?.company_name} / {inputModal.inventory?.warehouse_name}</span>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                        <span style={{ color: '#64748b' }}>매입처/창고</span>
+                                        <span style={{ fontWeight: '600', color: '#1e293b' }}>
+                                            {inputModal.inventory?.company_name} / {inputModal.inventory?.warehouse_name}
+                                        </span>
                                     </div>
-                                    <div className="modal-card-row" style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid #e2e8f0' }}>
-                                        <span className="modal-label">매입 일자:</span>
-                                        <span className="modal-value">{inputModal.inventory?.purchase_date}</span>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                        <span style={{ color: '#64748b' }}>매입 일자</span>
+                                        <span style={{ fontWeight: '600', color: '#1e293b' }}>
+                                            {inputModal.inventory?.purchase_date}
+                                        </span>
                                     </div>
-                                    <div className="modal-card-row">
-                                        <span className="modal-label">현재 가용 재고:</span>
-                                        <span className="modal-value-highlight">{Number(inputModal.maxQuantity).toLocaleString()} 개</span>
+                                    <div style={{ height: '1px', backgroundColor: '#e2e8f0', margin: '0.4rem 0' }}></div>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                        <span style={{ color: '#64748b' }}>현재 가용 재고</span>
+                                        <span style={{ fontWeight: 'bold', color: '#2563eb', fontSize: '1.1rem' }}>
+                                            {parseFloat(inputModal.maxQuantity).toString()} 개
+                                        </span>
                                     </div>
                                 </div>
 
@@ -774,7 +807,7 @@ const InventoryProductionManagement = () => {
                                         autoFocus
                                     />
                                     <span className="modal-qty-guide" style={{ color: inputModal.quantity > inputModal.maxQuantity ? '#ef4444' : '#64748b' }}>
-                                        {inputModal.quantity > inputModal.maxQuantity ? '⚠️ 가용 재고를 초과할 수 없습니다.' : `최대 ${Number(inputModal.maxQuantity).toLocaleString()}개 입력 가능`}
+                                        {inputModal.quantity > inputModal.maxQuantity ? '⚠️ 가용 재고를 초과할 수 없습니다.' : `최대 ${parseFloat(inputModal.maxQuantity).toString()}개 입력 가능`}
                                     </span>
                                 </div>
 

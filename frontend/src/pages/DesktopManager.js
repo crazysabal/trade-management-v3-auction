@@ -374,8 +374,8 @@ const DesktopManager = () => {
         const { type, componentProps } = win;
 
         switch (type) {
-            case 'PURCHASE': return <TradePanel tradeType="PURCHASE" panelId={`win-${win.id}`} onClose={() => closeWindow(win.id)} onPrint={handlePrint} onInventoryUpdate={handleInventoryUpdate} onTradeChange={handleTradeChange} onDirtyChange={(isDirty) => handleWindowDirtyChange(`win-${win.id}`, isDirty)} updateProps={(props) => updateActiveWindowProps(`win-${win.id}`, props)} {...componentProps} />;
-            case 'SALE': return <TradePanel tradeType="SALE" panelId={`win-${win.id}`} onClose={() => closeWindow(win.id)} onPrint={handlePrint} onInventoryUpdate={handleInventoryUpdate} onTradeChange={handleTradeChange} onDirtyChange={(isDirty) => handleWindowDirtyChange(`win-${win.id}`, isDirty)} updateProps={(props) => updateActiveWindowProps(`win-${win.id}`, props)} {...componentProps} />;
+            case 'PURCHASE': return <TradePanel tradeType="PURCHASE" panelId={`win-${win.id}`} onClose={() => closeWindow(win.id)} onPrint={handlePrint} onInventoryUpdate={handleInventoryUpdate} onTradeChange={handleTradeChange} onDirtyChange={(isDirty) => handleWindowDirtyChange(`win-${win.id}`, isDirty)} updateProps={(props) => updateActiveWindowProps(`win-${win.id}`, props)} onLaunchApp={launchApp} {...componentProps} />;
+            case 'SALE': return <TradePanel tradeType="SALE" panelId={`win-${win.id}`} onClose={() => closeWindow(win.id)} onPrint={handlePrint} onInventoryUpdate={handleInventoryUpdate} onTradeChange={handleTradeChange} onDirtyChange={(isDirty) => handleWindowDirtyChange(`win-${win.id}`, isDirty)} updateProps={(props) => updateActiveWindowProps(`win-${win.id}`, props)} onLaunchApp={launchApp} {...componentProps} />;
             case 'TRADE_LIST': return <TradeList isWindow={true} refreshKey={tradeRefreshKey} onOpenTradeEdit={(type, tradeId, viewMode = false) => launchApp(type, { initialTradeId: tradeId, initialViewMode: viewMode })} {...componentProps} />;
             case 'COMPANY_LIST': return <CompanyList isWindow={true} {...componentProps} />;
             case 'PRODUCT_LIST': return <IntegratedProductManagement isWindow={true} {...componentProps} />;
@@ -389,7 +389,7 @@ const DesktopManager = () => {
             case 'INVENTORY_AUDIT': return <InventoryAuditPage isWindow={true} {...componentProps} />;
 
             case 'MATCHING': return <MatchingPage isWindow={true} refreshKey={tradeRefreshKey} onTradeChange={handleTradeChange} {...componentProps} />;
-            case 'AUCTION_IMPORT': return <AuctionImportV2 isWindow={true} onTradeChange={handleTradeChange} {...componentProps} />;
+            case 'AUCTION_IMPORT': return <AuctionImportV2 isWindow={true} onTradeChange={handleTradeChange} onClose={() => closeWindow(win.id)} {...componentProps} />;
             case 'AUCTION_ACCOUNTS': return <AuctionAccounts isWindow={true} {...componentProps} />;
             case 'COMPANY_BALANCES': return <CompanyBalances isWindow={true} {...componentProps} />;
             case 'EXPENSES': return <ExpenseList isWindow={true} {...componentProps} />;

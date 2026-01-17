@@ -838,6 +838,25 @@ router.delete('/raw-data', async (req, res) => {
   }
 });
 
+// 원본 데이터 상태 일괄 수정 (매입 전표 생성 후 사용)
+router.put('/raw-data/status', async (req, res) => {
+  try {
+    const { ids, status } = req.body;
+
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ success: false, message: '대상을 선택해주세요.' });
+    }
+
+    const placeholders = ids.map(() => '?').join(',');
+    await db.query(`UPDATE auction_raw_data SET status = ? WHERE id IN (${placeholders})`, [status, ...ids]);
+
+    res.json({ success: true, message: '상태가 변경되었습니다.' });
+  } catch (error) {
+    console.error('원본 데이터 상태 수정 오류:', error);
+    res.status(500).json({ success: false, message: '서버 오류가 발생했습니다.' });
+  }
+});
+
 // 품목 매칭 목록 조회
 router.get('/mappings', async (req, res) => {
   try {

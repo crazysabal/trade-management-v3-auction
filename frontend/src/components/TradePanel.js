@@ -21,6 +21,7 @@ function TradePanel({
   onTradeChange,
   onClose,
   updateProps, // [NEW] Props 동기화 콜백
+  onLaunchApp, // [NEW] 앱 실행 콜백
   inventoryMap = {},
   cardColor = '#ffffff',
   timestamp // 리로드 트리거용
@@ -114,72 +115,112 @@ function TradePanel({
     }
   }, [panelId, isPurchase]);
 
-  // 컴포넌트 마운트 시 리스너 등록 및 활성화
+  // [1] 마운트/언마운트 관리 (키 생성 및 제거)
   useEffect(() => {
-    // 마운트 시 현재 패널을 활성 대상으로 설정
+    if (isPurchase) return;
+
+    if (!window.__salesPanelRegistry) window.__salesPanelRegistry = {};
+
+    // 초기 등록 (일단 false로 시작하고 바로 다음 Effect에서 업데이트됨)
+    window.__salesPanelRegistry[panelId] = {
+      hasCompany: !!master.company_id,
+      isViewMode: !!isViewMode
+    };
+
+    // 마운트 시 이벤트 발송 (초기화)
+    const entries = Object.values(window.__salesPanelRegistry);
+    window.dispatchEvent(new CustomEvent('sales-panels-updated', {
+      detail: {
+        count: entries.length,
+        hasReadyPanel: entries.some(p => p.hasCompany && !p.isViewMode)
+      }
+    }));
+
+    return () => {
+      // 언마운트 시에만 삭제
+      if (window.__salesPanelRegistry) {
+        delete window.__salesPanelRegistry[panelId];
+
+        const currentEntries = Object.values(window.__salesPanelRegistry);
+        window.dispatchEvent(new CustomEvent('sales-panels-updated', {
+          detail: {
+            count: currentEntries.length,
+            hasReadyPanel: currentEntries.some(p => p.hasCompany && !p.isViewMode)
+          }
+        }));
+      }
+    };
+  }, [panelId, isPurchase]); // 마운트 시 1회만 실행
+
+  // [2] 상태 변경 시 레지스트리 값 갱신 (삭제 하지 않음)
+  useEffect(() => {
+    if (isPurchase) return;
+    if (!window.__salesPanelRegistry) return; // 마운트 전이면 패스
+
+    // 값 갱신
+    window.__salesPanelRegistry[panelId] = {
+      hasCompany: !!master.company_id,
+      isViewMode: !!isViewMode
+    };
+
+    // 상태 변경 이벤트 발송
+    const entries = Object.values(window.__salesPanelRegistry);
+    const totalCount = entries.length;
+    const hasReadyPanel = entries.some(p => p.hasCompany && !p.isViewMode);
+
+    console.log(`[TradePanel Sync] ID: ${panelId}, Company: ${!!master.company_id}, View: ${isViewMode} -> Ready: ${hasReadyPanel}`);
+
+    window.dispatchEvent(new CustomEvent('sales-panels-updated', {
+      detail: {
+        count: totalCount,
+        hasReadyPanel: hasReadyPanel
+      }
+    }));
+  }, [master.company_id, isViewMode, isPurchase, panelId]);
+
+  // [3] 이벤트 핸들러 및 활성 패널 추적 (독립 실행)
+  useEffect(() => {
     markPanelActive();
 
-    // 전역 매출 전표 레지스트리 업데이트
-    if (!isPurchase) {
-      if (!window.__activeSalesPanels) window.__activeSalesPanels = new Set();
-      window.__activeSalesPanels.add(panelId);
-      // 상태 변경 알림발송
-      window.dispatchEvent(new CustomEvent('sales-panels-updated', { detail: { count: window.__activeSalesPanels.size } }));
-    }
     const handleQuickAdd = (e) => {
-      // 매입 전표는 재고 퀵 추가 이벤트에 반응하지 않음 (불필요한 오류 메시지 노출 방지)
       if (isPurchase) return;
 
       const { targetPanelId, inventory } = e.detail;
+      console.log(`[TradePanel:${panelId}] QuickAdd Event Received. Target: ${targetPanelId}, Last Active: ${window.__lastActiveSalesPanelId}`);
 
-      // 로그 추가 (디버깅)
-      console.log(`[TradePanel:${panelId}] QuickAdd Event Received. Target: ${targetPanelId}, Last Active Sales: ${window.__lastActiveSalesPanelId}`);
-
-      // 특정 타겟이 없으면 마지막 활성 Sales 패널이 본인인지 확인
       const isTarget = targetPanelId ? (targetPanelId === panelId) : (window.__lastActiveSalesPanelId === panelId);
 
       if (isTarget) {
-        // 1. 보기 모드 검증
         if (isViewMode) {
-          const msg = '현재 전표가 보기 전용입니다. 수정 모드로 전환 후 다시 시도해주세요.';
-          // 재고 목록 창에 오류 메시지만 전달 (중복 방지를 위해 본인 모달은 띄우지 않음)
-          window.dispatchEvent(new CustomEvent('inventory-quick-add-error', { detail: { message: msg } }));
+          window.dispatchEvent(new CustomEvent('inventory-quick-add-error', {
+            detail: { message: '현재 전표가 보기 전용입니다.' }
+          }));
           return;
         }
 
-        // 2. 거래처 선택 검증
         if (!master.company_id) {
-          const msg = '전표에 품목을 추가하려면 먼저 거래처를 선택해주세요.';
-          // 재고 목록 창에 오류 메시지만 전달
-          window.dispatchEvent(new CustomEvent('inventory-quick-add-error', { detail: { message: msg } }));
+          window.dispatchEvent(new CustomEvent('inventory-quick-add-error', {
+            detail: { message: '거래처를 먼저 선택해주세요.' }
+          }));
           return;
         }
 
-        // 모든 검증 통과 시 모달 오픈
         setInventoryInputModal({
           isOpen: true,
           inventory: inventory,
           quantity: (parseFloat(inventory.remaining_quantity) || 0).toString(),
           unitPrice: inventory.unit_price ? Math.floor(inventory.unit_price).toString() : '',
           maxQuantity: parseFloat(inventory.remaining_quantity) || 0,
-          dropIndex: details.length
+          dropIndex: detailsRef.current.length
         });
-
-        // if (window.__bringToFront) window.__bringToFront(panelId); // [REMOVED] 재고 목록 포커스 유지를 위해 제거
       }
     };
 
     window.addEventListener('inventory-quick-add', handleQuickAdd);
     return () => {
       window.removeEventListener('inventory-quick-add', handleQuickAdd);
-      // 언마운트 시 레지스트리에서 제거
-      if (!isPurchase && window.__activeSalesPanels) {
-        window.__activeSalesPanels.delete(panelId);
-        // 상태 변경 알림발송
-        window.dispatchEvent(new CustomEvent('sales-panels-updated', { detail: { count: window.__activeSalesPanels.size } }));
-      }
     };
-  }, [panelId, isViewMode, isPurchase, details.length, markPanelActive]);
+  }, [panelId, markPanelActive, isPurchase, isViewMode, master.company_id]);
   const [addPaymentModal, setAddPaymentModal] = useState({
     isOpen: false,
     amount: '',
@@ -282,7 +323,15 @@ function TradePanel({
 
     } catch (error) {
       console.error('반품 처리 중 오류:', error);
-      alert('반품 처리에 실패했습니다.');
+      setModal({
+        isOpen: true,
+        type: 'error',
+        title: '반품 처리 실패',
+        message: '반품 전표를 생성하는 중 오류가 발생했습니다.',
+        confirmText: '확인',
+        showCancel: false,
+        onConfirm: () => setModal(prev => ({ ...prev, isOpen: false }))
+      });
     }
   };
 
@@ -300,6 +349,10 @@ function TradePanel({
   const modalConfirmRef = useRef(null);
   const isSaving = useRef(false); // 저장 중 중복 클릭 방지
   const tableContainerRef = useRef(null); // [NEW] 상세 행 추가 시 스크롤 제어용
+  const detailsRef = useRef(details);
+  useEffect(() => {
+    detailsRef.current = details;
+  }, [details]);
 
 
 
@@ -1749,8 +1802,19 @@ function TradePanel({
                 onClick={refreshProducts}
                 disabled={isViewMode}
               >
-                🔄 새로고침
+                품목 새로고침
               </button>
+              {/* 재고 버튼 (매출일 때만 표시) */}
+              {!isPurchase && onLaunchApp && (
+                <button
+                  type="button"
+                  className="btn btn-info btn-custom btn-sm"
+                  onClick={() => onLaunchApp('INVENTORY_QUICK')}
+                  style={{ backgroundColor: '#17a2b8', color: 'white', border: 'none' }}
+                >
+                  재고
+                </button>
+              )}
               {/* 반품 버튼 (매출일 때만 표시) */}
               {!isPurchase && (
                 <button
@@ -1760,7 +1824,7 @@ function TradePanel({
                   disabled={!master.company_id || isViewMode}
                   style={{ backgroundColor: '#f39c12', color: 'white', border: 'none' }}
                 >
-                  ↩️ 반품등록
+                  반품
                 </button>
               )}
               <button

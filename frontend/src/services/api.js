@@ -147,6 +147,7 @@ export const auctionAPI = {
   // 원본 데이터 삭제
   deleteRawData: (id) => api.delete(`/auction/raw-data/${id}`),
   deleteRawDataBulk: (ids) => api.delete('/auction/raw-data', { data: { ids } }),
+  updateStatusBulk: (ids, status) => api.put('/auction/raw-data/status', { ids, status }),
 
   // 품목 매칭
   getMappings: () => api.get('/auction/mappings'),

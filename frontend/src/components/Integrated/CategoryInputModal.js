@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { categoryAPI } from '../../services/api';
 import { useModalDraggable } from '../../hooks/useModalDraggable';
+import ConfirmModal from '../ConfirmModal';
 
 // Reusing ModalShell pattern (Ideally extract to common)
 const CategoryInputModal = ({ isOpen, onClose, onSuccess, initialData, parentId }) => {
@@ -10,6 +11,13 @@ const CategoryInputModal = ({ isOpen, onClose, onSuccess, initialData, parentId 
     const [formData, setFormData] = useState({
         category_name: '',
         parent_id: null
+    });
+    const [confirmModal, setConfirmModal] = useState({
+        isOpen: false,
+        type: 'warning',
+        title: '',
+        message: '',
+        onConfirm: () => setConfirmModal(prev => ({ ...prev, isOpen: false }))
     });
     const { handleMouseDown, draggableStyle } = useModalDraggable(isOpen);
 
@@ -68,7 +76,14 @@ const CategoryInputModal = ({ isOpen, onClose, onSuccess, initialData, parentId 
             onClose();
         } catch (error) {
             console.error(error);
-            alert('저장 중 오류가 발생했습니다.');
+            setConfirmModal({
+                isOpen: true,
+                type: 'error',
+                title: '저장 실패',
+                message: '분류 저장 중 오류가 발생했습니다.',
+                onConfirm: () => setConfirmModal(prev => ({ ...prev, isOpen: false })),
+                showCancel: false
+            });
         }
     };
 
@@ -115,6 +130,17 @@ const CategoryInputModal = ({ isOpen, onClose, onSuccess, initialData, parentId 
                     </button>
                 </div>
             </div>
+
+            <ConfirmModal
+                isOpen={confirmModal.isOpen}
+                type={confirmModal.type}
+                title={confirmModal.title}
+                message={confirmModal.message}
+                onConfirm={confirmModal.onConfirm}
+                onCancel={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+                confirmText="확인"
+                showCancel={false}
+            />
         </div>,
         document.body
     );

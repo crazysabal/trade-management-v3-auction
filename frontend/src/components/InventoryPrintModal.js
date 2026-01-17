@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import html2canvas from 'html2canvas';
 import { useModalDraggable } from '../hooks/useModalDraggable';
 import { useAuth } from '../context/AuthContext';
+import ConfirmModal from './ConfirmModal';
 
 const InventoryPrintModal = ({ isOpen, onClose, inventory, warehouses }) => {
     const printRef = useRef(null);
@@ -16,6 +17,13 @@ const InventoryPrintModal = ({ isOpen, onClose, inventory, warehouses }) => {
     const [showRemarks, setShowRemarks] = useState(true);
     const [showDate, setShowDate] = useState(false);
     const [useSmartRatio, setUseSmartRatio] = useState(false);
+    const [confirmModal, setConfirmModal] = useState({
+        isOpen: false,
+        type: 'warning',
+        title: '',
+        message: '',
+        onConfirm: () => setConfirmModal(prev => ({ ...prev, isOpen: false }))
+    });
 
     // Load Settings on Mount or User Change
     useEffect(() => {
@@ -107,7 +115,14 @@ const InventoryPrintModal = ({ isOpen, onClose, inventory, warehouses }) => {
         try {
             const previewContainer = document.querySelector('.preview-container-for-copy');
             if (!previewContainer) {
-                alert('미리보기 영역을 찾을 수 없습니다.');
+                setConfirmModal({
+                    isOpen: true,
+                    type: 'warning',
+                    title: '복사 실패',
+                    message: '미리보기 영역을 찾을 수 없습니다.',
+                    onConfirm: () => setConfirmModal(prev => ({ ...prev, isOpen: false })),
+                    showCancel: false
+                });
                 return;
             }
 
@@ -133,7 +148,14 @@ const InventoryPrintModal = ({ isOpen, onClose, inventory, warehouses }) => {
 
             canvas.toBlob(async (blob) => {
                 if (!blob) {
-                    alert('이미지 생성에 실패했습니다.');
+                    setConfirmModal({
+                        isOpen: true,
+                        type: 'error',
+                        title: '복사 실패',
+                        message: '이미지 생성에 실패했습니다.',
+                        onConfirm: () => setConfirmModal(prev => ({ ...prev, isOpen: false })),
+                        showCancel: false
+                    });
                     return;
                 }
                 try {
@@ -143,13 +165,27 @@ const InventoryPrintModal = ({ isOpen, onClose, inventory, warehouses }) => {
                     // alert('재고 목록 이미지가 클립보드에 복사되었습니다.'); 
                 } catch (clipboardErr) {
                     console.error('클립보드 쓰기 실패:', clipboardErr);
-                    alert('클립보드 복사에 실패했습니다.');
+                    setConfirmModal({
+                        isOpen: true,
+                        type: 'error',
+                        title: '복사 실패',
+                        message: '클립보드 복사에 실패했습니다.',
+                        onConfirm: () => setConfirmModal(prev => ({ ...prev, isOpen: false })),
+                        showCancel: false
+                    });
                 }
             }, 'image/png');
 
         } catch (err) {
             console.error('캡처 실패:', err);
-            alert('이미지 캡처에 실패했습니다.');
+            setConfirmModal({
+                isOpen: true,
+                type: 'error',
+                title: '캡처 실패',
+                message: '이미지 캡처에 실패했습니다.',
+                onConfirm: () => setConfirmModal(prev => ({ ...prev, isOpen: false })),
+                showCancel: false
+            });
         }
     };
 
@@ -759,6 +795,17 @@ const InventoryPrintModal = ({ isOpen, onClose, inventory, warehouses }) => {
                     </div>
                 </div>
             </div>
+
+            <ConfirmModal
+                isOpen={confirmModal.isOpen}
+                type={confirmModal.type}
+                title={confirmModal.title}
+                message={confirmModal.message}
+                onConfirm={confirmModal.onConfirm}
+                onCancel={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+                confirmText="확인"
+                showCancel={false}
+            />
         </div>,
         document.body
     );

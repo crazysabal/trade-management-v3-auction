@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useModalDraggable } from '../hooks/useModalDraggable';
+import ConfirmModal from './ConfirmModal';
 
 const WarehouseModal = ({ isOpen, onClose, onSubmit, initialData }) => {
     const [formData, setFormData] = useState({
@@ -10,6 +11,13 @@ const WarehouseModal = ({ isOpen, onClose, onSubmit, initialData }) => {
         is_active: true,
         description: '',
         address: ''
+    });
+    const [confirmModal, setConfirmModal] = useState({
+        isOpen: false,
+        type: 'warning',
+        title: '',
+        message: '',
+        onConfirm: () => setConfirmModal(prev => ({ ...prev, isOpen: false }))
     });
     const { handleMouseDown, draggableStyle } = useModalDraggable(isOpen);
 
@@ -60,7 +68,14 @@ const WarehouseModal = ({ isOpen, onClose, onSubmit, initialData }) => {
 
     const handleSubmit = () => {
         if (!formData.name.trim()) {
-            alert('창고명을 입력해주세요.');
+            setConfirmModal({
+                isOpen: true,
+                type: 'warning',
+                title: '입력 확인',
+                message: '창고명을 입력해주세요.',
+                onConfirm: () => setConfirmModal(prev => ({ ...prev, isOpen: false })),
+                showCancel: false
+            });
             return;
         }
         onSubmit(formData);
@@ -148,6 +163,17 @@ const WarehouseModal = ({ isOpen, onClose, onSubmit, initialData }) => {
                     </button>
                 </div>
             </div>
+
+            <ConfirmModal
+                isOpen={confirmModal.isOpen}
+                type={confirmModal.type}
+                title={confirmModal.title}
+                message={confirmModal.message}
+                onConfirm={confirmModal.onConfirm}
+                onCancel={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+                confirmText="확인"
+                showCancel={false}
+            />
         </div>,
         document.body
     );

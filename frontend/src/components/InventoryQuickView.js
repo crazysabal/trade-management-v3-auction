@@ -8,9 +8,15 @@ const InventoryQuickView = ({ inventoryAdjustments = {}, refreshKey, onInventory
     const [loading, setLoading] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
     const { openModal, ConfirmModalComponent } = useConfirmModal();
-    const [isSalesPanelActive, setIsSalesPanelActive] = useState(
-        window.__activeSalesPanels ? window.__activeSalesPanels.size > 0 : false
-    );
+    const [panelStatus, setPanelStatus] = useState(() => {
+        if (!window.__salesPanelRegistry) return { count: 0, hasReadyPanel: false };
+        const entries = Object.values(window.__salesPanelRegistry);
+        return {
+            count: entries.length,
+            hasReadyPanel: entries.some(p => p.hasCompany && !p.isViewMode)
+        };
+    });
+    const isSalesPanelActive = panelStatus.hasReadyPanel;
     const [selectedId, setSelectedId] = useState(null);
     const filteredInventoryRef = React.useRef(filteredInventory);
     const selectedIdRef = React.useRef(selectedId);
@@ -52,7 +58,10 @@ const InventoryQuickView = ({ inventoryAdjustments = {}, refreshKey, onInventory
 
         // 전표 상태 변경 리스너
         const handlePanelsUpdate = (e) => {
-            setIsSalesPanelActive(e.detail.count > 0);
+            setPanelStatus({
+                count: e.detail.count,
+                hasReadyPanel: e.detail.hasReadyPanel
+            });
         };
 
         // 퀵 추가 완료 후 포커스 복구 및 "자동 다음 행 이동"
@@ -81,6 +90,26 @@ const InventoryQuickView = ({ inventoryAdjustments = {}, refreshKey, onInventory
             window.removeEventListener('inventory-quick-add-error', handleAddError);
         };
     }, [refreshKey]);
+
+    // [Safety Net] 이벤트 유실 방지를 위한 폴링 동기화 (500ms 주기)
+    useEffect(() => {
+        const syncStatus = () => {
+            if (!window.__salesPanelRegistry) return;
+            const entries = Object.values(window.__salesPanelRegistry);
+            setPanelStatus(prev => {
+                const newCount = entries.length;
+                const newHasReady = entries.some(p => p.hasCompany && !p.isViewMode);
+                // 상태가 다를 때만 업데이트 (렌더링 최적화)
+                if (prev.count !== newCount || prev.hasReadyPanel !== newHasReady) {
+                    return { count: newCount, hasReadyPanel: newHasReady };
+                }
+                return prev;
+            });
+        };
+
+        const intervalId = setInterval(syncStatus, 500);
+        return () => clearInterval(intervalId);
+    }, []);
 
     // 조정 내역(inventoryAdjustments)에 있지만 목록에 없는(소진된) 재고 불러오기
     useEffect(() => {
@@ -195,7 +224,7 @@ const InventoryQuickView = ({ inventoryAdjustments = {}, refreshKey, onInventory
             const keywords = searchTerm.toLowerCase().split(/\s+/).filter(t => t.length > 0);
             const filtered = adjustedInventory.filter(item => {
                 const weight = item.weight || item.product_weight; // InventoryQuickView uses 'weight' or 'product_weight'
-                const weightStr = weight ? Number(weight) + 'kg' : '';
+                const weightStr = weight ? Number(weight) + (item.weight_unit || item.product_weight_unit || 'kg') : '';
 
                 // InventoryHistory.js와 동일한 로직 적용
                 const primaryText = `${item.product_name || ''} ${weightStr} ${item.grade || ''} ${item.company_name || ''} ${item.sender || ''}`.toLowerCase();
@@ -383,7 +412,12 @@ const InventoryQuickView = ({ inventoryAdjustments = {}, refreshKey, onInventory
                                         <td style={{ padding: '0.5rem', textAlign: 'center' }}>
                                             <button
                                                 className="btn-quick-add"
-                                                title={isSalesPanelActive ? "전표에 추가 (Enter)" : "활성화된 매출 전표 창이 없습니다"}
+                                                title={isSalesPanelActive
+                                                    ? "전표에 추가 (Enter)"
+                                                    : (panelStatus.count === 0
+                                                        ? "활성화된 매출 전표 창이 없습니다"
+                                                        : "편집 가능한 매출 전표 창이 없거나 거래처가 선택되지 않았습니다")
+                                                }
                                                 disabled={!isSalesPanelActive}
                                                 onClick={(e) => {
                                                     e.stopPropagation();

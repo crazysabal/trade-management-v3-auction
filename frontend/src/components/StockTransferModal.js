@@ -171,22 +171,66 @@ const StockTransferModal = ({ isOpen, onClose, inventory, inventoryList = [], on
                 </div>
 
                 <div className="modal-body">
-                    <div style={{ marginBottom: '1.5rem', padding: '1rem', backgroundColor: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0', maxHeight: '150px', overflowY: 'auto' }}>
+                    <div style={{
+                        marginBottom: '1.5rem',
+                        padding: '1rem',
+                        backgroundColor: '#f8fafc',
+                        borderRadius: '12px',
+                        border: '1px solid #e2e8f0',
+                        maxHeight: '400px',
+                        overflowY: 'auto'
+                    }}>
                         {isBulk ? (
                             <ul style={{ margin: 0, paddingLeft: '1.2rem', fontSize: '0.9rem', color: '#475569' }}>
                                 {targetItems.map(item => (
-                                    <li key={item.id} style={{ marginBottom: '0.25rem' }}>
-                                        {item.product_name} {Number(item.product_weight) > 0 ? `${Number(item.product_weight)}kg` : ''} {item.sender} {item.grade} ({Number(item.remaining_quantity)}개)
+                                    <li key={item.id} style={{ marginBottom: '0.4rem' }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                            <span style={{ fontWeight: '600', color: '#1e293b' }}>
+                                                {item.product_name} {item.product_weight ? `${parseFloat(item.product_weight)}${item.weight_unit || item.product_weight_unit || 'kg'}` : ''} {item.sender || '-'} ({item.grade || '-'})
+                                            </span>
+                                            <span style={{ fontSize: '0.85rem', color: '#2563eb' }}>
+                                                {parseFloat(item.remaining_quantity).toString()} 개
+                                            </span>
+                                        </div>
+                                        <div style={{ fontSize: '0.8rem', color: '#94a3b8' }}>
+                                            {item.company_name} | {item.purchase_date?.substring(5, 10)}
+                                        </div>
                                     </li>
                                 ))}
                             </ul>
                         ) : (
-                            <>
-                                <div style={{ fontWeight: '600', color: '#1e293b', marginBottom: '0.25rem' }}>{inventory.product_name}</div>
-                                <div style={{ fontSize: '0.9rem', color: '#64748b' }}>
-                                    현재 창고: {inventory.warehouse_name || '미지정'} | 잔여: {Number(inventory.remaining_quantity)}
+                            <div style={{
+                                display: 'flex',
+                                flexDirection: 'column',
+                                gap: '0.5rem',
+                                fontSize: '0.9rem'
+                            }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                    <span style={{ color: '#64748b' }}>품목/중량</span>
+                                    <span style={{ fontWeight: '600', color: '#1e293b' }}>
+                                        {inventory.product_name} {inventory.product_weight ? `${parseFloat(inventory.product_weight)}${inventory.weight_unit || inventory.product_weight_unit || 'kg'}` : ''}
+                                    </span>
                                 </div>
-                            </>
+                                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                    <span style={{ color: '#64748b' }}>출하주/등급</span>
+                                    <span style={{ fontWeight: '600', color: '#1e293b' }}>
+                                        {inventory.sender || '-'} / {inventory.grade || '-'}
+                                    </span>
+                                </div>
+                                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                    <span style={{ color: '#64748b' }}>매입처/일자</span>
+                                    <span style={{ fontWeight: '600', color: '#1e293b' }}>
+                                        {inventory.company_name} <span style={{ color: '#94a3b8', fontWeight: '400' }}>({inventory.purchase_date?.substring(0, 10)})</span>
+                                    </span>
+                                </div>
+                                <div style={{ height: '1px', backgroundColor: '#e2e8f0', margin: '0.5rem 0' }}></div>
+                                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                    <span style={{ color: '#64748b' }}>현재 잔고</span>
+                                    <span style={{ fontWeight: 'bold', color: '#2563eb', fontSize: '1rem' }}>
+                                        {parseFloat(inventory.remaining_quantity).toString()} 개 (위치: {inventory.warehouse_name || '미지정'})
+                                    </span>
+                                </div>
+                            </div>
                         )}
                     </div>
 

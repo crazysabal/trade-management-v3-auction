@@ -185,6 +185,12 @@ const ProductInputModal = ({ isOpen, onClose, onSuccess, initialData = null, isE
         }
     };
 
+    const handlePreventEnter = (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+        }
+    };
+
     // --- Tag System Logic ---
     const handleTagKeyDown = (e, field) => {
         const input = field === 'grades' ? gradeInput : weightInput;
@@ -295,12 +301,40 @@ const ProductInputModal = ({ isOpen, onClose, onSuccess, initialData = null, isE
 
         // Validation
         if (!formData.product_name || !formData.category_id) {
-            alert('필수 입력 항목을 확인해주세요.');
+            setConfirmModal({
+                isOpen: true,
+                type: 'warning',
+                title: '입력 확인',
+                message: '필수 입력 항목(품목명, 분류)을 확인해주세요.',
+                onConfirm: () => setConfirmModal(prev => ({ ...prev, isOpen: false })),
+                showCancel: false
+            });
             return;
         }
 
         try {
             if (isEdit) {
+                // 중복 체크 (수정 시)
+                const duplicate = allProducts.find(p =>
+                    p.product_name === formData.product_name &&
+                    parseFloat(p.weight || 0) === parseFloat(formData.weight || 0) &&
+                    (p.weight_unit || 'kg') === (formData.weight_unit || 'kg') &&
+                    p.grade === formData.grade &&
+                    p.id !== initialData.id
+                );
+
+                if (duplicate) {
+                    setConfirmModal({
+                        isOpen: true,
+                        type: 'warning',
+                        title: '중복 품목',
+                        message: `이미 동일한 품목이 존재합니다:\n${formData.product_name} (${formData.weight || 0}${formData.weight_unit || 'kg'}, ${formData.grade || '-'})`,
+                        onConfirm: () => setConfirmModal(prev => ({ ...prev, isOpen: false })),
+                        showCancel: false
+                    });
+                    return;
+                }
+
                 // Update
                 const updatePayload = { ...formData };
                 delete updatePayload.grades;
@@ -336,7 +370,40 @@ const ProductInputModal = ({ isOpen, onClose, onSuccess, initialData = null, isE
                 }
 
                 if (targetGrades.length === 0 || (isMultiGrade && targetGrades.length === 1 && !targetGrades[0])) {
-                    alert('등급을 최소 하나 이상 입력해주세요.');
+                    setConfirmModal({
+                        isOpen: true,
+                        type: 'warning',
+                        title: '등급 미입력',
+                        message: '등급을 최소 하나 이상 입력해주세요.',
+                        onConfirm: () => setConfirmModal(prev => ({ ...prev, isOpen: false })),
+                        showCancel: false
+                    });
+                    return;
+                }
+
+                // --- 중복 체크 (신규/다중 등록 시) ---
+                const duplicates = [];
+                for (const w of targetWeights) {
+                    for (const g of targetGrades) {
+                        const dup = allProducts.find(p =>
+                            p.product_name === formData.product_name &&
+                            parseFloat(p.weight || 0) === parseFloat(w || 0) &&
+                            (p.weight_unit || 'kg') === (formData.weight_unit || 'kg') &&
+                            p.grade === g
+                        );
+                        if (dup) duplicates.push(`${formData.product_name} (${w}${formData.weight_unit || 'kg'}, ${g})`);
+                    }
+                }
+
+                if (duplicates.length > 0) {
+                    setConfirmModal({
+                        isOpen: true,
+                        type: 'warning',
+                        title: '중복 품목 포함',
+                        message: `이미 등록된 동일한 품목이 포함되어 있습니다:\n- ${duplicates.join('\n- ')}`,
+                        onConfirm: () => setConfirmModal(prev => ({ ...prev, isOpen: false })),
+                        showCancel: false
+                    });
                     return;
                 }
 
@@ -545,6 +612,7 @@ const ProductInputModal = ({ isOpen, onClose, onSuccess, initialData = null, isE
                                         name="grade"
                                         value={formData.grade || ''}
                                         onChange={handleChange}
+                                        onKeyDown={handlePreventEnter}
                                         placeholder="예: 특"
                                         style={{ width: '100%', height: '40px' }}
                                     />
@@ -602,6 +670,7 @@ const ProductInputModal = ({ isOpen, onClose, onSuccess, initialData = null, isE
                                             name="weight"
                                             value={formData.weight || ''}
                                             onChange={handleChange}
+                                            onKeyDown={handlePreventEnter}
                                             style={{ width: '100%', height: '40px' }}
                                         />
                                     )}

@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { purchaseInventoryAPI, warehousesAPI, inventoryAdjustmentAPI } from '../services/api';
+import ConfirmModal from '../components/ConfirmModal';
 import StockTransferModal from '../components/StockTransferModal';
 import InventoryAdjustmentModal from '../components/InventoryAdjustmentModal';
 import InventoryPrintModal from '../components/InventoryPrintModal';
+import InventoryDetailModal from '../components/InventoryDetailModal';
 import '../styles/InventoryTransfer.css';
 
 const InventoryTransferManagement = () => {
@@ -21,6 +23,14 @@ const InventoryTransferManagement = () => {
     const [transferModal, setTransferModal] = useState({ isOpen: false, inventory: null, inventoryList: [], toWarehouseId: '' });
     const [adjustmentModal, setAdjustmentModal] = useState({ isOpen: false, inventory: null });
     const [printModalOpen, setPrintModalOpen] = useState(false);
+    const [detailModal, setDetailModal] = useState({ isOpen: false, inventoryId: null });
+    const [confirmModal, setConfirmModal] = useState({
+        isOpen: false,
+        type: 'info',
+        title: '',
+        message: '',
+        onConfirm: () => setConfirmModal(prev => ({ ...prev, isOpen: false }))
+    });
 
     // Multi-Select State
     const [selectedItems, setSelectedItems] = useState(new Set()); // Set of inventory IDs
@@ -254,7 +264,14 @@ const InventoryTransferManagement = () => {
                 await warehousesAPI.reorder(orderedIds);
             } catch (err) {
                 console.error('순서 저장 실패:', err);
-                alert('순서 저장에 실패했습니다.');
+                setConfirmModal({
+                    isOpen: true,
+                    type: 'error',
+                    title: '순서 저장 실패',
+                    message: '창고 순서를 저장하는 중 오류가 발생했습니다.',
+                    onConfirm: () => setConfirmModal(prev => ({ ...prev, isOpen: false })),
+                    showCancel: false
+                });
                 loadData();
             }
         } else {
@@ -279,7 +296,7 @@ const InventoryTransferManagement = () => {
             const targetString = `
                 ${item.product_name || ''}
                 ${item.grade || ''}
-                ${Number(item.product_weight) || ''} ${Number(item.product_weight) > 0 ? Number(item.product_weight) + 'kg' : ''}
+                ${Number(item.product_weight) || ''} ${Number(item.product_weight) > 0 ? (item.weight_unit || item.product_weight_unit || 'kg') : ''}
                 ${item.sender || ''}
                 ${item.company_name || ''}
                 ${item.business_name || ''}
@@ -303,8 +320,9 @@ const InventoryTransferManagement = () => {
     // 3. 통계 계산 Helper
     const calculateStats = (items) => {
         const count = items.length;
+        const totalQuantity = items.reduce((sum, item) => sum + Number(item.remaining_quantity), 0);
         const totalValue = items.reduce((sum, item) => sum + (Number(item.remaining_quantity) * Number(item.unit_price)), 0);
-        return { count, totalValue };
+        return { count, totalQuantity, totalValue };
     };
 
     const totalStats = calculateStats(filteredInventory);
@@ -367,10 +385,17 @@ const InventoryTransferManagement = () => {
                     {/* 전체 재고 통계 (우측 정렬) */}
                     <div className={`stats-summary-container ${searchKeyword ? 'filtered' : ''}`}>
                         <span className={`stats-label ${searchKeyword ? 'filtered' : ''}`}>
-                            {searchKeyword ? '🔍 검색 결과: ' : '전체 재고: '}
+                            {searchKeyword ? '🔍 검색 건수: ' : '전체 재고: '}
                             <strong className={searchKeyword ? 'stats-value filtered' : ''} style={{ color: !searchKeyword ? '#1e293b' : undefined }}>
                                 {totalStats.count}건
                                 {searchKeyword && ` / 전체 ${inventory.length}건`}
+                            </strong>
+                        </span>
+                        <div className={`stats-divider ${searchKeyword ? 'filtered' : ''}`}></div>
+                        <span className={`stats-label ${searchKeyword ? 'filtered' : ''}`}>
+                            {searchKeyword ? '결과 수량: ' : '전체 수량: '}
+                            <strong className={searchKeyword ? 'stats-value filtered' : ''} style={{ color: !searchKeyword ? '#1e293b' : undefined }}>
+                                {totalStats.totalQuantity.toLocaleString()}개
                             </strong>
                         </span>
                         <div className={`stats-divider ${searchKeyword ? 'filtered' : ''}`}></div>
@@ -475,17 +500,29 @@ const InventoryTransferManagement = () => {
                                                             <span>{item.purchase_date}</span>
                                                         </div>
 
-                                                        <button
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                setAdjustmentModal({ isOpen: true, inventory: item });
-                                                            }}
-                                                            className="btn-adjust"
-                                                            title="재고 조정/폐기"
-                                                            style={{ margin: 0 }}
-                                                        >
-                                                            🗑️ 조정/폐기
-                                                        </button>
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginLeft: 'auto' }}>
+                                                            <button
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    setAdjustmentModal({ isOpen: true, inventory: item });
+                                                                }}
+                                                                className="btn-adjust"
+                                                                title="재고 조정/폐기"
+                                                                style={{ margin: 0 }}
+                                                            >
+                                                                🗑️ 조정/폐기
+                                                            </button>
+                                                            <button
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    setDetailModal({ isOpen: true, inventoryId: item.id });
+                                                                }}
+                                                                className="btn-detail"
+                                                                title="매입 상세 보기"
+                                                            >
+                                                                🔍
+                                                            </button>
+                                                        </div>
                                                     </div>
                                                 </div>
                                             </div>
@@ -527,6 +564,23 @@ const InventoryTransferManagement = () => {
                 onClose={() => setPrintModalOpen(false)}
                 inventory={inventory}
                 warehouses={warehouses}
+            />
+
+            <ConfirmModal
+                isOpen={confirmModal.isOpen}
+                type={confirmModal.type}
+                title={confirmModal.title}
+                message={confirmModal.message}
+                onConfirm={confirmModal.onConfirm}
+                onCancel={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+                confirmText="확인"
+                showCancel={false}
+            />
+
+            <InventoryDetailModal
+                isOpen={detailModal.isOpen}
+                inventoryId={detailModal.inventoryId}
+                onClose={() => setDetailModal({ isOpen: false, inventoryId: null })}
             />
         </div>
     );

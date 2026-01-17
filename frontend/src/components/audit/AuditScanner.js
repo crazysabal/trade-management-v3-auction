@@ -1,11 +1,19 @@
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { inventoryAuditAPI, purchaseInventoryAPI } from '../../services/api';
+import ConfirmModal from '../ConfirmModal';
 
 const AuditScanner = ({ audit, items, onUpdate, isSaving, onRefresh, reorderMode, setReorderMode }) => {
     const [search, setSearch] = useState('');
     const [filterWithDiff, setFilterWithDiff] = useState(false);
     const [localItems, setLocalItems] = useState([]);
     const [isReordering, setIsReordering] = useState(false);
+    const [confirmModal, setConfirmModal] = useState({
+        isOpen: false,
+        type: 'warning',
+        title: '',
+        message: '',
+        onConfirm: () => setConfirmModal(prev => ({ ...prev, isOpen: false }))
+    });
 
     // DnD State
     // DnD State
@@ -82,7 +90,14 @@ const AuditScanner = ({ audit, items, onUpdate, isSaving, onRefresh, reorderMode
         if (!reorderMode) {
             // 필터가 있는지 확인
             if (search.trim() || filterWithDiff) {
-                alert('순서 변경은 전체 목록에서만 가능합니다.\n검색어와 필터를 해제해주세요.');
+                setConfirmModal({
+                    isOpen: true,
+                    type: 'warning',
+                    title: '순서 변경 불가',
+                    message: '순서 변경은 전체 목록에서만 가능합니다.\n검색어와 필터를 해제해주세요.',
+                    onConfirm: () => setConfirmModal(prev => ({ ...prev, isOpen: false })),
+                    showCancel: false
+                });
                 return;
             }
             setLocalItems([...items]);
@@ -108,7 +123,14 @@ const AuditScanner = ({ audit, items, onUpdate, isSaving, onRefresh, reorderMode
             // We do NOT refresh here to prevent jumpiness, we refresh on Close.
         } catch (error) {
             console.error('Auto-save failed:', error);
-            alert('순서 저장에 실패했습니다.');
+            setConfirmModal({
+                isOpen: true,
+                type: 'error',
+                title: '저장 실패',
+                message: '순서 저장에 실패했습니다.',
+                onConfirm: () => setConfirmModal(prev => ({ ...prev, isOpen: false })),
+                showCancel: false
+            });
         } finally {
             setIsReordering(false);
         }
@@ -307,7 +329,14 @@ const AuditScanner = ({ audit, items, onUpdate, isSaving, onRefresh, reorderMode
             // Query provides ai.inventory_id (which is the purchase_inventory_id).
             const orderedIds = localItems.map(item => item.inventory_id || item.purchase_inventory_id);
             if (orderedIds.some(id => !id)) {
-                alert('일부 항목의 원본 재고 ID를 찾을 수 없습니다.');
+                setConfirmModal({
+                    isOpen: true,
+                    type: 'error',
+                    title: '저장 실패',
+                    message: '일부 항목의 원본 재고 ID를 찾을 수 없습니다.',
+                    onConfirm: () => setConfirmModal(prev => ({ ...prev, isOpen: false })),
+                    showCancel: false
+                });
                 return;
             }
 
@@ -319,7 +348,14 @@ const AuditScanner = ({ audit, items, onUpdate, isSaving, onRefresh, reorderMode
             }
         } catch (error) {
             console.error('순서 저장 실패:', error);
-            alert('순서 저장에 실패했습니다.');
+            setConfirmModal({
+                isOpen: true,
+                type: 'error',
+                title: '저장 실패',
+                message: '순서 저장에 실패했습니다.',
+                onConfirm: () => setConfirmModal(prev => ({ ...prev, isOpen: false })),
+                showCancel: false
+            });
         } finally {
             setIsReordering(false);
         }
@@ -639,6 +675,16 @@ const AuditScanner = ({ audit, items, onUpdate, isSaving, onRefresh, reorderMode
                         </div>
                     </div>
                 )}
+            <ConfirmModal
+                isOpen={confirmModal.isOpen}
+                type={confirmModal.type}
+                title={confirmModal.title}
+                message={confirmModal.message}
+                onConfirm={confirmModal.onConfirm}
+                onCancel={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+                confirmText="확인"
+                showCancel={false}
+            />
         </div >
     );
 };

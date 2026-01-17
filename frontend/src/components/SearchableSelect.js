@@ -3,6 +3,10 @@ import Select from 'react-select';
 
 // 공통 스타일 (기본 select와 동일한 높이)
 const customStyles = {
+  container: (base) => ({
+    ...base,
+    flex: 1
+  }),
   control: (base, state) => ({
     ...base,
     minHeight: '40px',
@@ -86,6 +90,10 @@ const customStyles = {
 // 작은 사이즈 스타일 (테이블 내부용) - 동일한 높이 유지
 const smallStyles = {
   ...customStyles,
+  container: (base) => ({
+    ...base,
+    flex: 1
+  }),
   control: (base, state) => ({
     ...customStyles.control(base, state),
     minHeight: '30px',

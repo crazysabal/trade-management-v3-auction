@@ -4,6 +4,7 @@ import html2canvas from 'html2canvas';
 import { tradeAPI, companyInfoAPI, paymentAPI } from '../services/api';
 import { useModalDraggable } from '../hooks/useModalDraggable';
 import { useAuth } from '../context/AuthContext';
+import ConfirmModal from './ConfirmModal';
 
 /**
 /**
@@ -63,6 +64,13 @@ function TradePrintModal({ isOpen, onClose, tradeId }) {
   const [companyInfo, setCompanyInfo] = useState(null);
   const [companySummary, setCompanySummary] = useState(null);
   const [error, setError] = useState(null);
+  const [confirmModal, setConfirmModal] = useState({
+    isOpen: false,
+    type: 'warning',
+    title: '',
+    message: '',
+    onConfirm: () => setConfirmModal(prev => ({ ...prev, isOpen: false }))
+  });
 
   const { user } = useAuth();
   const getScopedKey = (key) => user?.id ? `u${user.id}_${key}` : key;
@@ -469,9 +477,15 @@ function TradePrintModal({ isOpen, onClose, tradeId }) {
     try {
       // 미리보기 영역 선택 (첫 번째 페이지 또는 전체 컨테이너)
       // 현재는 첫 번째 페이지만 캡처한다고 가정하거나, 모든 페이지를 포함하는 컨테이너를 찾음
-      const previewContainer = document.querySelector('.preview-container-for-copy');
       if (!previewContainer) {
-        alert('미리보기 영역을 찾을 수 없습니다.');
+        setConfirmModal({
+          isOpen: true,
+          type: 'warning',
+          title: '복사 실패',
+          message: '미리보기 영역을 찾을 수 없습니다.',
+          onConfirm: () => setConfirmModal(prev => ({ ...prev, isOpen: false })),
+          showCancel: false
+        });
         return;
       }
 
@@ -503,7 +517,14 @@ function TradePrintModal({ isOpen, onClose, tradeId }) {
       // Canvas를 Blob으로 변환
       canvas.toBlob(async (blob) => {
         if (!blob) {
-          alert('이미지 생성에 실패했습니다.');
+          setConfirmModal({
+            isOpen: true,
+            type: 'error',
+            title: '복사 실패',
+            message: '이미지 생성에 실패했습니다.',
+            onConfirm: () => setConfirmModal(prev => ({ ...prev, isOpen: false })),
+            showCancel: false
+          });
           return;
         }
 
@@ -517,13 +538,27 @@ function TradePrintModal({ isOpen, onClose, tradeId }) {
           // alert('전표 이미지가 클립보드에 복사되었습니다.'); // 사용자 요청으로 제거
         } catch (clipboardErr) {
           console.error('클립보드 쓰기 실패:', clipboardErr);
-          alert('클립보드 복사에 실패했습니다. (보안상의 이유로 지원되지 않을 수 있습니다)');
+          setConfirmModal({
+            isOpen: true,
+            type: 'error',
+            title: '복사 실패',
+            message: '클립보드 복사에 실패했습니다. (보안상의 이유로 지원되지 않을 수 있습니다)',
+            onConfirm: () => setConfirmModal(prev => ({ ...prev, isOpen: false })),
+            showCancel: false
+          });
         }
       }, 'image/png');
 
     } catch (err) {
       console.error('캡처 실패:', err);
-      alert('이미지 캡처에 실패했습니다.');
+      setConfirmModal({
+        isOpen: true,
+        type: 'error',
+        title: '캡처 실패',
+        message: '이미지 캡처에 실패했습니다.',
+        onConfirm: () => setConfirmModal(prev => ({ ...prev, isOpen: false })),
+        showCancel: false
+      });
     }
   };
 
@@ -952,6 +987,17 @@ function TradePrintModal({ isOpen, onClose, tradeId }) {
           )}
         </div>
       </div>
+
+      <ConfirmModal
+        isOpen={confirmModal.isOpen}
+        type={confirmModal.type}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        onConfirm={confirmModal.onConfirm}
+        onCancel={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+        confirmText="확인"
+        showCancel={false}
+      />
     </div>,
     document.body
   );

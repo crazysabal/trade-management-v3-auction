@@ -995,17 +995,33 @@ function CompanyList({ isWindow }) {
   const handleDeleteSelected = async () => {
     if (selectedIds.length === 0) return;
 
-    if (confirm(`선택한 ${selectedIds.length}개의 거래처를 삭제하시겠습니까?`)) {
-      try {
-        await Promise.all(selectedIds.map(id => companyAPI.delete(id)));
-        setSelectedIds([]);
-        loadCompanies(true); // Silent reload
-        // alert('삭제되었습니다.'); // 불필요한 알림 제거 (자동 갱신됨)
-      } catch (error) {
-        console.error('일괄 삭제 오류:', error);
-        alert('삭제 중 오류가 발생했습니다.');
+    setModal({
+      isOpen: true,
+      type: 'delete',
+      title: '일괄 삭제',
+      message: `선택한 ${selectedIds.length}개의 거래처를 삭제하시겠습니까?`,
+      confirmText: '삭제',
+      showCancel: true,
+      onConfirm: async () => {
+        try {
+          await Promise.all(selectedIds.map(id => companyAPI.delete(id)));
+          setSelectedIds([]);
+          loadCompanies(true); // Silent reload
+          setModal(prev => ({ ...prev, isOpen: false }));
+        } catch (error) {
+          console.error('일괄 삭제 오류:', error);
+          setModal({
+            isOpen: true,
+            type: 'warning',
+            title: '삭제 실패',
+            message: '삭제 중 오류가 발생했습니다. 거래 내역이 있는 거래처는 삭제할 수 없습니다.',
+            confirmText: '확인',
+            showCancel: false,
+            onConfirm: () => { }
+          });
+        }
       }
-    }
+    });
   };
 
   return (

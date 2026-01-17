@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import ConfirmModal from './ConfirmModal';
 
 /**
  * PaymentCard - 입출금 관련 공통 컴포넌트
@@ -66,14 +67,23 @@ function PaymentCard({
   // 대기 중 입출금 수정 모달 상태
   const [editingPendingPayment, setEditingPendingPayment] = useState(null);
 
+  // 프리미엄 알림 모달 상태
+  const [confirmModal, setConfirmModal] = useState({
+    isOpen: false,
+    type: 'warning',
+    title: '',
+    message: '',
+    onConfirm: () => setConfirmModal(prev => ({ ...prev, isOpen: false }))
+  });
+
   // 잔고 계산
   const summary = useMemo(() => {
     const previousBalance = companySummary?.previous_balance || 0;
     const baseToday = companySummary?.today_total || 0;
     const baseTodayPayment = companySummary?.today_payment || 0;
-    
+
     // 삭제된 입출금 금액 계산 (linkedPayments에서 이미 제거되었으므로 별도 계산 불필요)
-    
+
     return {
       previous_balance: previousBalance,
       today_total: baseToday,
@@ -114,7 +124,14 @@ function PaymentCard({
   const handleSaveNewPayment = () => {
     const amount = parseFloat(addPaymentModal.amount) || 0;
     if (amount === 0) {
-      alert('금액을 입력해주세요. 0원은 입력할 수 없습니다.');
+      setConfirmModal({
+        isOpen: true,
+        type: 'warning',
+        title: '금액 입력',
+        message: '금액을 입력해주세요. 0원은 입력할 수 없습니다.',
+        onConfirm: () => setConfirmModal(prev => ({ ...prev, isOpen: false })),
+        showCancel: false
+      });
       return;
     }
 
@@ -125,7 +142,7 @@ function PaymentCard({
       notes: addPaymentModal.notes,
       isPending: true
     };
-    
+
     if (onPendingPaymentsChange) {
       onPendingPaymentsChange([...pendingPayments, newPayment]);
     }
@@ -142,22 +159,29 @@ function PaymentCard({
   // 대기 중 입출금 수정 저장
   const handleSavePendingPaymentEdit = () => {
     if (!editingPendingPayment) return;
-    
+
     const amount = parseFloat(editingPendingPayment.amount) || 0;
     if (amount === 0) {
-      alert('금액을 입력해주세요. 0원은 입력할 수 없습니다.');
+      setConfirmModal({
+        isOpen: true,
+        type: 'warning',
+        title: '금액 입력',
+        message: '금액을 입력해주세요. 0원은 입력할 수 없습니다.',
+        onConfirm: () => setConfirmModal(prev => ({ ...prev, isOpen: false })),
+        showCancel: false
+      });
       return;
     }
 
     if (onPendingPaymentsChange) {
-      onPendingPaymentsChange(pendingPayments.map(p => 
-        p.tempId === editingPendingPayment.tempId 
-          ? { 
-              ...p, 
-              amount: amount,
-              payment_method: editingPendingPayment.payment_method,
-              notes: editingPendingPayment.notes
-            }
+      onPendingPaymentsChange(pendingPayments.map(p =>
+        p.tempId === editingPendingPayment.tempId
+          ? {
+            ...p,
+            amount: amount,
+            payment_method: editingPendingPayment.payment_method,
+            notes: editingPendingPayment.notes
+          }
           : p
       ));
     }
@@ -167,10 +191,17 @@ function PaymentCard({
   // 저장된 입출금 수정 저장
   const handleSavePaymentEdit = () => {
     if (!editingPayment) return;
-    
+
     const amount = parseFloat(editingPayment.amount) || 0;
     if (amount === 0) {
-      alert('금액을 입력해주세요. 0원은 입력할 수 없습니다.');
+      setConfirmModal({
+        isOpen: true,
+        type: 'warning',
+        title: '금액 입력',
+        message: '금액을 입력해주세요. 0원은 입력할 수 없습니다.',
+        onConfirm: () => setConfirmModal(prev => ({ ...prev, isOpen: false })),
+        showCancel: false
+      });
       return;
     }
 
@@ -185,11 +216,11 @@ function PaymentCard({
         }
       });
     }
-    
+
     // linkedPayments 화면 표시용 업데이트
     if (onLinkedPaymentsChange) {
-      onLinkedPaymentsChange(linkedPayments.map(p => 
-        p.id === editingPayment.id 
+      onLinkedPaymentsChange(linkedPayments.map(p =>
+        p.id === editingPayment.id
           ? { ...p, amount: editingPayment.amount, allocated_amount: editingPayment.amount, payment_method: editingPayment.payment_method, notes: editingPayment.notes }
           : p
       ));
@@ -211,24 +242,24 @@ function PaymentCard({
   const paymentLabel = isPurchase ? '출금' : '입금';
 
   return (
-    <div className="card" style={{ 
-      padding: '0.75rem', 
-      display: 'flex', 
-      flexDirection: 'column', 
+    <div className="card" style={{
+      padding: '0.75rem',
+      display: 'flex',
+      flexDirection: 'column',
       backgroundColor: cardColor,
-      ...style 
+      ...style
     }}>
       {showTitle && (
         <h2 className="card-title" style={{ marginBottom: '0.5rem', fontSize: fs(1), flexShrink: 0 }}>
           💰 {cardTitle}
         </h2>
       )}
-      
+
       {/* 잔고 정보 리스트 */}
       <div style={{ marginBottom: '0.5rem', fontSize: fs(1), flexShrink: 0 }}>
-        <div style={{ 
-          display: 'flex', 
-          justifyContent: 'space-between', 
+        <div style={{
+          display: 'flex',
+          justifyContent: 'space-between',
           padding: '0.4rem',
           backgroundColor: '#f0f7ff',
           borderRadius: '4px 4px 0 0',
@@ -257,16 +288,16 @@ function PaymentCard({
           </span>
         </div>
       </div>
-      
+
       {/* 잔고 */}
       {(() => {
         const balanceColor = displayBalance > 0 ? '#e65100' : displayBalance < 0 ? '#1565c0' : '#2e7d32';
         const balanceBg = displayBalance > 0 ? '#fff3e0' : displayBalance < 0 ? '#e3f2fd' : '#e8f5e9';
-        
+
         return (
-          <div style={{ 
-            display: 'flex', 
-            justifyContent: 'space-between', 
+          <div style={{
+            display: 'flex',
+            justifyContent: 'space-between',
             padding: '0.5rem',
             backgroundColor: balanceBg,
             borderRadius: '6px',
@@ -316,14 +347,14 @@ function PaymentCard({
               const displayAmount = linkType === 'allocated' ? payment.allocated_amount : payment.amount;
               const canDelete = linkType === 'direct' || linkType === 'general';
               const isModified = modifiedPayments[payment.id];
-              
+
               const typeStyles = {
                 direct: { bg: '#f0fff4', border: '#27ae60', label: '직접', labelBg: '#27ae60' },
                 allocated: { bg: '#e3f2fd', border: '#2196f3', label: '배분', labelBg: '#2196f3' },
                 general: { bg: '#f3e5f5', border: '#9c27b0', label: '수금/지급', labelBg: '#9c27b0' }
               };
               const typeStyle = typeStyles[linkType] || typeStyles.direct;
-              
+
               return (
                 <div key={`${payment.id}-${linkType}`} style={{
                   display: 'flex',
@@ -339,22 +370,22 @@ function PaymentCard({
                   <div style={{ flex: 1 }}>
                     <div style={{ fontWeight: '500', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                       {formatCurrency(displayAmount)}원
-                      <span style={{ 
-                        fontSize: fs(0.75), 
-                        backgroundColor: typeStyle.labelBg, 
-                        color: 'white', 
-                        padding: '2px 6px', 
-                        borderRadius: '3px' 
+                      <span style={{
+                        fontSize: fs(0.75),
+                        backgroundColor: typeStyle.labelBg,
+                        color: 'white',
+                        padding: '2px 6px',
+                        borderRadius: '3px'
                       }}>
                         {typeStyle.label}
                       </span>
                       {isModified && (
-                        <span style={{ 
-                          fontSize: fs(0.7), 
-                          backgroundColor: '#ffc107', 
-                          color: '#333', 
-                          padding: '2px 5px', 
-                          borderRadius: '3px' 
+                        <span style={{
+                          fontSize: fs(0.7),
+                          backgroundColor: '#ffc107',
+                          color: '#333',
+                          padding: '2px 5px',
+                          borderRadius: '3px'
                         }}>
                           수정됨
                         </span>
@@ -425,12 +456,12 @@ function PaymentCard({
                 <div style={{ flex: 1 }}>
                   <div style={{ fontWeight: '500', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                     {formatCurrency(payment.amount)}원
-                    <span style={{ 
-                      fontSize: fs(0.75), 
-                      backgroundColor: '#ffc107', 
-                      color: '#333', 
-                      padding: '1px 4px', 
-                      borderRadius: '3px' 
+                    <span style={{
+                      fontSize: fs(0.75),
+                      backgroundColor: '#ffc107',
+                      color: '#333',
+                      padding: '1px 4px',
+                      borderRadius: '3px'
                     }}>
                       저장 대기
                     </span>
@@ -479,9 +510,9 @@ function PaymentCard({
             ))}
           </div>
         ) : (
-          <div style={{ 
-            padding: '0.75rem', 
-            textAlign: 'center', 
+          <div style={{
+            padding: '0.75rem',
+            textAlign: 'center',
             color: '#999',
             backgroundColor: '#f8f9fa',
             borderRadius: '6px',
@@ -502,8 +533,8 @@ function PaymentCard({
 
       {/* 입출금 추가 모달 */}
       {addPaymentModal.isOpen && (
-        <div 
-          className="modal-overlay" 
+        <div
+          className="modal-overlay"
           style={{
             position: 'fixed',
             top: 0,
@@ -522,11 +553,11 @@ function PaymentCard({
             }
           }}
         >
-          <div 
-            className="modal-container" 
+          <div
+            className="modal-container"
             tabIndex={-1}
-            style={{ 
-              maxWidth: '400px', 
+            style={{
+              maxWidth: '400px',
               padding: '1.5rem',
               backgroundColor: '#fff',
               borderRadius: '12px',
@@ -537,7 +568,7 @@ function PaymentCard({
             <h3 style={{ margin: '0 0 1rem 0', color: '#2c3e50' }}>
               {isPurchase ? '💸 출금' : '💰 입금'} 추가
             </h3>
-            
+
             <div className="form-group" style={{ marginBottom: '1rem' }}>
               <label style={{ display: 'block', marginBottom: '0.25rem', fontWeight: '500' }}>금액 *</label>
               <input
@@ -549,7 +580,7 @@ function PaymentCard({
                   const isNegative = inputValue.startsWith('-');
                   const numericPart = inputValue.replace(/[^0-9]/g, '');
                   const rawValue = isNegative && numericPart ? `-${numericPart}` : numericPart;
-                  const displayValue = numericPart 
+                  const displayValue = numericPart
                     ? (isNegative ? '-' : '') + new Intl.NumberFormat('ko-KR').format(parseInt(numericPart))
                     : (isNegative ? '-' : '');
                   setAddPaymentModal(prev => ({
@@ -571,7 +602,7 @@ function PaymentCard({
                 autoFocus
               />
             </div>
-            
+
             <div className="form-group" style={{ marginBottom: '1rem' }}>
               <label style={{ display: 'block', marginBottom: '0.25rem', fontWeight: '500' }}>결제방법</label>
               <select
@@ -592,7 +623,7 @@ function PaymentCard({
                 <option value="기타">기타</option>
               </select>
             </div>
-            
+
             <div className="form-group" style={{ marginBottom: '1rem' }}>
               <label style={{ display: 'block', marginBottom: '0.25rem', fontWeight: '500' }}>비고</label>
               <input
@@ -609,7 +640,7 @@ function PaymentCard({
                 style={{ width: '100%', padding: '0.5rem', border: '1px solid #ddd', borderRadius: '4px' }}
               />
             </div>
-            
+
             <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
               <button
                 type="button"
@@ -634,8 +665,8 @@ function PaymentCard({
 
       {/* 저장된 입출금 수정 모달 */}
       {editingPayment && (
-        <div 
-          className="modal-overlay" 
+        <div
+          className="modal-overlay"
           style={{
             position: 'fixed',
             top: 0,
@@ -654,10 +685,10 @@ function PaymentCard({
             }
           }}
         >
-          <div 
-            className="modal-container" 
+          <div
+            className="modal-container"
             tabIndex={-1}
-            style={{ 
+            style={{
               backgroundColor: 'white',
               borderRadius: '8px',
               maxWidth: '400px',
@@ -669,7 +700,7 @@ function PaymentCard({
             <h3 style={{ margin: '0 0 1rem 0', color: '#2c3e50' }}>
               {isPurchase ? '💸 출금' : '💰 입금'} 수정
             </h3>
-            
+
             <div className="form-group" style={{ marginBottom: '1rem' }}>
               <label style={{ display: 'block', marginBottom: '0.25rem', fontWeight: '500' }}>금액 *</label>
               <input
@@ -695,7 +726,7 @@ function PaymentCard({
                 autoFocus
               />
             </div>
-            
+
             <div className="form-group" style={{ marginBottom: '1rem' }}>
               <label style={{ display: 'block', marginBottom: '0.25rem', fontWeight: '500' }}>결제방법</label>
               <select
@@ -716,7 +747,7 @@ function PaymentCard({
                 <option value="기타">기타</option>
               </select>
             </div>
-            
+
             <div className="form-group" style={{ marginBottom: '1rem' }}>
               <label style={{ display: 'block', marginBottom: '0.25rem', fontWeight: '500' }}>비고</label>
               <input
@@ -733,7 +764,7 @@ function PaymentCard({
                 style={{ width: '100%', padding: '0.5rem', border: '1px solid #ddd', borderRadius: '4px' }}
               />
             </div>
-            
+
             <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
               <button
                 type="button"
@@ -758,8 +789,8 @@ function PaymentCard({
 
       {/* 대기 중 입출금 수정 모달 */}
       {editingPendingPayment && (
-        <div 
-          className="modal-overlay" 
+        <div
+          className="modal-overlay"
           style={{
             position: 'fixed',
             top: 0,
@@ -778,10 +809,10 @@ function PaymentCard({
             }
           }}
         >
-          <div 
-            className="modal-container" 
+          <div
+            className="modal-container"
             tabIndex={-1}
-            style={{ 
+            style={{
               backgroundColor: 'white',
               borderRadius: '8px',
               maxWidth: '400px',
@@ -793,7 +824,7 @@ function PaymentCard({
             <h3 style={{ margin: '0 0 1rem 0', color: '#2c3e50' }}>
               {isPurchase ? '💸 출금' : '💰 입금'} 수정 (저장 대기)
             </h3>
-            
+
             <div className="form-group" style={{ marginBottom: '1rem' }}>
               <label style={{ display: 'block', marginBottom: '0.25rem', fontWeight: '500' }}>금액 *</label>
               <input
@@ -804,7 +835,7 @@ function PaymentCard({
                   const isNegative = inputValue.startsWith('-');
                   const numericPart = inputValue.replace(/[^0-9]/g, '');
                   const rawValue = isNegative && numericPart ? `-${numericPart}` : numericPart;
-                  const displayValue = numericPart 
+                  const displayValue = numericPart
                     ? (isNegative ? '-' : '') + new Intl.NumberFormat('ko-KR').format(parseInt(numericPart))
                     : (isNegative ? '-' : '');
                   setEditingPendingPayment(prev => ({
@@ -824,7 +855,7 @@ function PaymentCard({
                 autoFocus
               />
             </div>
-            
+
             <div className="form-group" style={{ marginBottom: '1rem' }}>
               <label style={{ display: 'block', marginBottom: '0.25rem', fontWeight: '500' }}>결제방법</label>
               <select
@@ -845,7 +876,7 @@ function PaymentCard({
                 <option value="기타">기타</option>
               </select>
             </div>
-            
+
             <div className="form-group" style={{ marginBottom: '1rem' }}>
               <label style={{ display: 'block', marginBottom: '0.25rem', fontWeight: '500' }}>비고</label>
               <input
@@ -862,7 +893,7 @@ function PaymentCard({
                 style={{ width: '100%', padding: '0.5rem', border: '1px solid #ddd', borderRadius: '4px' }}
               />
             </div>
-            
+
             <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
               <button
                 type="button"
@@ -884,6 +915,17 @@ function PaymentCard({
           </div>
         </div>
       )}
+      {/* 프리미엄 알림 모달 */}
+      <ConfirmModal
+        isOpen={confirmModal.isOpen}
+        type={confirmModal.type}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        onConfirm={confirmModal.onConfirm}
+        onCancel={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+        confirmText="확인"
+        showCancel={false}
+      />
     </div>
   );
 }
