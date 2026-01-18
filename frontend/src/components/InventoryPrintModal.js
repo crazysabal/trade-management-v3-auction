@@ -725,7 +725,7 @@ const InventoryPrintModal = ({ isOpen, onClose, inventory, warehouses }) => {
                                                                     </td>
                                                                 )}
                                                                 <td style={{ textAlign: 'center', padding: '0', border: 'none' }}>
-                                                                    {row.hideWeight ? '' : (Number(item.product_weight) > 0 ? Number(item.product_weight) + (item.weight_unit || item.product_weight_unit || 'kg') : '-')}
+                                                                    {row.hideWeight ? '' : (Number(item.product_weight) > 0 ? `${Number(item.product_weight)}${(item.weight_unit || item.product_weight_unit || 'kg')}` : '-')}
                                                                 </td>
                                                                 <td style={{ textAlign: 'center', padding: '0', border: 'none', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                                                     {row.hideSender ? '' : (item.sender || '-')}

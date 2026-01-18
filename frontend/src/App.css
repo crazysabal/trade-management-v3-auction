@@ -2113,6 +2113,39 @@ table .input-styled {
   box-shadow: 0 4px 6px -1px rgba(59, 130, 246, 0.1);
 }
 
+.premium-modal-close {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: #94a3b8;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  z-index: 10;
+}
+
+.premium-modal-close:hover {
+  background-color: #f1f5f9;
+  color: #1e293b;
+  transform: rotate(90deg);
+}
+
+.premium-modal-close:active {
+  transform: rotate(90deg) scale(0.9);
+}
+
+.premium-modal-close svg {
+  width: 20px;
+  height: 20px;
+}
+
 .premium-modal-title {
   font-size: 1.5rem;
   font-weight: 800;

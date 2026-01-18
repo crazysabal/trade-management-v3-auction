@@ -229,7 +229,7 @@ const SalesLookupModal = ({
                                                 <td className="text-center" style={{ padding: '10px', color: '#475569', fontSize: '0.85rem' }}>{item.trade_date}</td>
                                                 <td style={{ padding: '10px', textAlign: 'left' }}>
                                                     <div style={{ fontWeight: 600, color: '#1e293b' }}>
-                                                        {item.product_name} {(item.product_weight && parseFloat(item.product_weight) > 0) ? `${parseFloat(item.product_weight)}kg` : ''} {item.grade ? `(${item.grade})` : ''}
+                                                        {item.product_name} {(item.product_weight && parseFloat(item.product_weight) > 0) ? `${parseFloat(item.product_weight)}${item.weight_unit || item.product_weight_unit || 'kg'}` : ''} {item.grade ? `(${item.grade})` : ''}
                                                     </div>
                                                 </td>
                                                 <td className="text-right" style={{ padding: '10px', fontWeight: 500, color: '#475569' }}>

@@ -56,6 +56,17 @@ const InventoryProductionManagement = () => {
         loadData();
     }, []);
 
+    // [NEW] 작업대 품목 수에 따른 출하주 자동 입력/초기화
+    useEffect(() => {
+        if (selectedIngredients.length === 1) {
+            // 품목이 1건일 때 해당 품목의 출하주 자동 입력
+            setSender(selectedIngredients[0].sender || '');
+        } else if (selectedIngredients.length === 0 || selectedIngredients.length >= 2) {
+            // 0건이거나 2건 이상일 때 초기화
+            setSender('');
+        }
+    }, [selectedIngredients]);
+
     const loadData = async () => {
         setLoading(true);
         try {
@@ -452,18 +463,20 @@ const InventoryProductionManagement = () => {
                     {/* [Left Panel] Available Ingredients */}
                     <div className="production-panel">
                         <div className="panel-header ingredients">
-                            <div className="panel-header-row">
-                                <h3 className="panel-title">📦 자재 선택</h3>
-                                <span className="badge-count">{filteredInventory.length} 건</span>
-                            </div>
-                            <div className="search-input-wrapper">
-                                <input
-                                    type="text"
-                                    className="production-input"
-                                    placeholder="품목, 등급, 출하주, 창고, 매입처 검색..."
-                                    value={searchTerm}
-                                    onChange={e => setSearchTerm(e.target.value)}
-                                />
+                            <div className="panel-header-row" style={{ gap: '1rem', marginBottom: 0 }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 'fit-content' }}>
+                                    <h3 className="panel-title">📦 자재 선택</h3>
+                                    <span className="badge-count">{filteredInventory.length} 건</span>
+                                </div>
+                                <div className="search-input-wrapper" style={{ flex: 1, marginTop: 0 }}>
+                                    <input
+                                        type="text"
+                                        className="production-input"
+                                        placeholder="품목, 등급, 출하주, 창고, 매입처 검색..."
+                                        value={searchTerm}
+                                        onChange={e => setSearchTerm(e.target.value)}
+                                    />
+                                </div>
                             </div>
                         </div>
                         <div className="panel-content">
@@ -479,7 +492,7 @@ const InventoryProductionManagement = () => {
                                     <div className="card-content">
                                         <div className="card-main-info">
                                             <span>{item.product_name}</span>
-                                            {Number(item.product_weight) > 0 && <span style={{ color: '#555' }}>{Number(item.product_weight)}kg</span>}
+                                            {Number(item.product_weight) > 0 && <span style={{ color: '#555' }}>{Number(item.product_weight)}{item.weight_unit || 'kg'}</span>}
                                             <span style={{ color: '#27ae60' }}>{item.sender}</span>
                                             {item.grade && <span style={{ color: '#7f8c8d' }}>({item.grade})</span>}
                                             <span style={{ flex: 1 }}></span>
@@ -537,7 +550,7 @@ const InventoryProductionManagement = () => {
                                     <div className="card-content">
                                         <div className="card-main-info" style={{ paddingRight: '15px' }}>
                                             <span>{item.product_name}</span>
-                                            {Number(item.product_weight) > 0 && <span style={{ color: '#555' }}>{Number(item.product_weight)}kg</span>}
+                                            {Number(item.product_weight) > 0 && <span style={{ color: '#555' }}>{Number(item.product_weight)}{item.weight_unit || 'kg'}</span>}
                                             <span style={{ color: '#27ae60' }}>{item.sender}</span>
                                             {item.grade && <span style={{ color: '#7f8c8d' }}>({item.grade})</span>}
                                             <span style={{ flex: 1 }}></span>
@@ -669,7 +682,7 @@ const InventoryProductionManagement = () => {
                                     <tr><td colSpan="6" style={{ padding: '20px', textAlign: 'center', color: '#999' }}>최근 이력이 없습니다.</td></tr>
                                 ) : (
                                     history.map((historyItem) => {
-                                        const weightStr = Number(historyItem.output_product_weight || 0) > 0 ? ` ${Number(historyItem.output_product_weight)}kg` : '';
+                                        const weightStr = Number(historyItem.output_product_weight || 0) > 0 ? ` ${Number(historyItem.output_product_weight)}${historyItem.output_product_weight_unit || 'kg'}` : '';
                                         const gradeStr = historyItem.output_product_grade ? ` (${historyItem.output_product_grade})` : '';
                                         const displayName = `${historyItem.output_product_name}${weightStr}${gradeStr}`;
 

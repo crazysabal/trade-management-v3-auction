@@ -50,7 +50,7 @@ const AuditScanner = ({ audit, items, onUpdate, isSaving, onRefresh, reorderMode
 
             const searchableText = [
                 item.product_name || '',
-                item.product_weight ? `${parseFloat(item.product_weight)}kg` : '',
+                item.product_weight ? `${parseFloat(item.product_weight)}${item.weight_unit || item.product_weight_unit || 'kg'}` : '',
                 item.sender || '',
                 item.grade || '',
                 systemQty.toString(),
@@ -405,7 +405,7 @@ const AuditScanner = ({ audit, items, onUpdate, isSaving, onRefresh, reorderMode
                             {/* Simplified Content (Left) */}
                             <div style={{ flex: 1 }}>
                                 <div style={{ fontSize: '1.05rem', color: '#2d3748', fontWeight: 600, marginBottom: '0.1rem' }}>
-                                    {item.product_name} {item.product_weight ? `${parseFloat(item.product_weight)}kg` : ''} {item.sender} {item.grade ? `(${item.grade})` : ''} <span style={{ color: '#e53e3e' }}>{formatQty(item.actual_quantity)}개</span> <span style={{ color: '#718096', fontWeight: 400, fontSize: '0.9rem' }}>{parseFloat(item.unit_cost || 0).toLocaleString()}원</span>
+                                    {item.product_name} {item.product_weight ? `${parseFloat(item.product_weight)}${item.weight_unit || item.product_weight_unit || 'kg'}` : ''} {item.sender} {item.grade ? `(${item.grade})` : ''} <span style={{ color: '#e53e3e' }}>{formatQty(item.actual_quantity)}개</span> <span style={{ color: '#718096', fontWeight: 400, fontSize: '0.9rem' }}>{parseFloat(item.unit_cost || 0).toLocaleString()}원</span>
                                 </div>
                                 <div style={{ fontSize: '0.9rem', color: '#718096', display: 'flex', gap: '0.5rem' }}>
                                     <span>{item.purchase_store_name || '매입처미정'}</span>
@@ -452,7 +452,7 @@ const AuditScanner = ({ audit, items, onUpdate, isSaving, onRefresh, reorderMode
                             <div className="scanner-card-header" style={{ paddingBottom: '0.25rem' }}>
                                 <div style={{ flex: 1 }}>
                                     <div className="product-name" style={{ color: '#2d3748', fontSize: '1.05rem', marginBottom: '0.2rem', fontWeight: 600 }}>
-                                        {item.product_name} {item.product_weight ? `${parseFloat(item.product_weight)}kg` : ''} {item.sender} {item.grade ? `(${item.grade})` : ''} <span style={{ color: '#e53e3e' }}>{formatQty(systemQty)}개</span> <span style={{ color: '#718096', fontSize: '0.9rem', fontWeight: 400 }}>{parseFloat(item.unit_cost || 0).toLocaleString()}원</span>
+                                        {item.product_name} {item.product_weight ? `${parseFloat(item.product_weight)}${item.weight_unit || item.product_weight_unit || 'kg'}` : ''} {item.sender} {item.grade ? `(${item.grade})` : ''} <span style={{ color: '#e53e3e' }}>{formatQty(systemQty)}개</span> <span style={{ color: '#718096', fontSize: '0.9rem', fontWeight: 400 }}>{parseFloat(item.unit_cost || 0).toLocaleString()}원</span>
                                     </div>
                                     <div className="sender-info" style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '0.5rem', fontSize: '0.9rem', color: '#718096' }}>
                                         <span>{item.purchase_store_name || '매입처미정'}</span>
@@ -657,7 +657,7 @@ const AuditScanner = ({ audit, items, onUpdate, isSaving, onRefresh, reorderMode
                         {/* Simplified Content */}
                         <div style={{ flex: 1 }}>
                             <div style={{ fontSize: '1.05rem', color: '#2d3748', fontWeight: 600, marginBottom: '0.1rem' }}>
-                                {draggingItemContent.product_name} {draggingItemContent.product_weight ? `${parseFloat(draggingItemContent.product_weight)}kg` : ''} {draggingItemContent.sender} {draggingItemContent.grade ? `(${draggingItemContent.grade})` : ''} <span style={{ color: '#e53e3e' }}>{formatQty(draggingItemContent.actual_quantity)}개</span> <span style={{ color: '#718096', fontWeight: 400, fontSize: '0.9rem' }}>{parseFloat(draggingItemContent.unit_cost || 0).toLocaleString()}원</span>
+                                {draggingItemContent.product_name} {draggingItemContent.product_weight ? `${parseFloat(draggingItemContent.product_weight)}${draggingItemContent.weight_unit || draggingItemContent.product_weight_unit || 'kg'}` : ''} {draggingItemContent.sender} {draggingItemContent.grade ? `(${draggingItemContent.grade})` : ''} <span style={{ color: '#e53e3e' }}>{formatQty(draggingItemContent.actual_quantity)}개</span> <span style={{ color: '#718096', fontWeight: 400, fontSize: '0.9rem' }}>{parseFloat(draggingItemContent.unit_cost || 0).toLocaleString()}원</span>
                             </div>
                             <div style={{ fontSize: '0.9rem', color: '#718096', display: 'flex', gap: '0.5rem' }}>
                                 <span>{draggingItemContent.purchase_store_name || '매입처미정'}</span>

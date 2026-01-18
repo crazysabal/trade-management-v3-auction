@@ -75,7 +75,7 @@ const AuditDesk = ({ audit, items, onUpdate, isSaving, reorderMode, setReorderMo
 
             const searchableText = [
                 item.product_name || '',
-                item.product_weight ? `${parseFloat(item.product_weight)}kg` : '',
+                item.product_weight ? `${parseFloat(item.product_weight)}${item.weight_unit || item.product_weight_unit || 'kg'}` : '',
                 item.sender || '',
                 item.grade || '',
                 systemQty.toString(),

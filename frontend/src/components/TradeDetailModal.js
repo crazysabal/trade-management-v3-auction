@@ -142,7 +142,7 @@ function TradeDetailModal({ isOpen, onClose, tradeId, highlightId }) {
   const formatProductName = (detail) => {
     const parts = [detail.product_name];
     if (detail.product_weight) {
-      parts.push(`${formatWeight(detail.product_weight)}kg`);
+      parts.push(`${formatWeight(detail.product_weight)}${detail.weight_unit || detail.product_weight_unit || 'kg'}`);
     }
     if (detail.grade) {
       return `${parts.join(' ')} (${detail.grade})`;
@@ -153,7 +153,7 @@ function TradeDetailModal({ isOpen, onClose, tradeId, highlightId }) {
   const isPurchase = trade?.trade_type === 'PURCHASE';
 
   return createPortal(
-    <div className="modal-overlay" style={{ zIndex: 1100 }}>
+    <div className="modal-overlay" style={{ zIndex: 10500 }}>
       <div
         className="trade-detail-modal"
         onClick={(e) => e.stopPropagation()}

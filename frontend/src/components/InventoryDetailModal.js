@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { purchaseInventoryAPI } from '../services/api';
 import TradeDetailModal from './TradeDetailModal';
+import useDraggable from '../hooks/useDraggable';
 
 // 헬퍼 함수
 const formatCurrency = (value) => {
@@ -27,15 +28,46 @@ const formatDate = (dateString) => {
 const getStatusBadge = (status) => {
     switch (status) {
         case 'AVAILABLE':
-            return <span className="badge badge-success">사용가능</span>;
+            return <span className="badge badge-success" style={{ padding: '4px 8px', fontSize: '0.75rem' }}>사용가능</span>;
         case 'DEPLETED':
-            return <span className="badge badge-secondary">소진</span>;
+            return <span className="badge badge-secondary" style={{ padding: '4px 8px', fontSize: '0.75rem' }}>소진</span>;
         case 'CANCELLED':
-            return <span className="badge badge-danger">취소</span>;
+            return <span className="badge badge-danger" style={{ padding: '4px 8px', fontSize: '0.75rem' }}>취소</span>;
         default:
-            return <span className="badge badge-secondary">{status}</span>;
+            return <span className="badge badge-secondary" style={{ padding: '4px 8px', fontSize: '0.75rem' }}>{status}</span>;
     }
 };
+
+const formatInventoryName = (inv) => {
+    if (!inv) return '';
+    const parts = [];
+    parts.push(inv.product_name);
+
+    // [Standard 34.9.5] 최우선 품목 식별 헤딩 표준 준수: 품목명 중량 출하주 (등급)
+    // 중량 표시 (단위 중량 사용)
+    const weight = inv.product_weight || inv.weight;
+    // product_weight 사용 시에는 product_weight_unit을 우선적으로 결합하여 정합성 유지
+    const unit = inv.product_weight ? (inv.product_weight_unit || inv.weight_unit || 'kg') : (inv.weight_unit || 'kg');
+    if (weight && parseFloat(weight) > 0) {
+        parts.push(`${parseFloat(weight).toString()}${unit}`);
+    }
+
+    // 출하주
+    if (inv.sender) {
+        parts.push(inv.sender);
+    }
+
+    let baseName = parts.join(' ');
+
+    // 등급은 괄호로 감싸서 뒤에 배치
+    if (inv.grade) {
+        baseName += ` (${inv.grade})`;
+    }
+
+    return baseName;
+};
+
+import './InventoryDetailModal.css';
 
 const InventoryDetailModal = ({ isOpen, inventoryId, onClose }) => {
     const [data, setData] = useState({
@@ -45,14 +77,31 @@ const InventoryDetailModal = ({ isOpen, inventoryId, onClose }) => {
     });
     const [tradeDetailModal, setTradeDetailModal] = useState({
         isOpen: false,
-        tradeId: null
+        tradeId: null,
+        highlightId: null
     });
+
+    const { position, handleMouseDown } = useDraggable();
 
     useEffect(() => {
         if (isOpen && inventoryId) {
             loadDetail();
         }
     }, [isOpen, inventoryId]);
+
+    // ESC 키로 닫기
+    useEffect(() => {
+        const handleEsc = (e) => {
+            if (e.key === 'Escape' && isOpen) {
+                // 서브 모달(전표 상세)이 열려있지 않을 때만 닫기
+                if (!tradeDetailModal.isOpen) {
+                    onClose();
+                }
+            }
+        };
+        window.addEventListener('keydown', handleEsc);
+        return () => window.removeEventListener('keydown', handleEsc);
+    }, [isOpen, tradeDetailModal.isOpen, onClose]);
 
     const loadDetail = async () => {
         setData(prev => ({ ...prev, loading: true }));
@@ -72,208 +121,175 @@ const InventoryDetailModal = ({ isOpen, inventoryId, onClose }) => {
     if (!isOpen) return null;
 
     return createPortal(
-        <div className="modal-overlay" style={{ zIndex: 10050 }}>
+        <div className="premium-modal-overlay" onClick={onClose}>
             <div
+                className="premium-modal-container"
                 style={{
-                    backgroundColor: '#fff',
-                    borderRadius: '12px',
-                    width: '90%',
+                    transform: `translate(${position.x}px, ${position.y}px)`,
                     maxWidth: '800px',
-                    maxHeight: '85vh',
-                    overflow: 'hidden',
-                    boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
-                    display: 'flex',
-                    flexDirection: 'column'
+                    width: '90vw'
                 }}
                 onClick={(e) => e.stopPropagation()}
             >
-                <div style={{
-                    padding: '1.25rem 1.5rem',
-                    borderBottom: '1px solid #e5e7eb',
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    backgroundColor: '#fff',
-                    flexShrink: 0
-                }}>
-                    <h3 style={{ margin: 0, color: '#1e293b', fontSize: '1.1rem', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        🔍 재고 상세
-                    </h3>
+                {/* 헤더: 프리미엄 표준 (중앙 아이콘 + 제목 + 부제목) */}
+                <div className="premium-modal-header" style={{ position: 'relative' }}>
+                    <div
+                        className="premium-modal-icon"
+                        onMouseDown={handleMouseDown}
+                        style={{ cursor: 'grab' }}
+                    >
+                        <span role="img" aria-label="inventory">🔍</span>
+                    </div>
+                    <h2 className="premium-modal-title">재고 상세</h2>
                     <button
                         onClick={onClose}
-                        style={{
-                            background: 'none',
-                            border: 'none',
-                            fontSize: '1.5rem',
-                            cursor: 'pointer',
-                            color: '#94a3b8',
-                            lineHeight: 1
-                        }}
+                        className="premium-modal-close"
+                        title="닫기 (Esc)"
                     >
-                        ×
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                            <line x1="18" y1="6" x2="6" y2="18"></line>
+                            <line x1="6" y1="6" x2="18" y2="18"></line>
+                        </svg>
                     </button>
                 </div>
-                <div style={{
-                    padding: '1.5rem',
-                    overflowY: 'auto',
-                    flex: 1,
-                    backgroundColor: '#fff'
-                }}>
+
+                <div className="premium-modal-body" style={{ overflowY: 'auto' }}>
                     {data.loading ? (
-                        <div style={{ textAlign: 'center', padding: '2rem', color: '#64748b' }}>
-                            불러오는 중...
-                        </div>
+                        <div className="premium-empty-state">불러오는 중...</div>
                     ) : data.inventory ? (
                         <>
-                            {/* 기본 정보 */}
-                            <div style={{
-                                display: 'grid',
-                                gridTemplateColumns: 'repeat(2, 1fr)',
-                                gap: '1rem',
-                                marginBottom: '1.5rem',
-                                padding: '1.25rem',
-                                backgroundColor: '#f8fafc',
-                                borderRadius: '12px',
-                                border: '1px solid #f1f5f9'
-                            }}>
-                                <div>
-                                    <label style={{ color: '#64748b', fontSize: '0.8rem', display: 'block', marginBottom: '4px' }}>품목</label>
-                                    <div style={{ fontWeight: '600', color: '#334155' }}>
-                                        {data.inventory.product_name}
-                                        {data.inventory.grade && (
-                                            <span className="badge badge-info" style={{ marginLeft: '8px', fontSize: '0.7rem' }}>
-                                                {data.inventory.grade}
+                            {/* 핵심 정보 배너 */}
+                            <div className="inventory-summary-banner">
+                                <div className="inventory-summary-left">
+                                    <div className="inventory-product-name" style={{ marginBottom: '6px' }}>
+                                        {formatInventoryName(data.inventory)}
+                                        {getStatusBadge(data.inventory.status)}
+                                    </div>
+                                    <div className="inventory-info-value" style={{ color: '#64748b', display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                        <span style={{ fontWeight: '600', color: '#475569' }}>{data.inventory.company_name}</span>
+                                        <span style={{ color: '#cbd5e1' }}>|</span>
+                                        <span>{formatDate(data.inventory.purchase_date)} 매입</span>
+                                        <span style={{ color: '#cbd5e1' }}>|</span>
+                                        <span style={{ color: '#0f172a', fontWeight: '600' }}>단가: {formatCurrency(data.inventory.unit_price)}원</span>
+                                    </div>
+                                </div>
+                                <div className="inventory-remaining-wrap">
+                                    <div className="inventory-remaining-label">남은 수량</div>
+                                    <div className="inventory-remaining-value">
+                                        {formatNumber(data.inventory.remaining_quantity)}
+                                        <span style={{ fontSize: '1rem', marginLeft: '4px', fontWeight: '500' }}>개</span>
+                                    </div>
+                                    <div className="inventory-original-qty">
+                                        최초 {formatNumber(data.inventory.original_quantity)}개 입고
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* 상세 정보 그리드 */}
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
+                                {/* 매입 상세 */}
+                                <div className="inventory-info-section">
+                                    <div className="inventory-section-title">매입 상세</div>
+                                    <div className="inventory-info-grid">
+                                        <div className="inventory-info-item">
+                                            <span className="inventory-info-label">전표 번호</span>
+                                            <span
+                                                className="inventory-info-value link"
+                                                onClick={() => setTradeDetailModal({
+                                                    isOpen: true,
+                                                    tradeId: data.inventory.trade_master_id,
+                                                    highlightId: data.inventory.trade_detail_id
+                                                })}
+                                            >
+                                                {data.inventory.trade_number}
                                             </span>
-                                        )}
+                                        </div>
                                     </div>
                                 </div>
-                                <div>
-                                    <label style={{ color: '#64748b', fontSize: '0.8rem', display: 'block', marginBottom: '4px' }}>매입처</label>
-                                    <div style={{ fontWeight: '600' }}>{data.inventory.company_name}</div>
-                                </div>
-                                <div>
-                                    <label style={{ color: '#64748b', fontSize: '0.8rem', display: 'block', marginBottom: '4px' }}>매입일</label>
-                                    <div>{formatDate(data.inventory.purchase_date)}</div>
-                                </div>
-                                <div>
-                                    <label style={{ color: '#64748b', fontSize: '0.8rem', display: 'block', marginBottom: '4px' }}>전표번호</label>
-                                    <div
-                                        style={{ color: '#3b82f6', cursor: 'pointer', textDecoration: 'underline' }}
-                                        onClick={() => {
-                                            setTradeDetailModal({ isOpen: true, tradeId: data.inventory.trade_master_id });
-                                        }}
-                                    >
-                                        {data.inventory.trade_number}
+
+                                {/* 출하주 및 출하지 정보 */}
+                                <div className="inventory-info-section">
+                                    <div className="inventory-section-title">출하주 및 출하지</div>
+                                    <div className="inventory-info-grid" style={{
+                                        backgroundColor: '#f0f9ff',
+                                        borderColor: '#e0f2fe',
+                                        display: 'flex',
+                                        flexDirection: 'row',
+                                        alignItems: 'center',
+                                        gap: '24px'
+                                    }}>
+                                        <div className="inventory-info-item" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                            <span className="inventory-info-label" style={{ marginBottom: 0 }}>출하주</span>
+                                            <span className="inventory-info-value">{data.inventory.sender || '-'}</span>
+                                        </div>
+                                        <div style={{ width: '1px', height: '12px', backgroundColor: '#bae6fd' }}></div>
+                                        <div className="inventory-info-item" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                            <span className="inventory-info-label" style={{ marginBottom: 0 }}>출하지</span>
+                                            <span className="inventory-info-value">{data.inventory.shipper_location || '-'}</span>
+                                        </div>
                                     </div>
                                 </div>
-                                <div>
-                                    <label style={{ color: '#64748b', fontSize: '0.8rem', display: 'block', marginBottom: '4px' }}>원래 수량</label>
-                                    <div>{formatNumber(data.inventory.original_quantity)}개</div>
-                                </div>
-                                <div>
-                                    <label style={{ color: '#64748b', fontSize: '0.8rem', display: 'block', marginBottom: '4px' }}>남은 수량</label>
-                                    <div style={{ fontWeight: '700', color: '#22c55e', fontSize: '1.1rem' }}>
-                                        {formatNumber(data.inventory.remaining_quantity)}개
+                            </div>
+
+                            {/* 매칭 이력 테이블 */}
+                            <div className="inventory-info-section">
+                                <h4 className="inventory-matching-header">
+                                    📄 매출 매칭 이력 ({data.matchings.length}건)
+                                </h4>
+                                {data.matchings.length === 0 ? (
+                                    <div className="premium-empty-state" style={{ padding: '2rem' }}>
+                                        아직 매출과 매칭된 이력이 없습니다.
                                     </div>
-                                </div>
-                                <div>
-                                    <label style={{ color: '#64748b', fontSize: '0.8rem', display: 'block', marginBottom: '4px' }}>매입 단가</label>
-                                    <div>{formatCurrency(data.inventory.unit_price)}원</div>
-                                </div>
-                                <div>
-                                    <label style={{ color: '#64748b', fontSize: '0.8rem', display: 'block', marginBottom: '4px' }}>상태</label>
-                                    <div>{getStatusBadge(data.inventory.status)}</div>
-                                </div>
-                                {data.inventory.shipper_location && (
-                                    <div>
-                                        <label style={{ color: '#64748b', fontSize: '0.8rem', display: 'block', marginBottom: '4px' }}>출하지</label>
-                                        <div>{data.inventory.shipper_location}</div>
-                                    </div>
-                                )}
-                                {data.inventory.sender && (
-                                    <div>
-                                        <label style={{ color: '#64748b', fontSize: '0.8rem', display: 'block', marginBottom: '4px' }}>출하주</label>
-                                        <div>{data.inventory.sender}</div>
+                                ) : (
+                                    <div className="inventory-table-container">
+                                        <table className="inventory-table">
+                                            <thead>
+                                                <tr>
+                                                    <th>매칭일</th>
+                                                    <th>매출전표</th>
+                                                    <th>고객</th>
+                                                    <th style={{ textAlign: 'right' }}>매칭수량</th>
+                                                    <th style={{ textAlign: 'right' }}>매출단가</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {data.matchings.map((match, index) => (
+                                                    <tr key={index}>
+                                                        <td>{formatDate(match.matched_at)}</td>
+                                                        <td>
+                                                            <span
+                                                                className="inventory-info-value link"
+                                                                onClick={() => setTradeDetailModal({
+                                                                    isOpen: true,
+                                                                    tradeId: match.sale_trade_master_id,
+                                                                    highlightId: match.sale_detail_id
+                                                                })}
+                                                            >
+                                                                {match.sale_trade_number}
+                                                            </span>
+                                                        </td>
+                                                        <td>{match.customer_name}</td>
+                                                        <td style={{ textAlign: 'right' }} className="qty-negative">
+                                                            -{formatNumber(match.matched_quantity)}개
+                                                        </td>
+                                                        <td style={{ textAlign: 'right' }}>{formatCurrency(match.sale_unit_price)}원</td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
                                     </div>
                                 )}
                             </div>
-
-                            {/* 매칭 이력 */}
-                            <h4 style={{ marginBottom: '1rem', color: '#1e293b', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                📋 매출 매칭 이력 ({data.matchings.length}건)
-                            </h4>
-                            {data.matchings.length === 0 ? (
-                                <div style={{
-                                    textAlign: 'center',
-                                    padding: '3rem 2rem',
-                                    color: '#94a3b8',
-                                    backgroundColor: '#f8fafc',
-                                    borderRadius: '12px',
-                                    border: '1px dashed #e2e8f0'
-                                }}>
-                                    아직 매출과 매칭된 이력이 없습니다.
-                                </div>
-                            ) : (
-                                <div style={{ border: '1px solid #e2e8f0', borderRadius: '8px', overflow: 'hidden' }}>
-                                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                                        <thead>
-                                            <tr style={{ backgroundColor: '#f1f5f9' }}>
-                                                <th style={{ padding: '12px', color: '#475569', fontWeight: '600', textAlign: 'left', fontSize: '0.85rem' }}>매칭일</th>
-                                                <th style={{ padding: '12px', color: '#475569', fontWeight: '600', textAlign: 'left', fontSize: '0.85rem' }}>매출전표</th>
-                                                <th style={{ padding: '12px', color: '#475569', fontWeight: '600', textAlign: 'left', fontSize: '0.85rem' }}>고객</th>
-                                                <th style={{ padding: '12px', color: '#475569', fontWeight: '600', textAlign: 'right', fontSize: '0.85rem' }}>매칭수량</th>
-                                                <th style={{ padding: '12px', color: '#475569', fontWeight: '600', textAlign: 'right', fontSize: '0.85rem' }}>매출단가</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {data.matchings.map((match, index) => (
-                                                <tr key={index} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                                                    <td style={{ padding: '12px', fontSize: '0.85rem' }}>{formatDate(match.matched_at)}</td>
-                                                    <td style={{ padding: '12px', fontSize: '0.85rem' }}>
-                                                        <span
-                                                            onClick={() => {
-                                                                setTradeDetailModal({ isOpen: true, tradeId: match.sale_trade_master_id });
-                                                            }}
-                                                            style={{
-                                                                color: '#3b82f6',
-                                                                cursor: 'pointer',
-                                                                textDecoration: 'underline'
-                                                            }}
-                                                            title="전표 상세 보기"
-                                                        >
-                                                            {match.sale_trade_number}
-                                                        </span>
-                                                    </td>
-                                                    <td style={{ padding: '12px', fontSize: '0.85rem' }}>{match.customer_name}</td>
-                                                    <td style={{ padding: '12px', textAlign: 'right', fontWeight: '700', color: '#ef4444', fontSize: '0.85rem' }}>
-                                                        -{formatNumber(match.matched_quantity)}개
-                                                    </td>
-                                                    <td style={{ padding: '12px', textAlign: 'right', fontSize: '0.85rem' }}>{formatCurrency(match.sale_unit_price)}원</td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            )}
                         </>
                     ) : (
-                        <div style={{ textAlign: 'center', padding: '2rem', color: '#ef4444' }}>
+                        <div className="premium-empty-state" style={{ color: '#ef4444' }}>
                             정보를 불러올 수 없습니다.
                         </div>
                     )}
                 </div>
-                <div style={{
-                    padding: '1rem 1.5rem',
-                    borderTop: '1px solid #e5e7eb',
-                    textAlign: 'right',
-                    backgroundColor: '#f8fafc',
-                    flexShrink: 0
-                }}>
-                    <button
-                        onClick={onClose}
-                        className="modal-btn modal-btn-cancel"
-                        style={{ height: '36px', padding: '0 1.25rem' }}
-                    >
+
+                <div className="premium-modal-footer">
+                    <button onClick={onClose} className="premium-modal-btn premium-btn-secondary">
                         닫기
                     </button>
                 </div>
@@ -281,8 +297,9 @@ const InventoryDetailModal = ({ isOpen, inventoryId, onClose }) => {
 
             <TradeDetailModal
                 isOpen={tradeDetailModal.isOpen}
-                onClose={() => setTradeDetailModal({ isOpen: false, tradeId: null })}
+                onClose={() => setTradeDetailModal({ isOpen: false, tradeId: null, highlightId: null })}
                 tradeId={tradeDetailModal.tradeId}
+                highlightId={tradeDetailModal.highlightId}
             />
         </div>,
         document.body

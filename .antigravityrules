@@ -94,6 +94,17 @@
 - **안정성**: `LEFT JOIN` 권장 (누락 방지).
 - **라우팅**: 고정 경로를 파라미터 경로보다 먼저 정의.
 
+### 3.4 시스템 관리 및 버전 정책 (System Management & Versioning Policy)
+- **[Standard 14.8] Semantic Micro-Versioning (0.0.1 Increment Rule)**:
+  - 핵심 기능 변화가 없는 미세 UI 조정, 버그 수정, 시각적 정합성 개선(예: Ghost Rectangle 제거) 완료 시 버전을 `0.0.1` 상향 조정합니다. (예: `1.0.6` -> `1.0.7`)
+  - 이는 런처의 업데이트 배너를 유도하여 모든 사용자가 최신 마감 버전임을 인지하도록 돕습니다.
+- **[Standard 14.8.1] Synchronized Version Uplift Protocol**:
+  - 배포 전 반드시 다음 3가지 핵심 파일의 버전을 상호 대조하여 동일하게 수동 업데이트해야 합니다.
+    1. `version.json`: 시스템 최상위 버전 (SSOT).
+    2. `frontend/package.json`: 프론트엔드 모듈 버전.
+    3. `backend/package.json`: 백엔드 모듈 버전.
+  - "모든 부품은 하나의 버전으로 숨 쉰다"는 동기화 원칙을 철저히 준수하십시오.
+
 ## 4. 트러블슈팅 및 보고 (Troubleshooting & Reporting)
 
 ### 4.1 환경적 요인 보고 프로토콜 (Environmental Issue Protocol)

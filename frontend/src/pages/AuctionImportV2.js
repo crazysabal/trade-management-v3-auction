@@ -6,6 +6,13 @@ import { auctionAPI, productAPI, tradeAPI, companyAPI, warehousesAPI } from '../
 import SearchableSelect from '../components/SearchableSelect';
 import ConfirmModal from '../components/ConfirmModal';
 
+// --- Utilities ---
+const getWeightInKg = (weight, unit) => {
+    const w = parseFloat(weight) || 0;
+    if (unit?.toLowerCase() === 'g') return w / 1000;
+    return w;
+};
+
 // --- Sub Component: AuctionItemRow ---
 const AuctionItemRow = React.memo(({
     item,
@@ -26,9 +33,12 @@ const AuctionItemRow = React.memo(({
 
         // Sort the pre-computed baseOptions
         return [...baseOptions].sort((a, b) => {
-            // Weight match (tolerance 0.05)
-            const aWeightMatch = totalWeight > 0 && Math.abs(a.weight - totalWeight) < 0.05;
-            const bWeightMatch = totalWeight > 0 && Math.abs(b.weight - totalWeight) < 0.05;
+            const aKg = getWeightInKg(a.weight, a.weightUnit);
+            const bKg = getWeightInKg(b.weight, b.weightUnit);
+
+            // Weight match (tolerance 0.05kg)
+            const aWeightMatch = totalWeight > 0 && Math.abs(aKg - totalWeight) < 0.05;
+            const bWeightMatch = totalWeight > 0 && Math.abs(bKg - totalWeight) < 0.05;
 
             // Grade match (case insensitive)
             const aGradeMatch = auctionGrade && a.grade &&
@@ -75,8 +85,9 @@ const AuctionItemRow = React.memo(({
     const auctionGrade = item.grade || '';
 
     // Custom format option label
-    const formatOptionLabel = useCallback(({ label, weight, grade }) => {
-        const weightMatch = totalWeight > 0 && Math.abs(weight - totalWeight) < 0.05;
+    const formatOptionLabel = useCallback(({ label, weight, grade, weightUnit }) => {
+        const optionWeightKg = getWeightInKg(weight, weightUnit);
+        const weightMatch = totalWeight > 0 && Math.abs(optionWeightKg - totalWeight) < 0.05;
         const gradeMatch = auctionGrade && grade && String(grade).toLowerCase() === String(auctionGrade).toLowerCase();
         const isFullMatch = weightMatch && gradeMatch;
         const isPartialMatch = weightMatch || gradeMatch;
@@ -132,7 +143,7 @@ const AuctionItemRow = React.memo(({
             <td>{item.sender || '-'}</td>
             <td>{item.grade || '-'}</td>
             <td className="text-right">{item.count || 0}개</td>
-            <td className="text-right">{totalWeight > 0 ? `${totalWeight}kg` : '-'}</td>
+            <td className="text-right">{totalWeight > 0 ? `${totalWeight}${item.weight_unit || 'kg'}` : '-'}</td>
             <td className="text-right">{formattedPrice}원</td>
             <td>
                 <SearchableSelect
@@ -192,13 +203,15 @@ function AuctionImportV2({ isWindow, onTradeChange, onClose }) {
             const pureName = product.product_name?.replace(/\([^)]*\)$/, '').trim();
             const productWeight = product.weight ? parseFloat(product.weight) : 0;
             const productGrade = product.grade || '';
-            const weightStr = productWeight > 0 ? `${productWeight.toFixed(1).replace(/\.0$/, '')}kg` : '';
+            const weightUnit = product.weight_unit || 'kg'; // 기본값 kg
+            const weightStr = productWeight > 0 ? `${productWeight.toFixed(1).replace(/\.0$/, '')}${weightUnit}` : '';
 
             return {
                 value: product.id,
                 label: `${pureName}${weightStr ? ` ${weightStr}` : ''}${productGrade ? ` (${productGrade})` : ''}`,
                 subLabel: product.product_code || '', // 추가 정보 표시용
                 weight: productWeight,
+                weightUnit: weightUnit,
                 grade: productGrade,
                 sortOrder: product.sort_order || 0,
                 productName: product.product_name || '',

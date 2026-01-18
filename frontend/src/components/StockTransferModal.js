@@ -186,7 +186,7 @@ const StockTransferModal = ({ isOpen, onClose, inventory, inventoryList = [], on
                                     <li key={item.id} style={{ marginBottom: '0.4rem' }}>
                                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                             <span style={{ fontWeight: '600', color: '#1e293b' }}>
-                                                {item.product_name} {item.product_weight ? `${parseFloat(item.product_weight)}${item.weight_unit || item.product_weight_unit || 'kg'}` : ''} {item.sender || '-'} ({item.grade || '-'})
+                                                {item.product_name}{item.product_weight ? ` ${parseFloat(item.product_weight)}${item.product_weight_unit || item.weight_unit || 'kg'}` : ''} {item.sender || '-'} ({item.grade || '-'})
                                             </span>
                                             <span style={{ fontSize: '0.85rem', color: '#2563eb' }}>
                                                 {parseFloat(item.remaining_quantity).toString()} 개
@@ -208,7 +208,7 @@ const StockTransferModal = ({ isOpen, onClose, inventory, inventoryList = [], on
                                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                                     <span style={{ color: '#64748b' }}>품목/중량</span>
                                     <span style={{ fontWeight: '600', color: '#1e293b' }}>
-                                        {inventory.product_name} {inventory.product_weight ? `${parseFloat(inventory.product_weight)}${inventory.weight_unit || inventory.product_weight_unit || 'kg'}` : ''}
+                                        {inventory.product_name}{inventory.product_weight ? ` ${parseFloat(inventory.product_weight)}${inventory.product_weight_unit || inventory.weight_unit || 'kg'}` : ''}
                                     </span>
                                 </div>
                                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>

@@ -1179,6 +1179,7 @@ function TradePanel({
   const handleDetailSelectChange = (index, option) => {
     handleDetailChange(index, 'product_id', option ? option.value : '');
     // 품목이 실제로 선택되었을 때만 수량으로 포커스 이동
+    // [FIX] option이 없는 경우(선택 취소)에는 포커스 이동을 하지 않음 (Shift+Tab 접근성 개선)
     if (option) {
       setTimeout(() => {
         if (quantityRefs.current[index]) {
@@ -1220,6 +1221,15 @@ function TradePanel({
   // 키보드 네비게이션
   const handleQuantityKeyDown = (e, index) => {
     if (e.key === 'Enter' || e.key === 'Tab') {
+      // [FIX] Shift+Tab (역방향)으로 나갈 때는 유효성 검사 제외
+      if (e.shiftKey) return;
+
+      const val = details[index].quantity;
+      if (val === '' || val === null || parseFloat(val) === 0) {
+        e.preventDefault();
+        return; // 수량이 없으면 단가로 넘어가지 않음
+      }
+
       e.preventDefault();
       if (unitPriceRefs.current[index]) {
         unitPriceRefs.current[index].focus();
@@ -1229,6 +1239,15 @@ function TradePanel({
 
   const handleUnitPriceKeyDown = (e, index) => {
     if (e.key === 'Enter' || e.key === 'Tab') {
+      // [FIX] Shift+Tab (역방향)으로 나갈 때는 유효성 검사 제외
+      if (e.shiftKey) return;
+
+      const val = details[index].unit_price;
+      if (val === '' || val === null || parseFloat(val) === 0) {
+        e.preventDefault();
+        return; // 단가가 없으면 비고/출하주로 넘어가지 않음
+      }
+
       e.preventDefault();
       if (isPurchase) {
         // Purchase: Unit Price -> Owner (Sender)
@@ -1266,6 +1285,15 @@ function TradePanel({
 
   const handleNotesKeyDown = (e, index) => {
     if (e.key === 'Enter') {
+      // 현재 행의 필수 값 체크 (품목, 수량, 단가)
+      const row = details[index];
+      const isInvalid = !row.product_id || !row.quantity || parseFloat(row.quantity) === 0 || !row.unit_price || parseFloat(row.unit_price) === 0;
+
+      if (isInvalid) {
+        e.preventDefault();
+        return; // 필수 값이 없으면 다음 행으로 갈 수 없음
+      }
+
       e.preventDefault();
       // 다음 행의 품목으로 이동하거나 새 행 추가
       if (index === details.length - 1) {
@@ -2953,7 +2981,8 @@ function TradePanel({
                   {(() => {
                     const inv = inventoryInputModal.inventory || {};
                     const weight = inv.weight || inv.product_weight;
-                    const weightText = weight ? ` ${parseFloat(weight)} kg` : '';
+                    const unit = detail.weight_unit || detail.product_weight_unit || 'kg';
+                    const weightText = weight ? `${parseFloat(weight)}${unit}` : '';
                     const senderText = inv.sender ? ` ${inv.sender} ` : '';
                     const gradeText = inv.grade ? ` (${inv.grade})` : '';
 

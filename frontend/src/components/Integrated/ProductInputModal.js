@@ -532,7 +532,7 @@ const ProductInputModal = ({ isOpen, onClose, onSuccess, initialData = null, isE
                         {!isEdit && isAddingGrade && (
                             <div style={{ marginBottom: '1.5rem', padding: '0.75rem', backgroundColor: '#fffbeb', borderRadius: '8px', border: '1px solid #fcd34d' }}>
                                 <p style={{ margin: 0, fontSize: '0.9rem', color: '#92400e' }}>
-                                    📌 "{formData.product_name}${formData.weight ? ` (${parseFloat(formData.weight)}${formData.weight_unit || 'kg'})` : ''}" 품목에 새로운 등급을 추가합니다.
+                                    📌 "{formData.product_name}${formData.weight ? `(${parseFloat(formData.weight)}${formData.weight_unit || 'kg'})` : ''}" 품목에 새로운 등급을 추가합니다.
                                 </p>
                             </div>
                         )}

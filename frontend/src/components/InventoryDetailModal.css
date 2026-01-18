@@ -1,0 +1,169 @@
+/* InventoryDetailModal.css */
+.inventory-detail-container {
+    padding: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+/* 핵심 정보 배너 */
+.inventory-summary-banner {
+    background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 1.25rem 1.5rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.inventory-summary-left {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.inventory-product-name {
+    font-size: 1.35rem;
+    font-weight: 700;
+    color: #0f172a;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.inventory-remaining-wrap {
+    text-align: right;
+    display: flex;
+    flex-direction: column;
+}
+
+.inventory-remaining-label {
+    font-size: 0.75rem;
+    color: #64748b;
+    margin-bottom: 2px;
+}
+
+.inventory-remaining-value {
+    font-size: 1.5rem;
+    font-weight: 800;
+    color: #22c55e;
+    line-height: 1.2;
+}
+
+.inventory-original-qty {
+    font-size: 0.8rem;
+    color: #94a3b8;
+}
+
+/* 정보 그리드 섹션 */
+.inventory-info-section {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    margin-top: 1.5rem;
+}
+
+.inventory-section-title {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: #475569;
+    border-left: 3px solid #3b82f6;
+    padding-left: 8px;
+    margin-bottom: 0.5rem;
+}
+
+.inventory-info-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 0.85rem;
+    padding: 1rem;
+    background-color: #ffffff;
+    border: 1px solid #f1f5f9;
+    border-radius: 8px;
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.02);
+}
+
+.inventory-info-item {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.inventory-info-label {
+    font-size: 0.75rem;
+    color: #94a3b8;
+    font-weight: 500;
+}
+
+.inventory-info-value {
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: #334155;
+}
+
+.inventory-info-value.link {
+    color: #3b82f6;
+    text-decoration: underline;
+    cursor: pointer;
+}
+
+/* 출처 정보 섹션 */
+.inventory-shipment-box {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    padding: 0.85rem 1rem;
+    background-color: #f0f9ff;
+    border: 1px solid #e0f2fe;
+    border-radius: 8px;
+}
+
+/* 테이블 섹션 */
+.inventory-matching-header {
+    margin-top: 1rem;
+    margin-bottom: 0.75rem;
+    font-size: 1rem;
+    font-weight: 600;
+    color: #1e293b;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.inventory-table-container {
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.inventory-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.inventory-table th {
+    background-color: #f8fafc;
+    padding: 10px 12px;
+    color: #64748b;
+    font-weight: 600;
+    text-align: left;
+    font-size: 0.8rem;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.inventory-table td {
+    padding: 10px 12px;
+    font-size: 0.85rem;
+    border-bottom: 1px solid #f1f5f9;
+    color: #334155;
+}
+
+.inventory-table tr:last-child td {
+    border-bottom: none;
+}
+
+.qty-negative {
+    color: #ef4444;
+    font-weight: 700;
+}

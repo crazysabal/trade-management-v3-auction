@@ -223,12 +223,14 @@ const InventoryQuickView = ({ inventoryAdjustments = {}, refreshKey, onInventory
         } else {
             const keywords = searchTerm.toLowerCase().split(/\s+/).filter(t => t.length > 0);
             const filtered = adjustedInventory.filter(item => {
-                const weight = item.weight || item.product_weight; // InventoryQuickView uses 'weight' or 'product_weight'
-                const weightStr = weight ? Number(weight) + (item.weight_unit || item.product_weight_unit || 'kg') : '';
+                const weight = item.product_weight || item.weight;
+                // product_weight 사용 시에는 product_weight_unit을 우선적으로 결합하여 정합성 유지
+                const unit = item.product_weight ? (item.product_weight_unit || item.weight_unit || 'kg') : (item.weight_unit || 'kg');
+                const weightStr = weight ? `${parseFloat(weight)}${unit}` : '';
 
                 // InventoryHistory.js와 동일한 로직 적용
                 const primaryText = `${item.product_name || ''} ${weightStr} ${item.grade || ''} ${item.company_name || ''} ${item.sender || ''}`.toLowerCase();
-                const secondaryText = `${item.warehouse_name || ''} ${formatDateShort(item.purchase_date)}`.toLowerCase(); // QuickView has limited fields compared to History
+                const secondaryText = `${item.warehouse_name || ''} ${formatDateShort(item.purchase_date)}`.toLowerCase();
 
                 return keywords.every(kw => {
                     // 1. 핵심 검색 대상(품목명, 거래처, 출하주 등)은 항상 부분 일치 허용
@@ -311,9 +313,10 @@ const InventoryQuickView = ({ inventoryAdjustments = {}, refreshKey, onInventory
     const formatProductName = (item) => {
         if (!item) return '';
         const parts = [item.product_name];
-        const weight = item.weight || item.product_weight;
-        const unit = item.weight_unit || item.product_weight_unit || 'kg';
-        if (weight) {
+        const weight = item.product_weight || item.weight;
+        // product_weight 사용 시에는 product_weight_unit을 우선적으로 결합하여 정합성 유지
+        const unit = item.product_weight ? (item.product_weight_unit || item.weight_unit || 'kg') : (item.weight_unit || 'kg');
+        if (weight && parseFloat(weight) > 0) {
             // parseFloat를 사용하여 불필요한 소수점 0 제거 (5.00 -> 5, 5.50 -> 5.5)
             parts.push(`${parseFloat(weight)}${unit}`);
         }

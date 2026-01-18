@@ -135,7 +135,8 @@ const InventoryHistory = ({ onOpenTrade }) => {
         const keywords = searchTerm.toLowerCase().split(/\s+/).filter(k => k.length > 0);
 
         return history.filter(item => {
-            const unit = item.weight_unit || item.product_weight_unit || 'kg';
+            // product_weight 사용 시에는 product_weight_unit을 우선적으로 결합하여 정합성 유지
+            const unit = item.product_weight ? (item.product_weight_unit || item.weight_unit || 'kg') : (item.weight_unit || 'kg');
             const primaryText = `${item.product_name || ''} ${item.product_weight ? Number(item.product_weight) + unit : ''} ${item.grade || ''} ${item.company_name || ''} ${item.sender || ''}`.toLowerCase();
             const secondaryText = `${item.warehouse_name || ''} ${item.shipper_location || ''} ${item.trade_number || ''} ${item.transaction_date || ''} ${getTypeLabel(item)}`.toLowerCase();
 
@@ -438,8 +439,8 @@ const InventoryHistory = ({ onOpenTrade }) => {
                                     >
 
                                         <td>
-                                            {item.transaction_date ? item.transaction_date.substring(0, 10) : '-'}
-                                            <div style={{ fontSize: '0.8em', color: '#999' }}>
+                                            <div style={{ fontWeight: '500', lineHeight: '1' }}>{item.transaction_date ? item.transaction_date.substring(0, 10) : '-'}</div>
+                                            <div style={{ fontSize: '0.82em', color: '#999', lineHeight: '1', marginTop: '1px' }}>
                                                 {item.detail_date ? new Date(item.detail_date).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }) : ''}
                                             </div>
                                         </td>
@@ -452,8 +453,7 @@ const InventoryHistory = ({ onOpenTrade }) => {
                                             {item.warehouse_name || '-'}
                                         </td>
                                         <td>
-                                            {item.product_name}
-                                            {item.product_weight ? ` ${Number(item.product_weight)}${item.weight_unit || item.product_weight_unit || 'kg'}` : ''}
+                                            {item.product_name}{item.product_weight ? ` ${Number(item.product_weight)}${item.product_weight_unit || item.weight_unit || 'kg'}` : ''}
                                         </td>
                                         <td>
                                             {item.sender || '-'}

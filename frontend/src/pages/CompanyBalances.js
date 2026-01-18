@@ -864,7 +864,7 @@ function CompanyBalances() {
                                     {item.date ? item.date.substring(5) : '-'}
                                   </td>
                                   <td style={{ padding: '10px 16px', color: '#1e293b', whiteSpace: 'nowrap' }}>
-                                    {item.product_name} {Number(item.product_weight || 0) > 0 ? `${Number(item.product_weight).toString()}kg` : ''}
+                                    {item.product_name} {Number(item.product_weight || 0) > 0 ? `${Number(item.product_weight).toString()}${item.weight_unit || item.product_weight_unit || 'kg'}` : ''}
                                   </td>
                                   <td style={{ padding: '10px 16px', color: '#475569', whiteSpace: 'nowrap' }}>{item.sender_name || '-'}</td>
                                   <td style={{ padding: '10px 16px', color: '#475569', whiteSpace: 'nowrap', textAlign: 'center' }}>

@@ -12,7 +12,10 @@ const InventoryTransferManagement = () => {
     const [warehouses, setWarehouses] = useState([]);
     const [loading, setLoading] = useState(false);
     const [reorderMode, setReorderMode] = useState(false); // 창고 순서 변경 모드
-    const [columnWidth, setColumnWidth] = useState(350); // Default width
+    const [columnWidth, setColumnWidth] = useState(() => {
+        const saved = localStorage.getItem('inventory_transfer_column_width');
+        return saved ? Number(saved) : 350;
+    });
 
     // Drag & Drop State
     const [draggedItem, setDraggedItem] = useState(null); // 드래그 중인 재고
@@ -41,6 +44,11 @@ const InventoryTransferManagement = () => {
     useEffect(() => {
         loadData();
     }, []);
+
+    // 컬럼 너비 설정 저장
+    useEffect(() => {
+        localStorage.setItem('inventory_transfer_column_width', columnWidth);
+    }, [columnWidth]);
 
     const loadData = async () => {
         setLoading(true);
@@ -293,10 +301,14 @@ const InventoryTransferManagement = () => {
         return inventory.filter(item => {
             if (keywords.length === 0) return true;
 
+            // product_weight 사용 시에는 product_weight_unit을 우선적으로 결합하여 정합성 유지
+            const unit = item.product_weight ? (item.product_weight_unit || item.weight_unit || 'kg') : (item.weight_unit || 'kg');
+            const weightStr = Number(item.product_weight) > 0 ? ` ${Number(item.product_weight)}${unit}` : '';
+
             const targetString = `
                 ${item.product_name || ''}
                 ${item.grade || ''}
-                ${Number(item.product_weight) || ''} ${Number(item.product_weight) > 0 ? (item.weight_unit || item.product_weight_unit || 'kg') : ''}
+                ${weightStr}
                 ${item.sender || ''}
                 ${item.company_name || ''}
                 ${item.business_name || ''}
@@ -479,7 +491,11 @@ const InventoryTransferManagement = () => {
                                                 <div className="card-content">
                                                     <div className="card-main-info" style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
                                                         <span style={{ marginRight: 0, fontWeight: 600, color: '#2d3748' }}>{item.product_name}</span>
-                                                        {Number(item.product_weight) > 0 && <span style={{ color: '#4a5568' }}>{Number(item.product_weight)}kg</span>}
+                                                        {Number(item.product_weight) > 0 && (
+                                                            <span style={{ color: '#4a5568' }}>
+                                                                &nbsp;{Number(item.product_weight)}{item.product_weight_unit || item.weight_unit || 'kg'}
+                                                            </span>
+                                                        )}
                                                         <span style={{ color: '#2b6cb0' }}>{item.sender}</span>
                                                         {item.grade && <span style={{ color: '#718096' }}>({item.grade})</span>}
 
