@@ -3,11 +3,12 @@ import { useAuth } from '../context/AuthContext';
 import { usePermission } from '../hooks/usePermission';
 import ConfirmModal from './ConfirmModal';
 import './Navbar.css';
-import { MENU_CONFIG } from '../config/menuConfig';
+import { useMenuConfig } from '../context/MenuConfigContext';
 
 const Navbar = ({ onLaunchApp }) => {
     const { user } = useAuth();
     const { hasPermission } = usePermission();
+    const { activeMenuConfig } = useMenuConfig(); // [NEW] Use dynamic config
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     // [NEW] Logout Confirmation Modal State
     const [isLogoutConfirmOpen, setIsLogoutConfirmOpen] = useState(false);
@@ -15,11 +16,15 @@ const Navbar = ({ onLaunchApp }) => {
     // 드롭다운 메뉴 상태 관리
     const [activeDropdown, setActiveDropdown] = useState(null);
 
-    // [RBAC] Filter Menu based on Permissions
-    const filteredMenu = MENU_CONFIG.map(group => {
-        const visibleItems = group.items.filter(item => hasPermission(item.id, 'READ'));
-        return { ...group, items: visibleItems };
-    }).filter(group => group.items.length > 0);
+    // [RBAC] Filter Menu based on Permissions (Use activeMenuConfig instead of MENU_CONFIG)
+    // Filter hidden groups first, then permissions
+    const filteredMenu = activeMenuConfig
+        .filter(group => !group.isHidden) // [NEW] Hide hidden groups
+        .map(group => {
+            const visibleItems = group.items.filter(item => hasPermission(item.id, 'READ'));
+            return { ...group, items: visibleItems };
+        })
+        .filter(group => group.items.length > 0);
 
     const toggleMobileMenu = () => {
         setIsMobileMenuOpen(!isMobileMenuOpen);
@@ -129,9 +134,12 @@ const Navbar = ({ onLaunchApp }) => {
 
                 <ul className={`nav-menu ${isMobileMenuOpen ? 'active' : ''}`}>
                     {filteredMenu.map(menu => {
-                        // [RBAC Fix] Check original item count to decide if it should be a dropdown
-                        const originalGroup = MENU_CONFIG.find(m => m.id === menu.id);
-                        const isDropdown = originalGroup && originalGroup.items.length > 1;
+                        // We should search in activeMenuConfig for the group to see 'potential' items count?
+                        // No, let's keep it simple. If 1 item, show as single link? 
+                        // Actually, existing code force-checks `originalGroup.items.length > 1`.
+                        // Let's replicate this by finding group in activeMenuConfig
+                        const groupConfig = activeMenuConfig.find(m => m.id === menu.id);
+                        const isDropdown = groupConfig && groupConfig.items.length > 1;
 
                         return (
                             <li

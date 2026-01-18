@@ -71,12 +71,16 @@ function AppContent() {
   );
 }
 
+import { MenuConfigProvider } from './context/MenuConfigContext';
+
 function App() {
   return (
     <AuthProvider>
-      <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-        <AppContent />
-      </Router>
+      <MenuConfigProvider>
+        <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+          <AppContent />
+        </Router>
+      </MenuConfigProvider>
     </AuthProvider>
   );
 }

@@ -75,7 +75,7 @@ const AuditDesk = ({ audit, items, onUpdate, isSaving, reorderMode, setReorderMo
 
             const searchableText = [
                 item.product_name || '',
-                item.product_weight ? `${parseFloat(item.product_weight)}${item.weight_unit || item.product_weight_unit || 'kg'}` : '',
+                item.product_weight ? `${parseFloat(item.product_weight)}${item.product_weight_unit || item.weight_unit || 'kg'}` : '',
                 item.sender || '',
                 item.grade || '',
                 systemQty.toString(),
@@ -385,7 +385,7 @@ const AuditDesk = ({ audit, items, onUpdate, isSaving, reorderMode, setReorderMo
                                     <td>
                                         <div style={{ fontWeight: 600, fontSize: '0.95rem', color: '#2d3748', lineHeight: '1.4' }}>
                                             <span style={{ marginRight: '6px' }}>{item.product_name}</span>
-                                            {item.product_weight && <span style={{ marginRight: '6px' }}>{parseFloat(item.product_weight)}kg</span>}
+                                            {item.product_weight && <span style={{ marginRight: '6px' }}>{parseFloat(item.product_weight)}{item.weight_unit || item.product_weight_unit || 'kg'}</span>}
                                             {item.sender && <span style={{ marginRight: '6px' }}>{item.sender}</span>}
                                             {item.grade && <span style={{ marginRight: '6px' }}>({item.grade})</span>}
                                             <span style={{ color: '#4a5568', fontWeight: 500, marginRight: '6px' }}>{parseFloat(item.system_quantity).toLocaleString()}개</span>

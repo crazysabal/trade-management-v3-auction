@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback, memo } from 'react';
 import { createPortal } from 'react-dom';
+import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import { Link } from 'react-router-dom';
 import { companyAPI } from '../services/api';
 import SearchableSelect from '../components/SearchableSelect';
@@ -23,24 +24,37 @@ const CompanyRow = memo(function CompanyRow({
   onDelete,
   onEdit,
   getTypeBadge,
-  canReorder, // [NEW]
-  onTouchStart // [NEW]
+  provided,
+  snapshot,
+  canReorder,
+  columnWidths // [NEW] Pass captured widths
 }) {
   const [isHandleHovered, setIsHandleHovered] = useState(false);
 
+  // Portal-aware style
+  const style = {
+    backgroundColor: !company.is_active ? '#f3f4f6' : (index % 2 === 0 ? '#ffffff' : '#f8fafc'),
+    borderTop: index > 0 ? '2px solid #e2e8f0' : 'none',
+    ...provided?.draggableProps.style, // Apply DnD styles
+    // Keep it as table-row as much as possible, or handle via portal wrapper
+    opacity: snapshot?.isDragging ? 0.9 : 1,
+    boxShadow: snapshot?.isDragging ? '0 10px 20px rgba(0,0,0,0.15)' : 'none',
+  };
+
+  // If dragging, we might need to wrap in a table structure if using Portal, 
+  // but handled by parent render logic usually or by applying `display: table` here for simpler cases.
+  // Actually, for optimal portal rendering of TR, we usually assume the Parent handles the Portal wrapping 
+  // or we render a specific Portal component.
+  // Let's rely on the parent passing the correct setup, or basic style adjustments.
+
   return (
     <tr
-      draggable={canReorder && isHandleHovered}
-      onDragStart={canReorder ? onDragStart : undefined}
-      onDragEnter={canReorder ? onDragEnter : undefined}
-      onDragOver={(e) => e.preventDefault()}
-      className={`${isDragOver ? 'drag-over' : ''} ${!company.is_active ? 'inactive-row' : ''}`}
-      style={{
-        backgroundColor: !company.is_active ? '#f3f4f6' : (index % 2 === 0 ? '#ffffff' : '#f8fafc'),
-        borderTop: index > 0 ? '2px solid #e2e8f0' : 'none'
-      }}
+      ref={provided?.innerRef}
+      {...provided?.draggableProps}
+      className={`${snapshot?.isDragging ? 'drag-over' : ''} ${!company.is_active ? 'inactive-row' : ''}`}
+      style={style}
     >
-      <td className="text-center">
+      <td className="text-center" style={snapshot?.isDragging ? { width: columnWidths[0] } : {}}>
         <input
           type="checkbox"
           checked={isSelected}
@@ -51,25 +65,27 @@ const CompanyRow = memo(function CompanyRow({
       {/* [CHANGED] 정렬 가능할 때만 핸들 표시 & 터치 이벤트 연결 */}
       <td
         className={`drag-handle ${canReorder ? 'cursor-grab' : 'cursor-not-allowed opacity-30'}`}
-        onTouchStart={canReorder ? onTouchStart : undefined}
+        {...provided?.dragHandleProps}
         onMouseEnter={() => setIsHandleHovered(true)}
         onMouseLeave={() => setIsHandleHovered(false)}
+        style={{ touchAction: 'none' }} // Crucial for touch dragging
       >
         {canReorder ? '☰' : '•'}
       </td>
 
-      <td className={`ellipsis ${company.company_name ? '' : 'text-muted'}`} title={company.company_name}>{company.company_name || '-'}</td>
-      <td className="ellipsis" title={company.business_name}>{company.business_name || '-'}</td>
-      <td>{company.business_number}</td>
-      <td className="ellipsis" title={company.ceo_name}>{company.ceo_name}</td>
+      <td className={`ellipsis ${company.company_name ? '' : 'text-muted'}`} style={snapshot?.isDragging ? { width: columnWidths[2] } : {}} title={company.company_name}>{company.company_name || '-'}</td>
+      <td className="ellipsis" style={snapshot?.isDragging ? { width: columnWidths[3] } : {}} title={company.business_name}>{company.business_name || '-'}</td>
+      <td style={snapshot?.isDragging ? { width: columnWidths[4] } : {}}>{company.business_number}</td>
+      <td className="ellipsis" style={snapshot?.isDragging ? { width: columnWidths[5] } : {}} title={company.ceo_name}>{company.ceo_name}</td>
       <td
         className="text-center clickable"
         onClick={onToggleCompanyType}
         title="클릭하여 구분 변경 (매출처 → 매입처 → 매입/매출)"
+        style={snapshot?.isDragging ? { width: columnWidths[6] } : {}}
       >
         {getTypeBadge(company.company_type_flag)}
       </td>
-      <td className="text-center">
+      <td className="text-center" style={snapshot?.isDragging ? { width: columnWidths[7] } : {}}>
         <label className="toggle-switch" title="클릭하여 전자계산서 발행 설정">
           <input
             type="checkbox"
@@ -81,7 +97,7 @@ const CompanyRow = memo(function CompanyRow({
           </span>
         </label>
       </td>
-      <td className="text-center">
+      <td className="text-center" style={snapshot?.isDragging ? { width: columnWidths[8] } : {}}>
         <span
           className={`badge clickable ${company.is_active ? 'badge-success' : 'badge-secondary'}`}
           onClick={onToggleActive}
@@ -91,7 +107,7 @@ const CompanyRow = memo(function CompanyRow({
         </span>
       </td>
       {!isSelectMode && (
-        <td className="text-center" style={{ whiteSpace: 'nowrap' }}>
+        <td className="text-center" style={{ whiteSpace: 'nowrap', ...(snapshot?.isDragging ? { width: columnWidths[9] } : {}) }}>
           <button
             onClick={() => onEdit(company)}
             className="btn btn-sm btn-primary"
@@ -186,30 +202,18 @@ function CompanyList({ isWindow }) {
     company_type: 'all',
     is_active: 'all'
   });
-  const [draggedId, setDraggedId] = useState(null);
-  const [dragOverId, setDragOverId] = useState(null);
-  const dragNode = useRef(null);
-  const pendingReorder = useRef(false);
+
+  // Cleanup Refs related to manual drag
   const companiesRef = useRef(companies);
-  const draggedIdRef = useRef(null);
-
-  // --- Mobile DnD State & Refs ---
-  const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
-  const [dragOverlayStyle, setDragOverlayStyle] = useState(null);
-  const dragOverlayRef = useRef(null);
-  const cachedItemRects = useRef([]);
-  const touchStart = useRef({ y: 0, top: 0, height: 0, width: 0, left: 0 });
-  const touchAnimationFrame = useRef(null);
   const dragItemIndex = useRef(null);
-  const latestCompanies = useRef(companies); // Ref pattern for stable access
 
-  // Sync latestCompanies ref
+  // Sync latestCompanies ref for DnD stability if needed
   useEffect(() => {
-    latestCompanies.current = companies;
-    companiesRef.current = companies; // Use existing ref too
+    companiesRef.current = companies;
   }, [companies]);
 
-  // Mobile Resize Handler
+  // Mobile check (Optional now as library handles it, but maybe used for UI responsiveness)
+  const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth <= 768);
     window.addEventListener('resize', handleResize);
@@ -239,11 +243,13 @@ function CompanyList({ isWindow }) {
     showCancel: true
   });
 
-  // 거래처 등록/수정 모달 상태
   const [editModal, setEditModal] = useState({
     isOpen: false,
     companyId: null // null이면 등록, 값이 있으면 수정
   });
+
+  // [NEW] Drag & Drop Column Widths
+  const [columnWidths, setColumnWidths] = useState([]);
 
   // 모달 ESC 닫기 처리
   useEffect(() => {
@@ -575,211 +581,51 @@ function CompanyList({ isWindow }) {
     setFilters(prev => ({ ...prev, [name]: value }));
   };
 
-  // 드래그 시작
-  const handleDragStart = (e, company) => {
-    setDraggedId(company.id);
-    draggedIdRef.current = company.id;
-    dragNode.current = e.target;
-    dragNode.current.addEventListener('dragend', handleDragEnd);
-    setTimeout(() => {
-      e.target.style.opacity = '0.5';
-    }, 0);
-  };
+  // --- DnD Handlers using @hello-pangea/dnd ---
 
-  // 드래그 중
-  const handleDragEnter = (e, company) => {
-    if (company.id === draggedId) return;
-
-    setDragOverId(company.id);
-
-    setCompanies(prevCompanies => {
-      const newCompanies = [...prevCompanies];
-      const draggedIndex = newCompanies.findIndex(c => c.id === draggedId);
-      const targetIndex = newCompanies.findIndex(c => c.id === company.id);
-
-      if (draggedIndex === -1 || targetIndex === -1) return prevCompanies;
-
-      const [draggedCompany] = newCompanies.splice(draggedIndex, 1);
-      newCompanies.splice(targetIndex, 0, draggedCompany);
-
-      // ref도 업데이트
-      companiesRef.current = newCompanies;
-
-      return newCompanies;
-    });
-  };
-
-  // 드래그 종료 - 자동 저장
-  // 드래그 종료 - 자동 저장
-  const handleDragEnd = async () => {
-    if (dragNode.current) {
-      dragNode.current.removeEventListener('dragend', handleDragEnd);
-      dragNode.current.style.opacity = '1';
-    }
-
-    const hadDrag = draggedIdRef.current !== null;
-    setDraggedId(null);
-    setDragOverId(null);
-    draggedIdRef.current = null;
-    dragNode.current = null;
-
-    // 드래그가 있었으면 자동 저장 (ref에서 최신 배열 사용)
-    if (hadDrag && !pendingReorder.current) {
-      pendingReorder.current = true;
-      try {
-        // [CHANGED] 원본 데이터 순서도 동기화 (수정 시 원복 방지)
-        // 정렬은 전체 목록일 때만 가능하므로 companies와 originalCompanies는 동일 집합임
-        setOriginalCompanies([...companiesRef.current]);
-
-        const items = companiesRef.current.map((company, index) => ({
-          id: company.id,
-          sort_order: index + 1
-        }));
-        await companyAPI.reorder({ items });
-      } catch (error) {
-        console.error('순번 저장 오류:', error);
-      } finally {
-        pendingReorder.current = false;
-      }
+  const onDragStart = (start) => {
+    // Capture the widths of all cells in the row being dragged
+    const tr = document.querySelector(`[data-rbd-draggable-id="${start.draggableId}"]`);
+    if (tr) {
+      const cells = Array.from(tr.querySelectorAll('td'));
+      const widths = cells.map(cell => `${cell.getBoundingClientRect().width}px`);
+      setColumnWidths(widths);
     }
   };
 
-  // --- Mobile DnD Handlers (Stable Callback Pattern) ---
+  const onDragEnd = async (result) => {
+    const { source, destination } = result;
 
-  const handleWindowTouchMove = useCallback((e) => {
-    if (dragItemIndex.current === null) return;
-    if (e.cancelable) e.preventDefault(); // Lock Scroll
+    // Dropped outside or no change
+    if (!destination) return;
+    if (destination.index === source.index) return;
 
-    const touchY = e.touches[0].clientY;
+    // 필터링된 상태에서는 정렬 불가 (UI상 드래그 핸들이 비활성화 되겠지만 안전장치)
+    if (filters.search.trim()) return;
 
-    // Absolute positioning using offset (Gold Standard)
-    const newTop = touchY - touchStart.current.offsetY;
+    const newCompanies = Array.from(companies);
+    const [movedCompany] = newCompanies.splice(source.index, 1);
+    newCompanies.splice(destination.index, 0, movedCompany);
 
-    // 1. Direct DOM Manipulation (60fps)
-    if (dragOverlayRef.current) {
-      // Use absolute coordinates instead of delta transform for stability
-      dragOverlayRef.current.style.top = `${newTop}px`;
-      dragOverlayRef.current.style.transform = 'none'; // Clear transform as we set top directly, or keep translate(0,0,0)
-    }
+    // Optimistic UI update
+    setCompanies(newCompanies);
+    setOriginalCompanies(newCompanies); // Sync original
+    companiesRef.current = newCompanies;
 
-    // 2. Throttled Live Swap
-    if (!touchAnimationFrame.current) {
-      touchAnimationFrame.current = requestAnimationFrame(() => {
-        // Calculate center based on new absolute top
-        const currentCenterY = (touchY - touchStart.current.offsetY) + (touchStart.current.height / 2);
-        let closestIndex = dragItemIndex.current;
-        let minDistance = Number.MAX_VALUE;
-
-        // Check against cached rects
-        cachedItemRects.current.forEach((rect, idx) => {
-          if (!rect) return;
-          const targetCenterY = rect.top + (rect.height / 2);
-          const distance = Math.abs(currentCenterY - targetCenterY);
-
-          if (distance < minDistance) {
-            minDistance = distance;
-            closestIndex = idx;
-          }
-        });
-
-        // Live Swap
-        if (closestIndex !== dragItemIndex.current && closestIndex !== -1) {
-          const newItems = [...latestCompanies.current];
-          const [moved] = newItems.splice(dragItemIndex.current, 1);
-          newItems.splice(closestIndex, 0, moved);
-
-          // Update State & Refs immediately
-          setCompanies(newItems); // Triggers re-render
-          // Note: Ref update happens in effect, but for atomic safety we update ref manually if needed for next frame
-          latestCompanies.current = newItems;
-          companiesRef.current = newItems;
-
-          dragItemIndex.current = closestIndex;
-        }
-        touchAnimationFrame.current = null;
-      });
-    }
-  }, []);
-
-  const handleWindowTouchEnd = useCallback(async () => {
-    if (touchAnimationFrame.current) {
-      cancelAnimationFrame(touchAnimationFrame.current);
-      touchAnimationFrame.current = null;
-    }
-
-    // Cleanup Global Listeners
-    window.removeEventListener('touchmove', handleWindowTouchMove);
-    window.removeEventListener('touchend', handleWindowTouchEnd);
-    window.removeEventListener('touchcancel', handleWindowTouchEnd);
-    window.removeEventListener('contextmenu', handleContextMenu, { capture: true });
-
-    // Clear Overlay State
-    setDraggedId(null);
-    setDragOverlayStyle(null);
-    dragItemIndex.current = null;
-    cachedItemRects.current = [];
-
-    // Save Reorder
+    // API Call
     try {
-      // [CHANGED] 원본 데이터 순서도 동기화 (수정 시 원복 방지)
-      setOriginalCompanies([...latestCompanies.current]);
-
-      const items = latestCompanies.current.map((company, index) => ({
+      const items = newCompanies.map((company, index) => ({
         id: company.id,
         sort_order: index + 1
       }));
       await companyAPI.reorder({ items });
     } catch (error) {
       console.error('순번 저장 오류:', error);
+      // Revert logic could be added here if critical
     }
-  }, [handleWindowTouchMove]);
-
-  const handleContextMenu = useCallback((e) => {
-    e.preventDefault();
-    e.stopPropagation();
-  }, []);
-
-  const handleTouchStart = (e, index, company) => {
-    // filters check
-    if (filters.search.trim()) return; // 검색 중에는 정렬 불가
-
-    if (e.cancelable) e.preventDefault();
-    e.stopPropagation();
-
-    // Cache Rects
-    const itemElements = document.querySelectorAll('.company-card');
-    cachedItemRects.current = Array.from(itemElements).map(el => el.getBoundingClientRect());
-
-    const rect = cachedItemRects.current[index];
-    if (!rect) return;
-
-    const touchY = e.touches[0].clientY;
-
-    dragItemIndex.current = index;
-    touchStart.current = {
-      y: touchY,
-      top: rect.top,
-      height: rect.height,
-      width: rect.width,
-      left: rect.left,
-      offsetY: touchY - rect.top // Store offset for absolute positioning
-    };
-
-    setDraggedId(company.id);
-    setDragOverlayStyle({
-      top: rect.top,
-      left: rect.left,
-      width: rect.width,
-      height: rect.height,
-      company: company // Pass content to overlay
-    });
-
-    // Attach Global Listeners
-    window.addEventListener('touchmove', handleWindowTouchMove, { passive: false });
-    window.addEventListener('touchend', handleWindowTouchEnd);
-    window.addEventListener('touchcancel', handleWindowTouchEnd);
-    window.addEventListener('contextmenu', handleContextMenu, { capture: true });
   };
+
+  // Removed Legacy Mobile Implementation
 
   // 엑셀 파일 선택
   const handleFileSelect = async (e) => {
@@ -1033,7 +879,6 @@ function CompanyList({ isWindow }) {
       )}
 
       <div className="search-filter-container">
-
         <div style={{
           display: 'flex',
           alignItems: 'center',
@@ -1046,7 +891,7 @@ function CompanyList({ isWindow }) {
               type="text"
               placeholder="🔍 거래처명, 대표자, 사업자번호, 별칭 등..."
               value={filters.search}
-              onChange={handleSearchChange}
+              onChange={(e) => setFilters(prev => ({ ...prev, search: e.target.value }))}
               style={{
                 width: '100%',
                 padding: '0.6rem',
@@ -1061,6 +906,11 @@ function CompanyList({ isWindow }) {
 
           {/* 3. 등록 (Register) */}
           <div style={{ display: 'flex', gap: '0.5rem' }}>
+            <button className="btn btn-outline-secondary" onClick={() => {
+              setFilters({ search: '', company_type: 'all', is_active: 'all' });
+            }}>
+              초기화
+            </button>
             {selectedIds.length > 0 && (
               <button
                 onClick={handleDeleteSelected}
@@ -1084,7 +934,7 @@ function CompanyList({ isWindow }) {
               </button>
             )}
             <button
-              onClick={handleCreate}
+              onClick={() => handleCreate()}
               className="btn btn-primary"
               style={{
                 whiteSpace: 'nowrap',
@@ -1120,52 +970,62 @@ function CompanyList({ isWindow }) {
           </div>
         </div>
 
-
       </div>
 
-      {/* 정렬 가능 여부 (모든 필터가 해제된 상태여야 함) */}
-      {(() => {
-        const canReorder = !filters.search.trim() && filters.company_type === 'all' && filters.is_active === 'all' && !isSelectMode;
+      {/* 2. Company List Table */}
+      <div className="table-responsive" style={{ overflowX: 'auto', overflowY: 'visible' }}>
+        {(() => {
+          // Simplified Reorder Condition: No search and Not in select mode
+          const canReorder = !filters.search.trim() && !isSelectMode;
 
-        return (
-          <div className="table-container">
-            {isMobile ? (
-              <div className="mobile-company-list">
-                {companies.length === 0 ? (
-                  <div className="text-center p-3 text-muted">등록된 거래처가 없습니다.</div>
-                ) : (
-                  companies.map((company, index) => (
-                    <div
-                      key={company.id}
-                      className={`company-card ${draggedId === company.id ? 'dragging' : ''} ${!company.is_active ? 'inactive' : ''}`}
-                      style={{ opacity: draggedId === company.id ? 0.3 : 1 }}
-                    >
-                      <div className="card-row-content" style={{ display: 'flex', alignItems: 'center', padding: '0.4rem', gap: '0' }}>
-
-                        {/* 1. Name (Flex Grow - Left aligned) */}
-                        <div style={{ flex: 1, minWidth: 0, paddingRight: '0.5rem' }}>
-                          <span className="company-alias" style={{ fontWeight: '600', fontSize: '1rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block' }}>
-                            {company.alias || company.company_name}
-                          </span>
+          return isMobile ? (
+            <div className="mobile-list-view">
+              {companies.length === 0 ? (
+                <div className="p-4 text-center text-gray-500">등록된 거래처가 없습니다.</div>
+              ) : (
+                companies.map((company, index) => (
+                  <div
+                    key={company.id}
+                    className="company-card p-4 border-b border-gray-200 bg-white"
+                    style={{
+                      backgroundColor: !company.is_active ? '#f9fafb' : 'white',
+                      opacity: draggedId === company.id ? 0.3 : 1,
+                      transition: 'transform 0.2s cubic-bezier(0.2, 0, 0, 1), box-shadow 0.2s',
+                    }}
+                  >
+                    <div className="card-row-content" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', flex: 1, minWidth: 0 }}>
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.includes(company.id)}
+                          onChange={() => handleCheckboxToggle(company.id)}
+                          style={{ marginRight: '0.75rem', width: '18px', height: '18px', flexShrink: 0 }}
+                        />
+                        <div style={{ minWidth: 0 }}>
+                          <div className="company-alias" style={{ fontWeight: '600', fontSize: '1rem', color: '#111827', marginBottom: '0.1rem' }}>
+                            {company.company_name || '-'}
+                          </div>
+                          <div style={{ fontSize: '0.85rem', color: '#6b7280' }}>
+                            {company.business_name || '-'}
+                          </div>
                         </div>
+                      </div>
+                      <div style={{ flexShrink: 0 }}>
+                        {getTypeBadge(company.company_type_flag)}
+                      </div>
+                    </div>
 
-                        {/* 2. Type (Fixed Width - Centered) - "구분" 컬럼 효과 */}
-                        <div style={{ width: '85px', display: 'flex', justifyContent: 'center', flexShrink: 0, whiteSpace: 'nowrap' }}>
-                          {getTypeBadge(company.company_type_flag)}
-                        </div>
-
-                        {/* 3. Status (Fixed Width - Centered) */}
-                        <div style={{ width: '60px', display: 'flex', justifyContent: 'center', flexShrink: 0 }}>
-                          <span
-                            className={`status-badge ${company.is_active ? 'active' : 'inactive'}`}
-                            onClick={(e) => { e.stopPropagation(); handleToggleActive(company); }}
-                            style={{ fontSize: '0.8rem', whiteSpace: 'nowrap' }}
-                          >
-                            {company.is_active ? '사용' : '미사용'}
-                          </span>
-                        </div>
-
-                        {/* 4. Edit (Fixed Width) */}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.75rem', paddingTop: '0.75rem', borderTop: '1px dashed #e5e7eb' }}>
+                      <div style={{ display: 'flex', alignItems: 'center' }}>
+                        <span
+                          className={`badge clickable ${company.is_active ? 'badge-success' : 'badge-secondary'}`}
+                          onClick={() => handleToggleActive(company)}
+                          style={{ fontSize: '0.8rem', padding: '0.2rem 0.6rem' }}
+                        >
+                          {company.is_active ? '사용' : '미사용'}
+                        </span>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                         <div style={{ width: '50px', display: 'flex', justifyContent: 'center', flexShrink: 0 }}>
                           <button
                             onClick={(e) => { e.stopPropagation(); handleEdit(company); }}
@@ -1175,8 +1035,6 @@ function CompanyList({ isWindow }) {
                             수정
                           </button>
                         </div>
-
-                        {/* 5. Handle (Fixed Width) - [CHANGED] 조건부 표시 */}
                         <div
                           className={`drag-handle touch-none no-select ${canReorder ? '' : 'opacity-30'}`}
                           onTouchStart={(e) => canReorder && handleTouchStart(e, index, company)}
@@ -1194,11 +1052,13 @@ function CompanyList({ isWindow }) {
                         </div>
                       </div>
                     </div>
-                  ))
-                )}
-              </div>
-            ) : (
-              <table>
+                  </div>
+                ))
+              )}
+            </div>
+          ) : (
+            <DragDropContext onDragStart={onDragStart} onDragEnd={onDragEnd}>
+              <table style={{ tableLayout: 'fixed', width: '100%' }}>
                 <thead>
                   <tr>
                     <th style={{ width: '40px', textAlign: 'center' }}>
@@ -1220,40 +1080,68 @@ function CompanyList({ isWindow }) {
                     {!isSelectMode && <th className="text-center" style={{ minWidth: '120px' }}>액션</th>}
                   </tr>
                 </thead>
-                <tbody>
-                  {companies.length === 0 ? (
-                    <tr>
-                      <td colSpan="10" className="text-center">등록된 거래처가 없습니다.</td>
-                    </tr>
-                  ) : (
-                    companies.map((company, index) => (
-                      <CompanyRow
-                        key={company.id}
-                        company={company}
-                        index={index}
-                        isSelectMode={isSelectMode}
-                        isSelected={selectedIds.includes(company.id)}
-                        isDragOver={dragOverId === company.id}
-                        canReorder={canReorder} // [NEW] - CompanyRow에 전달
-                        onDragStart={(e) => canReorder && handleDragStart(e, company)}
-                        onDragEnter={(e) => canReorder && handleDragEnter(e, company)}
-                        onTouchStart={(e) => canReorder && handleTouchStart(e, index, company)} // [NEW]
-                        onCheckboxToggle={() => handleCheckboxToggle(company.id)}
-                        onToggleCompanyType={() => handleToggleCompanyType(company)}
-                        onToggleETaxInvoice={() => handleToggleETaxInvoice(company)}
-                        onToggleActive={() => handleToggleActive(company)}
-                        onDelete={() => handleDelete(company.id, company.company_name)}
-                        onEdit={handleEdit}
-                        getTypeBadge={getTypeBadge}
-                      />
-                    ))
+                <Droppable droppableId="company-list" type="COMPANY">
+                  {(provided, snapshot) => (
+                    <tbody ref={provided.innerRef} {...provided.droppableProps}>
+                      {companies.length === 0 ? (
+                        <tr>
+                          <td colSpan="10" className="text-center">등록된 거래처가 없습니다.</td>
+                        </tr>
+                      ) : (
+                        companies.map((company, index) => (
+                          <Draggable
+                            key={company.id}
+                            draggableId={String(company.id)}
+                            index={index}
+                            isDragDisabled={!canReorder} // Strict condition
+                          >
+                            {(provided, snapshot) => {
+                              const child = (
+                                <CompanyRow
+                                  key={company.id}
+                                  company={company}
+                                  index={index}
+                                  isSelectMode={isSelectMode}
+                                  isSelected={selectedIds.includes(company.id)}
+                                  isDragOver={snapshot.isDragging}
+                                  canReorder={canReorder}
+                                  provided={provided}
+                                  snapshot={snapshot}
+                                  columnWidths={columnWidths} // Pass the widths
+                                  onCheckboxToggle={() => handleCheckboxToggle(company.id)}
+                                  onToggleCompanyType={() => handleToggleCompanyType(company)}
+                                  onToggleETaxInvoice={() => handleToggleETaxInvoice(company)}
+                                  onToggleActive={() => handleToggleActive(company)}
+                                  onDelete={() => handleDelete(company.id, company.company_name)}
+                                  onEdit={handleEdit}
+                                  getTypeBadge={getTypeBadge}
+                                />
+                              );
+
+                              if (snapshot.isDragging) {
+                                return createPortal(
+                                  <table style={{ tableLayout: 'fixed', width: provided.draggableProps.style.width, borderCollapse: 'collapse' }}>
+                                    <tbody>
+                                      {child}
+                                    </tbody>
+                                  </table>,
+                                  document.body
+                                );
+                              }
+                              return child;
+                            }}
+                          </Draggable>
+                        ))
+                      )}
+                      {provided.placeholder}
+                    </tbody>
                   )}
-                </tbody>
+                </Droppable>
               </table>
-            )}
-          </div>
-        );
-      })()}
+            </DragDropContext>
+          );
+        })()}
+      </div>
 
 
       {/* 엑셀 업로드 모달 - Portal로 body에 렌더링 */}
@@ -1521,55 +1409,7 @@ function CompanyList({ isWindow }) {
         showCancel={modal.showCancel}
       />
 
-      {/* Drag Overlay - Hoisted to Root for Stability */}
-      {dragOverlayStyle && (
-        <div
-          ref={dragOverlayRef}
-          className="company-card-overlay"
-          style={{
-            position: 'fixed',
-            top: dragOverlayStyle.top,
-            left: dragOverlayStyle.left,
-            width: dragOverlayStyle.width,
-            height: dragOverlayStyle.height,
-            zIndex: 9999,
-            pointerEvents: 'none',
-            transform: 'none',
-            boxShadow: '0 10px 15px -3px rgba(0,0,0,0.2)',
-            background: 'white',
-            opacity: 0.95
-          }}
-        >
-          <div className="card-row-content" style={{ display: 'flex', alignItems: 'center', padding: '0.4rem', gap: '0' }}>
-            {/* 1. Name */}
-            <div style={{ flex: 1, minWidth: 0, paddingRight: '0.5rem' }}>
-              <span className="company-alias" style={{ fontWeight: '600', fontSize: '1rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block' }}>
-                {dragOverlayStyle.company.alias || dragOverlayStyle.company.company_name}
-              </span>
-            </div>
-
-            {/* 2. Type */}
-            <div style={{ width: '85px', display: 'flex', justifyContent: 'center', flexShrink: 0, whiteSpace: 'nowrap' }}>
-              {getTypeBadge(dragOverlayStyle.company.company_type_flag)}
-            </div>
-
-            {/* 3. Status */}
-            <div style={{ width: '60px', display: 'flex', justifyContent: 'center', flexShrink: 0 }}>
-              <span className={`status-badge ${dragOverlayStyle.company.is_active ? 'active' : 'inactive'}`} style={{ fontSize: '0.8rem', whiteSpace: 'nowrap' }}>
-                {dragOverlayStyle.company.is_active ? '사용' : '미사용'}
-              </span>
-            </div>
-
-            {/* 4. Edit */}
-            <div style={{ width: '50px', display: 'flex', justifyContent: 'center', flexShrink: 0 }}>
-              <button className="btn btn-sm btn-primary" style={{ padding: '0.2rem 0.5rem', fontSize: '0.8rem' }}>수정</button>
-            </div>
-
-            {/* 5. Handle */}
-            <div style={{ width: '40px', display: 'flex', justifyContent: 'center', fontSize: '1.2rem', color: '#999', flexShrink: 0 }}>≡</div>
-          </div>
-        </div>
-      )}
+      {/* Drag Overlay - Removed as handled by Portal logic inside Draggable/CompanyRow style */}
     </div >
   );
 }

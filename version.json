@@ -1,6 +1,6 @@
 {
     "system_name": "Hongda Biz",
-    "version": "1.0.7",
-    "last_updated": "2026-01-17T08:10:00Z",
-    "description": "Sales Panel Sync Logic Improvement, Transaction Tooltip Update, Inventory UI Enhancements"
+    "version": "1.0.8",
+    "last_updated": "2026-01-18T14:58:00Z",
+    "description": "CompanyList DND Refactor, UI Restoration, Filter Simplification, Label Updates, and DND Smoothness Optimization"
 }

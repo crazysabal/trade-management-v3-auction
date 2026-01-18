@@ -143,7 +143,7 @@ const AuctionItemRow = React.memo(({
             <td>{item.sender || '-'}</td>
             <td>{item.grade || '-'}</td>
             <td className="text-right">{item.count || 0}개</td>
-            <td className="text-right">{totalWeight > 0 ? `${totalWeight}${item.weight_unit || 'kg'}` : '-'}</td>
+            <td className="text-right">{totalWeight > 0 ? `${totalWeight}${item.product_weight_unit || item.weight_unit || 'kg'}` : '-'}</td>
             <td className="text-right">{formattedPrice}원</td>
             <td>
                 <SearchableSelect

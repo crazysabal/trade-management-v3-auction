@@ -116,7 +116,7 @@ function CompanyForm({ id: propId, onSuccess, onCancel, isModal: propIsModal }) 
         isOpen: true,
         type: 'warning',
         title: '입력 오류',
-        message: '거래처 명(별칭)은 필수입니다.',
+        message: '거래처 명은 필수입니다.',
         confirmText: '확인',
         showCancel: false,
         onConfirm: () => { }
@@ -188,7 +188,7 @@ function CompanyForm({ id: propId, onSuccess, onCancel, isModal: propIsModal }) 
 
           <div className="form-row">
             <div className="form-group">
-              <label className="required">거래처 명(별칭)</label>
+              <label className="required">거래처 명</label>
               <input
                 type="text"
                 name="company_name"
@@ -221,7 +221,7 @@ function CompanyForm({ id: propId, onSuccess, onCancel, isModal: propIsModal }) 
 
           <div className="form-row">
             <div className="form-group">
-              <label>사업자 명 (법인명)</label>
+              <label>사업자 명</label>
               <input
                 type="text"
                 name="business_name"

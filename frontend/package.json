@@ -1,8 +1,9 @@
 {
   "name": "hongda-biz-frontend",
-  "version": "1.0.7",
+  "version": "1.0.8",
   "private": true,
   "dependencies": {
+    "@hello-pangea/dnd": "^18.0.1",
     "ag-grid-community": "^35.0.0",
     "ag-grid-react": "^35.0.0",
     "axios": "^1.13.2",

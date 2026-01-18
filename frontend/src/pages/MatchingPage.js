@@ -266,7 +266,7 @@ function MatchingPage({ isWindow, refreshKey, onTradeChange }) {
   // 품목 표시 형식: "품목명 중량kg (등급)" - 전표 등록 화면과 동일
   const formatProductName = (item) => {
     const name = item.product_name || '';
-    const unit = item.weight_unit || item.product_weight_unit || 'kg';
+    const unit = item.product_weight_unit || item.weight_unit || 'kg';
     const weight = item.product_weight ? `${parseFloat(item.product_weight)}${unit}` : '';
     const grade = item.grade ? `(${item.grade})` : '';
     return `${name}${weight ? ` ${weight}` : ''}${grade ? ` ${grade}` : ''}`.trim();

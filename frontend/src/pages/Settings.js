@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { settingsAPI } from '../services/api';
-// import UserManagement from './UserManagement'; // Separated to standalone menu
-// import './Settings.css'; // Assuming styling is handled in global or not needed if file missing
+import MenuEditorModal from '../components/MenuEditorModal'; // [NEW]
 
 const Settings = ({ ...rest }) => {
+    const [menuModalOpen, setMenuModalOpen] = useState(false); // [NEW]
+
     return (
         <div className="settings-container fade-in">
             <div className="page-header" style={{ display: 'flex', alignItems: 'center' }}>
@@ -81,9 +82,46 @@ const Settings = ({ ...rest }) => {
                                 </label>
                             </div>
                         </div>
+
+                        {/* [NEW] Menu Customization Section */}
+                        <div className="settings-section" style={{
+                            backgroundColor: 'white',
+                            padding: '1.5rem',
+                            borderRadius: '12px',
+                            border: '1px solid #e2e8f0',
+                            boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+                            marginBottom: '1rem'
+                        }}>
+                            <h3 style={{ fontSize: '1.1rem', marginBottom: '1rem', color: '#1e293b', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                🎨 메뉴 개인화
+                                <span style={{ fontSize: '0.8rem', fontWeight: 'normal', color: '#64748b', background: '#f1f5f9', padding: '2px 8px', borderRadius: '12px' }}>Beta</span>
+                            </h3>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                <div style={{ color: '#475569', fontSize: '0.95rem' }}>
+                                    자주 사용하는 메뉴 순서를 변경하거나 불필요한 메뉴를 숨길 수 있습니다.
+                                </div>
+                                <button
+                                    className="btn btn-outline-primary"
+                                    onClick={() => setMenuModalOpen(true)}
+                                    style={{
+                                        padding: '0.6rem 1.2rem',
+                                        borderRadius: '8px',
+                                        fontWeight: '600',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '0.5rem'
+                                    }}
+                                >
+                                    🛠️ 메뉴 순서 편집
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
+
+            {/* Menu Editor Modal */}
+            <MenuEditorModal isOpen={menuModalOpen} onClose={() => setMenuModalOpen(false)} />
         </div>
     );
 };

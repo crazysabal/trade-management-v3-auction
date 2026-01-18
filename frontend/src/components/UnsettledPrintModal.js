@@ -371,7 +371,7 @@ const UnsettledPrintModal = ({ isOpen, onClose, data }) => {
                                                                     </td>
                                                                     <td>{d.date ? d.date.substring(5, 10) : ''}</td>
                                                                     <td className="text-left">
-                                                                        {d.product_name} {Number(d.product_weight || 0) > 0 ? `${Number(d.product_weight).toString()}${d.weight_unit || d.product_weight_unit || 'kg'}` : ''}
+                                                                        {d.product_name} {Number(d.product_weight || 0) > 0 ? `${Number(d.product_weight).toString()}${d.product_weight_unit || d.weight_unit || 'kg'}` : ''}
                                                                     </td>
                                                                     <td>{d.sender_name || '-'}</td>
                                                                     <td>{d.grade} {d.size && `(${d.size})`}</td>
