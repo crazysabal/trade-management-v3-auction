@@ -29,9 +29,9 @@ echo     Update successful!
 echo    Starting program automatically...
 echo ================================================
 echo.
-timeout /t 3 /nobreak > nul
+timeout /t 2 /nobreak > nul
 start "" "Run Launcher.bat"
-exit /b 0
+exit
 
 :error
 echo.

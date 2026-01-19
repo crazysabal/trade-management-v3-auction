@@ -1,6 +1,6 @@
 {
     "system_name": "Hongda Biz",
-    "version": "1.0.27",
-    "last_updated": "2026-01-19T17:13:00Z",
-    "description": "Improvement: Added success log message upon database restoration completion for better visibility."
+    "version": "1.0.28",
+    "last_updated": "2026-01-19T17:23:00Z",
+    "description": "UX Improvement: CMD window now closes automatically after update completes."
 }
