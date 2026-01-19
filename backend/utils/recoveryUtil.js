@@ -46,7 +46,7 @@ const recoveryUtil = {
             await backupUtil.generateBackupZip();
 
             // 4. 데이터베이스 복원 실행 (mysql cli 사용)
-            const mysqlPath = process.env.MYSQL_PATH || 'mysql';
+            const mysqlPath = mysqlPathFinder.getExecutablePath('mysql.exe', process.env.MYSQL_PATH);
             const sqlPath = path.join(tempExtractDir, sqlFile);
 
             await new Promise((resolve, reject) => {
@@ -59,7 +59,7 @@ const recoveryUtil = {
                         const decodedStderr = iconv.decode(stderr, 'cp949');
                         console.error('MySQL Restore Error:', decodedStderr);
                         console.error('Executed Command:', maskedCmd);
-                        return reject(new Error(`데이터베이스 복원 중 오류가 발생했습니다. (경로 확인: ${mysqlPath})`));
+                        return reject(new Error(`데이터베이스 복원 중 오류가 발생했습니다. (시도된 경로: ${mysqlPath})`));
                     }
                     resolve();
                 });

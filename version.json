@@ -1,6 +1,6 @@
 {
     "system_name": "Hongda Biz",
-    "version": "1.0.23",
-    "last_updated": "2026-01-19T16:45:00Z",
-    "description": "Critical Fix: Enhanced MySQL path discovery in setup and fixed encoding for database backup/restore errors."
+    "version": "1.0.24",
+    "last_updated": "2026-01-19T16:53:00Z",
+    "description": "Final Fix: Self-healing MySQL path discovery for backup/restore. No manual .env configuration needed."
 }

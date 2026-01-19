@@ -3,6 +3,7 @@ const path = require('path');
 const fs = require('fs');
 const archiver = require('archiver');
 const iconv = require('iconv-lite');
+const mysqlPathFinder = require('./mysqlPathFinder');
 require('dotenv').config({ path: path.join(__dirname, '../.env') });
 
 /**
@@ -14,7 +15,7 @@ const backupUtil = {
      * @param {string} outputPath 저장할 SQL 파일 경로
      */
     dumpDatabase: async (outputPath) => {
-        const dumpPath = process.env.MYSQLDUMP_PATH || 'mysqldump';
+        const dumpPath = mysqlPathFinder.getExecutablePath('mysqldump.exe', process.env.MYSQLDUMP_PATH);
         const cmd = `"${dumpPath}" -h ${process.env.DB_HOST} -u ${process.env.DB_USER} -p${process.env.DB_PASSWORD} ${process.env.DB_NAME} > "${outputPath}"`;
 
         return new Promise((resolve, reject) => {
@@ -24,7 +25,7 @@ const backupUtil = {
                     const decodedStderr = iconv.decode(stderr, 'cp949');
                     console.error('MySQL Dump Error:', decodedStderr);
                     console.error('Executed Command:', maskedCmd);
-                    return reject(new Error(`데이터베이스 덤프 생성 중 오류가 발생했습니다. (경로 확인: ${dumpPath})`));
+                    return reject(new Error(`데이터베이스 덤프 생성 중 오류가 발생했습니다. (시도된 경로: ${dumpPath})`));
                 }
                 resolve();
             });
