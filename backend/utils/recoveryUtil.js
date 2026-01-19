@@ -62,6 +62,7 @@ const recoveryUtil = {
                         console.error('Executed Command:', maskedCmd);
                         return reject(new Error(`데이터베이스 복원 중 오류가 발생했습니다. (시도된 경로: ${mysqlPath})`));
                     }
+                    console.log('MySQL Restore Completed Successfully.'); // [NEW] 복구 완료 로그
                     resolve();
                 });
             });
