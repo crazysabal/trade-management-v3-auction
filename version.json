@@ -1,6 +1,6 @@
 {
     "system_name": "Hongda Biz",
-    "version": "1.0.17",
-    "last_updated": "2026-01-19T16:05:00Z",
-    "description": "Critical Bug Fixes: Auction purchase warehouse validation, database recovery path fix (.env absolute path), and schema trigger hardening."
+    "version": "1.0.18",
+    "last_updated": "2026-01-19T16:15:00Z",
+    "description": "Fix: MySQL dump/restore path auto-discovery in setup, and absolute path loading for .env in utils."
 }

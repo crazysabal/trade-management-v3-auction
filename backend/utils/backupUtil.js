@@ -40,8 +40,10 @@ const backupUtil = {
 
             exec(cmd, (error, stdout, stderr) => {
                 if (error) {
+                    const maskedCmd = cmd.replace(/-p.*?\s/, '-p******** ');
                     console.error('MySQL Dump Error:', stderr);
-                    return reject(new Error('데이터베이스 덤프 생성 중 오류가 발생했습니다.'));
+                    console.error('Executed Command:', maskedCmd);
+                    return reject(new Error(`데이터베이스 덤프 생성 중 오류가 발생했습니다. (경로 확인: ${dumpPath})`));
                 }
                 resolve();
             });

@@ -54,8 +54,10 @@ const recoveryUtil = {
 
                 exec(cmd, (error, stdout, stderr) => {
                     if (error) {
+                        const maskedCmd = cmd.replace(/-p.*?\s/, '-p******** ');
                         console.error('MySQL Restore Error:', stderr);
-                        return reject(new Error('데이터베이스 복원 중 오류가 발생했습니다.'));
+                        console.error('Executed Command:', maskedCmd);
+                        return reject(new Error(`데이터베이스 복원 중 오류가 발생했습니다. (경로 확인: ${mysqlPath})`));
                     }
                     resolve();
                 });

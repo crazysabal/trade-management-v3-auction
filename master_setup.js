@@ -134,6 +134,27 @@ async function setup() {
         }
     }
 
+    // [추가] MySQL 설치 경로 자동 탐색
+    function findMySQLPath() {
+        const commonPaths = [
+            'C:\\Program Files\\MySQL\\MySQL Server 8.4\\bin',
+            'C:\\Program Files\\MySQL\\MySQL Server 8.0\\bin',
+            'C:\\Program Files\\MySQL\\MySQL Server 8.2\\bin',
+            'C:\\mysql\\bin'
+        ];
+
+        for (const p of commonPaths) {
+            if (fs.existsSync(path.join(p, 'mysqldump.exe'))) {
+                return p;
+            }
+        }
+        return null;
+    }
+
+    const autoMySQLPath = findMySQLPath();
+    const dumpPath = process.env.MYSQLDUMP_PATH || (autoMySQLPath ? path.join(autoMySQLPath, 'mysqldump.exe') : 'mysqldump');
+    const mysqlExePath = process.env.MYSQL_PATH || (autoMySQLPath ? path.join(autoMySQLPath, 'mysql.exe') : 'mysql');
+
     // 성공한 비밀번호로 .env 파일 저장/업데이트
     const envTemplate = `
 # Database Configuration
@@ -148,9 +169,18 @@ PORT=5000
 NODE_ENV=development
 JWT_SECRET=hongda-biz-secret-key
 ENCRYPTION_KEY=secure-auction-key-v1-super-secret
+
+# Backup Configuration
+MYSQLDUMP_PATH=${dumpPath}
+MYSQL_PATH=${mysqlExePath}
+
+# Google API Configuration (Optional)
+GOOGLE_CLIENT_ID=${process.env.GOOGLE_CLIENT_ID || ''}
+GOOGLE_CLIENT_SECRET=${process.env.GOOGLE_CLIENT_SECRET || ''}
+GOOGLE_REFRESH_TOKEN=${process.env.GOOGLE_REFRESH_TOKEN || ''}
 `;
     fs.writeFileSync(envPath, envTemplate.trim());
-    console.log('✅ .env 파일 설정 완료');
+    console.log('✅ .env 파일 설정 완료 (MySQL 경로 포함)');
 
     // 4. 데이터베이스 초기화
     console.log('\n--- [3/5] 데이터베이스 초기 구축 ---');
