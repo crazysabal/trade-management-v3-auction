@@ -261,26 +261,63 @@ const BackupManagement = () => {
                         {showGuide && (
                             <div className="setup-guide" style={{
                                 backgroundColor: '#ffffff',
-                                padding: '1rem',
-                                borderRadius: '8px',
-                                marginBottom: '1rem',
+                                padding: '1.5rem',
+                                borderRadius: '12px',
+                                marginBottom: '1.5rem',
                                 border: '1px solid #cbd5e1',
-                                fontSize: '0.85rem',
-                                lineHeight: '1.6',
-                                color: '#475569'
+                                fontSize: '0.9rem',
+                                lineHeight: '1.7',
+                                color: '#334155',
+                                boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.02)'
                             }}>
-                                <strong style={{ color: '#1e293b' }}>🚀 1분 만에 따라하기:</strong>
-                                <ol style={{ paddingLeft: '1.2rem', marginTop: '0.5rem' }}>
-                                    <li><a href="https://console.cloud.google.com/" target="_blank" rel="noreferrer">Google Cloud Console</a> 접속</li>
-                                    <li><b>Google Drive API</b> 사용 버튼 클릭</li>
-                                    <li><b>OAuth 동의 화면</b> 설정 (외부 선택)</li>
-                                    <li><b>[중요]</b> 동의 화면 하단 <b>Test users</b>에 본인 이메일 추가</li>
-                                    <li><b>사용자 인증 정보</b>에서 <b>OAuth 클라이언트 ID</b>(웹 애플리케이션) 생성</li>
-                                    <li><b>리디렉션 URI</b>에 <code>http://localhost:5000/api/system/auth/google/callback</code> 입력</li>
-                                </ol>
-                                <p style={{ fontSize: '0.8rem', color: '#ef4444', marginTop: '0.5rem', marginBottom: 0 }}>
-                                    * 상세 매뉴얼은 <code>google_api_guide.md</code> 파일을 확인해주세요.
-                                </p>
+                                <h5 style={{ color: '#1e293b', fontWeight: '700', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    📖 구글 드라이브 연동 상세 가이드
+                                </h5>
+
+                                <div style={{ marginBottom: '1.5rem', padding: '1rem', backgroundColor: '#fff7ed', borderRadius: '8px', borderLeft: '4px solid #f97316' }}>
+                                    <strong style={{ color: '#c2410c' }}>💡 개요</strong><br />
+                                    구글 클라우드 콘솔에서 API 키를 발급받는 과정입니다. 딱 한 번만 설정하면 이후에는 버튼 클릭 한 번으로 백업이 완료됩니다.
+                                </div>
+
+                                <div className="step-item" style={{ marginBottom: '1.2rem' }}>
+                                    <strong style={{ color: '#6366f1' }}>1단계. 프로젝트 생성 및 API 활성화</strong>
+                                    <ul style={{ paddingLeft: '1.2rem', marginTop: '0.4rem', fontSize: '0.85rem' }}>
+                                        <li><a href="https://console.cloud.google.com/" target="_blank" rel="noreferrer" style={{ fontWeight: '600' }}>Google Cloud Console</a> 접속</li>
+                                        <li>상단 프로젝트 선택 버튼 클릭 &gt; <strong>[새 프로젝트]</strong> 생성 (이름: HongdaBiz-Backup)</li>
+                                        <li>좌측 메뉴 <strong>[라이브러리]</strong> &gt; <code>Google Drive API</code> 검색 후 <strong>[사용]</strong> 클릭</li>
+                                    </ul>
+                                </div>
+
+                                <div className="step-item" style={{ marginBottom: '1.2rem' }}>
+                                    <strong style={{ color: '#6366f1' }}>2단계. OAuth 동의 화면 설정 (중요 🌟)</strong>
+                                    <ul style={{ paddingLeft: '1.2rem', marginTop: '0.4rem', fontSize: '0.85rem' }}>
+                                        <li>좌측 메뉴 <strong>[OAuth 동의 화면]</strong> &gt; User Type <strong>[외부]</strong> 선택</li>
+                                        <li>앱 이름(HongdaBiz)과 이메일 주소 등 필수 항목 입력</li>
+                                        <li><strong>[Test users]</strong> 단계에서 <strong>반드시 본인의 구글 이메일을 추가</strong>해야 합니다. (미등록 시 접속 차단됨)</li>
+                                    </ul>
+                                </div>
+
+                                <div className="step-item" style={{ marginBottom: '1.2rem' }}>
+                                    <strong style={{ color: '#6366f1' }}>3단계. 클라이언트 ID 발급</strong>
+                                    <ul style={{ paddingLeft: '1.2rem', marginTop: '0.4rem', fontSize: '0.85rem' }}>
+                                        <li>좌측 메뉴 <strong>[사용자 인증 정보]</strong> &gt; <strong>[+ 사용자 인증 정보 만들기]</strong></li>
+                                        <li><strong>[OAuth 클라이언트 ID]</strong> 선택 &gt; 유형: <strong>웹 애플리케이션</strong></li>
+                                        <li><strong>[승인된 리디렉션 URI]</strong> 에 아래 주소 입력:<br />
+                                            <code style={{ background: '#f1f5f9', padding: '2px 6px', borderRadius: '4px', fontSize: '0.8rem', color: '#dc2626' }}>http://localhost:5000/api/system/auth/google/callback</code>
+                                        </li>
+                                        <li>생성 후 화면에 뜨는 <strong>Client ID</strong>와 <strong>Client Secret</strong>을 복사하여 아래 입력 칸에 넣어주세요.</li>
+                                    </ul>
+                                </div>
+
+                                <div style={{ marginTop: '1.5rem', paddingTop: '1rem', borderTop: '1px solid #e2e8f0' }}>
+                                    <h6 style={{ fontWeight: '700', fontSize: '0.85rem', color: '#1e293b', marginBottom: '0.5rem' }}>⚠️ 자주 발생하는 문제 (FAQ)</h6>
+                                    <div style={{ fontSize: '0.8rem', color: '#64748b' }}>
+                                        <p style={{ marginBottom: '0.5rem' }}><strong>Q: "액세스 차단됨" 화면이 나와요.</strong><br />
+                                            A: 2단계의 <b>Test users</b>에 현재 로그인하려는 이메일이 등록되어 있는지 확인해 주세요.</p>
+                                        <p style={{ marginBottom: '0.5rem' }}><strong>Q: "안전하지 않은 앱" 경고가 떠요.</strong><br />
+                                            A: 개인용 앱이라서 뜨는 정상적인 경고입니다. <b>[고급] &gt; [HongdaBiz(으)로 이동]</b>을 클릭하여 진행하세요.</p>
+                                    </div>
+                                </div>
                             </div>
                         )}
 
