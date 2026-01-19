@@ -261,8 +261,11 @@
             </div>
             <div id="license-expiry-display" style="margin-top: 12px; color: #999; font-size: 15px;">만료일: 확인 중...</div>
             <div id="system-version-display"
-                style="margin-top: 18px; border-top: 1px solid #333; padding-top: 12px; font-size: 14px; color: #888; font-weight: bold;">
-                Version: 불러오는 중...</div>
+                style="margin-top: 18px; border-top: 1px solid #333; padding-top: 12px; font-size: 14px; color: #888; font-weight: bold; display: flex; justify-content: space-between; align-items: center;">
+                <span>Version: <span id="ver-text">불러오는 중...</span></span>
+                <button onclick="checkManualUpdate()" class="clear-btn" style="padding: 2px 8px; font-size: 11px;">🛠
+                    체크</button>
+            </div>
         </div>
     </div>
 

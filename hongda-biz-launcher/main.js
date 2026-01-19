@@ -158,24 +158,39 @@ async function checkUpdateOnline() {
     // 실제 레포: crazysabal/hongda-biz, 브랜치: master
     const REMOTE_VERSION_URL = `https://raw.githubusercontent.com/crazysabal/hongda-biz/master/version.json?t=${Date.now()}`;
 
-    try {
-        if (!fs.existsSync(versionPath)) return;
-        const localVersion = JSON.parse(fs.readFileSync(versionPath, 'utf8')).version;
-
+    return new Promise((resolve) => {
         https.get(REMOTE_VERSION_URL, (res) => {
             let data = '';
             res.on('data', d => data += d);
             res.on('end', () => {
                 try {
+                    const localVersion = JSON.parse(fs.readFileSync(versionPath, 'utf8')).version;
                     const remoteVersion = JSON.parse(data).version;
                     if (localVersion !== remoteVersion) {
                         mainWindow.webContents.send('update-available', { local: localVersion, remote: remoteVersion });
+                        resolve({ available: true, local: localVersion, remote: remoteVersion });
+                    } else {
+                        resolve({ available: false, local: localVersion, remote: remoteVersion });
                     }
-                } catch (e) { /* ignore */ }
+                } catch (e) {
+                    resolve({ error: true, message: 'Parse error' });
+                }
             });
-        }).on('error', () => { /* ignore */ });
-    } catch (err) { /* ignore */ }
+        }).on('error', (err) => {
+            resolve({ error: true, message: err.message });
+        });
+    });
 }
+
+// [NEW] 수동 업데이트 체크 IPC
+ipcMain.on('manual-check-update', async (event) => {
+    const result = await checkUpdateOnline();
+    if (result && !result.available && !result.error) {
+        event.reply('update-not-available', result.local);
+    } else if (result && result.error) {
+        event.reply('update-check-error', result.message);
+    }
+});
 
 app.on('window-all-closed', function () {
     killAllProcesses();

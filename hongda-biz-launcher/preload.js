@@ -14,5 +14,9 @@ contextBridge.exposeInMainWorld('api', {
     getVersion: () => ipcRenderer.send('get-version'),
     onVersion: (callback) => ipcRenderer.on('version-info', (event, data) => callback(data)),
     openExternal: (url) => ipcRenderer.send('open-external', url),
-    minimizeWindow: () => ipcRenderer.send('minimize-window')
+    minimizeWindow: () => ipcRenderer.send('minimize-window'),
+    // [NEW] 수동 업데이트 체크
+    checkUpdate: () => ipcRenderer.send('manual-check-update'),
+    onUpdateNotAvailable: (callback) => ipcRenderer.on('update-not-available', (event, data) => callback(data)),
+    onUpdateError: (callback) => ipcRenderer.on('update-check-error', (event, data) => callback(data))
 });

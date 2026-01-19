@@ -208,8 +208,23 @@ window.api.onUpdateAvailable(({ local, remote }) => {
         verSpan.textContent = remote;
         banner.style.display = 'block';
         appendLog('system', `🚀 새로운 업데이트가 발견되었습니다! (v${local} -> v${remote})`, false);
-        appendLog('system', `💡 [업데이트 방법 보기] 버튼을 클릭해 안내를 확인하세요.`, false);
+        appendLog('system', `💡 [지금 업데이트] 버튼을 클릭해 진행하세요.`, false);
     }
+});
+
+function checkManualUpdate() {
+    appendLog('system', '🔍 업데이트 확인 중...', false);
+    window.api.checkUpdate();
+}
+
+window.api.onUpdateNotAvailable((version) => {
+    appendLog('system', `✅ 최신 버전을 사용 중입니다. (v${version})`, false);
+    alert(`이미 최신 버전(v${version})입니다.`);
+});
+
+window.api.onUpdateError((msg) => {
+    appendLog('system', `❌ 업데이트 확인 중 오류 발생: ${msg}`, true);
+    alert(`업데이트 확인 실패:\n${msg}`);
 });
 
 function startAutoUpdate() {
@@ -227,8 +242,8 @@ window.api.onMachineId((id) => {
 });
 
 window.api.onVersion((ver) => {
-    const display = document.getElementById('system-version-display');
-    if (display) display.textContent = `Version: ${ver}`;
+    const display = document.getElementById('ver-text');
+    if (display) display.textContent = ver;
 });
 
 window.api.onLicenseInfo((info) => {
