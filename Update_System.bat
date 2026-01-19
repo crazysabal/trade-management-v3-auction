@@ -16,9 +16,9 @@ if errorlevel 1 goto :error
 echo.
 echo [3/4] Installing packages for new features...
 echo [Backend...]
-cd backend && npm install && cd ..
+cd backend && call npm install && cd ..
 echo [Frontend...]
-cd frontend && npm install && cd ..
+cd frontend && call npm install && cd ..
 echo [Launcher...]
 cd hongda-biz-launcher && npm install && cd ..
 echo.

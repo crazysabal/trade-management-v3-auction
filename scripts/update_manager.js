@@ -93,6 +93,26 @@ class UpdateManager {
         fs.rmSync(this.tempDir, { recursive: true, force: true });
     }
 
+    async installDependencies() {
+        console.log('\n--- [Update Manager] 라이브러리 자동 설치 (Self-Repair) ---');
+        const dirs = ['backend', 'frontend'];
+        const rootDir = path.join(__dirname, '..');
+
+        for (const dir of dirs) {
+            console.log(`\n[${dir}] 설치 확인 및 진행 중...`);
+            try {
+                const targetPath = path.join(rootDir, dir);
+                if (fs.existsSync(targetPath)) {
+                    // Windows 대응: shell: true 옵션으로 npm/npm.cmd 자동 처리
+                    execSync('npm install', { cwd: targetPath, stdio: 'inherit', shell: true });
+                }
+            } catch (err) {
+                console.error(`❌ [${dir}] 설치 중 오류 발생 (무시하고 진행): ${err.message}`);
+            }
+        }
+        console.log('\n--- [Update Manager] 설치 완료 ---\n');
+    }
+
     async checkAndUpdate() {
         console.log('\n================================================');
         console.log('   홍다 비즈 (Hongda Biz) 온라인 업데이트');
@@ -128,6 +148,9 @@ class UpdateManager {
             }
 
             await this.applyPatch();
+
+            // [FIX] 배치 파일 종료 문제 방지를 위해 JS에서 직접 의존성 설치 수행
+            await this.installDependencies();
 
             console.log('\n--- 업데이트 완료! ---');
             console.log('1. 라이브러리 갱신을 위해 npm install을 실행합니다.');

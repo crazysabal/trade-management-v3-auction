@@ -1,6 +1,6 @@
 {
     "system_name": "Hongda Biz",
-    "version": "1.0.12",
-    "last_updated": "2026-01-19T02:50:00Z",
-    "description": "Hotfix v3: Vite Cache Force Clean (vite --force) & Version Sync 1.0.12"
+    "version": "1.0.13",
+    "last_updated": "2026-01-19T03:00:00Z",
+    "description": "Hotfix v4: Critical Batch Fix (call npm) & Script-based Install Fail-safe"
 }
