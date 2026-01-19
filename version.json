@@ -1,6 +1,6 @@
 {
     "system_name": "Hongda Biz",
-    "version": "1.0.22",
-    "last_updated": "2026-01-19T16:40:00Z",
-    "description": "Launcher Improvement: Added 'Open Logs' button in UI to easily access log files stored in user home directory."
+    "version": "1.0.23",
+    "last_updated": "2026-01-19T16:45:00Z",
+    "description": "Critical Fix: Enhanced MySQL path discovery in setup and fixed encoding for database backup/restore errors."
 }

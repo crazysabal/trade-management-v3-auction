@@ -3,6 +3,7 @@ const path = require('path');
 const fs = require('fs');
 const AdmZip = require('adm-zip');
 const backupUtil = require('./backupUtil');
+const iconv = require('iconv-lite');
 require('dotenv').config({ path: path.join(__dirname, '../.env') });
 
 /**
@@ -52,10 +53,11 @@ const recoveryUtil = {
                 // -e "source path/to/file.sql" 대신 표준 입력을 사용하는 것이 공백 포함 경로에 더 안전함
                 const cmd = `"${mysqlPath}" -h ${process.env.DB_HOST} -u ${process.env.DB_USER} -p${process.env.DB_PASSWORD} ${process.env.DB_NAME} < "${sqlPath}"`;
 
-                exec(cmd, (error, stdout, stderr) => {
+                exec(cmd, { encoding: 'buffer' }, (error, stdout, stderr) => {
                     if (error) {
                         const maskedCmd = cmd.replace(/-p.*?\s/, '-p******** ');
-                        console.error('MySQL Restore Error:', stderr);
+                        const decodedStderr = iconv.decode(stderr, 'cp949');
+                        console.error('MySQL Restore Error:', decodedStderr);
                         console.error('Executed Command:', maskedCmd);
                         return reject(new Error(`데이터베이스 복원 중 오류가 발생했습니다. (경로 확인: ${mysqlPath})`));
                     }

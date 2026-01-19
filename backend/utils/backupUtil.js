@@ -2,12 +2,35 @@ const { exec } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 const archiver = require('archiver');
+const iconv = require('iconv-lite');
 require('dotenv').config({ path: path.join(__dirname, '../.env') });
 
 /**
  * 백업 압축 파일(ZIP)을 생성하는 유틸리티
  */
 const backupUtil = {
+    /**
+     * 데이터베이스를 SQL 파일로 덤프
+     * @param {string} outputPath 저장할 SQL 파일 경로
+     */
+    dumpDatabase: async (outputPath) => {
+        const dumpPath = process.env.MYSQLDUMP_PATH || 'mysqldump';
+        const cmd = `"${dumpPath}" -h ${process.env.DB_HOST} -u ${process.env.DB_USER} -p${process.env.DB_PASSWORD} ${process.env.DB_NAME} > "${outputPath}"`;
+
+        return new Promise((resolve, reject) => {
+            exec(cmd, { encoding: 'buffer' }, (error, stdout, stderr) => {
+                if (error) {
+                    const maskedCmd = cmd.replace(/-p.*?\s/, '-p******** ');
+                    const decodedStderr = iconv.decode(stderr, 'cp949');
+                    console.error('MySQL Dump Error:', decodedStderr);
+                    console.error('Executed Command:', maskedCmd);
+                    return reject(new Error(`데이터베이스 덤프 생성 중 오류가 발생했습니다. (경로 확인: ${dumpPath})`));
+                }
+                resolve();
+            });
+        });
+    },
+
     /**
      * DB 덤프 및 설정 파일을 포함한 ZIP 생성
      * @returns {Promise<string>} 생성된 ZIP 파일의 절대 경로
@@ -34,20 +57,7 @@ const backupUtil = {
         const zipPath = path.join(backupDir, zipFilename);
 
         // 1. MySQL Dump 실행
-        await new Promise((resolve, reject) => {
-            const dumpPath = process.env.MYSQLDUMP_PATH || 'mysqldump';
-            const cmd = `"${dumpPath}" -h ${process.env.DB_HOST} -u ${process.env.DB_USER} -p${process.env.DB_PASSWORD} ${process.env.DB_NAME} > "${sqlPath}"`;
-
-            exec(cmd, (error, stdout, stderr) => {
-                if (error) {
-                    const maskedCmd = cmd.replace(/-p.*?\s/, '-p******** ');
-                    console.error('MySQL Dump Error:', stderr);
-                    console.error('Executed Command:', maskedCmd);
-                    return reject(new Error(`데이터베이스 덤프 생성 중 오류가 발생했습니다. (경로 확인: ${dumpPath})`));
-                }
-                resolve();
-            });
-        });
+        await backupUtil.dumpDatabase(sqlPath);
 
         // 2. ZIP 압축
         await new Promise((resolve, reject) => {

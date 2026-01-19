@@ -134,20 +134,44 @@ async function setup() {
         }
     }
 
-    // [추가] MySQL 설치 경로 자동 탐색
+    // [추가] MySQL 설치 경로 자동 탐색 (개선형)
     function findMySQLPath() {
-        const commonPaths = [
-            'C:\\Program Files\\MySQL\\MySQL Server 8.4\\bin',
-            'C:\\Program Files\\MySQL\\MySQL Server 8.0\\bin',
-            'C:\\Program Files\\MySQL\\MySQL Server 8.2\\bin',
-            'C:\\mysql\\bin'
+        const rootPaths = [
+            'C:\\\\Program Files\\\\MySQL',
+            'C:\\\\Program Files (x86)\\\\MySQL',
+            'C:\\\\'
         ];
 
-        for (const p of commonPaths) {
-            if (fs.existsSync(path.join(p, 'mysqldump.exe'))) {
-                return p;
+        for (const root of rootPaths) {
+            if (!fs.existsSync(root)) continue;
+
+            // 1. 직접적인 bin 폴더 검색 (C:\mysql\bin 등)
+            const directBin = path.join(root, 'bin');
+            if (fs.existsSync(path.join(directBin, 'mysqldump.exe'))) {
+                return directBin;
             }
+
+            // 2. MySQL Server X.X 폴더들 검색
+            try {
+                const subs = fs.readdirSync(root);
+                for (const sub of subs) {
+                    const fullPath = path.join(root, sub, 'bin');
+                    if (fs.existsSync(path.join(fullPath, 'mysqldump.exe'))) {
+                        return fullPath;
+                    }
+                }
+            } catch (e) { /* ignore */ }
         }
+
+        // 3. 환경 변수에서 직접 찾기 시도 (where 명령)
+        try {
+            const { execSync } = require('child_process');
+            const wherePath = execSync('where mysqldump', { encoding: 'utf8' }).split('\n')[0].trim();
+            if (wherePath && fs.existsSync(wherePath)) {
+                return path.dirname(wherePath);
+            }
+        } catch (e) { /* ignore */ }
+
         return null;
     }
 
