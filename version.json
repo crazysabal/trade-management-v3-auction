@@ -1,6 +1,6 @@
 {
     "system_name": "Hongda Biz",
-    "version": "1.0.9",
-    "last_updated": "2026-01-19T02:15:00Z",
-    "description": "Warehouse/Payment DND Expansion, Sticky Layout Standardization, CompanyList Order Column & Layout Auto"
+    "version": "1.0.10",
+    "last_updated": "2026-01-19T02:30:00Z",
+    "description": "Hotfix: Dependency Logic Repair (hello-pangea/dnd), DND Expansion & Layout Stabilization"
 }
