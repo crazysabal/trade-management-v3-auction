@@ -48,8 +48,15 @@ const BackupManagement = () => {
             const link = document.createElement('a');
             link.href = url;
 
-            // 파일명 추출 (Content-Disposition 확인이 어려우면 기본값 사용)
-            const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+            // 파일명 추출 (로컬 시간 기준)
+            const now = new Date();
+            const timestamp = now.getFullYear() +
+                String(now.getMonth() + 1).padStart(2, '0') +
+                String(now.getDate()).padStart(2, '0') + '_' +
+                String(now.getHours()).padStart(2, '0') +
+                String(now.getMinutes()).padStart(2, '0') +
+                String(now.getSeconds()).padStart(2, '0');
+
             link.setAttribute('download', `HongdaBiz_Backup_${timestamp}.zip`);
 
             document.body.appendChild(link);
@@ -76,6 +83,26 @@ const BackupManagement = () => {
         } catch (error) {
             console.error('Failed to get auth URL:', error);
             setMessage({ text: '구글 인증 주소를 가져오지 못했습니다. Client ID 설정을 확인해주세요.', type: 'error' });
+        }
+    };
+
+    const handleDisconnectGoogle = async () => {
+        if (!window.confirm('구글 계정 연결을 해제하시겠습니까?\n해제 후에는 다시 연동하기 전까지 구글 드라이브 백업을 사용할 수 없습니다.')) {
+            return;
+        }
+
+        try {
+            setLoading(true);
+            const response = await systemAPI.disconnectGoogle();
+            if (response.data.success) {
+                setMessage({ text: response.data.message, type: 'success' });
+                fetchCredentials(); // 상태 갱신
+            }
+        } catch (error) {
+            console.error('Failed to disconnect:', error);
+            setMessage({ text: '연결 해제에 실패했습니다.', type: 'error' });
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -164,11 +191,32 @@ const BackupManagement = () => {
     };
 
     return (
-        <div className="backup-management">
-            <div className="card" style={{ padding: '1.5rem', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
-                <h3 style={{ fontSize: '1.1rem', marginBottom: '1.2rem', color: '#1e293b', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    🛡️ 데이터 백업 및 관리
-                </h3>
+        <div className="backup-management" style={{ flex: 1, width: '100%', display: 'flex', flexDirection: 'column' }}>
+            <div className="card" style={{
+                flex: 1,
+                display: 'flex',
+                flexDirection: 'column',
+                padding: '1.25rem',
+                borderRadius: '12px',
+                border: '1px solid #e2e8f0',
+                minHeight: 0,
+                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)'
+            }}>
+                <div style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    marginBottom: '1.5rem',
+                    borderBottom: '2px solid #f1f5f9',
+                    paddingBottom: '1rem'
+                }}>
+                    <h3 style={{ fontSize: '1.25rem', margin: 0, color: '#1e293b', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        🛡️ 데이터 백업 및 관리
+                    </h3>
+                    <div style={{ fontSize: '0.85rem', color: '#64748b', backgroundColor: '#f1f5f9', padding: '4px 12px', borderRadius: '20px', fontWeight: '600' }}>
+                        System Integrity Module
+                    </div>
+                </div>
 
                 {message.text && (
                     <div className={`alert alert-${message.type}`} style={{
@@ -186,7 +234,7 @@ const BackupManagement = () => {
                     </div>
                 )}
 
-                <div className="backup-actions" style={{ display: 'flex', gap: '1rem', marginBottom: '2rem' }}>
+                <div className="backup-actions" style={{ display: 'flex', gap: '1rem', marginBottom: '1.25rem' }}>
                     <button
                         className="btn btn-primary"
                         onClick={handleDownloadBackup}
@@ -210,21 +258,37 @@ const BackupManagement = () => {
                     >
                         ☁️ 구글 드라이브로 즉시 백업
                     </button>
-                    <button
-                        className="btn btn-outline-dark"
-                        onClick={handleConnectGoogle}
-                        disabled={loading || !apiConfig.clientId}
-                        style={{
-                            flex: 0.5,
-                            padding: '1rem',
-                            borderRadius: '10px',
-                            fontWeight: '600',
-                            borderStyle: 'dashed',
-                            opacity: !apiConfig.clientId ? 0.5 : 1
-                        }}
-                    >
-                        🔗 계정 연결
-                    </button>
+                    {apiConfig.hasRefreshToken ? (
+                        <button
+                            className="btn btn-outline-danger"
+                            onClick={handleDisconnectGoogle}
+                            disabled={loading}
+                            style={{
+                                flex: 0.5,
+                                padding: '1rem',
+                                borderRadius: '10px',
+                                fontWeight: '600'
+                            }}
+                        >
+                            🚫 연결 해제
+                        </button>
+                    ) : (
+                        <button
+                            className="btn btn-outline-dark"
+                            onClick={handleConnectGoogle}
+                            disabled={loading || !apiConfig.clientId}
+                            style={{
+                                flex: 0.5,
+                                padding: '1rem',
+                                borderRadius: '10px',
+                                fontWeight: '600',
+                                borderStyle: 'dashed',
+                                opacity: !apiConfig.clientId ? 0.5 : 1
+                            }}
+                        >
+                            🔗 계정 연결
+                        </button>
+                    )}
                 </div>
 
                 {!apiConfig.clientId && !showApiSetup && (
@@ -349,39 +413,60 @@ const BackupManagement = () => {
                 )}
 
                 <div className="recovery-section" style={{
-                    marginTop: '2rem',
-                    paddingTop: '1.5rem',
-                    borderTop: '1px dashed #e2e8f0',
-                    marginBottom: '2rem'
+                    marginTop: '1.25rem',
+                    paddingTop: '1.25rem',
+                    borderTop: '2px dashed #f1f5f9'
                 }}>
-                    <h4 style={{ fontSize: '0.95rem', marginBottom: '1rem', color: '#1e293b' }}>🔄 시스템 데이터 복구</h4>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                        <label className="btn btn-outline-danger" style={{
-                            flex: 1,
-                            cursor: 'pointer',
-                            textAlign: 'center',
-                            padding: '0.75rem',
-                            borderRadius: '8px',
-                            fontWeight: '600'
-                        }}>
-                            📁 백업 파일 선택 및 복구 실행
-                            <input
-                                type="file"
-                                accept=".zip"
-                                style={{ display: 'none' }}
-                                onChange={handleRestoreBackup}
-                                disabled={loading}
-                            />
-                        </label>
-                        <div style={{ flex: 1.5, fontSize: '0.85rem', color: '#64748b', lineHeight: '1.4' }}>
-                            *.zip 형식의 백업 파일을 선택하면 데이터베이스가 해당 시점으로 복원됩니다.
+                    <h4 style={{ fontSize: '1rem', marginBottom: '1.2rem', color: '#1e293b', fontWeight: '700' }}>
+                        🔄 시스템 데이터 복구 (RESTORE)
+                    </h4>
+                    <div style={{ padding: '1rem', backgroundColor: '#fff1f2', borderRadius: '12px', border: '1px solid #fecdd3' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem', flexWrap: 'wrap' }}>
+                            <label className="btn btn-danger" style={{
+                                flex: 1,
+                                minWidth: '200px',
+                                cursor: 'pointer',
+                                textAlign: 'center',
+                                padding: '1rem',
+                                borderRadius: '10px',
+                                fontWeight: '700',
+                                boxShadow: '0 4px 6px -1px rgba(225, 29, 72, 0.2)',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: '8px'
+                            }}>
+                                <span style={{ fontSize: '1.2rem' }}>📂</span> 백업 파일 선택 및 복구 실행
+                                <input
+                                    type="file"
+                                    accept=".zip"
+                                    style={{ display: 'none' }}
+                                    onChange={handleRestoreBackup}
+                                    disabled={loading}
+                                />
+                            </label>
+                            <div style={{ flex: 1.5, minWidth: '250px', fontSize: '0.875rem', color: '#9f1239', lineHeight: '1.6' }}>
+                                <strong>주의:</strong> 선택한 백업 파일로 데이터베이스를 완전히 덮어씌웁니다.<br />
+                                <b>*.zip</b> 형식의 파일을 업로드하면 즉시 복구가 진행됩니다.
+                            </div>
                         </div>
                     </div>
                 </div>
 
-                <div className="backup-history">
+                <div className="backup-history" style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    marginTop: '1.25rem',
+                    marginBottom: '1.25rem'
+                }}>
                     <h4 style={{ fontSize: '0.95rem', marginBottom: '0.75rem', color: '#64748b' }}>최근 로컬 백업 내역</h4>
-                    <div className="backup-list" style={{ maxHeight: '200px', overflowY: 'auto', border: '1px solid #f1f5f9', borderRadius: '8px' }}>
+                    <div className="backup-list" style={{
+                        maxHeight: '300px',
+                        overflowY: 'auto',
+                        border: '1px solid #f1f5f9',
+                        borderRadius: '8px',
+                        backgroundColor: '#fcfcfd'
+                    }}>
                         {backups.length > 0 ? (
                             backups.map((backup, idx) => (
                                 <div key={idx} style={{

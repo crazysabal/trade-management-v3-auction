@@ -1,6 +1,6 @@
 {
     "system_name": "Hongda Biz",
-    "version": "1.0.15",
-    "last_updated": "2026-01-19T14:16:00Z",
-    "description": "Integrated Data Backup & Recovery System with Dedicated App (🛡️) and Google Drive OAuth2 automation."
+    "version": "1.0.16",
+    "last_updated": "2026-01-19T15:15:00Z",
+    "description": "Integrated Backup System v2: OAuth2 Auto-Setup, KST Filename Fix, Premium Restore UI, and Fluid History List (Max 5 Rows)."
 }

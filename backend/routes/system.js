@@ -65,6 +65,30 @@ router.get('/auth/google/callback', async (req, res) => {
     }
 });
 
+// 구글 계정 연결 해제
+router.post('/auth/google/disconnect', async (req, res) => {
+    try {
+        const envPath = path.join(__dirname, '../.env');
+        let envContent = fs.readFileSync(envPath, 'utf8');
+
+        // GOOGLE_REFRESH_TOKEN 항목 삭제 또는 초기화
+        if (envContent.includes('GOOGLE_REFRESH_TOKEN=')) {
+            envContent = envContent.replace(/GOOGLE_REFRESH_TOKEN=.*/, 'GOOGLE_REFRESH_TOKEN=');
+            fs.writeFileSync(envPath, envContent);
+
+            // 메모리에서도 제거
+            delete process.env.GOOGLE_REFRESH_TOKEN;
+
+            res.json({ success: true, message: '구글 계정 연결이 성공적으로 해제되었습니다.' });
+        } else {
+            res.json({ success: true, message: '이미 연결된 계정이 없습니다.' });
+        }
+    } catch (error) {
+        console.error('Google Disconnect Error:', error);
+        res.status(500).json({ success: false, message: '연결 해제 중 오류가 발생했습니다.' });
+    }
+});
+
 // 백업 생성 및 다운로드 (로컬 방식)
 router.get('/backup/download', async (req, res) => {
     try {

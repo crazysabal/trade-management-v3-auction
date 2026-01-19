@@ -259,6 +259,7 @@ export const inventoryAuditAPI = {
 // 시스템 관리 API (백업 등)
 export const systemAPI = {
   getGoogleAuthUrl: () => api.get('/system/auth/google/url'),
+  disconnectGoogle: () => api.post('/system/auth/google/disconnect'),
   downloadBackup: () => api.get('/system/backup/download', { responseType: 'blob' }),
   backupToGoogleDrive: () => api.post('/system/backup/google-drive'),
   getBackups: () => api.get('/system/backups'),

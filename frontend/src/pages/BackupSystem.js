@@ -5,9 +5,12 @@ const BackupSystem = ({ isWindow }) => {
     return (
         <div className="backup-system-page" style={{
             height: '100%',
-            overflowY: 'auto',
-            background: '#ffffff',
-            padding: isWindow ? '0' : '20px'
+            display: 'flex',
+            flexDirection: 'column',
+            background: '#f8fafc',
+            padding: '0.5rem',
+            boxSizing: 'border-box',
+            overflow: 'auto'
         }}>
             <BackupManagement />
         </div>
