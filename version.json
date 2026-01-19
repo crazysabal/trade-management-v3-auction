@@ -1,6 +1,6 @@
 {
     "system_name": "Hongda Biz",
-    "version": "1.0.16",
-    "last_updated": "2026-01-19T15:15:00Z",
-    "description": "Integrated Backup System v2: OAuth2 Auto-Setup, KST Filename Fix, Premium Restore UI, and Fluid History List (Max 5 Rows)."
+    "version": "1.0.17",
+    "last_updated": "2026-01-19T16:05:00Z",
+    "description": "Critical Bug Fixes: Auction purchase warehouse validation, database recovery path fix (.env absolute path), and schema trigger hardening."
 }

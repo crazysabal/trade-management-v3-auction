@@ -572,7 +572,7 @@ BEGIN
             original_quantity, remaining_quantity, unit_price, total_weight,
             shipper_location, sender, status
         ) VALUES (
-            NEW.id, NEW.product_id, v_company_id, IFNULL(v_warehouse_id, 1), v_trade_date,
+            NEW.id, NEW.product_id, v_company_id, v_warehouse_id, v_trade_date,
             NEW.quantity, NEW.quantity, NEW.unit_price, IFNULL(NEW.total_weight, 0),
             IFNULL(NEW.shipper_location, ''), IFNULL(NEW.sender, ''), 'AVAILABLE'
         );

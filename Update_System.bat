@@ -20,7 +20,7 @@ cd backend && call npm install && cd ..
 echo [Frontend...]
 cd frontend && call npm install && cd ..
 echo [Launcher...]
-cd hongda-biz-launcher && npm install && cd ..
+cd hongda-biz-launcher && call npm install && cd ..
 echo.
 echo [4/4] Optimizing system and finishing...
 echo.

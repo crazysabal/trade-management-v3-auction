@@ -1,6 +1,7 @@
 const express = require('express'); // Force restart - 2026-01-17 10:05
 const cors = require('cors');
-require('dotenv').config();
+const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '.env') });
 
 const app = express();
 

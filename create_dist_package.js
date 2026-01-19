@@ -24,6 +24,7 @@ const INCLUDE_LIST = [
     'Installation_Guide.md',   // 마크다운 가이드 추가
     'README.md',               // 메인 설명서 추가
     'Run Launcher.bat',
+    'Run_New_Launcher.bat',    // 신규 소스 실행 런처 추가
     'Update_System.bat',      // 업데이트용 배치파일
     'database_schema.sql',
     'master_setup.js',

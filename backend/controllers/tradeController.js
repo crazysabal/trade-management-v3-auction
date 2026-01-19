@@ -102,6 +102,15 @@ const TradeController = {
                 };
             }
 
+            // [NEW] 매입 전표인 경우 창고 필수 검증
+            if (master.trade_type === 'PURCHASE' && !master.warehouse_id) {
+                await connection.rollback();
+                throw {
+                    status: 400,
+                    message: '매입 전표 등록 시 창고를 반드시 선택해야 합니다.'
+                };
+            }
+
             const prefix = master.trade_type === 'PURCHASE' ? 'PUR' : (master.trade_type === 'PRODUCTION' ? 'PRO' : 'SAL');
             const tradeDateStr = String(master.trade_date).slice(0, 10).replace(/-/g, '');
             const today = tradeDateStr;
@@ -269,6 +278,15 @@ const TradeController = {
                         }
                     };
                 }
+            }
+
+            // [NEW] 매입 전표인 경우 창고 필수 검증
+            if (tradeType === 'PURCHASE' && !master.warehouse_id) {
+                await connection.rollback();
+                throw {
+                    status: 400,
+                    message: '매입 전표 수정 시 창고를 반드시 선택해야 합니다.'
+                };
             }
 
             // 3. 매입 전표인 경우: 매칭된 내역 유효성 검사 (Upsert 전략 준비)

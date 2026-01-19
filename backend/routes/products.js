@@ -14,10 +14,19 @@ router.get('/export/excel', async (req, res) => {
   try {
     const query = `
       SELECT pc.category_name as parent_category, c.category_name as sub_category, 
-             p.product_name, p.grade, p.weight, p.weight_unit, p.product_code, p.notes, p.is_active
+             p.product_name, p.grade, p.weight, p.weight_unit, p.product_code, p.notes, p.is_active,
+             GROUP_CONCAT(
+               CONCAT(pm.auction_product_name, 
+                      IF(pm.auction_weight != '' OR pm.auction_grade != '', 
+                         CONCAT('(', pm.auction_weight, '/', pm.auction_grade, ')'), 
+                         '')
+               ) SEPARATOR ', '
+             ) as auction_mappings
       FROM products p
       LEFT JOIN categories c ON p.category_id = c.id
       LEFT JOIN categories pc ON c.parent_id = pc.id
+      LEFT JOIN product_mapping pm ON p.id = pm.system_product_id AND pm.is_active = 1
+      GROUP BY p.id, pc.category_name, c.category_name
       ORDER BY p.sort_order, p.product_code
     `;
     const [rows] = await db.query(query);
@@ -30,6 +39,7 @@ router.get('/export/excel', async (req, res) => {
       '중량': row.weight || '',
       '단위': row.weight_unit || 'kg',
       '품목코드': row.product_code,
+      '경매 매핑 정보': row.auction_mappings || '',
       '비고': row.notes || '',
       '사용여부': row.is_active ? '사용' : '미사용'
     }));
@@ -105,19 +115,52 @@ router.post('/import/excel', upload.single('file'), async (req, res) => {
 
       // 2. 품목 등록 또는 수정 (품목코드 기준)
       const [existing] = await connection.query('SELECT id FROM products WHERE product_code = ?', [productCode]);
+      let productId;
 
       if (existing.length > 0) {
+        productId = existing[0].id;
         await connection.query(
           `UPDATE products SET product_name = ?, grade = ?, weight = ?, weight_unit = ?, category_id = ?, notes = ?, is_active = ? WHERE id = ?`,
-          [productName, grade || null, weight || null, weightUnit, categoryId, notes || '', isActive, existing[0].id]
+          [productName, grade || null, weight || null, weightUnit, categoryId, notes || '', isActive, productId]
         );
         updatedCount++;
       } else {
-        await connection.query(
+        const [insRes] = await connection.query(
           `INSERT INTO products (product_code, product_name, grade, weight, weight_unit, category_id, notes, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
           [productCode, productName, grade || null, weight || null, weightUnit, categoryId, notes || '', isActive]
         );
+        productId = insRes.insertId;
         insertedCount++;
+      }
+
+      // 3. 경매 매핑 정보 처리
+      const mappingStr = item['경매 매핑 정보'];
+      if (mappingStr !== undefined) {
+        // [SYNC] 해당 품목의 기존 매핑 정보 초기화 후 재등록 (엑셀을 기준으로 동기화)
+        await connection.query('DELETE FROM product_mapping WHERE system_product_id = ?', [productId]);
+
+        if (mappingStr && mappingStr.trim()) {
+          const mappings = mappingStr.split(',').map(m => m.trim()).filter(m => m);
+          for (const m of mappings) {
+            // 파싱: AuctionName(Weight/Grade)
+            let auctionName = m;
+            let auctionWeight = '';
+            let auctionGrade = '';
+
+            const match = m.match(/^(.+?)\((.*?)\/(.*?)\)$/);
+            if (match) {
+              auctionName = match[1];
+              auctionWeight = match[2];
+              auctionGrade = match[3];
+            }
+
+            await connection.query(
+              `INSERT INTO product_mapping (auction_product_name, auction_weight, auction_grade, system_product_id, is_active) 
+               VALUES (?, ?, ?, ?, 1)`,
+              [auctionName, auctionWeight, auctionGrade, productId]
+            );
+          }
+        }
       }
     }
 

@@ -3,7 +3,7 @@ const path = require('path');
 const fs = require('fs');
 const AdmZip = require('adm-zip');
 const backupUtil = require('./backupUtil');
-require('dotenv').config();
+require('dotenv').config({ path: path.join(__dirname, '../.env') });
 
 /**
  * 백업 파일을 통한 시스템 복원 유틸리티

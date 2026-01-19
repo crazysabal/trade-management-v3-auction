@@ -678,6 +678,10 @@ function AuctionImportV2({ isWindow, onTradeChange, onClose }) {
             setModal({ isOpen: true, type: 'warning', title: '오류', message: '매입처를 선택하세요', showCancel: false });
             return;
         }
+        if (!importConfig.warehouse_id) {
+            setModal({ isOpen: true, type: 'warning', title: '오류', message: '창고를 선택하세요', showCancel: false });
+            return;
+        }
         const unmatched = rawData.filter(i => !getMappedProductId(i.product_name, i.weight, i.grade));
         if (unmatched.length > 0) {
             setModal({
