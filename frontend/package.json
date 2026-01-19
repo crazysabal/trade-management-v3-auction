@@ -1,6 +1,6 @@
 {
   "name": "hongda-biz-frontend",
-  "version": "1.0.11",
+  "version": "1.0.12",
   "private": true,
   "dependencies": {
     "@hello-pangea/dnd": "^18.0.1",
@@ -19,8 +19,8 @@
     "react-select": "^5.10.2"
   },
   "scripts": {
-    "start": "vite",
-    "dev": "vite --host",
+    "start": "vite --force",
+    "dev": "vite --force --host",
     "build": "vite build",
     "preview": "vite preview"
   },
