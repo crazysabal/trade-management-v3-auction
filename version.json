@@ -1,6 +1,6 @@
 {
     "system_name": "Hongda Biz",
-    "version": "1.0.18",
-    "last_updated": "2026-01-19T16:15:00Z",
-    "description": "Fix: MySQL dump/restore path auto-discovery in setup, and absolute path loading for .env in utils."
+    "version": "1.0.20",
+    "last_updated": "2026-01-19T16:30:00Z",
+    "description": "UX Improvement: Prevented auto-browser opening when an update is detected, and faster update checking."
 }

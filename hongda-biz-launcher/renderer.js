@@ -8,6 +8,7 @@ let isLicensed = false; // [LICENSE] 승인 여부
 let licenseMsg = '';
 
 let isStartingAll = false; // [NEW] 통합 시작 중인지 추적
+let isUpdateAvailable = false; // [NEW] 업데이트 발견 여부
 
 function toggleServer(type) {
     // [LICENSE] 가드 추가
@@ -154,6 +155,10 @@ window.api.onLog(({ type, data, isError }) => {
             appendLog('system', '▶ 프론트엔드 준비 완료 감지. 브라우저 및 최소화 실행...', false);
             isStartingAll = false; // 시퀀스 완전 종료
             setTimeout(() => {
+                if (isUpdateAvailable) {
+                    appendLog('system', '💡 업데이트가 발견되어 브라우저 자동 실행 및 최소화를 건너뜁니다.', false);
+                    return;
+                }
                 appendLog('system', '🌐 브라우저를 열고 런처를 최소화합니다.', false);
                 window.api.openExternal('http://localhost:3000');
                 setTimeout(() => {
@@ -207,6 +212,7 @@ window.api.onUpdateAvailable(({ local, remote }) => {
     if (banner && verSpan) {
         verSpan.textContent = remote;
         banner.style.display = 'block';
+        isUpdateAvailable = true; // 플래그 설정
         appendLog('system', `🚀 새로운 업데이트가 발견되었습니다! (v${local} -> v${remote})`, false);
         appendLog('system', `💡 [지금 업데이트] 버튼을 클릭해 진행하세요.`, false);
     }

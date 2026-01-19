@@ -2,6 +2,8 @@ const { app, BrowserWindow, ipcMain, shell } = require('electron');
 const path = require('path');
 const { spawn } = require('child_process');
 const os = require('os');
+const iconv = require('iconv-lite');
+const fs = require('fs');
 
 let mainWindow;
 const processes = {
@@ -15,6 +17,22 @@ const MACHINE_ID = HardwareInfo.getMachineId();
 let IS_LICENSED = false;
 let LICENSE_MESSAGE = '라이선스 확인 중...';
 let LICENSE_EXPIRY = ''; // [NEW] 라이선스 만료일 저장
+
+// [LOGGING] 로그 파일 기록 함수
+const LOG_DIR = path.join(os.homedir(), '.hongdabiz', 'logs');
+if (!fs.existsSync(LOG_DIR)) fs.mkdirSync(LOG_DIR, { recursive: true });
+
+function writeLogToFile(type, message) {
+    try {
+        const today = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+        const logPath = path.join(LOG_DIR, `launcher_${today}.log`);
+        const timestamp = new Date().toISOString();
+        const logContent = `[${timestamp}] [${type}] ${message}\n`;
+        fs.appendFileSync(logPath, logContent, 'utf8');
+    } catch (e) {
+        console.error('Failed to write log to file', e);
+    }
+}
 
 // 윈도우 생성
 async function createWindow() {
@@ -58,7 +76,7 @@ if (!gotTheLock) {
         await createWindow();
 
         // [UPDATE CHECK] 온라인 버전 체크
-        setTimeout(checkUpdateOnline, 3000); // 실행 3초 후 체크
+        setTimeout(checkUpdateOnline, 1000); // 실행 1초 후 체크
 
         app.on('activate', function () {
             if (BrowserWindow.getAllWindows().length === 0) createWindow();
@@ -233,6 +251,7 @@ process.on('uncaughtException', (err) => {
             isError: true
         });
     }
+    writeLogToFile('FATAL', `시스템 오류가 발생했습니다: ${err.message}\n${err.stack}`);
 });
 
 const killPort = require('kill-port');
@@ -281,11 +300,13 @@ ipcMain.on('start-process', async (event, { type, command, cwd, port }) => {
             `- Root: ${PROJECT_ROOT}\n` +
             `- Target: ${targetCwd}\n`;
         if (mainWindow) mainWindow.webContents.send('log-data', { type, data: diagLog });
+        writeLogToFile('SYSTEM', diagLog);
 
         // 경로 존재 여부 체크 (ENOENT 방지 핵심)
         if (!fs.existsSync(targetCwd)) {
             const errMsg = `[Error] 실행 경로를 찾을 수 없습니다: ${targetCwd}\n설치 폴더 구조를 확인해주세요.\n`;
             if (mainWindow) mainWindow.webContents.send('log-data', { type, data: errMsg, isError: true });
+            writeLogToFile('ERROR', errMsg);
             return;
         }
 
@@ -319,11 +340,15 @@ ipcMain.on('start-process', async (event, { type, command, cwd, port }) => {
         event.reply('process-status', { type, status: 'running' });
 
         child.stdout.on('data', (d) => {
-            if (mainWindow) mainWindow.webContents.send('log-data', { type, data: d.toString() });
+            const decodedData = iconv.decode(d, 'cp949');
+            if (mainWindow) mainWindow.webContents.send('log-data', { type, data: decodedData });
+            writeLogToFile(type, decodedData);
         });
 
         child.stderr.on('data', (d) => {
-            if (mainWindow) mainWindow.webContents.send('log-data', { type, data: d.toString(), isError: true });
+            const decodedData = iconv.decode(d, 'cp949');
+            if (mainWindow) mainWindow.webContents.send('log-data', { type, data: decodedData, isError: true });
+            writeLogToFile(`${type}_ERROR`, decodedData);
         });
 
         child.on('error', (err) => {

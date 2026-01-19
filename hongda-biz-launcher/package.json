@@ -8,6 +8,7 @@
         "dist": "electron-builder --win portable"
     },
     "dependencies": {
+        "iconv-lite": "^0.7.2",
         "kill-port": "^2.0.1"
     },
     "devDependencies": {
