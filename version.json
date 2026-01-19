@@ -1,6 +1,6 @@
 {
     "system_name": "Hongda Biz",
-    "version": "1.0.28",
-    "last_updated": "2026-01-19T17:23:00Z",
-    "description": "UX Improvement: CMD window now closes automatically after update completes."
+    "version": "1.0.29",
+    "last_updated": "2026-01-19T17:28:00Z",
+    "description": "UX Improvement: Added silent launch script (VBS) to run the launcher without a visible CMD window."
 }
