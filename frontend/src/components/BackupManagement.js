@@ -3,6 +3,8 @@ import { systemAPI } from '../services/api';
 
 const BackupManagement = () => {
     const [backups, setBackups] = useState([]);
+    const [remoteBackups, setRemoteBackups] = useState([]);
+    const [driveFolderUrl, setDriveFolderUrl] = useState(''); // [NEW] 구글 드라이브 폴더 URL
     const [loading, setLoading] = useState(false);
     const [message, setMessage] = useState({ text: '', type: '' });
     const [apiConfig, setApiConfig] = useState({ clientId: '', clientSecret: '', hasRefreshToken: false });
@@ -12,6 +14,7 @@ const BackupManagement = () => {
     useEffect(() => {
         fetchBackups();
         fetchCredentials();
+        fetchRemoteBackups();
     }, []);
 
     const fetchCredentials = async () => {
@@ -33,6 +36,20 @@ const BackupManagement = () => {
             }
         } catch (error) {
             console.error('Failed to fetch backups:', error);
+        }
+    };
+
+    // 원격 백업 목록 조회
+    const fetchRemoteBackups = async () => {
+        try {
+            const response = await systemAPI.getGoogleDriveBackups();
+            if (response.data.success) {
+                // [MOD] 응답 구조 변경 대응 ({ files, folderUrl })
+                setRemoteBackups(response.data.data.files);
+                setDriveFolderUrl(response.data.data.folderUrl);
+            }
+        } catch (error) {
+            console.error('Failed to fetch remote backups:', error);
         }
     };
 
@@ -77,7 +94,6 @@ const BackupManagement = () => {
         try {
             const response = await systemAPI.getGoogleAuthUrl();
             if (response.data.success && response.data.url) {
-                // 구글 로그인 창을 새 창으로 띄움
                 window.open(response.data.url, 'google-auth', 'width=600,height=700');
             }
         } catch (error) {
@@ -96,7 +112,8 @@ const BackupManagement = () => {
             const response = await systemAPI.disconnectGoogle();
             if (response.data.success) {
                 setMessage({ text: response.data.message, type: 'success' });
-                fetchCredentials(); // 상태 갱신
+                fetchCredentials();
+                setRemoteBackups([]);
             }
         } catch (error) {
             console.error('Failed to disconnect:', error);
@@ -115,12 +132,19 @@ const BackupManagement = () => {
             if (response.data.success) {
                 setMessage({ text: response.data.message, type: 'success' });
                 fetchBackups();
+                fetchRemoteBackups();
             }
         } catch (error) {
             console.error('Google Drive backup failed:', error);
             setMessage({ text: '구글 드라이브 백업에 실패했습니다. (API 인증 정보 확인 필요)', type: 'error' });
         } finally {
             setLoading(false);
+        }
+    };
+
+    const handleOpenDriveFolder = () => {
+        if (driveFolderUrl) {
+            window.open(driveFolderUrl, '_blank');
         }
     };
 
@@ -191,15 +215,83 @@ const BackupManagement = () => {
     };
 
     return (
-        <div className="backup-management" style={{ flex: 1, width: '100%', display: 'flex', flexDirection: 'column' }}>
+        <div className="backup-management" style={{ height: '100%', width: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden', padding: '1px' }}>
+            <style>
+                {`
+                    .btn-google-drive {
+                        background-color: #34a853 !important;
+                        border-color: #34a853 !important;
+                        color: white !important;
+                        transition: all 0.2s ease;
+                    }
+                    .btn-google-drive:hover {
+                        background-color: #2d8e47 !important;
+                        border-color: #2d8e47 !important;
+                        transform: translateY(-1px);
+                        box-shadow: 0 6px 8px -1px rgba(52, 168, 83, 0.3) !important;
+                    }
+                    .btn-google-drive:active {
+                        transform: translateY(0);
+                        background-color: #26793c !important;
+                    }
+                    .btn-primary-custom {
+                        background-color: #2563eb !important;
+                        border-color: #2563eb !important;
+                        transition: all 0.2s ease;
+                    }
+                    .btn-primary-custom:hover {
+                        background-color: #1d4ed8 !important;
+                        transform: translateY(-1px);
+                        box-shadow: 0 6px 8px -1px rgba(37, 99, 235, 0.3) !important;
+                    }
+                    .btn-danger-custom {
+                        background-color: #ef4444 !important;
+                        border-color: #ef4444 !important;
+                        color: white !important;
+                        transition: all 0.2s ease;
+                        box-shadow: 0 4px 6px -1px rgba(225, 29, 72, 0.2);
+                    }
+                    .btn-danger-custom:hover {
+                        background-color: #dc2626 !important;
+                        transform: translateY(-1px);
+                        box-shadow: 0 6px 8px -1px rgba(225, 29, 72, 0.3) !important;
+                    }
+                    .btn-danger-custom:active {
+                        transform: translateY(0);
+                    }
+                    .btn-outline-danger-custom {
+                        color: #ef4444 !important;
+                        border: 1px solid #ef4444 !important;
+                        background-color: transparent !important;
+                        transition: all 0.2s ease;
+                    }
+                    .btn-outline-danger-custom:hover {
+                        background-color: #fef2f2 !important;
+                        transform: translateY(-1px);
+                        box-shadow: 0 4px 6px -1px rgba(239, 68, 68, 0.1) !important;
+                    }
+                    .btn-outline-dark-custom {
+                        color: #334155 !important;
+                        border: 1px dashed #334155 !important;
+                        background-color: transparent !important;
+                        transition: all 0.2s ease;
+                    }
+                    .btn-outline-dark-custom:hover {
+                        background-color: #f1f5f9 !important;
+                        transform: translateY(-1px);
+                    }
+                `}
+            </style>
             <div className="card" style={{
-                flex: 1,
+                height: '100%',
                 display: 'flex',
                 flexDirection: 'column',
                 padding: '1.25rem',
                 borderRadius: '12px',
                 border: '1px solid #e2e8f0',
+                margin: 0,
                 minHeight: 0,
+                overflow: 'hidden',
                 boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)'
             }}>
                 <div style={{
@@ -234,61 +326,73 @@ const BackupManagement = () => {
                     </div>
                 )}
 
-                <div className="backup-actions" style={{ display: 'flex', gap: '1rem', marginBottom: '1.25rem' }}>
-                    <button
-                        className="btn btn-primary"
-                        onClick={handleDownloadBackup}
-                        disabled={loading}
-                        style={{ flex: 1, padding: '1rem', borderRadius: '10px', fontWeight: '600' }}
-                    >
-                        📥 내 PC로 백업 받기 (ZIP)
-                    </button>
-                    <button
-                        className="btn btn-success"
-                        onClick={handleGoogleDriveBackup}
-                        disabled={loading}
-                        style={{
-                            flex: 1,
-                            padding: '1rem',
-                            borderRadius: '10px',
-                            fontWeight: '600',
-                            backgroundColor: '#34a853',
-                            borderColor: '#34a853'
-                        }}
-                    >
-                        ☁️ 구글 드라이브로 즉시 백업
-                    </button>
-                    {apiConfig.hasRefreshToken ? (
-                        <button
-                            className="btn btn-outline-danger"
-                            onClick={handleDisconnectGoogle}
-                            disabled={loading}
-                            style={{
-                                flex: 0.5,
-                                padding: '1rem',
-                                borderRadius: '10px',
-                                fontWeight: '600'
-                            }}
-                        >
-                            🚫 연결 해제
-                        </button>
-                    ) : (
-                        <button
-                            className="btn btn-outline-dark"
-                            onClick={handleConnectGoogle}
-                            disabled={loading || !apiConfig.clientId}
-                            style={{
-                                flex: 0.5,
-                                padding: '1rem',
-                                borderRadius: '10px',
-                                fontWeight: '600',
-                                borderStyle: 'dashed',
-                                opacity: !apiConfig.clientId ? 0.5 : 1
-                            }}
-                        >
-                            🔗 계정 연결
-                        </button>
-                    )}
+                <div className="backup-section" style={{ marginBottom: '1.5rem' }}>
+                    <h4 style={{ fontSize: '1rem', marginBottom: '1.2rem', color: '#1e293b', fontWeight: '700' }}>
+                        🚀 시스템 데이터 백업 (BACKUP)
+                    </h4>
+                    <div style={{ padding: '1.25rem', backgroundColor: '#f0f9ff', borderRadius: '12px', border: '1px solid #bae6fd' }}>
+                        <div className="backup-actions" style={{ display: 'flex', gap: '1rem' }}>
+                            <button
+                                onClick={handleDownloadBackup}
+                                disabled={loading}
+                                style={{
+                                    flex: 1,
+                                    padding: '1rem',
+                                    borderRadius: '10px',
+                                    fontWeight: '700',
+                                    boxShadow: '0 4px 6px -1px rgba(37, 99, 235, 0.2)'
+                                }}
+                                className="btn btn-primary btn-primary-custom"
+                            >
+                                📥 내 PC로 백업 받기 (ZIP)
+                            </button>
+                            <button
+                                className="btn btn-google-drive"
+                                onClick={handleGoogleDriveBackup}
+                                disabled={loading}
+                                style={{
+                                    flex: 1,
+                                    padding: '1rem',
+                                    borderRadius: '10px',
+                                    fontWeight: '700',
+                                    boxShadow: '0 4px 6px -1px rgba(52, 168, 83, 0.2)'
+                                }}
+                            >
+                                ☁️ 구글 드라이브로 즉시 백업
+                            </button>
+                            {apiConfig.hasRefreshToken ? (
+                                <button
+                                    className="btn btn-outline-danger-custom"
+                                    onClick={handleDisconnectGoogle}
+                                    disabled={loading}
+                                    style={{
+                                        flex: 0.8,
+                                        padding: '1rem',
+                                        borderRadius: '10px',
+                                        fontWeight: '700'
+                                    }}
+                                >
+                                    🚫 구글 연동 해제
+                                </button>
+                            ) : (
+                                <button
+                                    className="btn btn-outline-dark-custom"
+                                    onClick={handleConnectGoogle}
+                                    disabled={loading || !apiConfig.clientId}
+                                    style={{
+                                        flex: 0.8,
+                                        padding: '1rem',
+                                        borderRadius: '10px',
+                                        fontWeight: '700',
+                                        borderStyle: 'dashed',
+                                        opacity: !apiConfig.clientId ? 0.5 : 1
+                                    }}
+                                >
+                                    🔗 구글 드라이브 연동
+                                </button>
+                            )}
+                        </div>
+                    </div>
                 </div>
 
                 {!apiConfig.clientId && !showApiSetup && (
@@ -413,16 +517,15 @@ const BackupManagement = () => {
                 )}
 
                 <div className="recovery-section" style={{
-                    marginTop: '1.25rem',
-                    paddingTop: '1.25rem',
-                    borderTop: '2px dashed #f1f5f9'
+                    marginTop: '0.4rem',
+                    paddingTop: '0.4rem'
                 }}>
-                    <h4 style={{ fontSize: '1rem', marginBottom: '1.2rem', color: '#1e293b', fontWeight: '700' }}>
+                    <h4 style={{ fontSize: '1rem', marginBottom: '0.8rem', color: '#1e293b', fontWeight: '700' }}>
                         🔄 시스템 데이터 복구 (RESTORE)
                     </h4>
-                    <div style={{ padding: '1rem', backgroundColor: '#fff1f2', borderRadius: '12px', border: '1px solid #fecdd3' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem', flexWrap: 'wrap' }}>
-                            <label className="btn btn-danger" style={{
+                    <div style={{ padding: '1.25rem', backgroundColor: '#fff1f2', borderRadius: '12px', border: '1px solid #fecdd3' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+                            <label className="btn-danger-custom" style={{
                                 flex: 1,
                                 minWidth: '200px',
                                 cursor: 'pointer',
@@ -430,7 +533,6 @@ const BackupManagement = () => {
                                 padding: '1rem',
                                 borderRadius: '10px',
                                 fontWeight: '700',
-                                boxShadow: '0 4px 6px -1px rgba(225, 29, 72, 0.2)',
                                 display: 'flex',
                                 alignItems: 'center',
                                 justifyContent: 'center',
@@ -445,7 +547,7 @@ const BackupManagement = () => {
                                     disabled={loading}
                                 />
                             </label>
-                            <div style={{ flex: 1.5, minWidth: '250px', fontSize: '0.875rem', color: '#9f1239', lineHeight: '1.6' }}>
+                            <div style={{ flex: 1.8, minWidth: '250px', fontSize: '0.875rem', color: '#9f1239', lineHeight: '1.6' }}>
                                 <strong>주의:</strong> 선택한 백업 파일로 데이터베이스를 완전히 덮어씌웁니다.<br />
                                 <b>*.zip</b> 형식의 파일을 업로드하면 즉시 복구가 진행됩니다.
                             </div>
@@ -453,42 +555,130 @@ const BackupManagement = () => {
                     </div>
                 </div>
 
-                <div className="backup-history" style={{
+                <div className="backup-histories-wrapper" style={{
                     display: 'flex',
-                    flexDirection: 'column',
-                    marginTop: '1.25rem',
-                    marginBottom: '1.25rem'
+                    gap: '1.5rem',
+                    marginTop: '0.4rem',
+                    flex: 1,
+                    minHeight: 0,
+                    overflow: 'hidden'
                 }}>
-                    <h4 style={{ fontSize: '0.95rem', marginBottom: '0.75rem', color: '#64748b' }}>최근 로컬 백업 내역</h4>
-                    <div className="backup-list" style={{
-                        maxHeight: '300px',
-                        overflowY: 'auto',
-                        border: '1px solid #f1f5f9',
-                        borderRadius: '8px',
-                        backgroundColor: '#fcfcfd'
+                    <div className="backup-history" style={{
+                        flex: 1,
+                        minWidth: '320px',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        minHeight: 0,
+                        overflow: 'hidden'
                     }}>
-                        {backups.length > 0 ? (
-                            backups.map((backup, idx) => (
-                                <div key={idx} style={{
-                                    display: 'flex',
-                                    justifyContent: 'space-between',
-                                    padding: '0.75rem 1rem',
-                                    borderBottom: idx < backups.length - 1 ? '1px solid #f1f5f9' : 'none',
-                                    fontSize: '0.85rem'
-                                }}>
-                                    <div style={{ display: 'flex', flexDirection: 'column' }}>
-                                        <span style={{ fontWeight: '500', color: '#334155' }}>{backup.fileName}</span>
-                                        <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
-                                            {new Date(backup.createdAt).toLocaleString()}
-                                        </span>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem', height: '32px' }}>
+                            <h4 style={{ fontSize: '0.95rem', margin: 0, color: '#334155', display: 'flex', alignItems: 'center', gap: '6px' }}>최근 로컬 백업 내역</h4>
+                        </div>
+                        <div className="backup-list" style={{
+                            flex: 1,
+                            minHeight: 0,
+                            overflowY: 'auto',
+                            border: '1px solid #e2e8f0',
+                            borderRadius: '8px',
+                            backgroundColor: '#f8fafc',
+                            display: 'flex',
+                            flexDirection: 'column'
+                        }}>
+                            {backups.length > 0 ? (
+                                backups.map((backup, idx) => (
+                                    <div key={idx} style={{
+                                        display: 'flex',
+                                        justifyContent: 'space-between',
+                                        padding: '0.75rem 1rem',
+                                        borderBottom: idx < backups.length - 1 ? '1px solid #e2e8f0' : 'none',
+                                        fontSize: '0.85rem'
+                                    }}>
+                                        <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                            <span style={{ fontWeight: '500', color: '#334155' }}>{backup.fileName}</span>
+                                            <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
+                                                {new Date(backup.createdAt).toLocaleString()}
+                                            </span>
+                                        </div>
+                                        <span style={{ alignSelf: 'center', color: '#64748b' }}>{formatSize(backup.size)}</span>
                                     </div>
-                                    <span style={{ alignSelf: 'center', color: '#64748b' }}>{formatSize(backup.size)}</span>
-                                </div>
-                            ))
-                        ) : (
-                            <div style={{ padding: '2rem', textAlign: 'center', color: '#94a3b8' }}>생성된 백업 내역이 없습니다.</div>
-                        )}
+                                ))
+                            ) : (
+                                <div style={{ padding: '2rem', textAlign: 'center', color: '#94a3b8' }}>생성된 백업 내역이 없습니다.</div>
+                            )}
+                        </div>
                     </div>
+
+                    {/* [NEW] 구글 드라이브 원격 백업 목록 섹션 */}
+                    {apiConfig.hasRefreshToken && (
+                        <div className="remote-backup-history" style={{
+                            flex: 1,
+                            minWidth: '320px',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            minHeight: 0,
+                            overflow: 'hidden'
+                        }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem', height: '32px' }}>
+                                <h4 style={{ fontSize: '0.95rem', margin: 0, color: '#334155', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                    ☁️ 구글 드라이브 백업 내역
+                                    <span style={{ fontSize: '0.75rem', fontWeight: 'normal', color: '#64748b' }}>(최근 20개)</span>
+                                </h4>
+                                {driveFolderUrl && (
+                                    <button
+                                        onClick={handleOpenDriveFolder}
+                                        className="btn btn-sm btn-outline-primary"
+                                        style={{
+                                            fontSize: '0.75rem', padding: '2px 8px', display: 'flex', alignItems: 'center', gap: '4px',
+                                            border: '1px solid #cbd5e1', backgroundColor: '#fff', color: '#475569'
+                                        }}
+                                    >
+                                        📂 폴더 열기
+                                    </button>
+                                )}
+                            </div>
+
+                            <div className="backup-list" style={{
+                                flex: 1,
+                                minHeight: 0,
+                                overflowY: 'auto',
+                                border: '1px solid #e2e8f0',
+                                borderRadius: '8px',
+                                backgroundColor: '#f8fafc',
+                                display: 'flex',
+                                flexDirection: 'column'
+                            }}>
+                                {remoteBackups.length > 0 ? (
+                                    remoteBackups.map((file, idx) => (
+                                        <div key={idx} style={{
+                                            display: 'flex',
+                                            justifyContent: 'space-between',
+                                            alignItems: 'center',
+                                            padding: '0.75rem 1rem',
+                                            borderBottom: idx < remoteBackups.length - 1 ? '1px solid #e2e8f0' : 'none',
+                                            fontSize: '0.85rem'
+                                        }}>
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                                <div style={{ fontWeight: '600', color: '#334155', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                    {file.name}
+                                                    <span style={{ fontSize: '0.7rem', padding: '1px 6px', borderRadius: '4px', backgroundColor: '#dbeafe', color: '#1e40af' }}>Cloud</span>
+                                                </div>
+                                                <span style={{ fontSize: '0.75rem', color: '#64748b' }}>
+                                                    {new Date(file.createdTime).toLocaleString()}
+                                                </span>
+                                            </div>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                                <span style={{ color: '#64748b', fontSize: '0.8rem' }}>{formatSize(file.size)}</span>
+                                            </div>
+                                        </div>
+                                    ))
+                                ) : (
+                                    <div style={{ padding: '2rem', textAlign: 'center', color: '#94a3b8' }}>
+                                        {loading ? '목록을 불러오는 중...' : '구글 드라이브에 저장된 백업이 없습니다.'}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
                 </div>
             </div>
         </div>

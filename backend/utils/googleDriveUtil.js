@@ -95,6 +95,42 @@ const googleDriveUtil = {
     },
 
     /**
+     * 구글 드라이브 폴더 내 백업 파일 목록 조회
+     */
+    listFiles: async (folderName = 'HongdaBiz_Backups') => {
+        try {
+            const auth = googleDriveUtil.getAuthClient();
+            const drive = google.drive({ version: 'v3', auth });
+
+            // 1. 폴더 ID 찾기
+            const folderId = await googleDriveUtil.getOrCreateFolder(drive, folderName);
+
+            // [NEW] 폴더의 WebViewLink 가져오기
+            const folderRes = await drive.files.get({
+                fileId: folderId,
+                fields: 'webViewLink'
+            });
+            const folderUrl = folderRes.data.webViewLink;
+
+            // 2. 파일 목록 조회 (쿼리)
+            const res = await drive.files.list({
+                q: `'${folderId}' in parents and mimeType = 'application/zip' and trashed = false`,
+                fields: 'files(id, name, size, createdTime, webViewLink, webContentLink)',
+                orderBy: 'createdTime desc',
+                pageSize: 20 // 최근 20개만
+            });
+
+            return {
+                files: res.data.files,
+                folderUrl
+            };
+        } catch (error) {
+            console.error('Google Drive List Error:', error);
+            throw error;
+        }
+    },
+
+    /**
      * 전용 폴더가 있는지 확인하고 없으면 생성
      */
     getOrCreateFolder: async (drive, folderName) => {

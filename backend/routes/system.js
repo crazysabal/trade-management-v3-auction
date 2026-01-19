@@ -233,4 +233,20 @@ router.post('/backup/credentials', async (req, res) => {
     }
 });
 
+// 구글 드라이브 백업 목록 조회 [NEW]
+router.get('/backup/google-drive/files', async (req, res) => {
+    try {
+        // 0. 설정 확인
+        if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_REFRESH_TOKEN) {
+            return res.json({ success: true, data: [] }); // 설정 없으면 빈 배열 반환
+        }
+
+        const files = await googleDriveUtil.listFiles();
+        res.json({ success: true, data: files });
+    } catch (error) {
+        console.error('Google Drive list error:', error);
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
 module.exports = router;

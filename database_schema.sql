@@ -463,6 +463,23 @@ CREATE TABLE IF NOT EXISTS users (
     FOREIGN KEY (role_id) REFERENCES roles(id) ON DELETE SET NULL
 );
 
+-- [PATCH] Safe Add 'full_name' Column Procedure (v1.0.30)
+DROP PROCEDURE IF EXISTS AddFullNameToUsers;
+DELIMITER //
+CREATE PROCEDURE AddFullNameToUsers()
+BEGIN
+    IF NOT EXISTS (
+        SELECT * FROM information_schema.COLUMNS 
+        WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' AND COLUMN_NAME = 'full_name'
+    ) THEN
+        ALTER TABLE users ADD COLUMN full_name VARCHAR(100);
+    END IF;
+END //
+DELIMITER ;
+CALL AddFullNameToUsers();
+DROP PROCEDURE AddFullNameToUsers;
+
+
 -- 32. USER MENU SETTINGS (사용자 메뉴 설정)
 CREATE TABLE IF NOT EXISTS user_menu_settings (
     user_id INT PRIMARY KEY,
