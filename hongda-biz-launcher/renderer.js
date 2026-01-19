@@ -55,6 +55,10 @@ function clearLog() {
     document.getElementById('log-combined').innerHTML = '';
 }
 
+function openLogsFolder() {
+    window.api.openLogsFolder();
+}
+
 // ANSI Code Stripper (Simple regex)
 function stripAnsi(text) {
     return text.replace(/[\u001b\u009b][[()#;?]*(?:[0-9]{1,4}(?:;[0-9]{0,4})*)?[0-9A-ORZcf-nqry=><]/g, '');

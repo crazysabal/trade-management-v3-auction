@@ -22,6 +22,20 @@ let LICENSE_EXPIRY = ''; // [NEW] 라이선스 만료일 저장
 const LOG_DIR = path.join(os.homedir(), '.hongdabiz', 'logs');
 if (!fs.existsSync(LOG_DIR)) fs.mkdirSync(LOG_DIR, { recursive: true });
 
+// [ENCODING] 스마트 디코딩 함수 (UTF-8 우선, 깨질 경우 CP949 시도)
+function smartDecode(buffer) {
+    try {
+        const utf8String = buffer.toString('utf8');
+        // UTF-8 디코딩 시 유효하지 않은 바이트(FFFD)가 포함되어 있다면 CP949로 시도
+        if (utf8String.includes('\uFFFD')) {
+            return iconv.decode(buffer, 'cp949');
+        }
+        return utf8String;
+    } catch (e) {
+        return iconv.decode(buffer, 'cp949');
+    }
+}
+
 function writeLogToFile(type, message) {
     try {
         const today = new Date().toISOString().slice(0, 10).replace(/-/g, '');
@@ -340,13 +354,13 @@ ipcMain.on('start-process', async (event, { type, command, cwd, port }) => {
         event.reply('process-status', { type, status: 'running' });
 
         child.stdout.on('data', (d) => {
-            const decodedData = iconv.decode(d, 'cp949');
+            const decodedData = smartDecode(d);
             if (mainWindow) mainWindow.webContents.send('log-data', { type, data: decodedData });
             writeLogToFile(type, decodedData);
         });
 
         child.stderr.on('data', (d) => {
-            const decodedData = iconv.decode(d, 'cp949');
+            const decodedData = smartDecode(d);
             if (mainWindow) mainWindow.webContents.send('log-data', { type, data: decodedData, isError: true });
             writeLogToFile(`${type}_ERROR`, decodedData);
         });
@@ -396,6 +410,12 @@ ipcMain.on('open-external', (event, url) => {
 
 ipcMain.on('minimize-window', () => {
     if (mainWindow) mainWindow.minimize();
+});
+
+ipcMain.on('open-logs-folder', () => {
+    if (fs.existsSync(LOG_DIR)) {
+        shell.openPath(LOG_DIR);
+    }
 });
 
 // [UPDATE] 자동 업데이트 실행 연동

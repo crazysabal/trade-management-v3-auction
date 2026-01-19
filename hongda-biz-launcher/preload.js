@@ -18,5 +18,6 @@ contextBridge.exposeInMainWorld('api', {
     // [NEW] 수동 업데이트 체크
     checkUpdate: () => ipcRenderer.send('manual-check-update'),
     onUpdateNotAvailable: (callback) => ipcRenderer.on('update-not-available', (event, data) => callback(data)),
-    onUpdateError: (callback) => ipcRenderer.on('update-check-error', (event, data) => callback(data))
+    onUpdateError: (callback) => ipcRenderer.on('update-check-error', (event, data) => callback(data)),
+    openLogsFolder: () => ipcRenderer.send('open-logs-folder')
 });

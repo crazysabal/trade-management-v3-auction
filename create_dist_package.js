@@ -34,7 +34,7 @@ const INCLUDE_LIST = [
     'scripts'                // 업데이트 매니저 포함
 ];
 
-// 2. 제외 규칙 (폴더명/파일명)
+// 2. 제외 규칙 (폴더명/파일명/확장자) - 대소문자 구분 없이 처리됨
 const EXCLUDE_LIST = [
     'node_modules',
     '.git',
@@ -42,13 +42,19 @@ const EXCLUDE_LIST = [
     '.antigravityrules',
     'archive',
     'dist',
+    'out',
+    'build',
     'package-lock.json',
-    '.env',             // 보안을 위해 제외 (setup에서 자동 생성됨)
-    'cookies',          // 경매 세션 정보 유출 방지
-    'puppeteer_data',   // 브라우저 프로필 유출 방지
-    'logs',             // 시스템 로그 제외
-    'temp_update'       // 업데이트 임시 폴더 제외
+    '.env',
+    'cookies',
+    'puppeteer_data',
+    'logs',
+    'temp_update',
+    '.DS_Store',
+    'thumbs.db'
 ];
+
+const EXCLUDE_EXTENSIONS = ['.exe', '.zip', '.log', '.tmp'];
 
 function deleteFolderRecursive(directoryPath) {
     if (fs.existsSync(directoryPath)) {
@@ -66,7 +72,20 @@ function deleteFolderRecursive(directoryPath) {
 
 function copyFolderRecursiveSync(source, target) {
     const name = path.basename(source);
-    if (EXCLUDE_LIST.includes(name)) return;
+    const lowerName = name.toLowerCase();
+    const ext = path.extname(name).toLowerCase();
+
+    // 폴더/파일명 기반 제외 확인
+    if (EXCLUDE_LIST.some(ex => ex.toLowerCase() === lowerName)) {
+        console.log(`  - [SKIP] 제외 대상 폴더/파일: ${name}`);
+        return;
+    }
+
+    // 확장자 기반 제외 확인
+    if (EXCLUDE_EXTENSIONS.includes(ext)) {
+        console.log(`  - [SKIP] 제외 대상 확장자: ${name}`);
+        return;
+    }
 
     if (!fs.existsSync(target)) {
         fs.mkdirSync(target, { recursive: true });
@@ -76,11 +95,20 @@ function copyFolderRecursiveSync(source, target) {
         const files = fs.readdirSync(source);
         files.forEach((file) => {
             const curSource = path.join(source, file);
+            const curTarget = path.join(target, file);
+
             if (fs.lstatSync(curSource).isDirectory()) {
-                copyFolderRecursiveSync(curSource, path.join(target, file));
+                copyFolderRecursiveSync(curSource, curTarget);
             } else {
-                if (!EXCLUDE_LIST.includes(file)) {
-                    fs.copyFileSync(curSource, path.join(target, file));
+                const lowerFile = file.toLowerCase();
+                const fileExt = path.extname(file).toLowerCase();
+
+                if (EXCLUDE_LIST.some(ex => ex.toLowerCase() === lowerFile)) {
+                    console.log(`  - [SKIP] 제외 대상 파일: ${file}`);
+                } else if (EXCLUDE_EXTENSIONS.includes(fileExt)) {
+                    console.log(`  - [SKIP] 제외 대상 확장자: ${file}`);
+                } else {
+                    fs.copyFileSync(curSource, curTarget);
                 }
             }
         });
