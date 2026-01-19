@@ -1,6 +1,6 @@
 {
     "system_name": "Hongda Biz",
-    "version": "1.0.10",
-    "last_updated": "2026-01-19T02:30:00Z",
-    "description": "Hotfix: Dependency Logic Repair (hello-pangea/dnd), DND Expansion & Layout Stabilization"
+    "version": "1.0.11",
+    "last_updated": "2026-01-19T02:40:00Z",
+    "description": "Hotfix v2: Force Re-install Dependencies (@hello-pangea/dnd), Version Sync 1.0.11"
 }
