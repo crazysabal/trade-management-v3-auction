@@ -24,7 +24,9 @@ class UpdateManager {
 
     async getRemoteVersion() {
         return new Promise((resolve, reject) => {
-            https.get(this.remoteVersionUrl, (res) => {
+            // [FIX] GitHub Raw URL 캐싱 방지를 위한 쿼리 파라미터 추가
+            const urlWithCacheBust = `${this.remoteVersionUrl}?t=${Date.now()}`;
+            https.get(urlWithCacheBust, (res) => {
                 let data = '';
                 res.on('data', d => data += d);
                 res.on('end', () => {

@@ -4,6 +4,7 @@ const fs = require('fs');
 const AdmZip = require('adm-zip');
 const backupUtil = require('./backupUtil');
 const iconv = require('iconv-lite');
+const mysqlPathFinder = require('./mysqlPathFinder');
 require('dotenv').config({ path: path.join(__dirname, '../.env') });
 
 /**

@@ -198,7 +198,12 @@ async function checkUpdateOnline() {
                 try {
                     const localVersion = JSON.parse(fs.readFileSync(versionPath, 'utf8')).version;
                     const remoteVersion = JSON.parse(data).version;
-                    if (localVersion !== remoteVersion) {
+
+                    // [FIX] 단순 문자열 비교(!==)가 아닌 버전 대소 비교 수행
+                    // 예: 1.0.25 vs 1.0.24
+                    const isNewer = compareVersions(remoteVersion, localVersion) > 0;
+
+                    if (isNewer) {
                         mainWindow.webContents.send('update-available', { local: localVersion, remote: remoteVersion });
                         resolve({ available: true, local: localVersion, remote: remoteVersion });
                     } else {
@@ -212,6 +217,19 @@ async function checkUpdateOnline() {
             resolve({ error: true, message: err.message });
         });
     });
+}
+
+// [UTIL] 버전 비교 (1: v1 > v2, -1: v1 < v2, 0: same)
+function compareVersions(v1, v2) {
+    const p1 = v1.split('.').map(Number);
+    const p2 = v2.split('.').map(Number);
+    for (let i = 0; i < Math.max(p1.length, p2.length); i++) {
+        const n1 = p1[i] || 0;
+        const n2 = p2[i] || 0;
+        if (n1 > n2) return 1;
+        if (n1 < n2) return -1;
+    }
+    return 0;
 }
 
 // [NEW] 수동 업데이트 체크 IPC

@@ -1,6 +1,6 @@
 {
     "system_name": "Hongda Biz",
-    "version": "1.0.24",
-    "last_updated": "2026-01-19T16:53:00Z",
-    "description": "Final Fix: Self-healing MySQL path discovery for backup/restore. No manual .env configuration needed."
+    "version": "1.0.26",
+    "last_updated": "2026-01-19T17:02:00Z",
+    "description": "Critical Fix: Resolved update loop by adding cache-busting to version check and enforcing strict version comparison logic."
 }
