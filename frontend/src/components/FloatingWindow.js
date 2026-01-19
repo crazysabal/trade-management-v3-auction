@@ -572,7 +572,8 @@ const FloatingWindow = ({ title, icon, onClose, initialPosition = { x: 100, y: 1
             )}
 
             {/* Content */}
-            <div className="window-content-area" style={{ flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column', padding: isMobile ? 0 : contentPadding }}>
+            {/* Content area: Changed to block to ensure proper sticky behavior for children */}
+            <div className="window-content-area" style={{ flex: 1, overflow: 'auto', display: 'block', height: '100%', padding: isMobile ? 0 : contentPadding }}>
                 {children}
             </div>
 

@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef, useCallback, memo } from 'react';
-import { createPortal } from 'react-dom';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import { Link } from 'react-router-dom';
 import { companyAPI } from '../services/api';
+import useTableDnd from '../hooks/useTableDnd';
+import TableDndRow from '../components/TableDndRow';
 import SearchableSelect from '../components/SearchableSelect';
 import ConfirmModal from '../components/ConfirmModal';
 import CompanyForm from './CompanyForm';
@@ -53,6 +54,7 @@ const CompanyRow = memo(function CompanyRow({
       {...provided?.draggableProps}
       className={`${snapshot?.isDragging ? 'drag-over' : ''} ${!company.is_active ? 'inactive-row' : ''}`}
       style={style}
+      data-id={company.id}
     >
       <td className="text-center" style={snapshot?.isDragging ? { width: columnWidths[0] } : {}}>
         <input
@@ -73,19 +75,24 @@ const CompanyRow = memo(function CompanyRow({
         {canReorder ? '☰' : '•'}
       </td>
 
-      <td className={`ellipsis ${company.company_name ? '' : 'text-muted'}`} style={snapshot?.isDragging ? { width: columnWidths[2] } : {}} title={company.company_name}>{company.company_name || '-'}</td>
-      <td className="ellipsis" style={snapshot?.isDragging ? { width: columnWidths[3] } : {}} title={company.business_name}>{company.business_name || '-'}</td>
-      <td style={snapshot?.isDragging ? { width: columnWidths[4] } : {}}>{company.business_number}</td>
-      <td className="ellipsis" style={snapshot?.isDragging ? { width: columnWidths[5] } : {}} title={company.ceo_name}>{company.ceo_name}</td>
+      {/* [NEW] 순서 컬럼 */}
+      <td className="text-center" style={{ color: '#64748b', ...(snapshot?.isDragging ? { width: columnWidths[2] } : {}) }}>
+        {index + 1}
+      </td>
+
+      <td className={`ellipsis ${company.company_name ? '' : 'text-muted'}`} style={snapshot?.isDragging ? { width: columnWidths[3] } : {}} title={company.company_name}>{company.company_name || '-'}</td>
+      <td className="ellipsis" style={snapshot?.isDragging ? { width: columnWidths[4] } : {}} title={company.business_name}>{company.business_name || '-'}</td>
+      <td style={snapshot?.isDragging ? { width: columnWidths[5] } : {}}>{company.business_number}</td>
+      <td className="ellipsis" style={snapshot?.isDragging ? { width: columnWidths[6] } : {}} title={company.ceo_name}>{company.ceo_name}</td>
       <td
         className="text-center clickable"
         onClick={onToggleCompanyType}
         title="클릭하여 구분 변경 (매출처 → 매입처 → 매입/매출)"
-        style={snapshot?.isDragging ? { width: columnWidths[6] } : {}}
+        style={snapshot?.isDragging ? { width: columnWidths[7] } : {}}
       >
         {getTypeBadge(company.company_type_flag)}
       </td>
-      <td className="text-center" style={snapshot?.isDragging ? { width: columnWidths[7] } : {}}>
+      <td className="text-center" style={snapshot?.isDragging ? { width: columnWidths[8] } : {}}>
         <label className="toggle-switch" title="클릭하여 전자계산서 발행 설정">
           <input
             type="checkbox"
@@ -97,7 +104,7 @@ const CompanyRow = memo(function CompanyRow({
           </span>
         </label>
       </td>
-      <td className="text-center" style={snapshot?.isDragging ? { width: columnWidths[8] } : {}}>
+      <td className="text-center" style={snapshot?.isDragging ? { width: columnWidths[9] } : {}}>
         <span
           className={`badge clickable ${company.is_active ? 'badge-success' : 'badge-secondary'}`}
           onClick={onToggleActive}
@@ -107,7 +114,7 @@ const CompanyRow = memo(function CompanyRow({
         </span>
       </td>
       {!isSelectMode && (
-        <td className="text-center" style={{ whiteSpace: 'nowrap', ...(snapshot?.isDragging ? { width: columnWidths[9] } : {}) }}>
+        <td className="text-center" style={{ whiteSpace: 'nowrap', ...(snapshot?.isDragging ? { width: columnWidths[10] } : {}) }}>
           <button
             onClick={() => onEdit(company)}
             className="btn btn-sm btn-primary"
@@ -196,6 +203,7 @@ const filterCompanies = (companies, filters) => {
 
 function CompanyList({ isWindow }) {
   const [companies, setCompanies] = useState([]);
+  const [originalCompanies, setOriginalCompanies] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState({
     search: '',
@@ -204,21 +212,33 @@ function CompanyList({ isWindow }) {
   });
 
   // Cleanup Refs related to manual drag
-  const companiesRef = useRef(companies);
-  const dragItemIndex = useRef(null);
+  const companiesRef = useRef([]);
+
+  const handleReorder = async (newItems) => {
+    setOriginalCompanies(newItems);
+    companiesRef.current = newItems;
+    try {
+      const items = newItems.map((company, index) => ({
+        id: company.id,
+        sort_order: index + 1
+      }));
+      await companyAPI.reorder({ items });
+    } catch (error) {
+      console.error('순번 저장 오류:', error);
+    }
+  };
+
+  const {
+    // We use the hook's localItems as the base for filtering
+    columnWidths,
+    onDragStart,
+    onDragEnd
+  } = useTableDnd(originalCompanies, handleReorder);
 
   // Sync latestCompanies ref for DnD stability if needed
   useEffect(() => {
     companiesRef.current = companies;
   }, [companies]);
-
-  // Mobile check (Optional now as library handles it, but maybe used for UI responsiveness)
-  const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
-  useEffect(() => {
-    const handleResize = () => setIsMobile(window.innerWidth <= 768);
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
 
   // 다중 선택 삭제 관련 상태
   const [selectedIds, setSelectedIds] = useState([]);
@@ -249,7 +269,6 @@ function CompanyList({ isWindow }) {
   });
 
   // [NEW] Drag & Drop Column Widths
-  const [columnWidths, setColumnWidths] = useState([]);
 
   // 모달 ESC 닫기 처리
   useEffect(() => {
@@ -273,7 +292,13 @@ function CompanyList({ isWindow }) {
   }, [editModal.isOpen]);
 
   // 전체 데이터 원본 (클라이언트 필터링용)
-  const [originalCompanies, setOriginalCompanies] = useState([]);
+  // Mobile check (Optional now as library handles it, but maybe used for UI responsiveness)
+  const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth <= 768);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   // 필터 변경 시 클라이언트 사이드 필터링 (즉시 반응 & 버벅임 제거)
   useEffect(() => {
@@ -583,47 +608,7 @@ function CompanyList({ isWindow }) {
 
   // --- DnD Handlers using @hello-pangea/dnd ---
 
-  const onDragStart = (start) => {
-    // Capture the widths of all cells in the row being dragged
-    const tr = document.querySelector(`[data-rbd-draggable-id="${start.draggableId}"]`);
-    if (tr) {
-      const cells = Array.from(tr.querySelectorAll('td'));
-      const widths = cells.map(cell => `${cell.getBoundingClientRect().width}px`);
-      setColumnWidths(widths);
-    }
-  };
-
-  const onDragEnd = async (result) => {
-    const { source, destination } = result;
-
-    // Dropped outside or no change
-    if (!destination) return;
-    if (destination.index === source.index) return;
-
-    // 필터링된 상태에서는 정렬 불가 (UI상 드래그 핸들이 비활성화 되겠지만 안전장치)
-    if (filters.search.trim()) return;
-
-    const newCompanies = Array.from(companies);
-    const [movedCompany] = newCompanies.splice(source.index, 1);
-    newCompanies.splice(destination.index, 0, movedCompany);
-
-    // Optimistic UI update
-    setCompanies(newCompanies);
-    setOriginalCompanies(newCompanies); // Sync original
-    companiesRef.current = newCompanies;
-
-    // API Call
-    try {
-      const items = newCompanies.map((company, index) => ({
-        id: company.id,
-        sort_order: index + 1
-      }));
-      await companyAPI.reorder({ items });
-    } catch (error) {
-      console.error('순번 저장 오류:', error);
-      // Revert logic could be added here if critical
-    }
-  };
+  // Removed Legacy Mobile Implementation
 
   // Removed Legacy Mobile Implementation
 
@@ -871,19 +856,39 @@ function CompanyList({ isWindow }) {
   };
 
   return (
-    <div className={`company-list-wrapper ${isWindow ? 'is-window' : ''}`}>
-      {!isWindow && (
-        <div className="page-header">
-          <h1 className="page-title company-title">🏢 거래처 관리</h1>
-        </div>
-      )}
+    <div className={`company-list-wrapper ${isWindow ? 'is-window' : ''}`} style={isWindow ? {
+      display: 'block',
+      height: 'auto',
+      overflow: 'visible'
+    } : {
+      minHeight: '100%',
+      height: '100%',
+      display: 'flex',
+      flexDirection: 'column',
+      overflow: 'auto'
+    }}>
+      {/* Standard 35.29: MDI High-Density Flexbar (Sticky Utility) */}
+      <div style={isWindow ? {
+        position: 'sticky',
+        top: 0,
+        zIndex: 110,
+        backgroundColor: 'white',
+        padding: '1rem 1rem 0.5rem 1rem', // Add internal padding as window has 0
+        borderBottom: '1px solid #e5e7eb',
+        boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+      } : {}}>
+        {!isWindow && (
+          <div className="page-header">
+            <h1 className="page-title company-title">🏢 거래처 관리</h1>
+          </div>
+        )}
 
-      <div className="search-filter-container">
-        <div style={{
+        <div className="search-filter-container" style={{
           display: 'flex',
           alignItems: 'center',
           gap: '0.5rem',
-          flexWrap: 'nowrap'
+          flexWrap: 'nowrap',
+          padding: isWindow ? '0.5rem 1rem' : '1rem'
         }}>
           {/* 1. 검색 (Search) */}
           <div style={{ flex: 1, minWidth: 0 }}>
@@ -898,14 +903,37 @@ function CompanyList({ isWindow }) {
                 fontSize: '1rem',
                 border: '1px solid #ddd',
                 borderRadius: '4px',
-                height: '38px', // Match button height
+                height: '38px',
                 boxSizing: 'border-box'
               }}
             />
           </div>
 
-          {/* 3. 등록 (Register) */}
-          <div style={{ display: 'flex', gap: '0.5rem' }}>
+          {/* 2. 필터 (Filters) */}
+          <div style={{ display: 'flex', gap: '0.5rem', flexShrink: 0 }}>
+            <select
+              value={filters.company_type}
+              onChange={(e) => setFilters(prev => ({ ...prev, company_type: e.target.value }))}
+              style={{ height: '38px', padding: '0 0.5rem', borderRadius: '4px', border: '1px solid #ddd' }}
+            >
+              <option value="all">모든 구분</option>
+              <option value="CUSTOMER">매출처</option>
+              <option value="SUPPLIER">매입처</option>
+              <option value="BOTH">매입/매출</option>
+            </select>
+            <select
+              value={filters.is_active}
+              onChange={(e) => setFilters(prev => ({ ...prev, is_active: e.target.value }))}
+              style={{ height: '38px', padding: '0 0.5rem', borderRadius: '4px', border: '1px solid #ddd' }}
+            >
+              <option value="all">모든 상태</option>
+              <option value="true">사용 중</option>
+              <option value="false">미사용</option>
+            </select>
+          </div>
+
+          {/* 3. 액션 (Actions) */}
+          <div style={{ display: 'flex', gap: '0.5rem', flexShrink: 0 }}>
             <button className="btn btn-outline-secondary" onClick={() => {
               setFilters({ search: '', company_type: 'all', is_active: 'all' });
             }}>
@@ -954,7 +982,7 @@ function CompanyList({ isWindow }) {
                 <button
                   onClick={handleExportExcel}
                   className="btn btn-secondary"
-                  style={{ height: '38px', padding: '0 0.75rem', whiteSpace: 'nowrap', marginRight: '0.5rem' }}
+                  style={{ height: '38px', padding: '0 0.75rem', whiteSpace: 'nowrap' }}
                 >
                   📤 내보내기
                 </button>
@@ -969,13 +997,11 @@ function CompanyList({ isWindow }) {
             )}
           </div>
         </div>
-
       </div>
 
-      {/* 2. Company List Table */}
-      <div className="table-responsive" style={{ overflowX: 'auto', overflowY: 'visible' }}>
+      {/* Standard 35.28: Delegate scroll to parent, force overflow visible for both X and Y to avoid DnD nested scroll detection */}
+      <div className="table-container" style={isWindow ? { overflow: 'visible' } : { flex: 1, overflow: 'auto' }}>
         {(() => {
-          // Simplified Reorder Condition: No search and Not in select mode
           const canReorder = !filters.search.trim() && !isSelectMode;
 
           return isMobile ? (
@@ -989,8 +1015,6 @@ function CompanyList({ isWindow }) {
                     className="company-card p-4 border-b border-gray-200 bg-white"
                     style={{
                       backgroundColor: !company.is_active ? '#f9fafb' : 'white',
-                      opacity: draggedId === company.id ? 0.3 : 1,
-                      transition: 'transform 0.2s cubic-bezier(0.2, 0, 0, 1), box-shadow 0.2s',
                     }}
                   >
                     <div className="card-row-content" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -1026,26 +1050,22 @@ function CompanyList({ isWindow }) {
                         </span>
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                        <div style={{ width: '50px', display: 'flex', justifyContent: 'center', flexShrink: 0 }}>
-                          <button
-                            onClick={(e) => { e.stopPropagation(); handleEdit(company); }}
-                            className="btn btn-sm btn-primary"
-                            style={{ padding: '0.2rem 0.5rem', fontSize: '0.8rem' }}
-                          >
-                            수정
-                          </button>
-                        </div>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleEdit(company); }}
+                          className="btn btn-sm btn-primary"
+                          style={{ padding: '0.2rem 0.5rem', fontSize: '0.8rem' }}
+                        >
+                          수정
+                        </button>
                         <div
-                          className={`drag-handle touch-none no-select ${canReorder ? '' : 'opacity-30'}`}
-                          onTouchStart={(e) => canReorder && handleTouchStart(e, index, company)}
+                          className={`drag-handle touch-none no-select ${canReorder ? '' : 'button-disabled'}`}
                           style={{
                             width: '40px',
                             display: 'flex',
                             justifyContent: 'center',
                             fontSize: '1.2rem',
                             color: '#999',
-                            cursor: canReorder ? 'grab' : 'not-allowed',
-                            flexShrink: 0
+                            cursor: canReorder ? 'grab' : 'not-allowed'
                           }}
                         >
                           {canReorder ? '≡' : '•'}
@@ -1058,8 +1078,8 @@ function CompanyList({ isWindow }) {
             </div>
           ) : (
             <DragDropContext onDragStart={onDragStart} onDragEnd={onDragEnd}>
-              <table style={{ tableLayout: 'fixed', width: '100%' }}>
-                <thead>
+              <table style={{ tableLayout: 'auto', width: '100%' }}>
+                <thead style={isWindow ? { position: 'sticky', top: '105px', zIndex: 10 } : {}}>
                   <tr>
                     <th style={{ width: '40px', textAlign: 'center' }}>
                       <input
@@ -1070,6 +1090,7 @@ function CompanyList({ isWindow }) {
                       />
                     </th>
                     <th style={{ width: '40px' }}></th>
+                    <th style={{ width: '50px', textAlign: 'center' }}>순서</th>
                     <th>거래처 명</th>
                     <th>사업자 명</th>
                     <th>사업자번호</th>
@@ -1081,11 +1102,11 @@ function CompanyList({ isWindow }) {
                   </tr>
                 </thead>
                 <Droppable droppableId="company-list" type="COMPANY">
-                  {(provided, snapshot) => (
+                  {(provided) => (
                     <tbody ref={provided.innerRef} {...provided.droppableProps}>
                       {companies.length === 0 ? (
                         <tr>
-                          <td colSpan="10" className="text-center">등록된 거래처가 없습니다.</td>
+                          <td colSpan="11" className="text-center">등록된 거래처가 없습니다.</td>
                         </tr>
                       ) : (
                         companies.map((company, index) => (
@@ -1093,21 +1114,19 @@ function CompanyList({ isWindow }) {
                             key={company.id}
                             draggableId={String(company.id)}
                             index={index}
-                            isDragDisabled={!canReorder} // Strict condition
+                            isDragDisabled={!canReorder}
                           >
-                            {(provided, snapshot) => {
-                              const child = (
+                            {(provided, snapshot) => (
+                              <TableDndRow provided={provided} snapshot={snapshot}>
                                 <CompanyRow
-                                  key={company.id}
                                   company={company}
                                   index={index}
                                   isSelectMode={isSelectMode}
                                   isSelected={selectedIds.includes(company.id)}
-                                  isDragOver={snapshot.isDragging}
                                   canReorder={canReorder}
                                   provided={provided}
                                   snapshot={snapshot}
-                                  columnWidths={columnWidths} // Pass the widths
+                                  columnWidths={columnWidths}
                                   onCheckboxToggle={() => handleCheckboxToggle(company.id)}
                                   onToggleCompanyType={() => handleToggleCompanyType(company)}
                                   onToggleETaxInvoice={() => handleToggleETaxInvoice(company)}
@@ -1116,20 +1135,8 @@ function CompanyList({ isWindow }) {
                                   onEdit={handleEdit}
                                   getTypeBadge={getTypeBadge}
                                 />
-                              );
-
-                              if (snapshot.isDragging) {
-                                return createPortal(
-                                  <table style={{ tableLayout: 'fixed', width: provided.draggableProps.style.width, borderCollapse: 'collapse' }}>
-                                    <tbody>
-                                      {child}
-                                    </tbody>
-                                  </table>,
-                                  document.body
-                                );
-                              }
-                              return child;
-                            }}
+                              </TableDndRow>
+                            )}
                           </Draggable>
                         ))
                       )}

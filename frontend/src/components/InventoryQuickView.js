@@ -64,9 +64,9 @@ const InventoryQuickView = ({ inventoryAdjustments = {}, refreshKey, onInventory
             });
         };
 
-        // 퀵 추가 완료 후 포커스 복구 및 "자동 다음 행 이동"
-        const handleAddComplete = () => {
-            recoverListFocus(true);
+        // 퀵 추가 완료 후 포커스 복구 및 "성공 시에만 자동 다음 행 이동"
+        const handleAddComplete = (e) => {
+            recoverListFocus(e.detail?.success === true);
         };
 
         // [NEW] 퀵 추가 중 오류 발생 시 모달 표시 리스너

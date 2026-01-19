@@ -1,7 +1,10 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import { settingsAPI } from '../services/api';
 import PaymentMethodModal from '../components/PaymentMethodModal';
 import { useConfirmModal } from '../components/ConfirmModal';
+import useTableDnd from '../hooks/useTableDnd';
+import TableDndRow from '../components/TableDndRow';
 import '../components/TradePanel.css'; // 공통 테이블 스타일 사용
 
 const PaymentMethodManagement = ({ isWindow }) => {
@@ -103,33 +106,10 @@ const PaymentMethodManagement = ({ isWindow }) => {
         });
     };
 
-    // 드래그 앤 드롭 핸들러 (지출 관리와 동일한 로직)
-    const handleDragStart = (e, position) => {
-        dragItem.current = position;
-        e.dataTransfer.effectAllowed = 'move';
-        const row = e.target.closest('tr');
-        if (row) e.dataTransfer.setDragImage(row, 0, 0);
-    };
+    // 드래그 앤 드롭 Refs - 제거됨 (Standard 35.30 useTableDnd 사용)
 
-    const handleDragEnter = (e, position) => {
-        dragOverItem.current = position;
-    };
-
-    const handleDrop = async (e) => {
-        if (dragItem.current === null || dragOverItem.current === null || dragItem.current === dragOverItem.current) return;
-
-        const copyItems = [...paymentMethods];
-        const dragContent = copyItems[dragItem.current];
-
-        copyItems.splice(dragItem.current, 1);
-        copyItems.splice(dragOverItem.current, 0, dragContent);
-
-        dragItem.current = null;
-        dragOverItem.current = null;
-
-        setPaymentMethods(copyItems);
-
-        const reorderedData = copyItems.map((item, index) => ({
+    const handleReorder = async (newItems) => {
+        const reorderedData = newItems.map((item, index) => ({
             id: item.id,
             sort_order: (index + 1) * 10
         }));
@@ -142,10 +122,32 @@ const PaymentMethodManagement = ({ isWindow }) => {
         }
     };
 
+    const {
+        localItems: displayedPaymentMethods,
+        columnWidths,
+        onDragStart,
+        onDragEnd
+    } = useTableDnd(paymentMethods, handleReorder);
+
     return (
-        <div className="payment-methods-mgmt" style={{ width: '100%', height: '100%', padding: '0.5rem' }}>
-            {/* 상단 액션 바 */}
-            <div style={{ textAlign: 'right', marginBottom: '0.5rem' }}>
+        <div className="payment-methods-mgmt" style={{
+            display: 'block',
+            height: 'auto',
+            padding: '0.5rem',
+            overflow: 'visible'
+        }}>
+            {/* Standard 35.31: Sticky Utility Bar */}
+            <div style={{
+                position: 'sticky',
+                top: 0,
+                zIndex: 110,
+                backgroundColor: 'white',
+                padding: '0.5rem',
+                borderBottom: '1px solid #e5e7eb',
+                boxShadow: '0 2px 4px rgba(0,0,0,0.05)',
+                marginBottom: '0.5rem',
+                textAlign: 'right'
+            }}>
                 <button
                     onClick={handleAdd}
                     className="btn btn-primary"
@@ -158,98 +160,118 @@ const PaymentMethodManagement = ({ isWindow }) => {
             {loading ? (
                 <div style={{ textAlign: 'center', padding: '2rem', color: '#64748b' }}>로딩 중...</div>
             ) : (
-                <div className="table-container">
-                    <table className="trade-Table" style={{ width: '100%' }}>
-                        <thead>
-                            <tr>
-                                <th style={{ width: '50px', textAlign: 'center', padding: '0.5rem', fontSize: '0.85rem' }}></th>
-                                <th style={{ width: '80px', textAlign: 'center', padding: '0.5rem', fontSize: '0.85rem' }}>순서</th>
-                                <th style={{ padding: '0.5rem', fontSize: '0.85rem', textAlign: 'left' }}>결제 방법 명칭</th>
-                                <th style={{ width: '100px', textAlign: 'center', padding: '0.5rem', fontSize: '0.85rem' }}>상태</th>
-                                <th style={{ width: '150px', textAlign: 'center', padding: '0.5rem', fontSize: '0.85rem' }}>관리</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {paymentMethods.length > 0 ? (
-                                paymentMethods.map((method, index) => (
-                                    <tr
-                                        key={method.id}
-                                        onDragEnter={(e) => handleDragEnter(e, index)}
-                                        onDragEnd={handleDrop}
-                                        onDragOver={(e) => e.preventDefault()}
-                                        className={`hover-row ${!method.is_active ? 'inactive-row' : ''}`}
-                                    >
-                                        <td style={{ textAlign: 'center', color: '#adb5bd', padding: '0.5rem' }}>
-                                            <span
-                                                className="drag-handle"
-                                                draggable={true}
-                                                onDragStart={(e) => handleDragStart(e, index)}
-                                                style={{ cursor: 'grab', display: 'inline-block' }}
-                                                title="드래그하여 순서 변경"
-                                            >
-                                                ☰
-                                            </span>
-                                        </td>
-                                        <td style={{ textAlign: 'center', padding: '0.5rem', fontSize: '0.85rem', color: '#64748b' }}>
-                                            {index + 1}
-                                        </td>
-                                        <td style={{ padding: '0.5rem', fontSize: '0.85rem', fontWeight: '500' }}>
-                                            {method.name}
-                                        </td>
-                                        <td style={{ textAlign: 'center', padding: '0.5rem' }}>
-                                            <span
-                                                className={`badge ${method.is_active ? 'badge-success' : 'badge-secondary'}`}
-                                                onClick={() => toggleActive(method)}
-                                                title="클릭하여 상태 변경"
-                                            >
-                                                {method.is_active ? '사용' : '미사용'}
-                                            </span>
-                                        </td>
-                                        <td style={{ textAlign: 'center', padding: '0.5rem' }}>
-                                            <div style={{ display: 'flex', gap: '4px', justifyContent: 'center', alignItems: 'center' }}>
-                                                <button
-                                                    onClick={() => handleEdit(method)}
-                                                    className="btn btn-sm btn-primary"
-                                                    style={{
-                                                        padding: '2px 8px',
-                                                        fontSize: '0.8rem',
-                                                        width: 'auto',
-                                                        minWidth: '0',
-                                                        height: '28px',
-                                                        whiteSpace: 'nowrap',
-                                                        flex: 'none'
-                                                    }}
-                                                >
-                                                    수정
-                                                </button>
-                                                <button
-                                                    onClick={() => handleDelete(method)}
-                                                    className="btn btn-sm btn-danger"
-                                                    style={{
-                                                        padding: '2px 8px',
-                                                        fontSize: '0.8rem',
-                                                        width: 'auto',
-                                                        minWidth: '0',
-                                                        height: '28px',
-                                                        whiteSpace: 'nowrap',
-                                                        flex: 'none'
-                                                    }}
-                                                >
-                                                    삭제
-                                                </button>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                ))
-                            ) : (
+                <div className="table-container" style={{ overflow: 'visible' }}>
+                    <DragDropContext onDragStart={onDragStart} onDragEnd={onDragEnd}>
+                        <table className="trade-Table" style={{ width: '100%', tableLayout: 'fixed' }}>
+                            <thead style={{ position: 'sticky', top: '54px', zIndex: 10 }}>
                                 <tr>
-                                    <td colSpan="5" style={{ textAlign: 'center', padding: '3rem', color: '#94a3b8' }}>
-                                        등록된 결제 방법이 없습니다.
-                                    </td>
+                                    <th style={{ width: '50px', textAlign: 'center', padding: '0.5rem', fontSize: '0.85rem' }}></th>
+                                    <th style={{ width: '80px', textAlign: 'center', padding: '0.5rem', fontSize: '0.85rem' }}>순서</th>
+                                    <th style={{ padding: '0.5rem', fontSize: '0.85rem', textAlign: 'left' }}>결제 방법 명칭</th>
+                                    <th style={{ width: '100px', textAlign: 'center', padding: '0.5rem', fontSize: '0.85rem' }}>상태</th>
+                                    <th style={{ width: '150px', textAlign: 'center', padding: '0.5rem', fontSize: '0.85rem' }}>관리</th>
                                 </tr>
-                            )}
-                        </tbody>
-                    </table>
+                            </thead>
+                            <Droppable droppableId="payment-methods">
+                                {(provided) => (
+                                    <tbody ref={provided.innerRef} {...provided.droppableProps}>
+                                        {displayedPaymentMethods.length > 0 ? (
+                                            displayedPaymentMethods.map((method, index) => (
+                                                <Draggable key={method.id} draggableId={String(method.id)} index={index}>
+                                                    {(provided, snapshot) => (
+                                                        <TableDndRow provided={provided} snapshot={snapshot}>
+                                                            <tr
+                                                                ref={provided.innerRef}
+                                                                {...provided.draggableProps}
+                                                                className={`hover-row ${!method.is_active ? 'inactive-row' : ''}`}
+                                                                style={{
+                                                                    ...provided.draggableProps.style,
+                                                                    backgroundColor: snapshot.isDragging ? '#f8fafc' : (index % 2 === 0 ? '#ffffff' : '#f8fafc'),
+                                                                    boxShadow: snapshot.isDragging ? '0 5px 15px rgba(0,0,0,0.1)' : 'none',
+                                                                    opacity: snapshot.isDragging ? 0.9 : 1
+                                                                }}
+                                                            >
+                                                                <td
+                                                                    className="drag-handle"
+                                                                    {...provided.dragHandleProps}
+                                                                    style={{
+                                                                        textAlign: 'center',
+                                                                        color: snapshot.isDragging ? '#3182ce' : '#adb5bd',
+                                                                        padding: '0.5rem',
+                                                                        cursor: snapshot.isDragging ? 'grabbing' : 'grab',
+                                                                        width: snapshot.isDragging ? columnWidths[0] : '50px'
+                                                                    }}
+                                                                >
+                                                                    ☰
+                                                                </td>
+                                                                <td style={{ textAlign: 'center', padding: '0.5rem', fontSize: '0.85rem', color: '#64748b', ...(snapshot.isDragging ? { width: columnWidths[1] } : {}) }}>
+                                                                    {index + 1}
+                                                                </td>
+                                                                <td style={{ padding: '0.5rem', fontSize: '0.85rem', fontWeight: '500', ...(snapshot.isDragging ? { width: columnWidths[2] } : {}) }}>
+                                                                    {method.name}
+                                                                </td>
+                                                                <td style={{ textAlign: 'center', padding: '0.5rem', ...(snapshot.isDragging ? { width: columnWidths[3] } : {}) }}>
+                                                                    <span
+                                                                        className={`badge ${method.is_active ? 'badge-success' : 'badge-secondary'}`}
+                                                                        onClick={() => toggleActive(method)}
+                                                                        title="클릭하여 상태 변경"
+                                                                        style={{ cursor: 'pointer' }}
+                                                                    >
+                                                                        {method.is_active ? '사용' : '미사용'}
+                                                                    </span>
+                                                                </td>
+                                                                <td style={{ textAlign: 'center', padding: '0.5rem', ...(snapshot.isDragging ? { width: columnWidths[4] } : {}) }}>
+                                                                    <div style={{ display: 'flex', gap: '4px', justifyContent: 'center', alignItems: 'center' }}>
+                                                                        <button
+                                                                            onClick={() => handleEdit(method)}
+                                                                            className="btn btn-sm btn-primary"
+                                                                            style={{
+                                                                                padding: '2px 8px',
+                                                                                fontSize: '0.8rem',
+                                                                                width: 'auto',
+                                                                                minWidth: '0',
+                                                                                height: '28px',
+                                                                                whiteSpace: 'nowrap',
+                                                                                flex: 'none'
+                                                                            }}
+                                                                        >
+                                                                            수정
+                                                                        </button>
+                                                                        <button
+                                                                            onClick={() => handleDelete(method)}
+                                                                            className="btn btn-sm btn-danger"
+                                                                            style={{
+                                                                                padding: '2px 8px',
+                                                                                fontSize: '0.8rem',
+                                                                                width: 'auto',
+                                                                                minWidth: '0',
+                                                                                height: '28px',
+                                                                                whiteSpace: 'nowrap',
+                                                                                flex: 'none'
+                                                                            }}
+                                                                        >
+                                                                            삭제
+                                                                        </button>
+                                                                    </div>
+                                                                </td>
+                                                            </tr>
+                                                        </TableDndRow>
+                                                    )}
+                                                </Draggable>
+                                            ))
+                                        ) : (
+                                            <tr>
+                                                <td colSpan="5" style={{ textAlign: 'center', padding: '3rem', color: '#94a3b8' }}>
+                                                    등록된 결제 방법이 없습니다.
+                                                </td>
+                                            </tr>
+                                        )}
+                                        {provided.placeholder}
+                                    </tbody>
+                                )}
+                            </Droppable>
+                        </table>
+                    </DragDropContext>
                 </div>
             )}
 

@@ -2935,6 +2935,14 @@ function TradePanel({
             className="modal-overlay"
             onMouseDown={(e) => e.stopPropagation()} // 이벤트 버블링 차단하여 뒤의 전표 창이 앞으로 튀어나오지 않게 함
             onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') {
+                setInventoryInputModal(prev => ({ ...prev, isOpen: false }));
+                // 취소 시에도 재고 목록 창에 포커스 반환
+                if (window.__bringToFront) window.__bringToFront('INVENTORY_QUICK');
+                window.dispatchEvent(new CustomEvent('inventory-quick-add-complete', { detail: { success: false } }));
+              }
+            }}
             style={{
               position: 'fixed',
               top: 0,
@@ -2981,7 +2989,7 @@ function TradePanel({
                   {(() => {
                     const inv = inventoryInputModal.inventory || {};
                     const weight = inv.weight || inv.product_weight;
-                    const unit = detail.weight_unit || detail.product_weight_unit || 'kg';
+                    const unit = inv.weight_unit || inv.product_weight_unit || 'kg';
                     const weightText = weight ? `${parseFloat(weight)}${unit}` : '';
                     const senderText = inv.sender ? ` ${inv.sender} ` : '';
                     const gradeText = inv.grade ? ` (${inv.grade})` : '';

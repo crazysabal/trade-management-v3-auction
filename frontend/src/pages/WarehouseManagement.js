@@ -1,7 +1,10 @@
 import React, { useState, useEffect } from 'react';
+import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import { warehousesAPI } from '../services/api';
 import WarehouseModal from '../components/WarehouseModal';
 import ConfirmModal from '../components/ConfirmModal';
+import useTableDnd from '../hooks/useTableDnd';
+import TableDndRow from '../components/TableDndRow';
 import './Settings.css'; // 설정 페이지 스타일 재사용
 
 const WarehouseManagement = () => {
@@ -18,67 +21,24 @@ const WarehouseManagement = () => {
     // 경고 모달 상태 (재고 있음)
     const [warningModal, setWarningModal] = useState({ isOpen: false, message: '' });
 
-    // 드래그 앤 드롭 Refs
-    const dragItem = React.useRef();
-    const dragOverItem = React.useRef();
+    // 드래그 앤 드롭 Refs - 제거됨 (Standard 35.30: useTableDnd 사용)
 
-    const handleDragStart = (e, position) => {
-        dragItem.current = position;
-        e.dataTransfer.effectAllowed = 'move';
-        // 드래그 이미지를 행 전체로 설정
-        const row = e.target.closest('tr');
-        if (row) {
-            e.dataTransfer.setDragImage(row, 0, 0);
-        }
-        // 드래그 중인 행 스타일링 (선택적)
-        if (row) row.classList.add('dragging');
-    };
-
-    const handleDragEnter = (e, position) => {
-        dragOverItem.current = position;
-        e.preventDefault();
-    };
-
-    const handleDragOver = (e) => {
-        e.preventDefault();
-        return false;
-    };
-
-    const handleDragEnd = async (e) => {
-        e.target.classList.remove('dragging');
-
-        const startIdx = dragItem.current;
-        const endIdx = dragOverItem.current;
-
-        if (startIdx === undefined || endIdx === undefined || startIdx === endIdx) {
-            dragItem.current = null;
-            dragOverItem.current = null;
-            return;
-        }
-
-        const newWarehouses = [...warehouses];
-        const draggedItemContent = newWarehouses[startIdx];
-
-        // 배열 재정렬
-        newWarehouses.splice(startIdx, 1);
-        newWarehouses.splice(endIdx, 0, draggedItemContent);
-
-        dragItem.current = null;
-        dragOverItem.current = null;
-
-        // UI 즉시 업데이트
-        setWarehouses(newWarehouses);
-
-        // 서버 저장
+    const handleReorder = async (newItems) => {
+        const orderedIds = newItems.map(w => w.id);
         try {
-            const orderedIds = newWarehouses.map(w => w.id);
             await warehousesAPI.reorder(orderedIds);
-            // 성공 시 조용히 넘어감 (이미 UI는 반영됨)
         } catch (error) {
-            showStatus('error', '순서 저장 실패 (새로고침 더미)');
-            fetchWarehouses(); // 실패 시 원복
+            showStatus('error', '순서 저장 실패');
+            fetchWarehouses();
         }
     };
+
+    const {
+        localItems: displayedWarehouses,
+        columnWidths,
+        onDragStart,
+        onDragEnd
+    } = useTableDnd(warehouses, handleReorder);
 
     useEffect(() => {
         fetchWarehouses();
@@ -166,9 +126,24 @@ const WarehouseManagement = () => {
     };
 
     return (
-        <div className="warehouse-management" style={{ width: '100%', height: '100%', padding: '0.5rem' }}>
-            {/* 상단 버튼 영역 */}
-            <div style={{ textAlign: 'right', marginBottom: '0.5rem' }}>
+        <div className="warehouse-management" style={{
+            display: 'block',
+            height: 'auto',
+            padding: '0.5rem',
+            overflow: 'visible'
+        }}>
+            {/* Standard 35.31: Sticky Utility Bar */}
+            <div style={{
+                position: 'sticky',
+                top: 0,
+                zIndex: 110,
+                backgroundColor: 'white',
+                padding: '0.5rem',
+                borderBottom: '1px solid #e5e7eb',
+                boxShadow: '0 2px 4px rgba(0,0,0,0.05)',
+                marginBottom: '0.5rem',
+                textAlign: 'right'
+            }}>
                 <button
                     onClick={handleCreate}
                     className="btn btn-primary"
@@ -187,97 +162,117 @@ const WarehouseManagement = () => {
                 </button>
             </div>
 
-            <div className="table-container">
-                <table className="trade-Table" style={{ width: '100%' }}>
-                    <thead>
-                        <tr>
-                            <th style={{ width: '50px', textAlign: 'center', padding: '0.5rem', fontSize: '0.85rem' }}></th>
-                            <th style={{ width: '80px', textAlign: 'center', padding: '0.5rem', fontSize: '0.85rem' }}>순서</th>
-                            <th style={{ padding: '0.5rem', fontSize: '0.85rem' }}>창고명</th>
-                            <th style={{ width: '80px', textAlign: 'center', padding: '0.5rem', fontSize: '0.85rem' }}>기본</th>
-                            <th style={{ width: '100px', textAlign: 'center', padding: '0.5rem', fontSize: '0.85rem' }}>상태</th>
-                            <th style={{ padding: '0.5rem', fontSize: '0.85rem' }}>설명</th>
-                            <th style={{ width: '140px', textAlign: 'center', padding: '0.5rem', fontSize: '0.85rem' }}>관리</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {warehouses.length > 0 ? (
-                            warehouses.map((wh, index) => (
-                                <tr
-                                    key={wh.id}
-                                    className={!wh.is_active ? 'inactive-row' : 'hover-row'}
-                                    onDragEnter={(e) => handleDragEnter(e, index)}
-                                    onDragOver={handleDragOver}
-                                    onDragEnd={handleDragEnd}
-                                >
-                                    <td style={{ textAlign: 'center', color: '#adb5bd', padding: '0.5rem', fontSize: '0.85rem' }}>
-                                        <span
-                                            className="drag-handle"
-                                            draggable={true}
-                                            onDragStart={(e) => handleDragStart(e, index)}
-                                            style={{ cursor: 'grab', display: 'inline-block', width: '100%', height: '100%' }}
-                                            title="드래그하여 순서 변경"
-                                        >
-                                            ☰
-                                        </span>
-                                    </td>
-                                    <td style={{ textAlign: 'center', padding: '0.5rem', fontSize: '0.85rem' }}>{index + 1}</td>
-                                    <td style={{ padding: '0.5rem', fontSize: '0.85rem' }}>{wh.name}</td>
-                                    <td style={{ textAlign: 'center', padding: '0.5rem', fontSize: '0.85rem' }}>{wh.is_default ? '✅' : ''}</td>
-                                    <td style={{ textAlign: 'center', padding: '0.5rem', fontSize: '0.85rem' }}>
-                                        <span
-                                            className={`badge ${wh.is_active ? 'badge-success' : 'badge-secondary'}`}
-                                            onClick={() => toggleActive(wh)}
-                                        >
-                                            {wh.is_active ? '사용' : '미사용'}
-                                        </span>
-                                    </td>
-                                    <td style={{ padding: '0.5rem', fontSize: '0.85rem' }}>{wh.description}</td>
-                                    <td style={{ textAlign: 'center', whiteSpace: 'nowrap', padding: '0.5rem', fontSize: '0.85rem' }}>
-                                        <div style={{ display: 'flex', gap: '4px', justifyContent: 'center', alignItems: 'center' }}>
-                                            <button
-                                                className="btn btn-sm btn-primary"
-                                                onClick={() => handleEdit(wh)}
-                                                style={{
-                                                    fontSize: '0.8rem',
-                                                    padding: '2px 8px',
-                                                    width: 'auto',
-                                                    minWidth: '0',
-                                                    height: '28px',
-                                                    whiteSpace: 'nowrap',
-                                                    flex: 'none'
-                                                }}
-                                            >
-                                                수정
-                                            </button>
-                                            <button
-                                                className="btn btn-sm btn-danger"
-                                                onClick={() => handleDelete(wh)}
-                                                style={{
-                                                    fontSize: '0.8rem',
-                                                    padding: '2px 8px',
-                                                    width: 'auto',
-                                                    minWidth: '0',
-                                                    height: '28px',
-                                                    whiteSpace: 'nowrap',
-                                                    flex: 'none'
-                                                }}
-                                            >
-                                                삭제
-                                            </button>
-                                        </div>
-                                    </td>
-                                </tr>
-                            ))
-                        ) : (
+            <div className="table-container" style={{ overflow: 'visible' }}>
+                <DragDropContext onDragStart={onDragStart} onDragEnd={onDragEnd}>
+                    <table className="trade-Table" style={{ width: '100%', tableLayout: 'fixed' }}>
+                        <thead style={{ position: 'sticky', top: '54px', zIndex: 10 }}>
                             <tr>
-                                <td colSpan="7" style={{ textAlign: 'center', padding: '3rem', color: '#6c757d' }}>
-                                    {loading ? '로딩 중...' : '등록된 창고가 없습니다.'}
-                                </td>
+                                <th style={{ width: '50px', textAlign: 'center', padding: '0.5rem', fontSize: '0.85rem' }}></th>
+                                <th style={{ width: '80px', textAlign: 'center', padding: '0.5rem', fontSize: '0.85rem' }}>순서</th>
+                                <th style={{ padding: '0.5rem', fontSize: '0.85rem' }}>창고명</th>
+                                <th style={{ width: '80px', textAlign: 'center', padding: '0.5rem', fontSize: '0.85rem' }}>기본</th>
+                                <th style={{ width: '100px', textAlign: 'center', padding: '0.5rem', fontSize: '0.85rem' }}>상태</th>
+                                <th style={{ padding: '0.5rem', fontSize: '0.85rem' }}>설명</th>
+                                <th style={{ width: '140px', textAlign: 'center', padding: '0.5rem', fontSize: '0.85rem' }}>관리</th>
                             </tr>
-                        )}
-                    </tbody>
-                </table>
+                        </thead>
+                        <Droppable droppableId="warehouse-list">
+                            {(provided) => (
+                                <tbody ref={provided.innerRef} {...provided.droppableProps}>
+                                    {displayedWarehouses.length > 0 ? (
+                                        displayedWarehouses.map((wh, index) => (
+                                            <Draggable key={wh.id} draggableId={String(wh.id)} index={index}>
+                                                {(provided, snapshot) => (
+                                                    <TableDndRow provided={provided} snapshot={snapshot}>
+                                                        <tr
+                                                            ref={provided.innerRef}
+                                                            {...provided.draggableProps}
+                                                            className={!wh.is_active ? 'inactive-row' : 'hover-row'}
+                                                            style={{
+                                                                ...provided.draggableProps.style,
+                                                                backgroundColor: snapshot.isDragging ? '#f8fafc' : (index % 2 === 0 ? '#ffffff' : '#f8fafc'),
+                                                                boxShadow: snapshot.isDragging ? '0 5px 15px rgba(0,0,0,0.1)' : 'none',
+                                                                opacity: snapshot.isDragging ? 0.9 : 1
+                                                            }}
+                                                        >
+                                                            <td
+                                                                {...provided.dragHandleProps}
+                                                                style={{
+                                                                    textAlign: 'center',
+                                                                    color: snapshot.isDragging ? '#3182ce' : '#cbd5e0',
+                                                                    padding: '0.5rem',
+                                                                    fontSize: '1.2rem',
+                                                                    cursor: snapshot.isDragging ? 'grabbing' : 'grab',
+                                                                    width: snapshot.isDragging ? columnWidths[0] : '50px'
+                                                                }}
+                                                            >
+                                                                ☰
+                                                            </td>
+                                                            <td style={{ textAlign: 'center', padding: '0.5rem', fontSize: '0.85rem', ...(snapshot.isDragging ? { width: columnWidths[1] } : {}) }}>{index + 1}</td>
+                                                            <td style={{ padding: '0.5rem', fontSize: '0.85rem', ...(snapshot.isDragging ? { width: columnWidths[2] } : {}) }}>{wh.name}</td>
+                                                            <td style={{ textAlign: 'center', padding: '0.5rem', fontSize: '0.85rem', ...(snapshot.isDragging ? { width: columnWidths[3] } : {}) }}>{wh.is_default ? '✅' : ''}</td>
+                                                            <td style={{ textAlign: 'center', padding: '0.5rem', fontSize: '0.85rem', ...(snapshot.isDragging ? { width: columnWidths[4] } : {}) }}>
+                                                                <span
+                                                                    className={`badge ${wh.is_active ? 'badge-success' : 'badge-secondary'}`}
+                                                                    onClick={() => toggleActive(wh)}
+                                                                    style={{ cursor: 'pointer' }}
+                                                                >
+                                                                    {wh.is_active ? '사용' : '미사용'}
+                                                                </span>
+                                                            </td>
+                                                            <td style={{ padding: '0.5rem', fontSize: '0.85rem', ...(snapshot.isDragging ? { width: columnWidths[5] } : {}) }}>{wh.description}</td>
+                                                            <td style={{ textAlign: 'center', whiteSpace: 'nowrap', padding: '0.5rem', fontSize: '0.85rem', ...(snapshot.isDragging ? { width: columnWidths[6] } : {}) }}>
+                                                                <div style={{ display: 'flex', gap: '4px', justifyContent: 'center', alignItems: 'center' }}>
+                                                                    <button
+                                                                        className="btn btn-sm btn-primary"
+                                                                        onClick={() => handleEdit(wh)}
+                                                                        style={{
+                                                                            fontSize: '0.8rem',
+                                                                            padding: '2px 8px',
+                                                                            width: 'auto',
+                                                                            minWidth: '0',
+                                                                            height: '28px',
+                                                                            whiteSpace: 'nowrap',
+                                                                            flex: 'none'
+                                                                        }}
+                                                                    >
+                                                                        수정
+                                                                    </button>
+                                                                    <button
+                                                                        className="btn btn-sm btn-danger"
+                                                                        onClick={() => handleDelete(wh)}
+                                                                        style={{
+                                                                            fontSize: '0.8rem',
+                                                                            padding: '2px 8px',
+                                                                            width: 'auto',
+                                                                            minWidth: '0',
+                                                                            height: '28px',
+                                                                            whiteSpace: 'nowrap',
+                                                                            flex: 'none'
+                                                                        }}
+                                                                    >
+                                                                        삭제
+                                                                    </button>
+                                                                </div>
+                                                            </td>
+                                                        </tr>
+                                                    </TableDndRow>
+                                                )}
+                                            </Draggable>
+                                        ))
+                                    ) : (
+                                        <tr>
+                                            <td colSpan="7" style={{ textAlign: 'center', padding: '3rem', color: '#6c757d' }}>
+                                                {loading ? '로딩 중...' : '등록된 창고가 없습니다.'}
+                                            </td>
+                                        </tr>
+                                    )}
+                                    {provided.placeholder}
+                                </tbody>
+                            )}
+                        </Droppable>
+                    </table>
+                </DragDropContext>
             </div>
             <div style={{ marginTop: '1rem', fontSize: '0.9rem', color: '#6c757d' }}>
                 💡 목록의 ☰ 아이콘을 드래그하여 순서를 변경할 수 있습니다.<br />

@@ -4,14 +4,15 @@
     padding: 0;
 }
 
-.company-list-wrapper.is-window {
+/* Conflict with inline styles for sticky fix */
+/* .company-list-wrapper.is-window {
     max-width: 100%;
     width: 100%;
     padding: 0.5rem;
     display: flex;
     flex-direction: column;
     min-height: 100%;
-}
+} */
 
 .company-list-header {
     display: flex;
@@ -47,18 +48,18 @@
     font-size: 0.8rem !important;
 }
 
-.company-list-wrapper.is-window .search-filter-container {
+/* Conflict with inline styles for sticky fix */
+/* .company-list-wrapper.is-window .search-filter-container {
     padding: 1rem !important;
     margin-bottom: 1rem !important;
     position: sticky;
     top: 0;
     z-index: 10;
     background-color: #ffffff;
-    /* Sticky header needs background */
     box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
     border-radius: 8px;
     border: 1px solid #e5e7eb;
-}
+} */
 
 /* --- Mobile Card View --- */
 .mobile-company-list {
