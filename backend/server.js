@@ -36,6 +36,7 @@ const expenseRouter = require('./routes/expenses');
 const expenseCategoryRouter = require('./routes/expenseCategories');
 const settlementRouter = require('./routes/settlement');
 const inventoryAuditRouter = require('./routes/inventoryAudit');
+const systemRouter = require('./routes/system');
 
 app.use('/api/companies', companiesRouter);
 app.use('/api/products', productsRouter);
@@ -60,6 +61,7 @@ app.use('/api/auth', require('./routes/auth')); // 인증 라우터 추가
 app.use('/api/users', require('./routes/users')); // 사용자 관리 라우터 추가
 app.use('/api/roles', rolesRouter); // RBAC 역할 관리 라우터 추가
 app.use('/api/user-settings', require('./routes/userSettings')); // [NEW] 사용자 설정 라우터
+app.use('/api/system', systemRouter);
 
 // 헬스체크
 app.get('/api/health', (req, res) => {

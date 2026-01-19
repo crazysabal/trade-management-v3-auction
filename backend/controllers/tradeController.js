@@ -102,9 +102,9 @@ const TradeController = {
                 };
             }
 
-            // 2. 전표번호 생성
             const prefix = master.trade_type === 'PURCHASE' ? 'PUR' : (master.trade_type === 'PRODUCTION' ? 'PRO' : 'SAL');
-            const today = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+            const tradeDateStr = String(master.trade_date).slice(0, 10).replace(/-/g, '');
+            const today = tradeDateStr;
 
             const [lastNumber] = await connection.query(
                 `SELECT trade_number FROM trade_masters 

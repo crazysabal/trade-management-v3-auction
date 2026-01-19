@@ -168,8 +168,6 @@ function TradePanel({
     const totalCount = entries.length;
     const hasReadyPanel = entries.some(p => p.hasCompany && !p.isViewMode);
 
-    console.log(`[TradePanel Sync] ID: ${panelId}, Company: ${!!master.company_id}, View: ${isViewMode} -> Ready: ${hasReadyPanel}`);
-
     window.dispatchEvent(new CustomEvent('sales-panels-updated', {
       detail: {
         count: totalCount,
@@ -186,7 +184,6 @@ function TradePanel({
       if (isPurchase) return;
 
       const { targetPanelId, inventory } = e.detail;
-      console.log(`[TradePanel:${panelId}] QuickAdd Event Received. Target: ${targetPanelId}, Last Active: ${window.__lastActiveSalesPanelId}`);
 
       const isTarget = targetPanelId ? (targetPanelId === panelId) : (window.__lastActiveSalesPanelId === panelId);
 
@@ -2355,13 +2352,13 @@ function TradePanel({
                     const inputValue = e.target.value;
                     const isNegative = inputValue.startsWith('-');
                     const numericPart = inputValue.replace(/[^0-9]/g, '');
-                    const rawValue = isNegative && numericPart ? `- ${numericPart} ` : numericPart;
+                    const amount = numericPart ? (isNegative ? -parseInt(numericPart) : parseInt(numericPart)) : 0;
                     const displayValue = numericPart
                       ? (isNegative ? '-' : '') + new Intl.NumberFormat('ko-KR').format(parseInt(numericPart))
                       : (isNegative ? '-' : '');
                     setAddPaymentModal(prev => ({
                       ...prev,
-                      amount: rawValue,
+                      amount: amount,
                       displayAmount: displayValue
                     }));
                   }}
@@ -2489,12 +2486,16 @@ function TradePanel({
                   type="text"
                   value={editingPayment.displayAmount || new Intl.NumberFormat('ko-KR').format(editingPayment.amount || 0)}
                   onChange={(e) => {
-                    const numericValue = e.target.value.replace(/[^0-9]/g, '');
-                    const amount = parseInt(numericValue) || 0;
+                    const inputValue = e.target.value;
+                    const isNegative = inputValue.startsWith('-');
+                    const numericPart = inputValue.replace(/[^0-9]/g, '');
+                    const amount = numericPart ? (isNegative ? -parseInt(numericPart) : parseInt(numericPart)) : 0;
                     setEditingPayment(prev => ({
                       ...prev,
                       amount: amount,
-                      displayAmount: numericValue ? new Intl.NumberFormat('ko-KR').format(amount) : ''
+                      displayAmount: numericPart
+                        ? (isNegative ? '-' : '') + new Intl.NumberFormat('ko-KR').format(parseInt(numericPart))
+                        : (isNegative ? '-' : '')
                     }));
                   }}
                   onKeyDown={(e) => {

@@ -27,6 +27,7 @@ import SettlementPage from './SettlementPage';
 import SettlementHistory from './SettlementHistory'; // [New]
 import Statistics from './Statistics';
 import Settings from './Settings';
+import BackupSystem from './BackupSystem';
 import WarehouseManagement from './WarehouseManagement';
 import ExpenseCategoryManagement from './ExpenseCategoryManagement';
 import CompanyInfo from './CompanyInfo';
@@ -154,7 +155,7 @@ const DesktopManager = () => {
 
         // 이미 열린 단일 인스턴스 앱 확인 (설정, 통계 등은 하나만)
         const alwaysSingleInstanceApps = [
-            'SETTINGS', 'STATISTICS', 'ROLE_MANAGEMENT' // Added ROLE_MANAGEMENT to single instance
+            'SETTINGS', 'STATISTICS', 'ROLE_MANAGEMENT', 'BACKUP_SYSTEM'
         ];
 
         const existing = windows?.find(w => w.type === appType);
@@ -193,6 +194,7 @@ const DesktopManager = () => {
         if (appType === 'ROLE_MANAGEMENT' || appType === 'USER_MANAGEMENT') size = { width: 1000, height: 750 };
         if (appType === 'SETTLEMENT_HISTORY' || appType === 'WAREHOUSES') size = { width: 900, height: 600 };
         if (appType === 'SETTINGS' || appType === 'EXPENSE_CATEGORIES' || appType === 'PAYMENT_METHODS') size = { width: 800, height: 630 };
+        if (appType === 'BACKUP_SYSTEM') size = { width: 800, height: 750 };
         if (appType === 'COMPANY_INFO') size = { width: 600, height: 500 };
 
         // [DEBUG] Append App Type for User Identification
@@ -397,6 +399,7 @@ const DesktopManager = () => {
             case 'SETTLEMENT_HISTORY': return <SettlementHistory isWindow={true} onOpenDetail={(item) => launchApp('SETTLEMENT', { initialHistory: item })} {...componentProps} />;
             case 'STATISTICS': return <Statistics isWindow={true} {...componentProps} />;
             case 'SETTINGS': return <Settings isWindow={true} windowMode={windowMode} setWindowMode={handleSetWindowMode} {...componentProps} />;
+            case 'BACKUP_SYSTEM': return <BackupSystem isWindow={true} {...componentProps} />;
             case 'WAREHOUSES': return <WarehouseManagement isWindow={true} {...componentProps} />;
             case 'EXPENSE_CATEGORIES': return <ExpenseCategoryManagement isWindow={true} {...componentProps} />;
             case 'COMPANY_INFO': return <CompanyInfo isWindow={true} {...componentProps} />;

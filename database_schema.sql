@@ -589,6 +589,12 @@ BEGIN
     ELSEIF v_trade_type = 'SALE' THEN
         SET v_after_qty = v_before_qty - NEW.quantity;
 
+        -- Negative Inventory Guard
+        IF v_after_qty < 0 THEN
+            SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = '재고가 부족하여 매출을 등록할 수 없습니다. (현재 재고보다 매출 수량이 많음)';
+        END IF;
+
         UPDATE inventory
         SET quantity = quantity - NEW.quantity,
             weight = weight - IFNULL(NEW.total_weight, 0)

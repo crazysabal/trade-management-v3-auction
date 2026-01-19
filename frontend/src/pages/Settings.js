@@ -117,6 +117,7 @@ const Settings = ({ ...rest }) => {
                             </div>
                         </div>
                     </div>
+
                 </div>
             </div>
 

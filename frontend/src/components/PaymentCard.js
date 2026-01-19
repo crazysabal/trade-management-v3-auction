@@ -579,13 +579,13 @@ function PaymentCard({
                   const inputValue = e.target.value;
                   const isNegative = inputValue.startsWith('-');
                   const numericPart = inputValue.replace(/[^0-9]/g, '');
-                  const rawValue = isNegative && numericPart ? `-${numericPart}` : numericPart;
+                  const amount = numericPart ? (isNegative ? -parseInt(numericPart) : parseInt(numericPart)) : 0;
                   const displayValue = numericPart
                     ? (isNegative ? '-' : '') + new Intl.NumberFormat('ko-KR').format(parseInt(numericPart))
                     : (isNegative ? '-' : '');
                   setAddPaymentModal(prev => ({
                     ...prev,
-                    amount: rawValue,
+                    amount: amount,
                     displayAmount: displayValue
                   }));
                 }}
@@ -707,12 +707,16 @@ function PaymentCard({
                 type="text"
                 value={editingPayment.displayAmount || new Intl.NumberFormat('ko-KR').format(editingPayment.amount || 0)}
                 onChange={(e) => {
-                  const numericValue = e.target.value.replace(/[^0-9]/g, '');
-                  const amount = parseInt(numericValue) || 0;
+                  const inputValue = e.target.value;
+                  const isNegative = inputValue.startsWith('-');
+                  const numericPart = inputValue.replace(/[^0-9]/g, '');
+                  const amount = numericPart ? (isNegative ? -parseInt(numericPart) : parseInt(numericPart)) : 0;
                   setEditingPayment(prev => ({
                     ...prev,
                     amount: amount,
-                    displayAmount: numericValue ? new Intl.NumberFormat('ko-KR').format(amount) : ''
+                    displayAmount: numericPart
+                      ? (isNegative ? '-' : '') + new Intl.NumberFormat('ko-KR').format(parseInt(numericPart))
+                      : (isNegative ? '-' : '')
                   }));
                 }}
                 onKeyDown={(e) => {
@@ -834,13 +838,13 @@ function PaymentCard({
                   const inputValue = e.target.value;
                   const isNegative = inputValue.startsWith('-');
                   const numericPart = inputValue.replace(/[^0-9]/g, '');
-                  const rawValue = isNegative && numericPart ? `-${numericPart}` : numericPart;
+                  const amount = numericPart ? (isNegative ? -parseInt(numericPart) : parseInt(numericPart)) : 0;
                   const displayValue = numericPart
                     ? (isNegative ? '-' : '') + new Intl.NumberFormat('ko-KR').format(parseInt(numericPart))
                     : (isNegative ? '-' : '');
                   setEditingPendingPayment(prev => ({
                     ...prev,
-                    amount: rawValue,
+                    amount: amount,
                     displayAmount: displayValue
                   }));
                 }}

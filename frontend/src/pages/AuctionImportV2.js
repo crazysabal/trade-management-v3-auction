@@ -128,17 +128,32 @@ const AuctionItemRow = React.memo(({
     }), [isMapped]);
 
     return (
-        <tr style={{ backgroundColor: !isMapped ? '#fff3cd' : groupColor }}>
+        <tr style={{
+            backgroundColor: item.status === 'IMPORTED' ? '#f8f9fa' : (!isMapped ? '#fff3cd' : groupColor),
+            opacity: item.status === 'IMPORTED' ? 0.7 : 1
+        }}>
             <td style={{ textAlign: 'center' }}>
-                <input
-                    type="checkbox"
-                    checked={isSelected}
-                    onChange={handleCheck}
-                    style={{ width: '16px', height: '16px', cursor: 'pointer', accentColor: '#e74c3c' }}
-                />
+                {item.status !== 'IMPORTED' && (
+                    <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={handleCheck}
+                        style={{ width: '16px', height: '16px', cursor: 'pointer', accentColor: '#e74c3c' }}
+                    />
+                )}
+                {item.status === 'IMPORTED' && <span style={{ fontSize: '0.75rem', color: '#666', fontWeight: 'bold' }}>완료</span>}
             </td>
             <td>{item.arrive_no}</td>
-            <td><strong>{item.product_name}</strong></td>
+            <td>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <strong>{item.product_name}</strong>
+                    {item.status === 'IMPORTED' && (
+                        <span style={{ backgroundColor: '#6c757d', color: 'white', padding: '1px 5px', borderRadius: '3px', fontSize: '0.7rem' }}>
+                            등록완료
+                        </span>
+                    )}
+                </div>
+            </td>
             <td>{item.shipper_location || '-'}</td>
             <td>{item.sender || '-'}</td>
             <td>{item.grade || '-'}</td>
@@ -175,6 +190,7 @@ function AuctionImportV2({ isWindow, onTradeChange, onClose }) {
     const [loadingMessage, setLoadingMessage] = useState('');
     const [step, setStep] = useState(1);
     const [selectedItems, setSelectedItems] = useState(new Set());
+    const [viewStatus, setViewStatus] = useState('PENDING'); // PENDING, IMPORTED, ALL
 
     const [crawlData, setCrawlData] = useState({
         account_id: '',
@@ -300,6 +316,50 @@ function AuctionImportV2({ isWindow, onTradeChange, onClose }) {
         }
     };
 
+
+    const fetchRawData = async () => {
+        setLoading(true);
+        try {
+            const rawDataRes = await auctionAPI.getRawData({
+                auction_date: crawlData.crawl_date,
+                account_id: crawlData.account_id,
+                status: viewStatus === 'ALL' ? undefined : viewStatus
+            });
+            // Sort by arrive_no (Entry Number) ascending, then by grade sort order
+            const gradePriorityMap = {};
+            products.forEach(p => {
+                const grade = p.grade || '';
+                if (gradePriorityMap[grade] === undefined || (p.sort_order || 9999) < gradePriorityMap[grade]) {
+                    gradePriorityMap[grade] = p.sort_order || 9999;
+                }
+            });
+
+            const sortedData = (rawDataRes.data.data || []).sort((a, b) => {
+                const numA = parseInt(a.arrive_no, 10) || 0;
+                const numB = parseInt(b.arrive_no, 10) || 0;
+
+                if (numA !== numB) return numA - numB;
+
+                // Secondary sort: Grade priority
+                const priorityA = gradePriorityMap[a.grade || ''] ?? 9999;
+                const priorityB = gradePriorityMap[b.grade || ''] ?? 9999;
+                return priorityA - priorityB;
+            });
+            setRawData(sortedData);
+        } catch (error) {
+            console.error('Raw data fetch error:', error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    // Re-fetch data when viewStatus changes in step 2
+    useEffect(() => {
+        if (step === 2) {
+            fetchRawData();
+        }
+    }, [viewStatus]);
+
     const handleCrawl = async () => {
         if (!crawlData.account_id) {
             setModal({ isOpen: true, type: 'warning', title: '입력 오류', message: '경매 계정을 선택하세요.', showCancel: false });
@@ -319,18 +379,7 @@ function AuctionImportV2({ isWindow, onTradeChange, onClose }) {
                 onConfirm: () => setModal(prev => ({ ...prev, isOpen: false }))
             });
 
-            const rawDataRes = await auctionAPI.getRawData({
-                auction_date: crawlData.crawl_date,
-                account_id: crawlData.account_id,
-                status: 'PENDING'
-            });
-            // Sort by arrive_no (Entry Number) ascending
-            const sortedData = (rawDataRes.data.data || []).sort((a, b) => {
-                const numA = parseInt(a.arrive_no, 10) || 0;
-                const numB = parseInt(b.arrive_no, 10) || 0;
-                return numA - numB;
-            });
-            setRawData(sortedData);
+            await fetchRawData();
 
             // Reload mappings (in case backend updated anything or just to be safe)
             const mappingsRes = await auctionAPI.getMappings();
@@ -437,22 +486,56 @@ function AuctionImportV2({ isWindow, onTradeChange, onClose }) {
         });
     };
 
-    const processImport = async () => {
-        // ... logic same as V1 ...
-        // Simplified for brevity in this prompt, but logic remains identical
+    const handleResetStatus = async () => {
+        if (selectedItems.size === 0) return;
+        setModal({
+            isOpen: true,
+            type: 'confirm',
+            title: '상태 초기화',
+            message: `선택된 ${selectedItems.size}개 항목을 대기 상태로 되돌리겠습니까?\n(매입 전표 삭제 후 다시 등록하고 싶을 때 사용합니다.)`,
+            showCancel: true,
+            confirmText: '초기화',
+            onConfirm: async () => {
+                try {
+                    setLoading(true);
+                    await auctionAPI.updateStatusBulk(Array.from(selectedItems), 'PENDING');
+                    await fetchRawData();
+                    setSelectedItems(new Set());
+                    setModal(prev => ({ ...prev, isOpen: false }));
+                } catch (e) {
+                    console.error(e);
+                    setModal({
+                        isOpen: true,
+                        type: 'warning',
+                        title: '실패',
+                        message: '상태 초기화에 실패했습니다.',
+                        showCancel: false
+                    });
+                } finally {
+                    setLoading(false);
+                }
+            }
+        });
+    };
+
+    const processImport = async (trigger) => {
+        // Defensive check: if trigger is an event or not a number/string, ignore it
+        const forceAppendId = (typeof trigger === 'number' || (typeof trigger === 'string' && !isNaN(trigger))) ? trigger : null;
+
         setLoading(true);
-        setLoadingMessage('매입 전표를 생성하는 중입니다...');
+        setLoadingMessage(forceAppendId ? '기존 전표에 추가하는 중입니다...' : '매입 전표를 생성하는 중입니다...');
         try {
-            const importItems = rawData.filter(item => getMappedProductId(item.product_name, item.weight, item.grade));
+            const importItems = rawData.filter(item => item.status === 'PENDING' && getMappedProductId(item.product_name, item.weight, item.grade));
             const importIds = importItems.map(item => item.id);
 
-            const details = importItems.map((item, index) => {
+            let details = importItems.map((item, index) => {
                 const mappedId = getMappedProductId(item.product_name, item.weight, item.grade);
                 return {
                     seq_no: index + 1,
                     product_id: mappedId,
                     quantity: item.count || 1,
                     total_weight: parseFloat(item.weight) || 0,
+                    weight_unit: 'kg',
                     unit_price: Math.floor(item.unit_price || 0),
                     supply_amount: Math.floor(item.total_price || 0),
                     tax_amount: 0,
@@ -464,19 +547,44 @@ function AuctionImportV2({ isWindow, onTradeChange, onClose }) {
                 };
             });
 
-            const master = {
-                trade_type: 'PURCHASE',
-                trade_date: importConfig.trade_date,
-                company_id: importConfig.supplier_id,
-                total_amount: details.reduce((sum, d) => sum + d.supply_amount, 0),
-                tax_amount: 0,
-                total_price: details.reduce((sum, d) => sum + d.total_amount, 0),
-                status: 'CONFIRMED',
-                notes: `경매 낙찰 자동 임포트 (${crawlData.crawl_date})`,
-                warehouse_id: importConfig.warehouse_id || null
-            };
+            if (forceAppendId) {
+                // Fetch existing trade details to append
+                const existingRes = await tradeAPI.getById(forceAppendId);
+                const existingData = existingRes.data?.data;
+                if (existingData) {
+                    const existingDetails = existingData.details || [];
+                    const maxSeq = existingDetails.length > 0 ? Math.max(...existingDetails.map(d => d.seq_no)) : 0;
 
-            await tradeAPI.create({ master, details });
+                    // Re-calculate seq_no for new items
+                    const newDetails = details.map((d, i) => ({ ...d, seq_no: maxSeq + i + 1 }));
+
+                    // Combined details
+                    details = [...existingDetails, ...newDetails];
+
+                    const master = {
+                        ...existingData.master,
+                        total_amount: details.reduce((sum, d) => sum + (parseFloat(d.supply_amount) || 0), 0),
+                        tax_amount: 0,
+                        total_price: details.reduce((sum, d) => sum + (parseFloat(d.total_amount) || 0), 0),
+                    };
+
+                    await tradeAPI.update(forceAppendId, { master, details });
+                }
+            } else {
+                const master = {
+                    trade_type: 'PURCHASE',
+                    trade_date: importConfig.trade_date,
+                    company_id: importConfig.supplier_id,
+                    total_amount: details.reduce((sum, d) => sum + d.supply_amount, 0),
+                    tax_amount: 0,
+                    total_price: details.reduce((sum, d) => sum + d.total_amount, 0),
+                    status: 'CONFIRMED',
+                    notes: `경매 낙찰 자동 임포트 (${crawlData.crawl_date})`,
+                    warehouse_id: importConfig.warehouse_id || null
+                };
+
+                await tradeAPI.create({ master, details });
+            }
 
             // Mark items as IMPORTED to prevent duplicates
             try {
@@ -489,7 +597,7 @@ function AuctionImportV2({ isWindow, onTradeChange, onClose }) {
                 isOpen: true,
                 type: 'success',
                 title: '완료',
-                message: `${details.length}건 생성 완료`,
+                message: `${importItems.length}건 ${forceAppendId ? '추가' : '생성'} 완료`,
                 showCancel: false,
                 onConfirm: () => {
                     if (onTradeChange) onTradeChange();
@@ -502,15 +610,37 @@ function AuctionImportV2({ isWindow, onTradeChange, onClose }) {
             });
 
         } catch (e) {
-            console.error(e);
-            const errorMessage = e.response?.data?.message || e.message || '작업 실패';
-            setModal({
-                isOpen: true,
-                type: 'warning',
-                title: '실패',
-                message: errorMessage,
-                showCancel: false
-            });
+            console.error('Import Error:', e);
+            const errorBody = e.response?.data;
+            const errorData = errorBody?.data || errorBody; // Handle both nested and flat error data
+            const existingTradeId = errorData?.existingTradeId;
+            const existingTradeNumber = errorData?.existingTradeNumber;
+
+            if (existingTradeId && !forceAppendId) {
+                // Duplicate trade found - offer append option
+                setModal({
+                    isOpen: true,
+                    type: 'confirm',
+                    title: '중복 전표 발견',
+                    message: `해당 날짜에 이미 매입 전표(${existingTradeNumber})가 존재합니다.\n\n기존 전표에 신규 항목들을 추가하시겠습니까?`,
+                    confirmText: '추가하기',
+                    cancelText: '취소',
+                    showCancel: true,
+                    onConfirm: () => {
+                        setModal({ isOpen: false });
+                        setTimeout(() => processImport(existingTradeId), 100);
+                    }
+                });
+            } else {
+                const errorMessage = errorBody?.message || e.message || '작업 실패';
+                setModal({
+                    isOpen: true,
+                    type: 'warning',
+                    title: '실패',
+                    message: errorMessage,
+                    showCancel: false
+                });
+            }
         } finally {
             setLoading(false);
         }
@@ -736,8 +866,31 @@ function AuctionImportV2({ isWindow, onTradeChange, onClose }) {
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexShrink: 0 }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
                                 <h2 style={{ margin: 0 }}>품목 매칭</h2>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: '1rem' }}>
+                                    <button
+                                        onClick={() => setViewStatus('PENDING')}
+                                        className={`btn ${viewStatus === 'PENDING' ? 'btn-primary' : 'btn-secondary'}`}
+                                        style={{ fontSize: '0.8rem', padding: '4px 10px' }}
+                                    >
+                                        대기
+                                    </button>
+                                    <button
+                                        onClick={() => setViewStatus('IMPORTED')}
+                                        className={`btn ${viewStatus === 'IMPORTED' ? 'btn-primary' : 'btn-secondary'}`}
+                                        style={{ fontSize: '0.8rem', padding: '4px 10px' }}
+                                    >
+                                        완료
+                                    </button>
+                                    <button
+                                        onClick={() => setViewStatus('ALL')}
+                                        className={`btn ${viewStatus === 'ALL' ? 'btn-primary' : 'btn-secondary'}`}
+                                        style={{ fontSize: '0.8rem', padding: '4px 10px' }}
+                                    >
+                                        전체
+                                    </button>
+                                </div>
                                 <span style={{ fontSize: '0.9rem', color: '#666', fontWeight: '500' }}>
-                                    (총 {rawData.length}건 / 매칭 {mappedCount}건)
+                                    ({viewStatus === 'PENDING' ? '대기' : viewStatus === 'IMPORTED' ? '완료' : '전체'} {rawData.length}건 / 매칭 {mappedCount}건)
                                 </span>
                             </div>
                             <div style={{ display: 'flex', gap: '8px' }}>
@@ -753,9 +906,14 @@ function AuctionImportV2({ isWindow, onTradeChange, onClose }) {
                                     🔄 품목 새로고침
                                 </button>
                                 {selectedItems.size > 0 && (
-                                    <button onClick={handleDeleteSelected} className="btn btn-danger" style={{ fontSize: '0.9rem', padding: '6px 12px', whiteSpace: 'nowrap' }}>
-                                        선택 삭제 ({selectedItems.size})
-                                    </button>
+                                    <>
+                                        <button onClick={handleResetStatus} className="btn btn-warning" style={{ fontSize: '0.9rem', padding: '6px 12px', whiteSpace: 'nowrap' }}>
+                                            상태 초기화 ({selectedItems.size})
+                                        </button>
+                                        <button onClick={handleDeleteSelected} className="btn btn-danger" style={{ fontSize: '0.9rem', padding: '6px 12px', whiteSpace: 'nowrap' }}>
+                                            선택 삭제 ({selectedItems.size})
+                                        </button>
+                                    </>
                                 )}
                             </div>
                         </div>
@@ -874,7 +1032,7 @@ function AuctionImportV2({ isWindow, onTradeChange, onClose }) {
                                     backgroundColor: (!allMapped && rawData.length > 0) ? '#94a3b8' : undefined,
                                     cursor: (!allMapped && rawData.length > 0) ? 'not-allowed' : 'pointer'
                                 }}
-                                onClick={processImport}
+                                onClick={handleImport}
                                 title={!allMapped && rawData.length > 0 ? "모든 품목을 매칭해야 전표 생성이 가능합니다." : ""}
                             >
                                 {!allMapped && rawData.length > 0 ? '미매칭 품목 존재' : '매입 전표 생성'}

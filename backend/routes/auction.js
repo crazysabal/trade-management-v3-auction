@@ -789,7 +789,11 @@ router.get('/raw-data', async (req, res) => {
       params.push(status);
     }
 
-    query += ' ORDER BY CAST(arrive_no AS UNSIGNED) ASC, id ASC';
+    query += `
+      ORDER BY 
+        CAST(arrive_no AS UNSIGNED) ASC, 
+        (SELECT MIN(sort_order) FROM products WHERE grade = auction_raw_data.grade) ASC,
+        id ASC`;
 
     const [rows] = await db.query(query, params);
     res.json({ success: true, data: rows });

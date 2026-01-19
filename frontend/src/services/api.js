@@ -256,4 +256,17 @@ export const inventoryAuditAPI = {
   delete: (id) => api.delete(`/inventory-audit/${id}`),
 };
 
+// 시스템 관리 API (백업 등)
+export const systemAPI = {
+  getGoogleAuthUrl: () => api.get('/system/auth/google/url'),
+  downloadBackup: () => api.get('/system/backup/download', { responseType: 'blob' }),
+  backupToGoogleDrive: () => api.post('/system/backup/google-drive'),
+  getBackups: () => api.get('/system/backups'),
+  restoreBackup: (formData) => api.post('/system/backup/restore', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' }
+  }),
+  getCredentials: () => api.get('/system/backup/credentials'),
+  saveCredentials: (data) => api.post('/system/backup/credentials', data),
+};
+
 export default api;

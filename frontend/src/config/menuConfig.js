@@ -87,6 +87,7 @@ export const MENU_CONFIG = [
         icon: '⚙️',
         items: [
             { id: 'SETTINGS', label: '시스템 설정', icon: '⚙️' },
+            { id: 'BACKUP_SYSTEM', label: '데이터 백업 관리', icon: '🛡️' },
             { id: 'COMPANY_INFO', label: '본사 정보', icon: 'ℹ️' },
             { id: 'USER_MANAGEMENT', label: '사용자/직원 관리', icon: '👥' },
             { id: 'ROLE_MANAGEMENT', label: '권한 관리', icon: '🔒' },
