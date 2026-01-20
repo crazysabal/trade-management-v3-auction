@@ -50,7 +50,7 @@ const InventoryProductionManagement = () => {
         productionId: null
     });
 
-    const { handleMouseDown: handleInputDrag, draggableStyle: inputDragStyle } = useModalDraggable(inputModal.isOpen, { isCentered: true });
+    const { handleMouseDown: handleInputDrag, draggableStyle: inputDragStyle } = useModalDraggable(inputModal.isOpen, { isCentered: false });
 
     useEffect(() => {
         loadData();
@@ -66,6 +66,17 @@ const InventoryProductionManagement = () => {
             setSender('');
         }
     }, [selectedIngredients]);
+
+    // [NEW] 자재 투입 모달 ESC 키로 닫기
+    useEffect(() => {
+        const handleEsc = (e) => {
+            if (e.key === 'Escape' && inputModal.isOpen) {
+                setInputModal({ isOpen: false, inventory: null, quantity: '', maxQuantity: 0 });
+            }
+        };
+        window.addEventListener('keydown', handleEsc);
+        return () => window.removeEventListener('keydown', handleEsc);
+    }, [inputModal.isOpen]);
 
     const loadData = async () => {
         setLoading(true);
@@ -479,7 +490,7 @@ const InventoryProductionManagement = () => {
                                 </div>
                             </div>
                         </div>
-                        <div className="panel-content">
+                        <div className="panel-content ingredients-content">
                             {filteredInventory.length === 0 ? (
                                 <div style={{
                                     height: '100%',
@@ -543,7 +554,7 @@ const InventoryProductionManagement = () => {
                         </div>
 
                         {/* Ingredient List */}
-                        <div className={`panel-content ${isDragOver ? 'drag-over' : ''}`}>
+                        <div className={`panel-content workbench-list-content ${isDragOver ? 'drag-over' : ''}`}>
                             {selectedIngredients.length === 0 ? (
                                 <div className="empty-workbench">
                                     <span className="empty-workbench-icon">📥</span>
@@ -757,8 +768,8 @@ const InventoryProductionManagement = () => {
                             style={inputDragStyle}
                             onClick={(e) => e.stopPropagation()}
                         >
-                            <div className="modal-header-premium draggable-header" onMouseDown={handleInputDrag}>
-                                <h3 className="modal-header-title drag-pointer-none">
+                            <div className="modal-header-premium draggable-header" onMouseDown={handleInputDrag} style={{ justifyContent: 'center', position: 'relative' }}>
+                                <h3 className="modal-header-title drag-pointer-none" style={{ justifyContent: 'center', width: '100%' }}>
                                     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: '#3498db' }}>
                                         <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
                                         <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
@@ -766,7 +777,7 @@ const InventoryProductionManagement = () => {
                                     </svg>
                                     자재 투입 수량 설정
                                 </h3>
-                                <button className="close-btn drag-pointer-auto" onClick={() => setInputModal({ isOpen: false, inventory: null, quantity: '', maxQuantity: 0 })}>&times;</button>
+                                <button className="close-btn drag-pointer-auto" style={{ position: 'absolute', right: '1.25rem' }} onClick={() => setInputModal({ isOpen: false, inventory: null, quantity: '', maxQuantity: 0 })}>&times;</button>
                             </div>
 
                             <div className="modal-body-premium">
@@ -799,6 +810,18 @@ const InventoryProductionManagement = () => {
                                             {inputModal.inventory?.company_name} / {inputModal.inventory?.warehouse_name}
                                         </span>
                                     </div>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px dashed #e2e8f0', paddingTop: '0.6rem', marginTop: '0.2rem' }}>
+                                        <span style={{ color: '#64748b' }}>매입 단가</span>
+                                        <span style={{ fontWeight: '600', color: '#27ae60' }}>
+                                            {Number(inputModal.inventory?.unit_price || 0).toLocaleString()} 원
+                                        </span>
+                                    </div>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '0.2rem' }}>
+                                        <span style={{ color: '#64748b' }}>예상 투입 금액</span>
+                                        <span style={{ fontWeight: '700', color: '#e74c3c', fontSize: '1.05rem' }}>
+                                            {(Number(inputModal.inventory?.unit_price || 0) * (parseFloat(inputModal.quantity) || 0)).toLocaleString()} 원
+                                        </span>
+                                    </div>
                                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                                         <span style={{ color: '#64748b' }}>매입 일자</span>
                                         <span style={{ fontWeight: '600', color: '#1e293b' }}>
@@ -815,18 +838,13 @@ const InventoryProductionManagement = () => {
                                 </div>
 
                                 <div style={{ marginBottom: '1.5rem' }}>
-                                    <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', color: '#475569', fontSize: '0.95rem' }}>투입할 수량 입력</label>
+                                    <label style={{ display: 'block', color: '#475569', fontSize: '0.95rem', fontWeight: 'bold', marginBottom: '0.75rem', textAlign: 'center' }}>투입할 수량 입력</label>
                                     <input
-                                        type="text"
-                                        onFocus={(e) => e.target.select()}
+                                        type="number"
                                         className="qty-input-large"
-                                        value={inputModal.quantity ? Number(inputModal.quantity.replace(/,/g, '')).toLocaleString() : ''}
-                                        onChange={(e) => {
-                                            const val = e.target.value.replace(/,/g, '');
-                                            if (val === '' || /^\d+$/.test(val)) {
-                                                setInputModal(prev => ({ ...prev, quantity: val }));
-                                            }
-                                        }}
+                                        placeholder="0"
+                                        value={inputModal.quantity}
+                                        onChange={(e) => setInputModal(prev => ({ ...prev, quantity: e.target.value }))}
                                         onKeyDown={(e) => {
                                             if (e.key === 'Enter') handleInputConfirm();
                                         }}

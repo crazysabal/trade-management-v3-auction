@@ -1,6 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { purchaseInventoryAPI } from '../services/api';
+import { purchaseInventoryAPI, inventoryProductionAPI, productAPI } from '../services/api';
 import { useConfirmModal } from './ConfirmModal';
+import { createPortal } from 'react-dom';
+import SearchableSelect from './SearchableSelect';
+import ProductionDetailModal from './ProductionDetailModal';
+import { useModalDraggable } from '../hooks/useModalDraggable';
 
 const InventoryQuickView = ({ inventoryAdjustments = {}, refreshKey, onInventoryLoaded }) => {
     const [inventory, setInventory] = useState([]);
@@ -18,6 +22,27 @@ const InventoryQuickView = ({ inventoryAdjustments = {}, refreshKey, onInventory
     });
     const isSalesPanelActive = panelStatus.hasReadyPanel;
     const [selectedId, setSelectedId] = useState(null);
+
+    // [NEW] 바로 분할 모달 상태
+    const [quickSplitModal, setQuickSplitModal] = useState({
+        isOpen: false,
+        sourceInventory: null,
+        outputProduct: null,
+        splitCount: '',
+        sourceUseQuantity: '1',
+        products: []
+    });
+    // [NEW] 전체 품목 리스트 캐시 (소분 가능 여부 판단용)
+    const [allProducts, setAllProducts] = useState([]);
+
+    // [NEW] 생산 작업 상세 모달 상태
+    const [productionModal, setProductionModal] = useState({
+        isOpen: false,
+        productionId: null
+    });
+
+    const { handleMouseDown: splitHandleMouseDown, draggableStyle: splitDraggableStyle } = useModalDraggable(quickSplitModal.isOpen);
+
     const filteredInventoryRef = React.useRef(filteredInventory);
     const selectedIdRef = React.useRef(selectedId);
 
@@ -178,15 +203,24 @@ const InventoryQuickView = ({ inventoryAdjustments = {}, refreshKey, onInventory
     const loadInventory = async () => {
         setLoading(true);
         try {
-            // SaleFromInventory.js와 동일하게 상세 목록(Lot) 조회
-            const response = await purchaseInventoryAPI.getAll({ has_remaining: 'true' });
-            const data = response.data?.data || response.data || [];
-            const validData = Array.isArray(data) ? data : [];
+            // 1. 재고 목록 조회
+            const invResponse = await purchaseInventoryAPI.getAll({ has_remaining: 'true' });
+            const invData = invResponse.data?.data || invResponse.data || [];
+            const validInvData = Array.isArray(invData) ? invData : [];
 
-            setInventory(validData);
-            setFilteredInventory(validData);
+            // 2. 전체 품목 리스트 조회 (캐싱되어 있지 않은 경우에만 또는 강제 갱신)
+            const prodResponse = await productAPI.getAll();
+            const prodData = prodResponse.data?.data || prodResponse.data || [];
+
+            setAllProducts(prodData);
+            setInventory(validInvData);
+            setFilteredInventory(validInvData); // validInvData 활용 (아래 useEffect에서 처리됨)
+
+            // 퀵스플릿 모달 내 품목 리스트도 미리 캐싱 업데이트
+            setQuickSplitModal(prev => ({ ...prev, products: prodData }));
+
         } catch (error) {
-            console.error('재고 조회 실패:', error);
+            console.error('데이터 로드 실패:', error);
             setInventory([]);
             setFilteredInventory([]);
         } finally {
@@ -254,10 +288,33 @@ const InventoryQuickView = ({ inventoryAdjustments = {}, refreshKey, onInventory
         setSearchTerm(e.target.value);
     };
 
+    const toggleIsAvailable = () => {
+        setIsAvailable(!isAvailable);
+    };
+
+    // ESC 키로 재고 분할 모달 닫기
+    useEffect(() => {
+        const handleEsc = (e) => {
+            if (e.key === 'Escape' && quickSplitModal.isOpen) {
+                setQuickSplitModal(prev => ({ ...prev, isOpen: false }));
+            }
+        };
+        window.addEventListener('keydown', handleEsc);
+        return () => window.removeEventListener('keydown', handleEsc);
+    }, [quickSplitModal.isOpen]);
 
 
     // 헬퍼 함수들 (SaleFromInventory.js와 동일)
-    const formatNumber = (value) => new Intl.NumberFormat('ko-KR').format(value || 0);
+    // [Standard 57] 소수점이 있는 경우에만 최대 2자리까지 표시 (중량/수치용)
+    const formatNumber = (value) => {
+        const num = parseFloat(value || 0);
+        return num.toLocaleString('ko-KR', { maximumFractionDigits: 2 });
+    };
+    // [NEW] 수량(개수) 전용 포맷터: 소수점 이하 표시 안함
+    const formatQuantity = (value) => {
+        const num = Math.floor(parseFloat(value || 0));
+        return new Intl.NumberFormat('ko-KR').format(num);
+    };
     const formatCurrency = (amount) => {
         if (!amount && amount !== 0) return '-';
         return new Intl.NumberFormat('ko-KR').format(Math.floor(amount)) + '원';
@@ -294,11 +351,111 @@ const InventoryQuickView = ({ inventoryAdjustments = {}, refreshKey, onInventory
             return;
         }
 
-        // 2. 이벤트 발송
         const event = new CustomEvent('inventory-quick-add', {
             detail: { inventory: item }
         });
         window.dispatchEvent(event);
+    };
+
+    // [NEW] 바로 분할 모달 열기 핸들러
+    const handleOpenQuickSplit = async (e, inventory) => {
+        e.stopPropagation();
+        try {
+            setLoading(true);
+            let productsList = quickSplitModal.products;
+            if (productsList.length === 0) {
+                const res = await productAPI.getAll();
+                productsList = res.data.data || [];
+            }
+
+            // 정수 분할 가능한 품목만 필터링 (동일 이름, 작은 중량, 정수 비율)
+            const curGrams = getWeightInGrams(inventory.product_weight || inventory.weight, inventory.product_weight_unit || inventory.weight_unit);
+            const validTargets = productsList.filter(p => {
+                if (p.product_name !== inventory.product_name) return false;
+                const pGrams = getWeightInGrams(p.weight, p.weight_unit);
+                if (pGrams <= 0 || pGrams >= curGrams) return false;
+                const ratio = curGrams / pGrams;
+                return Math.abs(ratio - Math.round(ratio)) < 0.001;
+            });
+
+            if (validTargets.length === 0) {
+                openModal({ type: 'warning', title: '분할 불가', message: '이 재고에서 정수로 분할 가능한 하위 품목이 없습니다.', showCancel: false });
+                return;
+            }
+
+            // 기본 선택값 설정 (가장 큰 중량의 하위 품목을 우선적으로 선택하거나 비워둠)
+            const defaultTarget = validTargets.sort((a, b) => getWeightInGrams(b.weight, b.weight_unit) - getWeightInGrams(a.weight, a.weight_unit))[0];
+
+            setQuickSplitModal({
+                isOpen: true,
+                sourceInventory: inventory,
+                outputProduct: defaultTarget,
+                splitCount: Math.round(curGrams / getWeightInGrams(defaultTarget.weight, defaultTarget.weight_unit)).toString(),
+                sourceUseQuantity: Math.floor(inventory.remaining_quantity || 0).toString(),
+                products: productsList,
+                validTargets: validTargets // 필터링된 목록 저장
+            });
+        } catch (err) {
+            console.error('품목 로딩 실패:', err);
+            openModal({ type: 'warning', title: '오류', message: '품목 정보를 불러오는데 실패했습니다.', showCancel: false });
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    // [NEW] 바로 분할 실행 핸들러
+    const handleExecuteQuickSplit = async () => {
+        const { sourceInventory, outputProduct, splitCount, sourceUseQuantity } = quickSplitModal;
+
+        if (!outputProduct || !splitCount || !sourceUseQuantity) {
+            openModal({ type: 'warning', title: '입력 오류', message: '결과 품목과 분할 수량을 입력해주세요.', showCancel: false });
+            return;
+        }
+
+        const useQty = parseFloat(sourceUseQuantity);
+        if (useQty <= 0 || useQty > (sourceInventory.remaining_quantity || 0)) {
+            openModal({ type: 'warning', title: '수량 오류', message: '분할할 원본 수량이 유효하지 않거나 부족합니다.', showCancel: false });
+            return;
+        }
+
+        try {
+            setLoading(true);
+            const payload = {
+                ingredients: [{
+                    inventory_id: sourceInventory.id,
+                    use_quantity: useQty
+                }],
+                output_product_id: outputProduct.id,
+                output_quantity: parseFloat(splitCount) * useQty,
+                additional_cost: 0,
+                sender: sourceInventory.sender || '',
+                memo: '빠른 분할(Quick Split)'
+            };
+
+            await inventoryProductionAPI.create(payload);
+
+            setQuickSplitModal(prev => ({ ...prev, isOpen: false }));
+            openModal({
+                type: 'success',
+                title: '성공',
+                message: '재고 분할이 완료되었습니다.',
+                showCancel: false,
+                onConfirm: loadInventory
+            });
+        } catch (err) {
+            console.error('분할 오류:', err);
+            openModal({ type: 'warning', title: '분할 실패', message: err.response?.data?.message || err.message, showCancel: false });
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    // 생산 작업 상세 조회
+    const handleViewProduction = (productionId) => {
+        setProductionModal({
+            isOpen: true,
+            productionId: productionId
+        });
     };
     // 날짜 포맷 (MM-DD)
     const formatDateShort = (dateString) => {
@@ -309,18 +466,46 @@ const InventoryQuickView = ({ inventoryAdjustments = {}, refreshKey, onInventory
         return `${month}-${day}`;
     };
 
-    // 품목명 포맷
     const formatProductName = (item) => {
         if (!item) return '';
-        const parts = [item.product_name];
+        const name = item.product_name || '';
         const weight = item.product_weight || item.weight;
-        // product_weight 사용 시에는 product_weight_unit을 우선적으로 결합하여 정합성 유지
         const unit = item.product_weight ? (item.product_weight_unit || item.weight_unit || 'kg') : (item.weight_unit || 'kg');
-        if (weight && parseFloat(weight) > 0) {
-            // parseFloat를 사용하여 불필요한 소수점 0 제거 (5.00 -> 5, 5.50 -> 5.5)
-            parts.push(`${parseFloat(weight)}${unit}`);
-        }
-        return parts.join(' ');
+
+        // [Standard 57 & 65.10] 중량 표시 (숫자-단위 밀착, 최대 소수점 2자리)
+        const weightStr = (weight && parseFloat(weight) > 0)
+            ? `${formatNumber(weight)}${unit}`
+            : '';
+        const gradeStr = item.grade ? `(${item.grade})` : '';
+
+        return `${name}${weightStr ? ` ${weightStr}` : ''}${gradeStr ? ` ${gradeStr}` : ''}`.trim();
+    };
+
+    // [NEW] 중량 단위 정규화 (g 단위로 변환)
+    const getWeightInGrams = (weight, unit) => {
+        const w = parseFloat(weight || 0);
+        if (isNaN(w) || w <= 0) return 0;
+        const normalizedUnit = (unit || 'kg').toLowerCase();
+        return normalizedUnit === 'kg' ? w * 1000 : w;
+    };
+
+    // [NEW] 소분(분할) 가능 여부 판별 핸들러 (정수 분할 검증 포함)
+    const isSplittable = (item) => {
+        if (!item.product_name) return false;
+
+        const curGrams = getWeightInGrams(item.product_weight || item.weight, item.product_weight_unit || item.weight_unit);
+        if (curGrams <= 0) return false;
+
+        // 동일 품목명 중 현재 중량보다 작은 품목이면서 정수로 나누어떨어지는지 확인
+        return allProducts.some(p => {
+            if (p.product_name !== item.product_name) return false;
+            const pGrams = getWeightInGrams(p.weight, p.weight_unit);
+            if (pGrams <= 0 || pGrams >= curGrams) return false;
+
+            // 정수로 나누어떨어지는지 확인 (부동소수점 오차 방지를 위해 Math.round 활용)
+            const ratio = curGrams / pGrams;
+            return Math.abs(ratio - Math.round(ratio)) < 0.001;
+        });
     };
 
     return (
@@ -365,6 +550,7 @@ const InventoryQuickView = ({ inventoryAdjustments = {}, refreshKey, onInventory
                                 <th style={{ padding: '0.6rem 0.5rem', textAlign: 'left', whiteSpace: 'nowrap' }}>매입처</th>
                                 <th style={{ padding: '0.6rem 0.5rem', textAlign: 'left', whiteSpace: 'nowrap' }}>창고</th>
                                 <th style={{ padding: '0.6rem 0.5rem', textAlign: 'center', whiteSpace: 'nowrap', width: '50px' }}>매입일</th>
+                                <th style={{ padding: '0.6rem 0.5rem', textAlign: 'center', whiteSpace: 'nowrap', width: '50px' }}>작업</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -479,7 +665,7 @@ const InventoryQuickView = ({ inventoryAdjustments = {}, refreshKey, onInventory
                                                     ? '#3498db' // Modified but positive -> Blue
                                                     : '#27ae60' // Untouched -> Green
                                         }}>
-                                            {formatNumber(item.remaining_quantity)}
+                                            {formatQuantity(item.remaining_quantity)}
                                         </td>
                                         <td style={{ padding: '0.5rem', textAlign: 'right', whiteSpace: 'nowrap' }}>
                                             {formatCurrency(item.unit_price)}
@@ -493,6 +679,60 @@ const InventoryQuickView = ({ inventoryAdjustments = {}, refreshKey, onInventory
                                         <td style={{ padding: '0.5rem', textAlign: 'center', whiteSpace: 'nowrap' }}>
                                             {formatDateShort(item.purchase_date)}
                                         </td>
+                                        <td style={{ padding: '0.5rem', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                                            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '6px' }}>
+                                                {isSplittable(item) && (
+                                                    <button
+                                                        onClick={(e) => handleOpenQuickSplit(e, item)}
+                                                        style={{
+                                                            background: '#fff3e0',
+                                                            border: '1px solid #ffe0b2',
+                                                            borderRadius: '6px',
+                                                            padding: '2px 8px',
+                                                            cursor: 'pointer',
+                                                            color: '#ea580c',
+                                                            fontSize: '0.9rem',
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'center',
+                                                            transition: 'all 0.2s'
+                                                        }}
+                                                        onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#ffedd5'}
+                                                        onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#fff3e0'}
+                                                        title="재고 분할 (소분)"
+                                                    >
+                                                        ✂️
+                                                    </button>
+                                                )}
+                                                {item.production_id && (
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            handleViewProduction(item.production_id);
+                                                        }}
+                                                        style={{
+                                                            background: '#f3e8ff',
+                                                            border: '1px solid #e9d5ff',
+                                                            borderRadius: '6px',
+                                                            padding: '2px 8px',
+                                                            cursor: 'pointer',
+                                                            color: '#9333ea',
+                                                            fontSize: '0.9rem',
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'center',
+                                                            transition: 'all 0.2s',
+                                                            fontWeight: 'bold'
+                                                        }}
+                                                        onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#faf5ff'}
+                                                        onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#f3e8ff'}
+                                                        title="작업 상세 및 취소"
+                                                    >
+                                                        🛠️
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </td>
                                     </tr>
                                 );
                             })}
@@ -502,9 +742,222 @@ const InventoryQuickView = ({ inventoryAdjustments = {}, refreshKey, onInventory
             </div>
 
             <div style={{ marginTop: '10px', textAlign: 'right', fontSize: '0.8rem', color: '#888' }}>
-                총 {filteredInventory.length}건 / 재고합계: {formatNumber(filteredInventory.reduce((sum, item) => sum + (parseFloat(item.remaining_quantity) || 0), 0))}
+                총 {filteredInventory.length}건 / 재고합계: {formatQuantity(filteredInventory.reduce((sum, item) => sum + (parseFloat(item.remaining_quantity) || 0), 0))}
             </div>
+            {quickSplitModal.isOpen && (
+                createPortal(
+                    <div className="modal-overlay" style={{ zIndex: 10500 }}>
+                        <div style={{
+                            backgroundColor: 'white', border: 'none', borderRadius: '24px',
+                            width: '440px', maxWidth: '95%', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+                            overflow: 'hidden', display: 'flex', flexDirection: 'column',
+                            ...splitDraggableStyle
+                        }} onClick={(e) => e.stopPropagation()}>
+                            {/* 헤더: Premium Icon Header */}
+                            <div
+                                style={{
+                                    padding: '2.5rem 2rem 1.5rem', textAlign: 'center', backgroundColor: '#fff'
+                                }}
+                            >
+                                <div
+                                    onMouseDown={splitHandleMouseDown}
+                                    style={{
+                                        width: '64px', height: '64px', backgroundColor: '#fff7ed', borderRadius: '18px',
+                                        display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1.25rem',
+                                        fontSize: '1.75rem', color: '#ea580c', border: '1px solid #ffedd5',
+                                        cursor: 'grab'
+                                    }}
+                                >
+                                    ✂️
+                                </div>
+                                <h2 style={{ margin: '0', fontSize: '1.5rem', fontWeight: '900', color: '#1e293b' }}>
+                                    재고 분할
+                                </h2>
+                            </div>
+
+                            <div style={{ padding: '0 2rem 2rem' }}>
+                                {/* 원재료 정보: 카드 레이아웃 */}
+                                <div style={{
+                                    marginBottom: '1.5rem', backgroundColor: '#f8fafc', padding: '1.5rem', borderRadius: '24px',
+                                    border: '1px solid #f1f5f9'
+                                }}>
+                                    {/* 상단: 품목명 및 생산자 */}
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '1.25rem', padding: '0 4px' }}>
+                                        <div style={{ fontSize: '1.2rem', color: '#1e293b', fontWeight: '900', letterSpacing: '-0.02em', flex: 1, marginRight: '1rem' }}>
+                                            {formatProductName(quickSplitModal.sourceInventory)}
+                                        </div>
+                                        <div style={{ fontSize: '0.85rem', color: '#64748b', fontWeight: '600', whiteSpace: 'nowrap' }}>
+                                            생산자: <span style={{ color: '#475569' }}>{quickSplitModal.sourceInventory?.sender || '-'}</span>
+                                        </div>
+                                    </div>
+
+                                    {/* 하단: 2열 정보 배지 (현재 재고 & 소분할 수량) */}
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                                        {/* 현재 재고 박스 */}
+                                        <div style={{
+                                            padding: '14px', backgroundColor: '#fff', borderRadius: '18px',
+                                            border: '1px solid #f1f5f9', textAlign: 'center',
+                                            boxShadow: '0 2px 4px rgba(0,0,0,0.02)'
+                                        }}>
+                                            <div style={{ fontSize: '0.7rem', color: '#94a3b8', fontWeight: '700', textTransform: 'uppercase', marginBottom: '4px' }}>현재 재고</div>
+                                            <div style={{ fontSize: '1.25rem', color: '#334155', fontWeight: '900', lineHeight: 1 }}>
+                                                {formatQuantity(quickSplitModal.sourceInventory?.remaining_quantity)}개
+                                            </div>
+                                        </div>
+
+                                        {/* 소분할 수량 박스 (강조 스타일) */}
+                                        <div style={{
+                                            padding: '14px', backgroundColor: '#fff7ed', borderRadius: '18px',
+                                            border: '1px solid #ffedd5', textAlign: 'center',
+                                            boxShadow: '0 4px 12px -2px rgba(234, 88, 12, 0.12)'
+                                        }}>
+                                            <div style={{ fontSize: '0.7rem', color: '#ea580c', fontWeight: '700', textTransform: 'uppercase', marginBottom: '4px' }}>소분할 수량</div>
+                                            <div style={{ fontSize: '1.25rem', color: '#ea580c', fontWeight: '900', lineHeight: 1 }}>
+                                                {formatQuantity(quickSplitModal.sourceUseQuantity)}개
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div style={{ marginBottom: '1rem' }}>
+                                    <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: '800', marginBottom: '0.5rem', color: '#475569' }}>
+                                        결과 품목
+                                    </label>
+                                    <SearchableSelect
+                                        options={(quickSplitModal.validTargets || []).map(p => ({
+                                            value: p.id,
+                                            label: `${p.product_name}${p.weight ? ` ${parseFloat(p.weight)}${p.weight_unit || 'kg'}` : ''}${p.grade ? ` (${p.grade})` : ''} `,
+                                            data: p
+                                        }))}
+                                        value={quickSplitModal.outputProduct?.id || ''}
+                                        onChange={(option) => {
+                                            const prod = option?.data;
+                                            if (prod) {
+                                                const curGrams = getWeightInGrams(quickSplitModal.sourceInventory.product_weight || quickSplitModal.sourceInventory.weight, quickSplitModal.sourceInventory.product_weight_unit || quickSplitModal.sourceInventory.weight_unit);
+                                                const pGrams = getWeightInGrams(prod.weight, prod.weight_unit);
+                                                setQuickSplitModal(prev => ({
+                                                    ...prev,
+                                                    outputProduct: prod,
+                                                    splitCount: Math.round(curGrams / pGrams).toString()
+                                                }));
+                                            } else {
+                                                setQuickSplitModal(prev => ({
+                                                    ...prev,
+                                                    outputProduct: null,
+                                                    splitCount: ''
+                                                }));
+                                            }
+                                        }}
+                                        placeholder="품목 검색 및 선택..."
+                                        size="normal"
+                                    />
+                                </div>
+
+                                <div style={{ marginBottom: '1.5rem' }}>
+                                    <label style={{ display: 'block', fontSize: '1rem', fontWeight: '800', marginBottom: '0.75rem', color: '#1e293b' }}>
+                                        원본 재고 중 몇 개를 소분할까요?
+                                    </label>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                                        <div style={{ flex: 1, position: 'relative' }}>
+                                            <input
+                                                type="text"
+                                                inputMode="numeric"
+                                                value={quickSplitModal.sourceUseQuantity}
+                                                onChange={(e) => {
+                                                    const maxQty = Math.floor(quickSplitModal.sourceInventory?.remaining_quantity || 0);
+                                                    let val = e.target.value.replace(/[^0-9]/g, ''); // 숫자 이외 제거
+                                                    const parsed = parseInt(val);
+                                                    if (!isNaN(parsed) && parsed > maxQty) val = maxQty.toString();
+                                                    setQuickSplitModal(prev => ({ ...prev, sourceUseQuantity: val }));
+                                                }}
+                                                placeholder="수량 입력"
+                                                min="1"
+                                                max={quickSplitModal.sourceInventory?.remaining_quantity}
+                                                step="1"
+                                                style={{
+                                                    width: '100%', padding: '1rem 1.25rem', border: '2px solid #3b82f6', borderRadius: '16px',
+                                                    fontSize: '1.25rem', fontWeight: '800', outline: 'none', transition: 'all 0.2s',
+                                                    backgroundColor: '#eff6ff', color: '#1e40af', textAlign: 'center'
+                                                }}
+                                                autoFocus
+                                                onFocus={(e) => e.target.select()}
+                                            />
+                                            <div style={{ position: 'absolute', right: '1.25rem', top: '50%', transform: 'translateY(-50%)', fontWeight: '700', color: '#3b82f6' }}>개</div>
+                                        </div>
+                                        <div style={{ fontSize: '1.5rem', color: '#94a3b8' }}>/</div>
+                                        <div style={{ padding: '0 1rem', fontSize: '1rem', color: '#64748b', fontWeight: '600' }}>
+                                            보유: {formatQuantity(quickSplitModal.sourceInventory?.remaining_quantity)}개
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div style={{
+                                    backgroundColor: '#f8fafc', padding: '1.5rem', borderRadius: '20px', marginBottom: '1.5rem',
+                                    border: '1px solid #f1f5f9'
+                                }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                                        <span style={{ fontSize: '0.9rem', color: '#64748b', fontWeight: '600' }}>1개당 생성 수량</span>
+                                        <span style={{ fontSize: '1rem', color: '#1e293b', fontWeight: '800' }}>
+                                            {formatQuantity(quickSplitModal.splitCount)}개 <span style={{ fontSize: '0.75rem', color: '#94a3b8', fontWeight: 'normal' }}>(중량 비율)</span>
+                                        </span>
+                                    </div>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                                        <span style={{ fontSize: '0.9rem', color: '#64748b', fontWeight: '600' }}>1개당 산정 단가</span>
+                                        <span style={{ fontSize: '1rem', color: '#1e293b', fontWeight: '800' }}>
+                                            {formatCurrency(Math.floor((quickSplitModal.sourceInventory?.unit_price || 0) / (parseFloat(quickSplitModal.splitCount) || 1)))}
+                                        </span>
+                                    </div>
+                                    <div style={{ height: '1px', backgroundColor: '#e2e8f0', margin: '1rem 0' }}></div>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
+                                        <span style={{ fontSize: '1rem', color: '#1e293b', fontWeight: '800', marginBottom: '4px' }}>총 생성 예정 수량</span>
+                                        <div style={{ textAlign: 'right' }}>
+                                            <div style={{ fontSize: '1.5rem', color: '#10b981', fontWeight: '900', lineHeight: 1 }}>
+                                                {formatQuantity(parseFloat(quickSplitModal.sourceUseQuantity || 0) * parseFloat(quickSplitModal.splitCount || 0))}개
+                                            </div>
+                                            <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: '6px' }}>
+                                                {quickSplitModal.outputProduct?.product_name || '결과 품목'} 으로 생성됩니다.
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '1rem' }}>
+                                    <button
+                                        onClick={() => setQuickSplitModal(prev => ({ ...prev, isOpen: false }))}
+                                        style={{
+                                            padding: '0.75rem 1.5rem', border: '1px solid #e2e8f0', backgroundColor: 'white',
+                                            borderRadius: '12px', cursor: 'pointer', fontWeight: '600', color: '#64748b'
+                                        }}
+                                    >
+                                        취소
+                                    </button>
+                                    <button
+                                        onClick={handleExecuteQuickSplit}
+                                        style={{
+                                            padding: '0.75rem 2rem', border: 'none', backgroundColor: '#f97316',
+                                            color: 'white', borderRadius: '12px', cursor: 'pointer', fontWeight: '700',
+                                            boxShadow: '0 4px 6px -1px rgba(249, 115, 22, 0.2)'
+                                        }}
+                                    >
+                                        분할 실행
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>,
+                    document.body
+                )
+            )}
             {ConfirmModalComponent}
+
+            <ProductionDetailModal
+                isOpen={productionModal.isOpen}
+                onClose={() => {
+                    setProductionModal({ isOpen: false, productionId: null });
+                    loadInventory(); // 취소 가능성이 있으므로 닫을 때 새로고침
+                }}
+                jobId={productionModal.productionId}
+            />
         </div>
     );
 };

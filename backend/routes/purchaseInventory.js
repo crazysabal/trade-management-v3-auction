@@ -36,13 +36,15 @@ router.get('/', async (req, res) => {
         c.company_name,
         c.business_name,
         tm.trade_number,
-        tm.id as trade_master_id
+        tm.id as trade_master_id,
+        ip.id as production_id
       FROM purchase_inventory pi
       LEFT JOIN products p ON pi.product_id = p.id
       LEFT JOIN companies c ON pi.company_id = c.id
       LEFT JOIN warehouses w ON pi.warehouse_id = w.id
       LEFT JOIN trade_details td ON pi.trade_detail_id = td.id
       LEFT JOIN trade_masters tm ON td.trade_master_id = tm.id
+      LEFT JOIN inventory_productions ip ON ip.output_inventory_id = pi.id
       WHERE 1=1
     `;
     const params = [];

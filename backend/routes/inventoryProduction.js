@@ -70,20 +70,41 @@ router.post('/', async (req, res) => {
         const tradeDetailId = detailResult.insertId;
 
         // 4. Create Purchase Inventory (This is the Result Item)
-        // Fetch Product Name/Grade/Weight for denormalization if needed?
-        // Actually purchase_inventory doesn't store Name/Grade directly (joins), 
-        // but it stores trade_detail_id, product_id, company_id.
-        // Wait, earlier I saw purchase_inventory has product_id.
+        // [NEW] Handle display_order inheritance/shift (Based on FIRST ingredient)
+        let targetDisplayOrder = null;
+        if (ingredients.length > 0) {
+            const firstIng = ingredients[0];
+            const [sourceRows] = await connection.query('SELECT id, display_order, remaining_quantity FROM purchase_inventory WHERE id = ?', [firstIng.inventory_id]);
+            if (sourceRows.length > 0) {
+                const source = sourceRows[0];
+                if (source.display_order !== null) {
+                    const isFullConsumption = Number(source.remaining_quantity) === Number(firstIng.use_quantity);
+                    if (isFullConsumption) {
+                        // Inherit the order of the primary ingredient
+                        targetDisplayOrder = source.display_order;
+                    } else {
+                        // Partial consumption: Shift items that logically follow the source
+                        // (either higher display_order OR same display_order with higher ID)
+                        await connection.query(
+                            'UPDATE purchase_inventory SET display_order = display_order + 1 WHERE (display_order > ?) OR (display_order = ? AND id > ?)',
+                            [source.display_order, source.display_order, source.id]
+                        );
+                        // Assign same order as source. Due to secondary sort 'id ASC', small ID (source) comes first.
+                        targetDisplayOrder = source.display_order;
+                    }
+                }
+            }
+        }
 
         // Let's Insert.
         const [invResult] = await connection.query(
             `INSERT INTO purchase_inventory 
             (trade_detail_id, product_id, company_id, warehouse_id, 
              purchase_date, original_quantity, remaining_quantity, 
-             unit_price, sender, status, created_at) 
-            VALUES (?, ?, ?, ?, NOW(), ?, ?, ?, ?, 'AVAILABLE', NOW())`,
+             unit_price, sender, status, display_order, created_at) 
+            VALUES (?, ?, ?, ?, NOW(), ?, ?, ?, ?, 'AVAILABLE', ?, NOW())`,
             [tradeDetailId, output_product_id, companyId, warehouseId,
-                output_quantity, output_quantity, newUnitPrice, sender]
+                output_quantity, output_quantity, newUnitPrice, sender, targetDisplayOrder]
         );
         const newInventoryId = invResult.insertId;
 

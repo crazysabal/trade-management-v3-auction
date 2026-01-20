@@ -113,7 +113,8 @@ CREATE TABLE IF NOT EXISTS purchase_inventory (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     INDEX idx_purchase_date (purchase_date),
     INDEX idx_product_id (product_id),
-    INDEX idx_warehouse_id (warehouse_id)
+    INDEX idx_warehouse_id (warehouse_id),
+    INDEX idx_purchase_inventory_display_order (display_order)
 );
 
 -- 6. SALE PURCHASE MATCHING (매출-매입 매칭)
@@ -573,6 +574,9 @@ BEGIN
     END IF;
 
     IF v_trade_type = 'PURCHASE' THEN
+        -- [NEW] 신규 순번 계산: 현재 최대 순번 + 1
+        SELECT IFNULL(MAX(display_order), 0) + 1 INTO v_display_order FROM purchase_inventory;
+
         SET v_after_qty = v_before_qty + NEW.quantity;
 
         -- 1. Updates Aggregate Inventory
@@ -586,12 +590,12 @@ BEGIN
         -- 2. Insert into purchase_inventory (For Lot Matching)
         INSERT INTO purchase_inventory (
             trade_detail_id, product_id, company_id, warehouse_id, purchase_date,
-            original_quantity, remaining_quantity, unit_price, total_weight,
-            shipper_location, sender, status
+            original_quantity, remaining_quantity, unit_price, total_weight, weight_unit,
+            shipper_location, sender, status, display_order
         ) VALUES (
-            NEW.id, NEW.product_id, v_company_id, v_warehouse_id, v_trade_date,
-            NEW.quantity, NEW.quantity, NEW.unit_price, IFNULL(NEW.total_weight, 0),
-            IFNULL(NEW.shipper_location, ''), IFNULL(NEW.sender, ''), 'AVAILABLE'
+            NEW.id, NEW.product_id, v_company_id, IFNULL(v_warehouse_id, 1), v_trade_date,
+            NEW.quantity, NEW.quantity, NEW.unit_price, IFNULL(NEW.total_weight, 0), NEW.weight_unit,
+            IFNULL(NEW.shipper_location, ''), IFNULL(NEW.sender, ''), 'AVAILABLE', v_display_order
         );
 
         -- 3. Insert into inventory_transactions (For History)

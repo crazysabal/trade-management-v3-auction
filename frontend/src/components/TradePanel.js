@@ -1618,7 +1618,7 @@ function TradePanel({
 
     return sorted.map(product => {
       const unit = product.weight_unit || 'kg';
-      const weightStr = product.weight ? `${parseFloat(product.weight)} ${unit}` : '';
+      const weightStr = product.weight ? `${parseFloat(product.weight)}${unit}` : '';
       return {
         value: product.id,
         label: `${product.product_name}${weightStr ? ` ${weightStr}` : ''}${product.grade ? ` (${product.grade})` : ''} `

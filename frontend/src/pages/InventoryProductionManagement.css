@@ -34,10 +34,8 @@
     border-radius: 12px;
     box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
     border: 1px solid #eef2f7;
-    min-height: 520px;
-    /* 최소 높이 보장 */
-    height: auto;
-    /* 내용에 따라 유연하게 조절 */
+    height: 720px;
+    /* 고정 높이로 대칭 유지 */
     overflow: hidden;
 }
 
@@ -61,6 +59,8 @@
     flex-direction: column;
     justify-content: center;
     box-sizing: border-box;
+    flex-shrink: 0;
+    /* 축소 방지 */
 }
 
 .panel-header.ingredients {
@@ -138,6 +138,15 @@
     overflow-y: auto;
     padding: 0.5rem;
     background-color: #fdfdfd;
+}
+
+.ingredients-content,
+.workbench-list-content {
+    flex: 1;
+    /* 남은 공간 가득 채우기 */
+    overflow-y: auto;
+    background-color: #fdfdfd;
+    border-bottom: 1px solid #f1f5f9;
 }
 
 .empty-workbench {
@@ -250,6 +259,8 @@
     padding: 1.2rem;
     background-color: #f8f9fa;
     border-top: 1px solid #eee;
+    flex-shrink: 0;
+    /* 축소 방지 */
 }
 
 .footer-config-container {

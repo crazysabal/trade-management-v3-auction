@@ -164,8 +164,8 @@ function ConfirmModal({
             {showConfirm && (
               <button
                 className={`modal-btn ${config.confirmBtnClass}`}
-                onClick={() => {
-                  onConfirm();
+                onClick={async () => {
+                  await onConfirm();
                   onClose();
                 }}
                 autoFocus

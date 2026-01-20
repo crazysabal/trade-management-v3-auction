@@ -5,6 +5,7 @@ import { Link } from 'react-router-dom';
 import ConfirmModal from '../components/ConfirmModal';
 import TradeDetailModal from '../components/TradeDetailModal';
 import InventoryDetailModal from '../components/InventoryDetailModal';
+import ProductionDetailModal from '../components/ProductionDetailModal';
 import { useAuth } from '../context/AuthContext';
 
 // 금액 포맷 함수 (컴포넌트 외부)
@@ -105,6 +106,12 @@ function InventoryList() {
   const [detailModal, setDetailModal] = useState({
     isOpen: false,
     inventoryId: null
+  });
+
+  // 생산 작업 상세 모달 상태
+  const [productionModal, setProductionModal] = useState({
+    isOpen: false,
+    productionId: null
   });
 
   // 좌우 위치 변경
@@ -239,6 +246,14 @@ function InventoryList() {
     });
   };
 
+  // 생산 작업 상세 조회
+  const handleViewProduction = (productionId) => {
+    setProductionModal({
+      isOpen: true,
+      productionId: productionId
+    });
+  };
+
   const getStatusBadge = (status) => {
     switch (status) {
       case 'AVAILABLE':
@@ -308,6 +323,27 @@ function InventoryList() {
                         <span style={{ fontSize: '0.75rem', color: '#666', marginLeft: '4px' }}>
                           {formatNumber(originalWeight)}{item.weight_unit || item.product_weight_unit || 'kg'}
                         </span>
+                      )}
+                      {item.production_id && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleViewProduction(item.production_id);
+                          }}
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            cursor: 'pointer',
+                            fontSize: '0.85rem',
+                            marginLeft: '6px',
+                            color: '#9b59b6',
+                            padding: '0 4px',
+                            verticalAlign: 'middle'
+                          }}
+                          title="분할/생산 작업 상세"
+                        >
+                          🛠️
+                        </button>
                       )}
                     </td>
                     <td style={{ padding: '0.4rem 0.5rem', fontSize: '0.8rem' }}>
@@ -614,6 +650,15 @@ function InventoryList() {
         isOpen={tradeDetailModal.isOpen}
         onClose={() => setTradeDetailModal({ isOpen: false, tradeId: null })}
         tradeId={tradeDetailModal.tradeId}
+      />
+
+      <ProductionDetailModal
+        isOpen={productionModal.isOpen}
+        onClose={() => {
+          setProductionModal({ isOpen: false, productionId: null });
+          loadData(); // 취소 가능성이 있으므로 닫을 때 새로고침
+        }}
+        jobId={productionModal.productionId}
       />
     </div>
   );

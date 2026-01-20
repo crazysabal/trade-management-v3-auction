@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { inventoryProductionAPI } from '../services/api';
 import { useModalDraggable } from '../hooks/useModalDraggable';
+import { useConfirmModal } from './ConfirmModal';
 
 /**
  * 재고 작업 상세 보기 모달 컴포넌트
@@ -12,6 +13,7 @@ function ProductionDetailModal({ isOpen, onClose, jobId, highlightId }) {
     const [jobData, setJobData] = useState(null);
     const [error, setError] = useState(null);
     const { handleMouseDown, draggableStyle } = useModalDraggable(isOpen);
+    const { openModal, ConfirmModalComponent } = useConfirmModal();
     const highlightedRowRef = useRef(null);
 
     // 작업 상세 정보 로드
@@ -57,6 +59,54 @@ function ProductionDetailModal({ isOpen, onClose, jobId, highlightId }) {
         }
     };
 
+    // 작업 취소 실행
+    const handleCancel = async () => {
+        openModal({
+            type: 'confirm',
+            title: '작업 취소 확인',
+            message: '이 작업을 취소하시겠습니까?\n취소 시 생산된 재고는 삭제되고 투입된 원재료가 복구됩니다.',
+            onConfirm: async () => {
+                try {
+                    setLoading(true);
+                    // [BUG FIX] inventoryProductionAPI.delete -> cancel
+                    const response = await inventoryProductionAPI.cancel(jobId);
+                    if (response.data.success) {
+                        // 첫 번째 모달이 닫힌 후 다음 모달을 띄우기 위해 약간의 지연 시간을 둠
+                        setTimeout(() => {
+                            openModal({
+                                type: 'success',
+                                title: '취소 완료',
+                                message: '작업이 성공적으로 취소되었습니다.',
+                                onConfirm: () => {
+                                    onClose();
+                                }
+                            });
+                        }, 100);
+                    } else {
+                        setTimeout(() => {
+                            openModal({
+                                type: 'error',
+                                title: '취소 실패',
+                                message: '취소 실패: ' + response.data.message
+                            });
+                        }, 100);
+                    }
+                } catch (err) {
+                    console.error('작업 취소 오류:', err);
+                    setTimeout(() => {
+                        openModal({
+                            type: 'error',
+                            title: '오류 발생',
+                            message: '작업 취소 중 오류가 발생했습니다: ' + (err.response?.data?.message || err.message)
+                        });
+                    }, 100);
+                } finally {
+                    setLoading(false);
+                }
+            }
+        });
+    };
+
     // ESC 키로 닫기
     useEffect(() => {
         const handleEsc = (e) => {
@@ -83,7 +133,22 @@ function ProductionDetailModal({ isOpen, onClose, jobId, highlightId }) {
     if (!isOpen) return null;
 
     const formatCurrency = (value) => {
-        return new Intl.NumberFormat('ko-KR').format(value || 0);
+        return new Intl.NumberFormat('ko-KR').format(value || 0) + '원';
+    };
+
+    const formatNumber = (val) => {
+        if (val === undefined || val === null || val === '') return '';
+        const num = parseFloat(val);
+        if (isNaN(num)) return val;
+        // 최대 소수점 2자리, 불필요한 0 제거
+        return parseFloat(num.toFixed(2)).toLocaleString('ko-KR');
+    };
+
+    const formatQuantity = (val) => {
+        if (val === undefined || val === null || val === '') return '0개';
+        const num = parseFloat(val);
+        if (isNaN(num)) return '0개';
+        return parseFloat(num.toFixed(2)).toLocaleString('ko-KR') + '개';
     };
 
     const formatDate = (dateString) => {
@@ -92,7 +157,7 @@ function ProductionDetailModal({ isOpen, onClose, jobId, highlightId }) {
     };
 
     return createPortal(
-        <div className="modal-overlay" style={{ zIndex: 10100 }}>
+        <div className="modal-overlay" style={{ zIndex: 10500 }}>
             <div
                 className="styled-modal"
                 onClick={(e) => e.stopPropagation()}
@@ -107,13 +172,36 @@ function ProductionDetailModal({ isOpen, onClose, jobId, highlightId }) {
             >
                 {/* 헤더 */}
                 <div
-                    className="modal-header draggable-header"
-                    onMouseDown={handleMouseDown}
+                    className="modal-header"
+                    style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '12px',
+                        padding: '1rem 1.5rem',
+                        borderBottom: '1px solid #e2e8f0',
+                        backgroundColor: '#fff'
+                    }}
                 >
-                    <h2 className="drag-pointer-none" style={{ margin: 0, fontSize: '1.25rem', color: '#1e293b' }}>
-                        🛠️ 작업 상세 내역
+                    <div
+                        onMouseDown={handleMouseDown}
+                        style={{
+                            cursor: 'grab',
+                            fontSize: '1.25rem',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            width: '32px',
+                            height: '32px',
+                            backgroundColor: '#f1f5f9',
+                            borderRadius: '8px'
+                        }}
+                    >
+                        🛠️
+                    </div>
+                    <h2 style={{ margin: 0, fontSize: '1.25rem', color: '#1e293b', flex: 1 }}>
+                        작업 상세 내역
                     </h2>
-                    <button className="close-btn drag-pointer-auto" onClick={onClose}>&times;</button>
+                    <button className="close-btn" onClick={onClose} style={{ fontSize: '1.5rem', background: 'none', border: 'none', cursor: 'pointer', color: '#64748b' }}>&times;</button>
                 </div>
 
                 {/* 바디 */}
@@ -148,7 +236,7 @@ function ProductionDetailModal({ isOpen, onClose, jobId, highlightId }) {
                                 <div>
                                     <div style={{ fontSize: '0.85rem', color: '#64748b', marginBottom: '0.25rem' }}>총 비용</div>
                                     <div style={{ fontWeight: '600', color: '#1e293b' }}>
-                                        {formatCurrency(jobData.total_cost)}원
+                                        {formatCurrency(jobData.total_cost)}
                                     </div>
                                 </div>
                                 <div style={{ gridColumn: '1 / -1' }}>
@@ -183,11 +271,11 @@ function ProductionDetailModal({ isOpen, onClose, jobId, highlightId }) {
                                                     style={{ borderBottom: '1px solid #e2e8f0' }}
                                                 >
                                                     <td style={{ padding: '0.75rem', fontWeight: isHighlighted ? '700' : 'normal' }}>
-                                                        {item.product_name} {item.product_weight}{item.weight_unit || item.product_weight_unit || 'kg'} {item.grade}
+                                                        {item.product_name} {formatNumber(item.weight || item.product_weight)}{item.weight_unit || item.product_weight_unit || 'kg'} {item.grade}
                                                         {isHighlighted && <span style={{ marginLeft: '8px', color: '#f08c00', fontSize: '0.8rem' }}>👈 선택됨</span>}
                                                     </td>
                                                     <td style={{ padding: '0.75rem', textAlign: 'center' }}>{item.sender || '-'}</td>
-                                                    <td style={{ padding: '0.75rem', textAlign: 'right' }}>{item.used_quantity}</td>
+                                                    <td style={{ padding: '0.75rem', textAlign: 'right' }}>{formatQuantity(item.used_quantity)}</td>
                                                     <td style={{ padding: '0.75rem', textAlign: 'right' }}>{formatCurrency(item.unit_price)}</td>
                                                     <td style={{ padding: '0.75rem', textAlign: 'right', fontWeight: '500' }}>
                                                         {formatCurrency(item.used_quantity * item.unit_price)}
@@ -225,11 +313,11 @@ function ProductionDetailModal({ isOpen, onClose, jobId, highlightId }) {
                                                     style={{ borderBottom: '1px solid #e2e8f0' }}
                                                 >
                                                     <td style={{ padding: '0.75rem', fontWeight: isHighlighted ? '700' : 'normal' }}>
-                                                        {item.product_name} {item.product_weight}{item.weight_unit || item.product_weight_unit || 'kg'} {item.grade}
+                                                        {item.product_name} {formatNumber(item.product_weight || item.weight)}{item.weight_unit || item.product_weight_unit || 'kg'} {item.grade}
                                                         {isHighlighted && <span style={{ marginLeft: '8px', color: '#f08c00', fontSize: '0.8rem' }}>👈 선택됨</span>}
                                                     </td>
                                                     <td style={{ padding: '0.75rem', textAlign: 'right', fontWeight: 'bold', color: '#2563eb' }}>
-                                                        {item.quantity}
+                                                        {formatQuantity(item.quantity)}
                                                     </td>
                                                     <td style={{ padding: '0.75rem', textAlign: 'right' }}>{formatCurrency(item.unit_cost)}</td>
                                                     <td style={{ padding: '0.75rem', textAlign: 'right', fontWeight: '500' }}>
@@ -249,11 +337,30 @@ function ProductionDetailModal({ isOpen, onClose, jobId, highlightId }) {
                 </div>
 
                 {/* 푸터 */}
-                <div className="modal-footer" style={{ borderTop: '1px solid #e2e8f0', padding: '1rem 1.5rem', backgroundColor: '#f8fafc' }}>
+                <div className="modal-footer" style={{ borderTop: '1px solid #e2e8f0', padding: '1rem 1.5rem', backgroundColor: '#f8fafc', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div>
+                        <button
+                            className="modal-btn"
+                            onClick={handleCancel}
+                            disabled={loading}
+                            style={{
+                                backgroundColor: '#fee2e2',
+                                color: '#dc2626',
+                                border: '1px solid #fecaca',
+                                padding: '0.4rem 0.8rem',
+                                borderRadius: '4px',
+                                fontSize: '0.85rem',
+                                fontWeight: '600',
+                                cursor: loading ? 'not-allowed' : 'pointer'
+                            }}
+                        >
+                            🚫 작업 취소 (삭제 및 복원)
+                        </button>
+                    </div>
                     <button className="modal-btn modal-btn-primary" onClick={onClose}>닫기</button>
-                    {/* 필요 시 작업 취소 버튼 등을 여기에 추가 가능 */}
                 </div>
             </div>
+            {ConfirmModalComponent}
         </div>,
         document.body
     );
