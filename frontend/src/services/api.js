@@ -152,6 +152,9 @@ export const auctionAPI = {
   // 품목 매칭
   getMappings: () => api.get('/auction/mappings'),
   saveMapping: (data) => api.post('/auction/mappings', data),
+
+  // 기존 매입 내역 조회 (중복 체크용)
+  getExistingPurchases: (params) => api.get('/auction/existing-purchases', { params }),
 };
 
 // 본사 정보 API

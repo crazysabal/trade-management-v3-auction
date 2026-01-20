@@ -49,6 +49,7 @@ import RoleManagement from './RoleManagement'; // RBAC Page
 const DesktopManager = () => {
     const { user } = useAuth();
     const { hasPermission } = usePermission(); // RBAC Hook
+    const { openModal, ConfirmModalComponent } = useConfirmModal(); // [FIX] Move to top to avoid TDZ in launchApp
     const getScopedKey = useCallback((key) => user?.id ? `u${user.id}_${key}` : key, [user?.id]);
 
     // ... (rest of code)
@@ -133,113 +134,6 @@ const DesktopManager = () => {
         }
     }, [activeWindowId, getScopedKey]);
 
-    // 앱 실행 (윈도우 열기)
-    const launchApp = useCallback((appType, props = {}) => {
-        // [RBAC] Permission Guard
-        // [NEW] DASHBOARD is basically home, skip READ check or handle as no-op later
-        if (appType === 'DASHBOARD') {
-            closeAll();
-            return;
-        }
-
-        // Check if user has READ permission for this appType
-        if (!hasPermission(appType, 'READ')) {
-            openModal({
-                type: 'warning',
-                title: '접근 제한',
-                message: '해당 메뉴에 대한 접근 권한이 없습니다. 관리자에게 문의하세요.',
-                showCancel: false
-            });
-            return;
-        }
-
-        // 이미 열린 단일 인스턴스 앱 확인 (설정, 통계 등은 하나만)
-        const alwaysSingleInstanceApps = [
-            'SETTINGS', 'STATISTICS', 'ROLE_MANAGEMENT', 'BACKUP_SYSTEM'
-        ];
-
-        const existing = windows?.find(w => w.type === appType);
-
-        // 1. 항상 단일 인스턴스인 앱
-        if (existing && alwaysSingleInstanceApps.includes(appType)) {
-            // 기존 윈도우의 props 업데이트
-            setWindows(prev => prev.map(w => w.id === existing.id ? { ...w, componentProps: { ...w.componentProps, ...props, timestamp: Date.now() }, isMinimized: false } : w));
-            // restoreWindow(existing.id); // 위에서 isMinimized 처리함
-            bringToFront(existing.id);
-            return;
-        }
-
-        // 2. 사용자 설정이 'single' 모드이고, 이미 열려있는 경우
-        if (windowMode === 'single' && existing) {
-            // 기존 윈도우의 props 업데이트
-            setWindows(prev => prev.map(w => w.id === existing.id ? { ...w, componentProps: { ...w.componentProps, ...props, timestamp: Date.now() }, isMinimized: false } : w));
-            // restoreWindow(existing.id); // 위에서 isMinimized 처리함
-            bringToFront(existing.id);
-            return;
-        }
-
-        const newId = Date.now();
-        const newZIndex = maxZIndex + 1;
-        setMaxZIndex(newZIndex);
-        setActiveWindowId(newId);
-
-        // 기본 설정 (from Source of Truth)
-        const meta = RESOURCE_METADATA[appType] || {};
-        let title = meta.label || appType;
-        let icon = meta.icon || '📱';
-        let size = { width: 1000, height: 700 };
-        let position = { x: 50 + ((windows?.length || 0) % 10) * 30, y: 50 + ((windows?.length || 0) % 10) * 30 };
-
-        // 크기 예외 처리 (config로 옮길 수도 있지만 일단 유지)
-        if (appType === 'ROLE_MANAGEMENT' || appType === 'USER_MANAGEMENT') size = { width: 1000, height: 750 };
-        if (appType === 'SETTLEMENT_HISTORY' || appType === 'WAREHOUSES') size = { width: 900, height: 600 };
-        if (appType === 'SETTINGS' || appType === 'EXPENSE_CATEGORIES' || appType === 'PAYMENT_METHODS') size = { width: 800, height: 630 };
-        if (appType === 'BACKUP_SYSTEM') size = { width: 800, height: 750 };
-        if (appType === 'COMPANY_INFO') size = { width: 600, height: 500 };
-
-        // [DEBUG] Append App Type for User Identification
-        title = `${title} [${appType}]`;
-
-        // 모바일이면 전체 화면 강제
-        if (isMobile) {
-            size = { width: window.innerWidth - 20, height: window.innerHeight - 80 }; // Navbar 고려
-            position = { x: 10, y: 70 };
-        }
-
-        // 윈도우 크기 및 위치 복원 (저장된 값이 있으면)
-        const savedSize = localStorage.getItem(getScopedKey(`window_size_${appType}`));
-        const savedPosition = localStorage.getItem(getScopedKey(`window_position_${appType}`));
-
-        if (!isMobile) {
-            if (savedSize) {
-                try { size = JSON.parse(savedSize); } catch (e) { }
-            }
-            if (savedPosition) {
-                try { position = JSON.parse(savedPosition); } catch (e) { }
-            }
-        }
-
-        const newWindow = {
-            id: newId,
-            type: appType,
-            zIndex: newZIndex,
-            position,
-            size,
-            title,
-            icon,
-            componentProps: props,
-            isMinimized: false
-        };
-
-        setWindows(prev => {
-            // [NEW] Mobile Single Window Policy: Close others
-            if (isMobile) {
-                return [newWindow];
-            }
-            return [...prev, newWindow];
-        });
-    }, [windows, maxZIndex, isMobile, windowMode]);
-
     const closeWindow = (id) => {
         setWindows(prev => prev.filter(w => w.id !== id));
         if (activeWindowId === id) {
@@ -299,27 +193,135 @@ const DesktopManager = () => {
         const win = windows.find(w => w.id === id);
         if (!win) return;
 
-        // localStorage 제거
         localStorage.removeItem(getScopedKey(`window_position_${win.type}`));
         localStorage.removeItem(getScopedKey(`window_size_${win.type}`));
 
-        // 기본 위치 및 크기로 리셋
-        // 기본 위치 로직 재현 (약식)
         const defaultPosition = { x: 50 + ((windows?.length || 0) % 10) * 30, y: 50 + ((windows?.length || 0) % 10) * 30 };
-
-        let defaultSize = { width: 1000, height: 700 };
-        if (['INVENTORY_QUICK', 'COMPANY_INFO'].includes(win.type)) defaultSize = { width: 600, height: 800 };
+        let defaultSize = { width: 1000, height: 820 };
+        if (['INVENTORY_QUICK', 'COMPANY_INFO'].includes(win.type)) {
+            defaultSize = { width: 'auto', height: 820 };
+        }
         if (['SETTINGS', 'EXPENSE_CATEGORIES'].includes(win.type)) defaultSize = { width: 800, height: 600 };
-        if (['WAREHOUSES'].includes(win.type)) defaultSize = { width: 900, height: 600 };
+        if (['WAREHOUSES', 'STATISTICS'].includes(win.type)) defaultSize = { width: 900, height: 600 };
 
         setWindows(prev => prev.map(w => w.id === id ? {
             ...w,
             position: defaultPosition,
             size: defaultSize
         } : w));
-
         bringToFront(id);
     };
+
+    // 앱 실행 (윈도우 열기)
+    const launchApp = useCallback((appType, props = {}, launcherId = null) => {
+        // [RBAC] Permission Guard
+        if (appType === 'DASHBOARD') {
+            closeAll();
+            return;
+        }
+
+        if (!hasPermission(appType, 'READ')) {
+            openModal({
+                type: 'warning',
+                title: '접근 제한',
+                message: '해당 메뉴에 대한 접근 권한이 없습니다. 관리자에게 문의하세요.',
+                showCancel: false
+            });
+            return;
+        }
+
+        const alwaysSingleInstanceApps = ['SETTINGS', 'STATISTICS', 'ROLE_MANAGEMENT', 'BACKUP_SYSTEM'];
+        const existing = windows?.find(w => w.type === appType);
+
+        const calculatePosition = (targetAppType, lId) => {
+            let pos = { x: 50 + ((windows?.length || 0) % 10) * 30, y: 50 + ((windows?.length || 0) % 10) * 30 };
+            if (!lId || isMobile) return pos;
+            const launcher = windows?.find(w => `win-${w.id}` === lId || w.id === lId);
+            if (launcher) {
+                const spacing = 2;
+                const launcherWidth = typeof launcher.size.width === 'number' ? launcher.size.width : 800;
+                let newX = launcher.position.x + launcherWidth + spacing;
+                let newY = launcher.position.y;
+                const winWidth = window.innerWidth;
+                const targetWidth = (targetAppType === 'INVENTORY_QUICK' || targetAppType === 'COMPANY_INFO') ? 900 : 1000;
+                if (newX + targetWidth > winWidth - 20) {
+                    newX = Math.max(0, winWidth - targetWidth - 30);
+                }
+                pos = { x: newX, y: newY };
+            }
+            return pos;
+        };
+
+        if (existing && (alwaysSingleInstanceApps.includes(appType) || windowMode === 'single')) {
+            const nextPos = launcherId ? calculatePosition(appType, launcherId) : existing.position;
+
+            // [Sidecar Height Sync for Existing Window]
+            // 이미 창이 열려있더라도 다시 호출 시 호출 창의 높이에 맞춤 (Trade Panel <-> Inventory Quick View)
+            let nextSize = existing.size;
+            if (launcherId && !isMobile && appType === 'INVENTORY_QUICK') {
+                const launcher = windows?.find(w => `win-${w.id}` === launcherId || w.id === launcherId);
+                if (launcher && launcher.size && typeof launcher.size.height === 'number') {
+                    nextSize = { ...existing.size, height: launcher.size.height };
+                }
+            }
+
+            setWindows(prev => prev.map(w => w.id === existing.id ? {
+                ...w,
+                position: nextPos,
+                size: nextSize,
+                componentProps: { ...w.componentProps, ...props, timestamp: Date.now() },
+                isMinimized: false
+            } : w));
+            bringToFront(existing.id);
+            return;
+        }
+
+        const newId = Date.now();
+        const newZIndex = maxZIndex + 1;
+        setMaxZIndex(newZIndex);
+        setActiveWindowId(newId);
+
+        const meta = RESOURCE_METADATA[appType] || {};
+        let title = meta.label || appType;
+        let icon = meta.icon || '📱';
+        let size = { width: 1000, height: 820 };
+
+        if (appType === 'ROLE_MANAGEMENT' || appType === 'USER_MANAGEMENT') size = { width: 1000, height: 750 };
+        if (appType === 'SETTLEMENT_HISTORY' || appType === 'WAREHOUSES') size = { width: 900, height: 600 };
+        if (appType === 'SETTINGS' || appType === 'EXPENSE_CATEGORIES' || appType === 'PAYMENT_METHODS') size = { width: 800, height: 630 };
+        if (appType === 'BACKUP_SYSTEM') size = { width: 800, height: 750 };
+        if (appType === 'SALE' || appType === 'PURCHASE') size = { width: 1000, height: 820 };
+        if (appType === 'AUCTION_IMPORT') size = { width: 'auto', height: 820 };
+        if (appType === 'COMPANY_INFO') size = { width: 'auto', height: 500 };
+        if (appType === 'INVENTORY_QUICK') {
+            size = { width: 'auto', height: 820 }; // Default
+            // [Sidecar Height Sync] 호출 창(Trade Panel)이 있으면 그 높이에 맞춤
+            if (launcherId && !isMobile) {
+                const launcher = windows?.find(w => `win-${w.id}` === launcherId || w.id === launcherId);
+                if (launcher && typeof launcher.size.height === 'number') {
+                    size.height = launcher.size.height;
+                }
+            }
+        }
+
+        let position = calculatePosition(appType, launcherId);
+        title = `${title} [${appType}]`;
+
+        if (isMobile) {
+            size = { width: window.innerWidth - 20, height: window.innerHeight - 80 };
+            position = { x: 10, y: 70 };
+        }
+
+        if (!launcherId && !isMobile) {
+            const savedSize = localStorage.getItem(getScopedKey(`window_size_${appType}`));
+            const savedPosition = localStorage.getItem(getScopedKey(`window_position_${appType}`));
+            if (savedSize) { try { size = JSON.parse(savedSize); } catch (e) { } }
+            if (savedPosition) { try { position = JSON.parse(savedPosition); } catch (e) { } }
+        }
+
+        const newWindow = { id: newId, type: appType, zIndex: newZIndex, position, size, title, icon, componentProps: props, isMinimized: false };
+        setWindows(prev => isMobile ? [newWindow] : [...prev, newWindow]);
+    }, [windows, maxZIndex, isMobile, windowMode, bringToFront, hasPermission, openModal, getScopedKey, closeAll]);
 
     // 재고 조정 상태 (Floating Windows 간 동기화)
     const [inventoryAdjustments, setInventoryAdjustments] = useState({});
@@ -328,7 +330,6 @@ const DesktopManager = () => {
     const [inventoryRefreshKey, setInventoryRefreshKey] = useState(0);
     const [tradeRefreshKey, setTradeRefreshKey] = useState(0);
 
-    const { openModal, ConfirmModalComponent } = useConfirmModal(); // Init hook
 
     const handleInventoryUpdate = useCallback((inventoryId, delta) => {
         setInventoryAdjustments(prev => {

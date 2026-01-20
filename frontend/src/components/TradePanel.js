@@ -1831,7 +1831,7 @@ function TradePanel({
                 <button
                   type="button"
                   className="btn btn-info btn-custom btn-sm"
-                  onClick={() => onLaunchApp('INVENTORY_QUICK')}
+                  onClick={() => onLaunchApp('INVENTORY_QUICK', {}, panelId)}
                   style={{ backgroundColor: '#17a2b8', color: 'white', border: 'none' }}
                 >
                   재고
@@ -3017,7 +3017,7 @@ function TradePanel({
                 <div style={{ textAlign: 'center', flex: 1 }}>
                   <div style={{ fontSize: '1.0rem', color: '#7f8c8d', marginBottom: '0.25rem' }}>재고 잔량</div>
                   <div style={{ fontWeight: '700', fontSize: '1.2rem', color: '#27ae60' }}>
-                    {inventoryInputModal.maxQuantity}
+                    {inventoryInputModal.maxQuantity}개
                   </div>
                 </div>
                 <div style={{ width: '1px', backgroundColor: '#e0e0e0' }}></div>

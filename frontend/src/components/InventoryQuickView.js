@@ -22,6 +22,7 @@ const InventoryQuickView = ({ inventoryAdjustments = {}, refreshKey, onInventory
     });
     const isSalesPanelActive = panelStatus.hasReadyPanel;
     const [selectedId, setSelectedId] = useState(null);
+    const [showTodayOnly, setShowTodayOnly] = useState(false);
 
     // [NEW] 바로 분할 모달 상태
     const [quickSplitModal, setQuickSplitModal] = useState({
@@ -265,12 +266,24 @@ const InventoryQuickView = ({ inventoryAdjustments = {}, refreshKey, onInventory
             onInventoryLoaded(adjustedInventory);
         }
 
-        // 검색어 필터링 적용
+        // 당일 매입 필터 및 검색어 필터링 적용
+        let filtered = adjustedInventory;
+
+        // 1. 당일 매입 필터 적용
+        if (showTodayOnly) {
+            const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+            filtered = filtered.filter(item => {
+                const purchaseDate = item.purchase_date ? item.purchase_date.split('T')[0] : '';
+                return purchaseDate === today;
+            });
+        }
+
+        // 2. 검색어 필터링 적용
         if (!searchTerm) {
-            setFilteredInventory(adjustedInventory);
+            setFilteredInventory(filtered);
         } else {
             const keywords = searchTerm.toLowerCase().split(/\s+/).filter(t => t.length > 0);
-            const filtered = adjustedInventory.filter(item => {
+            filtered = filtered.filter(item => {
                 const weight = item.product_weight || item.weight;
                 // product_weight 사용 시에는 product_weight_unit을 우선적으로 결합하여 정합성 유지
                 const unit = item.product_weight ? (item.product_weight_unit || item.weight_unit || 'kg') : (item.weight_unit || 'kg');
@@ -296,7 +309,7 @@ const InventoryQuickView = ({ inventoryAdjustments = {}, refreshKey, onInventory
             });
             setFilteredInventory(filtered);
         }
-    }, [inventory, inventoryAdjustments, searchTerm]);
+    }, [inventory, inventoryAdjustments, searchTerm, showTodayOnly]);
 
     const handleSearch = (e) => {
         setSearchTerm(e.target.value);
@@ -491,9 +504,8 @@ const InventoryQuickView = ({ inventoryAdjustments = {}, refreshKey, onInventory
         const weightStr = (weight && parseFloat(weight) > 0)
             ? `${formatNumber(weight)}${unit}`
             : '';
-        const gradeStr = item.grade ? `(${item.grade})` : '';
 
-        return `${name}${weightStr ? ` ${weightStr}` : ''}${gradeStr ? ` ${gradeStr}` : ''}`.trim();
+        return `${name}${weightStr ? ` ${weightStr}` : ''}`.trim();
     };
 
     // [NEW] 중량 단위 정규화 (g 단위로 변환)
@@ -524,28 +536,104 @@ const InventoryQuickView = ({ inventoryAdjustments = {}, refreshKey, onInventory
     };
 
     return (
-        <div style={{ height: '100%', display: 'flex', flexDirection: 'column', padding: '0.5rem' }}>
-            {/* 검색바 */}
-            <div style={{ marginBottom: '1rem' }}>
-                <input
-                    type="text"
-                    placeholder="🔍 품목, 매입처, 출하주, 창고 검색 (띄어쓰기로 다중 검색)"
-                    value={searchTerm}
-                    onChange={handleSearch}
+        <div style={{ height: '100%', display: 'flex', flexDirection: 'column', padding: '0.5rem', width: 'fit-content', minWidth: '100%' }}>
+            {/* 검색바 및 새로고침 */}
+            <div style={{ marginBottom: '1rem', display: 'flex', gap: '8px', alignItems: 'center' }}>
+                <div style={{ flex: 1, position: 'relative' }}>
+                    <input
+                        type="text"
+                        placeholder="🔍 품목, 매입처, 출하주, 창고 검색 (띄어쓰기로 다중 검색)"
+                        value={searchTerm}
+                        onChange={handleSearch}
+                        style={{
+                            width: '100%',
+                            height: '38px',
+                            padding: '0 0.75rem',
+                            border: '1px solid #ddd',
+                            borderRadius: '4px',
+                            fontSize: '0.9rem',
+                            boxSizing: 'border-box'
+                        }}
+                    />
+                </div>
+                <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    padding: '0 8px',
+                    backgroundColor: '#fff',
+                    border: '1px solid #ddd',
+                    borderRadius: '4px',
+                    height: '38px',
+                    cursor: 'pointer',
+                    userSelect: 'none',
+                    fontSize: '0.85rem',
+                    color: showTodayOnly ? '#3b82f6' : '#64748b',
+                    fontWeight: showTodayOnly ? '600' : '400',
+                    transition: 'all 0.2s',
+                    whiteSpace: 'nowrap'
+                }}
+                    onClick={() => setShowTodayOnly(!showTodayOnly)}
+                >
+                    <input
+                        type="checkbox"
+                        checked={showTodayOnly}
+                        onChange={() => { }} // 상위 div 클릭으로 제어
+                        style={{ cursor: 'pointer' }}
+                    />
+                    오늘 매입분
+                </div>
+                <button
+                    onClick={() => loadInventory()}
+                    disabled={loading}
+                    title="재고 새로고침"
                     style={{
-                        width: '100%',
                         height: '38px',
-                        padding: '0 0.75rem',
+                        padding: '0 12px',
+                        backgroundColor: '#f8f9fa',
                         border: '1px solid #ddd',
                         borderRadius: '4px',
-                        fontSize: '0.9rem',
-                        boxSizing: 'border-box'
+                        cursor: loading ? 'not-allowed' : 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        transition: 'all 0.2s',
+                        color: '#475569',
+                        boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
                     }}
-                />
+                    onMouseOver={(e) => { if (!loading) e.currentTarget.style.backgroundColor = '#e2e8f0'; }}
+                    onMouseOut={(e) => { if (!loading) e.currentTarget.style.backgroundColor = '#f8f9fa'; }}
+                >
+                    <svg
+                        viewBox="0 0 24 24"
+                        width="18"
+                        height="18"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2.5"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        style={{
+                            animation: loading ? 'spin 1.5s linear infinite' : 'none',
+                            transition: 'transform 0.3s ease'
+                        }}
+                    >
+                        <path d="M21 2v6h-6"></path>
+                        <path d="M3 12a9 9 0 0 1 15-6.7L21 8"></path>
+                        <path d="M3 22v-6h6"></path>
+                        <path d="M21 12a9 9 0 0 1-15 6.7L3 16"></path>
+                    </svg>
+                    <style>{`
+                        @keyframes spin {
+                            from { transform: rotate(0deg); }
+                            to { transform: rotate(360deg); }
+                        }
+                    `}</style>
+                </button>
             </div>
 
             {/* 목록 */}
-            <div style={{ flex: 1, overflowY: 'auto' }}>
+            <div style={{ flex: 1, overflowY: 'auto', width: 'fit-content', minWidth: '100%' }}>
                 {loading ? (
                     <div style={{ textAlign: 'center', padding: '20px', color: '#666' }}>로딩 중...</div>
                 ) : filteredInventory.length === 0 ? (
@@ -553,19 +641,17 @@ const InventoryQuickView = ({ inventoryAdjustments = {}, refreshKey, onInventory
                         {searchTerm ? '검색 결과가 없습니다.' : '재고 데이터가 없습니다.'}
                     </div>
                 ) : (
-                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
+                    <table style={{ width: 'auto', minWidth: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
                         <thead style={{ position: 'sticky', top: 0, backgroundColor: '#f8f9fa', zIndex: 1 }}>
                             <tr style={{ backgroundColor: '#34495e', color: 'white' }}>
                                 <th style={{ width: '40px' }}></th>
-                                <th style={{ padding: '0.6rem 0.5rem', textAlign: 'left', whiteSpace: 'nowrap' }}>품목명</th>
-                                <th style={{ padding: '0.6rem 0.5rem', textAlign: 'left', whiteSpace: 'nowrap' }}>출하주</th>
-                                <th style={{ padding: '0.6rem 0.5rem', textAlign: 'center', whiteSpace: 'nowrap' }}>등급</th>
-                                <th style={{ padding: '0.6rem 0.5rem', textAlign: 'right', whiteSpace: 'nowrap', width: '50px' }}>잔량</th>
-                                <th style={{ padding: '0.6rem 0.5rem', textAlign: 'right', whiteSpace: 'nowrap', width: '60px' }}>단가</th>
+                                <th style={{ padding: '0.6rem 0.5rem', textAlign: 'left', whiteSpace: 'nowrap' }}>품목 / 출하주 / 등급</th>
+                                <th style={{ padding: '0.6rem 0.5rem', textAlign: 'right', whiteSpace: 'nowrap' }}>잔량</th>
+                                <th style={{ padding: '0.6rem 0.5rem', textAlign: 'right', whiteSpace: 'nowrap' }}>단가</th>
                                 <th style={{ padding: '0.6rem 0.5rem', textAlign: 'left', whiteSpace: 'nowrap' }}>매입처</th>
                                 <th style={{ padding: '0.6rem 0.5rem', textAlign: 'left', whiteSpace: 'nowrap' }}>창고</th>
-                                <th style={{ padding: '0.6rem 0.5rem', textAlign: 'center', whiteSpace: 'nowrap', width: '50px' }}>매입일</th>
-                                <th style={{ padding: '0.6rem 0.5rem', textAlign: 'center', whiteSpace: 'nowrap', width: '50px' }}>작업</th>
+                                <th style={{ padding: '0.6rem 0.5rem', textAlign: 'center', whiteSpace: 'nowrap' }}>매입일</th>
+                                <th style={{ padding: '0.6rem 0.5rem', textAlign: 'center', whiteSpace: 'nowrap' }}>작업</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -662,13 +748,23 @@ const InventoryQuickView = ({ inventoryAdjustments = {}, refreshKey, onInventory
                                             </button>
                                         </td>
                                         <td style={{ padding: '0.5rem', whiteSpace: 'nowrap' }}>
-                                            <div style={{ fontWeight: '500' }}>{formatProductName(item)}</div>
-                                        </td>
-                                        <td style={{ padding: '0.5rem', whiteSpace: 'nowrap', color: '#666' }}>
-                                            {item.sender || '-'}
-                                        </td>
-                                        <td style={{ padding: '0.5rem', textAlign: 'center', whiteSpace: 'nowrap', color: '#666' }}>
-                                            {item.grade || '-'}
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                <span style={{ fontWeight: '600', color: '#1e293b' }}>{formatProductName(item)}</span>
+                                                <span style={{ color: '#64748b', fontSize: '0.85rem' }}>{item.sender || '-'}</span>
+                                                {item.grade && (
+                                                    <span style={{
+                                                        color: '#3b82f6',
+                                                        backgroundColor: '#eff6ff',
+                                                        padding: '1px 6px',
+                                                        borderRadius: '4px',
+                                                        fontSize: '0.75rem',
+                                                        fontWeight: 'bold',
+                                                        border: '1px solid #dbeafe'
+                                                    }}>
+                                                        {item.grade}
+                                                    </span>
+                                                )}
+                                            </div>
                                         </td>
                                         <td style={{
                                             padding: '0.5rem',
@@ -680,7 +776,7 @@ const InventoryQuickView = ({ inventoryAdjustments = {}, refreshKey, onInventory
                                                     ? '#3498db' // Modified but positive -> Blue
                                                     : '#27ae60' // Untouched -> Green
                                         }}>
-                                            {formatQuantity(item.remaining_quantity)}
+                                            {formatQuantity(item.remaining_quantity)}개
                                         </td>
                                         <td style={{ padding: '0.5rem', textAlign: 'right', whiteSpace: 'nowrap' }}>
                                             {formatCurrency(item.unit_price)}
@@ -698,7 +794,11 @@ const InventoryQuickView = ({ inventoryAdjustments = {}, refreshKey, onInventory
                                             <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '6px' }}>
                                                 {isSplittable(item) && (
                                                     <button
-                                                        onClick={(e) => handleOpenQuickSplit(e, item)}
+                                                        onClick={(e) => {
+                                                            setSelectedId(item.id);
+                                                            e.currentTarget.closest('.inventory-row')?.focus();
+                                                            handleOpenQuickSplit(e, item);
+                                                        }}
                                                         style={{
                                                             background: '#fff3e0',
                                                             border: '1px solid #ffe0b2',
@@ -723,6 +823,8 @@ const InventoryQuickView = ({ inventoryAdjustments = {}, refreshKey, onInventory
                                                     <button
                                                         onClick={(e) => {
                                                             e.stopPropagation();
+                                                            setSelectedId(item.id);
+                                                            e.currentTarget.closest('.inventory-row')?.focus();
                                                             handleViewProduction(item.production_id);
                                                         }}
                                                         style={{

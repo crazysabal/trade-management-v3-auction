@@ -207,7 +207,8 @@ const SearchableSelect = forwardRef(({
       formatOptionLabel={rest.formatOptionLabel || defaultFormatOptionLabel}
       noOptionsMessage={() => noOptionsMessage}
       styles={computedStyles}
-      menuPortalTarget={document.body} // Portal for escaping modals
+      menuPortalTarget={document.body}
+      menuPlacement="auto" // [NEW] 공간 부족 시 위로 열림(Drop-up) 자동 적용
       {...rest}
     />
   );

@@ -701,9 +701,7 @@ router.post('/crawl', async (req, res) => {
       }
     }
 
-    if (skippedCount > 0) {
-      console.log(`ℹ️  ${skippedCount}건의 중복 데이터 스킵됨`);
-    }
+    // 중복 데이터 스킵 로그 제거 (사용자 요청)
 
     // 크롤링 이력 저장
     const executionTime = Math.floor((Date.now() - startTime) / 1000);
@@ -941,6 +939,37 @@ router.post('/mappings', async (req, res) => {
     res.json({ success: true, message: '품목 매칭이 저장되었습니다.' });
   } catch (error) {
     console.error('품목 매칭 저장 오류:', error);
+    res.status(500).json({ success: false, message: '서버 오류가 발생했습니다.' });
+  }
+});
+
+// 특정 날짜의 기존 매입 내역 조회 (중복 체크용)
+router.get('/existing-purchases', async (req, res) => {
+  try {
+    const { trade_date } = req.query;
+    if (!trade_date) {
+      return res.status(400).json({ success: false, message: '날짜(trade_date)가 필요합니다.' });
+    }
+
+    const [rows] = await db.query(`
+      SELECT 
+        td.product_id,
+        td.quantity,
+        td.total_weight,
+        p.grade,
+        p.product_name,
+        tm.trade_number
+      FROM trade_details td
+      JOIN trade_masters tm ON td.trade_master_id = tm.id
+      JOIN products p ON td.product_id = p.id
+      WHERE tm.trade_date = ? 
+        AND tm.trade_type = 'PURCHASE'
+        AND tm.status != 'CANCELLED'
+    `, [trade_date]);
+
+    res.json({ success: true, data: rows });
+  } catch (error) {
+    console.error('기존 매입 내역 조회 오류:', error);
     res.status(500).json({ success: false, message: '서버 오류가 발생했습니다.' });
   }
 });

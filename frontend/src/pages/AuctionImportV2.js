@@ -23,7 +23,8 @@ const AuctionItemRow = React.memo(({
     baseOptions,
     onMappingChange,
     isSelected,
-    onSelectionChange
+    onSelectionChange,
+    isDuplicate // [NEW] 중복 여부
 }) => {
     // Generate options for this specific row (sorting logic only)
     // This avoids re-creating thousands of option objects every render
@@ -73,8 +74,8 @@ const AuctionItemRow = React.memo(({
 
     // Handle Select change
     const handleChange = useCallback((option) => {
-        onMappingChange(item, option ? option.value : '');
-    }, [item, onMappingChange]);
+        onMappingChange(option ? option.value : '');
+    }, [onMappingChange]);
 
     // Handle Checkbox change
     const handleCheck = useCallback((e) => {
@@ -129,19 +130,19 @@ const AuctionItemRow = React.memo(({
 
     return (
         <tr style={{
-            backgroundColor: item.status === 'IMPORTED' ? '#f8f9fa' : (!isMapped ? '#fff3cd' : groupColor),
-            opacity: item.status === 'IMPORTED' ? 0.7 : 1
+            backgroundColor: item.status === 'IMPORTED' ? '#f8f9fa' : (isDuplicate ? '#fff5f5' : (!isMapped ? '#fff3cd' : groupColor)),
+            opacity: item.status === 'IMPORTED' ? 0.7 : 1,
+            borderLeft: isDuplicate ? '4px solid #ef4444' : 'none'
         }}>
             <td style={{ textAlign: 'center' }}>
-                {item.status !== 'IMPORTED' && (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}>
                     <input
                         type="checkbox"
                         checked={isSelected}
                         onChange={handleCheck}
-                        style={{ width: '16px', height: '16px', cursor: 'pointer', accentColor: '#e74c3c' }}
+                        style={{ width: '16px', height: '16px', cursor: 'pointer', accentColor: '#3498db' }}
                     />
-                )}
-                {item.status === 'IMPORTED' && <span style={{ fontSize: '0.75rem', color: '#666', fontWeight: 'bold' }}>완료</span>}
+                </div>
             </td>
             <td>{item.arrive_no}</td>
             <td>
@@ -152,13 +153,17 @@ const AuctionItemRow = React.memo(({
                             등록완료
                         </span>
                     )}
+                    {isDuplicate && (
+                        <span style={{ backgroundColor: '#ef4444', color: 'white', padding: '1px 5px', borderRadius: '3px', fontSize: '0.7rem', fontWeight: 'bold' }}>
+                            중복
+                        </span>
+                    )}
                 </div>
             </td>
-            <td>{item.shipper_location || '-'}</td>
+            <td style={{ textAlign: 'center' }}>{totalWeight > 0 ? `${totalWeight}${item.product_weight_unit || item.weight_unit || 'kg'}` : '-'}</td>
             <td>{item.sender || '-'}</td>
-            <td>{item.grade || '-'}</td>
+            <td style={{ textAlign: 'center' }}>{item.grade || '-'}</td>
             <td className="text-right">{item.count || 0}개</td>
-            <td className="text-right">{totalWeight > 0 ? `${totalWeight}${item.product_weight_unit || item.weight_unit || 'kg'}` : '-'}</td>
             <td className="text-right">{formattedPrice}원</td>
             <td>
                 <SearchableSelect
@@ -173,6 +178,7 @@ const AuctionItemRow = React.memo(({
                     styles={selectStyles}
                 />
             </td>
+            <td>{item.shipper_location || '-'}</td>
         </tr>
     );
 });
@@ -186,11 +192,12 @@ function AuctionImportV2({ isWindow, onTradeChange, onClose }) {
     const [products, setProducts] = useState([]);
     const [companies, setCompanies] = useState([]);
     const [warehouses, setWarehouses] = useState([]);
+    const [existingPurchases, setExistingPurchases] = useState([]); // [NEW] 해당 날짜의 기존 매입 내역
     const [loading, setLoading] = useState(false);
-    const [loadingMessage, setLoadingMessage] = useState('');
+    const [loadingMessage, setLoadingMessage] = useState('처리 중...');
+    const [isTableLoading, setIsTableLoading] = useState(false); // [NEW] 탭 전환용 가벼운 로딩
     const [step, setStep] = useState(1);
     const [selectedItems, setSelectedItems] = useState(new Set());
-    const [viewStatus, setViewStatus] = useState('PENDING'); // PENDING, IMPORTED, ALL
 
     const [crawlData, setCrawlData] = useState({
         account_id: '',
@@ -252,6 +259,30 @@ function AuctionImportV2({ isWindow, onTradeChange, onClose }) {
         return mappings[fallbackKey] || null;
     }, [mappings, getMappingKey, getProductNameOnlyKey]);
 
+    // [NEW] 모든 항목이 매핑되었는지 확인 (전표 생성 버튼 활성 조건)
+    const allMapped = useMemo(() => {
+        if (rawData.length === 0) return false;
+        // IMPORTED 상태인 항목은 제외하고 체크 (이미 처리된 것이므로)
+        const pendings = rawData.filter(item => item.status !== 'IMPORTED');
+        if (pendings.length === 0) return false;
+        return pendings.every(item => !!getMappedProductId(item.product_name, item.weight, item.grade));
+    }, [rawData, getMappedProductId]);
+
+    // [Refined] 헤더 체크박스 상태 계산 (Memoized)
+    const { isAllSelected, isHeaderDisabled } = useMemo(() => {
+        const disabled = rawData.length === 0;
+        const allSelected = !disabled && rawData.every(item => selectedItems.has(item.id));
+        return { isAllSelected: allSelected, isHeaderDisabled: disabled };
+    }, [rawData, selectedItems]);
+
+    // [NEW] 선택된 항목 중 '등록 완료' 상태인 항목 개수 (상태 초기화 버튼용)
+    const selectedImportedCount = useMemo(() => {
+        return Array.from(selectedItems).filter(id => {
+            const item = rawData.find(i => i.id === id);
+            return item && item.status === 'IMPORTED';
+        }).length;
+    }, [selectedItems, rawData]);
+
     // 유틸리티: 로컬 시간대 기준 YYYY-MM-DD 반환
     const formatLocalDate = (date) => {
         const d = date || new Date();
@@ -262,11 +293,6 @@ function AuctionImportV2({ isWindow, onTradeChange, onClose }) {
     };
 
     const today = formatLocalDate(new Date());
-
-    const allMapped = useMemo(() => {
-        if (rawData.length === 0) return false;
-        return rawData.every(item => getMappedProductId(item.product_name, item.weight, item.grade));
-    }, [rawData, getMappedProductId]);
 
     useEffect(() => {
         loadInitialData();
@@ -317,48 +343,81 @@ function AuctionImportV2({ isWindow, onTradeChange, onClose }) {
     };
 
 
-    const fetchRawData = async () => {
-        setLoading(true);
+    const fetchRawData = async (isSilent = false) => {
+        if (isSilent) setIsTableLoading(true);
+        else setLoading(true);
+
         try {
-            const rawDataRes = await auctionAPI.getRawData({
-                auction_date: crawlData.crawl_date,
-                account_id: crawlData.account_id,
-                status: viewStatus === 'ALL' ? undefined : viewStatus
-            });
-            // Sort by arrive_no (Entry Number) ascending, then by grade sort order
+            const [rawDataRes, existingRes] = await Promise.all([
+                auctionAPI.getRawData({
+                    auction_date: crawlData.crawl_date,
+                    account_id: crawlData.account_id
+                }),
+                auctionAPI.getExistingPurchases({ trade_date: crawlData.crawl_date })
+            ]);
+
+            setExistingPurchases(existingRes.data?.data || []);
+
+            // [REFINED] Sort by Grade Priority First, then by Entry Number
             const gradePriorityMap = {};
             products.forEach(p => {
-                const grade = p.grade || '';
+                const grade = (p.grade || '').trim().toUpperCase();
                 if (gradePriorityMap[grade] === undefined || (p.sort_order || 9999) < gradePriorityMap[grade]) {
                     gradePriorityMap[grade] = p.sort_order || 9999;
                 }
             });
 
             const sortedData = (rawDataRes.data.data || []).sort((a, b) => {
+                // 1순위: 상태 우선순위 (대기가 항상 위로)
+                if (a.status === 'PENDING' && b.status === 'IMPORTED') return -1;
+                if (a.status === 'IMPORTED' && b.status === 'PENDING') return 1;
+
+                // 2순위: 입하번호
                 const numA = parseInt(a.arrive_no, 10) || 0;
                 const numB = parseInt(b.arrive_no, 10) || 0;
-
                 if (numA !== numB) return numA - numB;
 
-                // Secondary sort: Grade priority
-                const priorityA = gradePriorityMap[a.grade || ''] ?? 9999;
-                const priorityB = gradePriorityMap[b.grade || ''] ?? 9999;
+                // 3순위: 등급 우선순위
+                const gradeA = (a.grade || '').trim().toUpperCase();
+                const gradeB = (b.grade || '').trim().toUpperCase();
+                const priorityA = gradePriorityMap[gradeA] ?? 9999;
+                const priorityB = gradePriorityMap[gradeB] ?? 9999;
                 return priorityA - priorityB;
             });
             setRawData(sortedData);
+
+            // [NEW] 초기 선택 처리: 매입 대기 중이면서 매핑된 항목만 자동 선택
+            const initialSelected = new Set();
+            sortedData.forEach(item => {
+                if (item.status !== 'PENDING') return;
+
+                const mappedId = getMappedProductId(item.product_name, item.weight, item.grade);
+                if (mappedId) {
+                    const systemProduct = products.find(p => String(p.id) === String(mappedId));
+                    const itemWeight = parseFloat(item.weight) || 0;
+                    const itemCount = item.count || 0;
+                    const duplicate = systemProduct && (existingRes.data?.data || []).some(p =>
+                        String(p.product_id) === String(mappedId) &&
+                        Math.abs(parseFloat(p.quantity) - itemCount) < 0.01 &&
+                        Math.abs(parseFloat(p.total_weight) - itemWeight) < 0.01 &&
+                        (p.grade || '') === (systemProduct.grade || '')
+                    );
+
+                    if (!duplicate) {
+                        initialSelected.add(item.id);
+                    }
+                }
+            });
+            setSelectedItems(initialSelected);
         } catch (error) {
             console.error('Raw data fetch error:', error);
         } finally {
             setLoading(false);
+            setIsTableLoading(false);
         }
     };
 
-    // Re-fetch data when viewStatus changes in step 2
-    useEffect(() => {
-        if (step === 2) {
-            fetchRawData();
-        }
-    }, [viewStatus]);
+    // viewStatus 탭이 제거되었으므로 의존성에서 제거
 
     const handleCrawl = async () => {
         if (!crawlData.account_id) {
@@ -452,39 +511,35 @@ function AuctionImportV2({ isWindow, onTradeChange, onClose }) {
         });
     }, []);
 
+    // [NEW] 중복 여부 판별 함수
+    const isDuplicate = useCallback((item) => {
+        const mappedId = getMappedProductId(item.product_name, item.weight, item.grade);
+        if (!mappedId) return false;
+
+        const systemProduct = products.find(p => String(p.id) === String(mappedId));
+        if (!systemProduct) return false;
+
+        const itemWeight = parseFloat(item.weight) || 0;
+        const itemCount = item.count || 0;
+
+        return existingPurchases.some(p =>
+            String(p.product_id) === String(mappedId) &&
+            Math.abs(parseFloat(p.quantity) - itemCount) < 0.01 &&
+            Math.abs(parseFloat(p.total_weight) - itemWeight) < 0.01 &&
+            (p.grade || '') === (systemProduct.grade || '')
+        );
+    }, [getMappedProductId, products, existingPurchases]);
+
     const handleSelectAll = useCallback((checked) => {
-        if (checked) setSelectedItems(new Set(rawData.map(item => item.id)));
-        else setSelectedItems(new Set());
+        if (checked) {
+            const allIds = rawData.map(item => item.id);
+            setSelectedItems(new Set(allIds));
+        } else {
+            setSelectedItems(new Set());
+        }
     }, [rawData]);
 
-    const handleDeleteSelected = async () => {
-        if (selectedItems.size === 0) return;
-        setModal({
-            isOpen: true,
-            type: 'confirm',
-            title: '삭제 확인',
-            message: `선택된 ${selectedItems.size}개 항목을 삭제하시겠습니까?`,
-            showCancel: true,
-            confirmText: '삭제',
-            onConfirm: async () => {
-                try {
-                    await auctionAPI.deleteRawDataBulk(Array.from(selectedItems));
-                    setRawData(prev => prev.filter(item => !selectedItems.has(item.id)));
-                    setSelectedItems(new Set());
-                    setModal(prev => ({ ...prev, isOpen: false }));
-                } catch (e) {
-                    console.error(e);
-                    setModal({
-                        isOpen: true,
-                        type: 'warning',
-                        title: '실패',
-                        message: '삭제에 실패했습니다.',
-                        showCancel: false
-                    });
-                }
-            }
-        });
-    };
+
 
     const handleResetStatus = async () => {
         if (selectedItems.size === 0) return;
@@ -522,10 +577,28 @@ function AuctionImportV2({ isWindow, onTradeChange, onClose }) {
         // Defensive check: if trigger is an event or not a number/string, ignore it
         const forceAppendId = (typeof trigger === 'number' || (typeof trigger === 'string' && !isNaN(trigger))) ? trigger : null;
 
+        // [NEW] 선택된 항목 확인
+        const importItems = rawData.filter(item =>
+            selectedItems.has(item.id) &&
+            item.status === 'PENDING' &&
+            getMappedProductId(item.product_name, item.weight, item.grade)
+        );
+
+        if (importItems.length === 0) {
+            setModal({
+                isOpen: true,
+                type: 'warning',
+                title: '선택 항목 없음',
+                message: '매입 처리할 항목을 선택해주세요. (시스템 품목이 매칭되어 있어야 합니다.)',
+                showCancel: false,
+                confirmText: '확인'
+            });
+            return;
+        }
+
         setLoading(true);
         setLoadingMessage(forceAppendId ? '기존 전표에 추가하는 중입니다...' : '매입 전표를 생성하는 중입니다...');
         try {
-            const importItems = rawData.filter(item => item.status === 'PENDING' && getMappedProductId(item.product_name, item.weight, item.grade));
             const importIds = importItems.map(item => item.id);
 
             let details = importItems.map((item, index) => {
@@ -715,7 +788,7 @@ function AuctionImportV2({ isWindow, onTradeChange, onClose }) {
     }, [rawData]);
 
     return (
-        <div className={`auction-import ${isWindow ? 'is-window' : ''}`} style={{ maxWidth: isWindow ? '100%' : '1400px', margin: isWindow ? '0' : '0 auto', position: 'relative', display: 'flex', flexDirection: 'column', height: isWindow ? '100%' : 'auto', maxHeight: isWindow ? '100%' : 'none', boxSizing: 'border-box' }}>
+        <div className={`auction-import ${isWindow ? 'is-window' : ''}`} style={{ width: isWindow ? 'fit-content' : '100%', minWidth: isWindow ? '100%' : 'auto', maxWidth: isWindow ? 'none' : '1400px', margin: isWindow ? '0' : '0 auto', position: 'relative', display: 'flex', flexDirection: 'column', height: isWindow ? '100%' : 'auto', maxHeight: isWindow ? '100%' : 'none', boxSizing: 'border-box' }}>
             {loading && (
                 <div className="loading-overlay">
                     <div className="loading-content"><div className="spinner"></div><p>{loadingMessage}</p></div>
@@ -866,36 +939,35 @@ function AuctionImportV2({ isWindow, onTradeChange, onClose }) {
 
             {step === 2 && (
                 <>
-                    <div className="card" style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                    <div className="card" style={{
+                        flex: 1,
+                        minHeight: 0,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        overflow: 'hidden',
+                        marginBottom: '1rem', // 간격 복구
+                        borderRadius: '8px', // 모든 모서리 라운드 복구
+                        padding: '1.25rem' // 표준 패딩
+                    }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexShrink: 0 }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
                                 <h2 style={{ margin: 0 }}>품목 매칭</h2>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: '1rem' }}>
-                                    <button
-                                        onClick={() => setViewStatus('PENDING')}
-                                        className={`btn ${viewStatus === 'PENDING' ? 'btn-primary' : 'btn-secondary'}`}
-                                        style={{ fontSize: '0.8rem', padding: '4px 10px' }}
-                                    >
-                                        대기
-                                    </button>
-                                    <button
-                                        onClick={() => setViewStatus('IMPORTED')}
-                                        className={`btn ${viewStatus === 'IMPORTED' ? 'btn-primary' : 'btn-secondary'}`}
-                                        style={{ fontSize: '0.8rem', padding: '4px 10px' }}
-                                    >
-                                        완료
-                                    </button>
-                                    <button
-                                        onClick={() => setViewStatus('ALL')}
-                                        className={`btn ${viewStatus === 'ALL' ? 'btn-primary' : 'btn-secondary'}`}
-                                        style={{ fontSize: '0.8rem', padding: '4px 10px' }}
-                                    >
-                                        전체
-                                    </button>
+                                <div style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '15px', // 간격 소폭 확대
+                                    marginLeft: '1.5rem',
+                                    padding: '6px 20px', // 패딩 확대
+                                    background: '#f8f9fa',
+                                    borderRadius: '25px',
+                                    border: '1px solid #e9ecef',
+                                    boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.02)'
+                                }}>
+                                    <span style={{ fontSize: '0.95rem', color: '#555', fontWeight: '500' }}>전체 <b style={{ color: '#2c3e50', marginLeft: '3px', fontSize: '1.05rem' }}>{rawData.length}</b></span>
+                                    <span style={{ fontSize: '0.95rem', color: '#555', fontWeight: '500' }}>대기 <b style={{ color: '#3498db', marginLeft: '3px', fontSize: '1.05rem' }}>{rawData.filter(i => i.status === 'PENDING').length}</b></span>
+                                    <span style={{ fontSize: '0.95rem', color: '#555', fontWeight: '500' }}>완료 <b style={{ color: '#27ae60', marginLeft: '3px', fontSize: '1.05rem' }}>{rawData.filter(i => i.status === 'IMPORTED').length}</b></span>
+                                    <span style={{ fontSize: '0.95rem', color: '#555', fontWeight: '500' }}>매칭 <b style={{ color: '#8e44ad', marginLeft: '3px', fontSize: '1.05rem' }}>{mappedCount}</b></span>
                                 </div>
-                                <span style={{ fontSize: '0.9rem', color: '#666', fontWeight: '500' }}>
-                                    ({viewStatus === 'PENDING' ? '대기' : viewStatus === 'IMPORTED' ? '완료' : '전체'} {rawData.length}건 / 매칭 {mappedCount}건)
-                                </span>
                             </div>
                             <div style={{ display: 'flex', gap: '8px' }}>
                                 <button onClick={() => setStep(1)} className="btn btn-secondary" style={{ fontSize: '0.9rem', padding: '6px 12px', whiteSpace: 'nowrap' }}>
@@ -909,48 +981,104 @@ function AuctionImportV2({ isWindow, onTradeChange, onClose }) {
                                 >
                                     🔄 품목 새로고침
                                 </button>
-                                {selectedItems.size > 0 && (
-                                    <>
-                                        <button onClick={handleResetStatus} className="btn btn-warning" style={{ fontSize: '0.9rem', padding: '6px 12px', whiteSpace: 'nowrap' }}>
-                                            상태 초기화 ({selectedItems.size})
-                                        </button>
-                                        <button onClick={handleDeleteSelected} className="btn btn-danger" style={{ fontSize: '0.9rem', padding: '6px 12px', whiteSpace: 'nowrap' }}>
-                                            선택 삭제 ({selectedItems.size})
-                                        </button>
-                                    </>
+                                {selectedImportedCount > 0 && (
+                                    <button onClick={handleResetStatus} className="btn btn-warning" style={{ fontSize: '0.9rem', padding: '6px 12px', whiteSpace: 'nowrap' }}>
+                                        상태 초기화 ({selectedImportedCount})
+                                    </button>
                                 )}
                             </div>
                         </div>
 
-                        <div className="table-container" style={{ flex: 1, overflowY: 'auto', maxHeight: 'none', border: '1px solid #eee', borderRadius: '4px' }}>
-                            <table>
+                        <div className="table-container" style={{
+                            flex: 1,
+                            overflowY: 'auto',
+                            border: '1px solid #eee',
+                            borderRadius: '4px',
+                            position: 'relative',
+                            opacity: isTableLoading ? 0.6 : 1,
+                            transition: 'opacity 0.2s ease',
+                            background: '#fff'
+                        }}>
+                            {isTableLoading && (
+                                <div style={{
+                                    position: 'absolute',
+                                    top: '50%',
+                                    left: '50%',
+                                    transform: 'translate(-50%, -50%)',
+                                    zIndex: 1000, // 더 높게 설정
+                                    background: 'rgba(255,255,255,0.8)',
+                                    padding: '10px 20px',
+                                    borderRadius: '20px',
+                                    boxShadow: '0 2px 10px rgba(0,0,0,0.1)',
+                                    fontWeight: 'bold',
+                                    color: '#3498db',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '10px'
+                                }}>
+                                    <div className="spinner" style={{ width: '20px', height: '20px', borderWidth: '3px', margin: 0 }}></div>
+                                    데이터 로딩 중...
+                                </div>
+                            )}
+                            <table style={{ borderCollapse: 'separate', borderSpacing: 0 }}>
                                 <thead>
                                     <tr>
-                                        <th style={{ textAlign: 'center' }}><input type="checkbox" style={{ width: '16px', height: '16px', cursor: 'pointer', accentColor: '#e74c3c' }} onChange={e => handleSelectAll(e.target.checked)} /></th>
-                                        <th>입하번호</th>
-                                        <th>품목명</th>
-                                        <th>출하지</th>
-                                        <th>출하주</th>
-                                        <th>등급</th>
-                                        <th>수량</th>
-                                        <th>중량</th>
-                                        <th>단가</th>
-                                        <th style={{ minWidth: '250px' }}>시스템 품목</th>
+                                        {/* sticky header style helper */}
+                                        {(() => {
+                                            const headerStyle = {
+                                                position: 'sticky',
+                                                top: 0,
+                                                zIndex: 100,
+                                                backgroundColor: '#34495e', // [FIXED] 거래처 관리 동일
+                                                color: 'white', // [FIXED] 거래처 관리 동일
+                                                fontWeight: 'bold',
+                                                fontSize: '0.85rem',
+                                                borderBottom: '1px solid #2c3e50',
+                                                boxShadow: '0 1px 2px rgba(0,0,0,0.1)',
+                                                height: '40px',
+                                                verticalAlign: 'middle'
+                                            };
+                                            return (
+                                                <>
+                                                    <th style={{ ...headerStyle, textAlign: 'center', width: '40px', whiteSpace: 'nowrap' }}>
+                                                        <input
+                                                            type="checkbox"
+                                                            style={{ width: '16px', height: '16px', cursor: isHeaderDisabled ? 'not-allowed' : 'pointer', accentColor: '#3498db' }}
+                                                            checked={isAllSelected}
+                                                            disabled={isHeaderDisabled}
+                                                            onChange={(e) => handleSelectAll(e.target.checked)}
+                                                        />
+                                                    </th>
+                                                    <th style={{ ...headerStyle, width: '80px', whiteSpace: 'nowrap' }}>입하번호</th>
+                                                    <th style={{ ...headerStyle, minWidth: '150px', whiteSpace: 'nowrap' }}>품목명</th>
+                                                    <th style={{ ...headerStyle, textAlign: 'center', width: '80px', whiteSpace: 'nowrap' }}>중량</th>
+                                                    <th style={{ ...headerStyle, width: '100px', whiteSpace: 'nowrap' }}>출하주</th>
+                                                    <th style={{ ...headerStyle, textAlign: 'center', width: '60px', whiteSpace: 'nowrap' }}>등급</th>
+                                                    <th style={{ ...headerStyle, width: '80px', whiteSpace: 'nowrap' }}>수량</th>
+                                                    <th style={{ ...headerStyle, width: '100px', whiteSpace: 'nowrap' }}>단가</th>
+                                                    <th style={{ ...headerStyle, minWidth: '300px', whiteSpace: 'nowrap' }}>시스템 품목</th>
+                                                    <th style={{ ...headerStyle, minWidth: '120px', whiteSpace: 'nowrap' }}>출하지</th>
+                                                </>
+                                            );
+                                        })()}
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {rawData.map(item => {
                                         const mappedId = getMappedProductId(item.product_name, item.weight, item.grade);
+                                        const formattedPrice = Math.floor(item.unit_price || 0).toLocaleString();
+                                        const duplicate = isDuplicate(item);
                                         return (
                                             <AuctionItemRow
                                                 key={item.id}
                                                 item={item}
                                                 isMapped={!!mappedId}
+                                                isDuplicate={duplicate}
                                                 groupColor={groupColorMap.get(item.arrive_no)}
-                                                formattedPrice={Math.floor(item.unit_price || 0).toLocaleString()}
+                                                formattedPrice={formattedPrice}
                                                 mappedProductId={mappedId}
                                                 baseOptions={baseOptions}
-                                                onMappingChange={handleProductMapping}
+                                                onMappingChange={(productId) => handleProductMapping(item, productId)}
                                                 isSelected={selectedItems.has(item.id)}
                                                 onSelectionChange={handleSelectionChange}
                                             />
@@ -962,56 +1090,46 @@ function AuctionImportV2({ isWindow, onTradeChange, onClose }) {
 
                     </div>
 
-                    <div className="card" style={{ marginTop: '0.75rem', flex: 'none' }}>
-                        <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', borderBottom: '2px solid #3498db', paddingBottom: '0.5rem' }}>
-                            <h2 className="card-title" style={{ margin: 0, border: 'none', padding: 0 }}>전표 생성 설정</h2>
-                        </div>
-
-                        <div className="form-row" style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginTop: '0.5rem' }}>
-                            <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '320px', flex: 'none', margin: 0 }}>
-                                <label className="required" style={{ whiteSpace: 'nowrap', fontWeight: '900', minWidth: '60px', margin: 0 }}>매입처</label>
+                    <div className="card" style={{
+                        flexShrink: 0,
+                        padding: '1.25rem', // 표준 패딩 복구
+                        backgroundColor: '#f8f9fa',
+                        border: '1px solid #ddd',
+                        borderRadius: '8px', // 모든 모서리 라운드 복구
+                        marginTop: 0 // 상단 카드 마진이 있으므로 0 유지
+                    }}>
+                        <h4 style={{ margin: '0 0 0.75rem 0', color: '#2c3e50', fontSize: '1rem', borderLeft: '4px solid #3498db', paddingLeft: '10px' }}>전표 생성 설정</h4>
+                        <div style={{ display: 'flex', flexWrap: 'nowrap', gap: '20px', alignItems: 'center' }}>
+                            <div className="form-group" style={{ flex: 1, minWidth: '200px', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <label style={{ whiteSpace: 'nowrap', fontWeight: '600', minWidth: '50px' }}>매입처</label>
                                 <div style={{ flex: 1 }}>
                                     <SearchableSelect
-                                        options={companies.map(c => ({
-                                            value: c.id,
-                                            label: c.company_name,
-                                            data: { subLabel: c.business_name, code: c.code }
-                                        }))}
+                                        options={companies.map(c => ({ value: c.id, label: c.company_name }))}
                                         value={importConfig.supplier_id}
-                                        onChange={o => setImportConfig({ ...importConfig, supplier_id: o ? o.value : '' })}
-                                        menuPortalTarget={document.body}
+                                        onChange={(val) => setImportConfig({ ...importConfig, supplier_id: val ? val.value : '' })}
+                                        placeholder="매입처 선택..."
                                     />
                                 </div>
                             </div>
-
-                            <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '280px', flex: 'none', margin: 0 }}>
-                                <label className="required" style={{ whiteSpace: 'nowrap', fontWeight: '900', margin: 0 }}>입고 창고</label>
+                            <div className="form-group" style={{ flex: 1, minWidth: '150px', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <label style={{ whiteSpace: 'nowrap', fontWeight: '600', minWidth: '60px' }}>입고 창고</label>
                                 <div style={{ flex: 1 }}>
                                     <SearchableSelect
                                         options={warehouses.map(w => ({ value: w.id, label: w.name }))}
                                         value={importConfig.warehouse_id}
-                                        onChange={o => setImportConfig({ ...importConfig, warehouse_id: o ? o.value : '' })}
+                                        onChange={(val) => setImportConfig({ ...importConfig, warehouse_id: val ? val.value : '' })}
+                                        placeholder="창고 선택..."
                                     />
                                 </div>
                             </div>
-
-                            <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '220px', flex: 'none', margin: 0 }}>
-                                <label className="required" style={{ whiteSpace: 'nowrap', fontWeight: '900', margin: 0 }}>거래일자</label>
+                            <div className="form-group" style={{ flex: 'none', width: '200px', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <label style={{ whiteSpace: 'nowrap', fontWeight: '600', minWidth: '60px' }}>거래일자</label>
                                 <input
                                     type="date"
+                                    className="form-control"
                                     value={importConfig.trade_date}
                                     onChange={e => setImportConfig({ ...importConfig, trade_date: e.target.value })}
                                     style={{
-                                        padding: '4px 8px',
-                                        borderRadius: '4px',
-                                        border: '1px solid #ddd',
-                                        height: '40px',
-                                        boxSizing: 'border-box',
-                                        flex: 1,
-                                        minWidth: 0,
-                                        textAlign: 'center',
-                                        backgroundColor: importConfig.trade_date !== today ? '#ffe0b2' : 'white',
-                                        color: importConfig.trade_date !== today ? '#e65100' : 'inherit',
                                         fontWeight: importConfig.trade_date !== today ? 'bold' : 'normal',
                                         margin: 0
                                     }}
@@ -1022,21 +1140,17 @@ function AuctionImportV2({ isWindow, onTradeChange, onClose }) {
                                 className="btn btn-primary"
                                 disabled={rawData.length === 0 || !allMapped}
                                 style={{
-                                    height: '40px',
-                                    width: 'auto',
-                                    minWidth: '120px',
-                                    flex: 'none',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    marginLeft: 'auto',
+                                    height: '42px',
+                                    padding: '0 24px',
+                                    fontSize: '0.95rem',
                                     fontWeight: 'bold',
-                                    padding: '0 20px',
-                                    margin: 0,
+                                    marginLeft: 'auto',
+                                    whiteSpace: 'nowrap',
+                                    boxShadow: '0 2px 4px rgba(52, 152, 219, 0.2)',
                                     backgroundColor: (!allMapped && rawData.length > 0) ? '#94a3b8' : undefined,
                                     cursor: (!allMapped && rawData.length > 0) ? 'not-allowed' : 'pointer'
                                 }}
-                                onClick={handleImport}
+                                onClick={processImport}
                                 title={!allMapped && rawData.length > 0 ? "모든 품목을 매칭해야 전표 생성이 가능합니다." : ""}
                             >
                                 {!allMapped && rawData.length > 0 ? '미매칭 품목 존재' : '매입 전표 생성'}

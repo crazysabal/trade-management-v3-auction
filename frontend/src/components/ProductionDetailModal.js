@@ -46,6 +46,7 @@ function ProductionDetailModal({ isOpen, onClose, jobId, highlightId }) {
                     grade: rawData.output_product_grade,
                     quantity: rawData.output_quantity,
                     unit_cost: rawData.unit_cost,
+                    weight_unit: rawData.output_product_weight_unit || rawData.output_inventory_weight_unit,
                     warehouse_name: rawData.output_warehouse_name
                 }]
             };
@@ -274,7 +275,7 @@ function ProductionDetailModal({ isOpen, onClose, jobId, highlightId }) {
                                                     style={{ borderBottom: '1px solid #e2e8f0' }}
                                                 >
                                                     <td style={{ padding: '0.75rem', fontWeight: isHighlighted ? '700' : 'normal' }}>
-                                                        {item.product_name} {formatNumber(item.weight || item.product_weight)}{item.weight_unit || item.product_weight_unit || 'kg'} {item.grade}
+                                                        {item.product_name} {formatNumber(item.weight || item.product_weight)}{item.product_weight_unit || item.weight_unit || 'kg'} {item.grade}
                                                         {isHighlighted && <span style={{ marginLeft: '8px', color: '#f08c00', fontSize: '0.8rem' }}>👈 선택됨</span>}
                                                     </td>
                                                     <td style={{ padding: '0.75rem', textAlign: 'center' }}>{item.sender || '-'}</td>

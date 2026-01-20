@@ -820,6 +820,9 @@ function ProductManager({ selectedCategoryId }) {
                                     onDragEnd={handleDragEnd}
                                 >
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                        <span style={{ color: '#475569' }}>
+                                            {product.weight ? `${parseFloat(product.weight)}${product.weight_unit || 'kg'}` : '-'}
+                                        </span>
                                         <span style={{
                                             backgroundColor: '#e2e8f0',
                                             padding: '0.1rem 0.4rem',
@@ -829,9 +832,6 @@ function ProductManager({ selectedCategoryId }) {
                                             textAlign: 'center'
                                         }}>
                                             {product.grade || '-'}
-                                        </span>
-                                        <span style={{ color: '#475569' }}>
-                                            {product.weight ? `${parseFloat(product.weight)}${product.weight_unit || 'kg'}` : '-'}
                                         </span>
                                     </div>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>

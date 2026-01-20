@@ -1,6 +1,6 @@
 {
     "system_name": "Hongda Biz",
-    "version": "1.0.37",
-    "last_updated": "2026-01-20T13:25:00Z",
-    "description": "Unified Inventory Ordering & Undo System, Symmetrical Dashboard (720px), Non-Blur Modal UX, and Smart Interaction (Enter/ESC/Auto-Focus)."
+    "version": "1.0.59",
+    "description": "낙찰 데이터 UI 최종 정리 (선택 삭제 제거 및 초기화 조건 고도화)",
+    "date": "2026-01-20"
 }

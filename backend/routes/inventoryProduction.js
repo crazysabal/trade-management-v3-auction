@@ -30,6 +30,10 @@ router.post('/', async (req, res) => {
         let companyId = null; // Use the company of the first ingredient
         let warehouseId = null; // Use the warehouse of the first ingredient (Output location)
 
+        // [NEW] Get Output Product's Weight Unit
+        const [outProdRows] = await connection.query('SELECT weight_unit FROM products WHERE id = ?', [output_product_id]);
+        const outputWeightUnit = outProdRows[0]?.weight_unit || 'kg';
+
         for (const ing of ingredients) {
             const [rows] = await connection.query('SELECT * FROM purchase_inventory WHERE id = ? FOR UPDATE', [ing.inventory_id]);
             if (rows.length === 0) throw new Error(`재고 ID ${ing.inventory_id}를 찾을 수 없습니다.`);
@@ -63,9 +67,9 @@ router.post('/', async (req, res) => {
         // 3. Create Trade Detail
         const [detailResult] = await connection.query(
             `INSERT INTO trade_details 
-            (trade_master_id, seq_no, product_id, quantity, unit_price, supply_amount, tax_amount, total_amount, sender) 
-            VALUES (?, 1, ?, ?, ?, ?, 0, ?, ?)`,
-            [tradeMasterId, output_product_id, output_quantity, newUnitPrice, totalCost, totalCost, sender]
+            (trade_master_id, seq_no, product_id, quantity, unit_price, supply_amount, tax_amount, total_amount, sender, weight_unit) 
+            VALUES (?, 1, ?, ?, ?, ?, 0, ?, ?, ?)`,
+            [tradeMasterId, output_product_id, output_quantity, newUnitPrice, totalCost, totalCost, sender, outputWeightUnit]
         );
         const tradeDetailId = detailResult.insertId;
 
@@ -101,10 +105,10 @@ router.post('/', async (req, res) => {
             `INSERT INTO purchase_inventory 
             (trade_detail_id, product_id, company_id, warehouse_id, 
              purchase_date, original_quantity, remaining_quantity, 
-             unit_price, sender, status, display_order, created_at) 
-            VALUES (?, ?, ?, ?, NOW(), ?, ?, ?, ?, 'AVAILABLE', ?, NOW())`,
+             unit_price, sender, status, display_order, weight_unit, created_at) 
+            VALUES (?, ?, ?, ?, NOW(), ?, ?, ?, ?, 'AVAILABLE', ?, ?, NOW())`,
             [tradeDetailId, output_product_id, companyId, warehouseId,
-                output_quantity, output_quantity, newUnitPrice, sender, targetDisplayOrder]
+                output_quantity, output_quantity, newUnitPrice, sender, targetDisplayOrder, outputWeightUnit]
         );
         const newInventoryId = invResult.insertId;
 
@@ -146,14 +150,17 @@ router.post('/', async (req, res) => {
             // Let's re-fetch OR assume we can query it. 
             // Re-fetching inside loop is bad for perf but ok for low volume.
 
-            const [localRows] = await connection.query('SELECT product_id, unit_price, sender FROM purchase_inventory WHERE id = ?', [ing.inventory_id]);
+            const [localRows] = await connection.query(
+                'SELECT pi.product_id, pi.unit_price, pi.sender, p.weight_unit FROM purchase_inventory pi JOIN products p ON pi.product_id = p.id WHERE pi.id = ?',
+                [ing.inventory_id]
+            );
             const item = localRows[0];
             const usageCost = Number(item.unit_price) * Number(ing.use_quantity);
 
             await connection.query(
                 `INSERT INTO trade_details 
-                (trade_master_id, seq_no, product_id, quantity, unit_price, supply_amount, tax_amount, total_amount, sender) 
-                VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?)`,
+                (trade_master_id, seq_no, product_id, quantity, unit_price, supply_amount, tax_amount, total_amount, sender, weight_unit) 
+                VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, ?)`,
                 [
                     tradeMasterId,
                     seqNo++,
@@ -162,7 +169,8 @@ router.post('/', async (req, res) => {
                     item.unit_price,
                     -usageCost, // Negative Amount
                     -usageCost,
-                    item.sender
+                    item.sender,
+                    item.weight_unit || 'kg'
                 ]
             );
         }
@@ -307,6 +315,7 @@ router.get('/recent', async (req, res) => {
                 p.product_name AS output_product_name,
                 p.grade AS output_product_grade,
                 p.weight AS output_product_weight,
+                p.weight_unit AS output_product_weight_unit,
                 pi.original_quantity AS output_quantity,
 
                 pi.unit_price AS unit_cost
@@ -341,6 +350,7 @@ router.get('/', async (req, res) => {
                 p.product_name AS output_product_name,
                 p.grade AS output_product_grade,
                 p.weight AS output_product_weight,
+                p.weight_unit AS output_product_weight_unit,
                 pi.original_quantity AS output_quantity,
 
                 pi.unit_price AS unit_cost
@@ -406,10 +416,13 @@ router.get('/:id', async (req, res) => {
                 p.product_name AS output_product_name,
                 p.grade AS output_product_grade,
                 p.weight AS output_product_weight,
+                p.weight_unit AS output_product_weight_unit,
                 pi.original_quantity AS output_quantity,
                 pi.unit_price AS unit_cost,
                 pi.id as output_inventory_id,
                 pi.sender as output_sender,
+                pi.weight_unit as output_inventory_weight_unit,
+                p.weight_unit as output_product_weight_unit,
                 w.name as output_warehouse_name
             FROM inventory_productions ip
             JOIN purchase_inventory pi ON ip.output_inventory_id = pi.id
@@ -438,6 +451,8 @@ router.get('/:id', async (req, res) => {
                 p.product_name,
                 p.grade,
                 p.weight,
+                p.weight_unit as product_weight_unit,
+                pi.weight_unit,
                 c.company_name
             FROM inventory_production_ingredients ipi
             JOIN purchase_inventory pi ON ipi.used_inventory_id = pi.id
