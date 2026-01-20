@@ -77,6 +77,7 @@ function ProductionDetailModal({ isOpen, onClose, jobId, highlightId }) {
                                 type: 'success',
                                 title: '취소 완료',
                                 message: '작업이 성공적으로 취소되었습니다.',
+                                showCancel: false,
                                 onConfirm: () => {
                                     onClose();
                                 }
@@ -87,7 +88,8 @@ function ProductionDetailModal({ isOpen, onClose, jobId, highlightId }) {
                             openModal({
                                 type: 'error',
                                 title: '취소 실패',
-                                message: '취소 실패: ' + response.data.message
+                                message: '취소 실패: ' + response.data.message,
+                                showCancel: false
                             });
                         }, 100);
                     }
@@ -97,7 +99,8 @@ function ProductionDetailModal({ isOpen, onClose, jobId, highlightId }) {
                         openModal({
                             type: 'error',
                             title: '오류 발생',
-                            message: '작업 취소 중 오류가 발생했습니다: ' + (err.response?.data?.message || err.message)
+                            message: '작업 취소 중 오류가 발생했습니다: ' + (err.response?.data?.message || err.message),
+                            showCancel: false
                         });
                     }, 100);
                 } finally {

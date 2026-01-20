@@ -200,7 +200,7 @@ const InventoryQuickView = ({ inventoryAdjustments = {}, refreshKey, onInventory
         fetchMissingItems();
     }, [inventoryAdjustments, inventory]);
 
-    const loadInventory = async () => {
+    const loadInventory = async (idToSelect = null) => {
         setLoading(true);
         try {
             // 1. 재고 목록 조회
@@ -218,6 +218,20 @@ const InventoryQuickView = ({ inventoryAdjustments = {}, refreshKey, onInventory
 
             // 퀵스플릿 모달 내 품목 리스트도 미리 캐싱 업데이트
             setQuickSplitModal(prev => ({ ...prev, products: prodData }));
+
+            // [NEW] 분할 등으로 신규 생성된 ID가 있으면 선택 및 포커싱
+            if (idToSelect) {
+                setTimeout(() => {
+                    setSelectedId(idToSelect);
+                    setTimeout(() => {
+                        const selectedRow = document.querySelector(`.inventory-row.is-selected`);
+                        if (selectedRow) {
+                            selectedRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                            selectedRow.focus();
+                        }
+                    }, 100);
+                }, 50);
+            }
 
         } catch (error) {
             console.error('데이터 로드 실패:', error);
@@ -432,7 +446,8 @@ const InventoryQuickView = ({ inventoryAdjustments = {}, refreshKey, onInventory
                 memo: '빠른 분할(Quick Split)'
             };
 
-            await inventoryProductionAPI.create(payload);
+            const response = await inventoryProductionAPI.create(payload);
+            const newInventoryId = response.data?.data?.inventory_id;
 
             setQuickSplitModal(prev => ({ ...prev, isOpen: false }));
             openModal({
@@ -440,7 +455,7 @@ const InventoryQuickView = ({ inventoryAdjustments = {}, refreshKey, onInventory
                 title: '성공',
                 message: '재고 분할이 완료되었습니다.',
                 showCancel: false,
-                onConfirm: loadInventory
+                onConfirm: () => loadInventory(newInventoryId)
             });
         } catch (err) {
             console.error('분할 오류:', err);
@@ -881,6 +896,9 @@ const InventoryQuickView = ({ inventoryAdjustments = {}, refreshKey, onInventory
                                                 }}
                                                 autoFocus
                                                 onFocus={(e) => e.target.select()}
+                                                onKeyDown={(e) => {
+                                                    if (e.key === 'Enter') handleExecuteQuickSplit();
+                                                }}
                                             />
                                             <div style={{ position: 'absolute', right: '1.25rem', top: '50%', transform: 'translateY(-50%)', fontWeight: '700', color: '#3b82f6' }}>개</div>
                                         </div>
