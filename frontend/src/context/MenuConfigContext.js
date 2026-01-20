@@ -27,17 +27,32 @@ export const MenuConfigProvider = ({ children }) => {
                     // For simplicity in V1, we trust the DB config but ideally should merge with MENU_CONFIG
                     // to support newly added features.
 
-                    // Simple merge for robustness:
-                    // 1. Load user config
-                    // 2. Check if any 'id' from MENU_CONFIG is missing in user config -> Add it to end
                     const userConfig = response.data.menuConfig;
-                    const userGroupIds = new Set(userConfig.map(g => g.id));
+                    const masterGroupMap = new Map(MENU_CONFIG.map(g => [g.id, g]));
 
+                    // Deep Merge:
+                    // 1. Process existing groups in user's config to add missing items
+                    const integratedConfig = userConfig.map(group => {
+                        const masterGroup = masterGroupMap.get(group.id);
+                        if (!masterGroup) return group; // Custom or deprecated group
+
+                        const userItemIds = new Set(group.items.map(i => i.id));
+                        const missingItems = masterGroup.items.filter(i => !userItemIds.has(i.id));
+
+                        if (missingItems.length > 0) {
+                            return {
+                                ...group,
+                                items: [...group.items, ...missingItems]
+                            };
+                        }
+                        return group;
+                    });
+
+                    // 2. Add entirely new groups from master config
+                    const userGroupIds = new Set(userConfig.map(g => g.id));
                     const missingGroups = MENU_CONFIG.filter(g => !userGroupIds.has(g.id));
 
-                    // Filter items within groups as well if needed, but for now Group Level merge is enough for MVP
-
-                    setActiveMenuConfig([...userConfig, ...missingGroups]);
+                    setActiveMenuConfig([...integratedConfig, ...missingGroups]);
                 } else {
                     setActiveMenuConfig(MENU_CONFIG);
                 }

@@ -54,7 +54,7 @@ async function createWindow() {
 
     mainWindow = new BrowserWindow({
         width: 1000,
-        height: 800,
+        height: 920,
         webPreferences: {
             preload: path.join(__dirname, 'preload.js'),
             nodeIntegration: false,
@@ -433,6 +433,51 @@ ipcMain.on('minimize-window', () => {
 ipcMain.on('open-logs-folder', () => {
     if (fs.existsSync(LOG_DIR)) {
         shell.openPath(LOG_DIR);
+    }
+});
+
+// [NEW] 환경 변수(.env) 읽기/쓰기 IPC 핸들러
+ipcMain.on('get-env', (event) => {
+    try {
+        const envPath = path.join(PROJECT_ROOT, 'backend', '.env');
+        if (!fs.existsSync(envPath)) {
+            return event.reply('env-info', {});
+        }
+        const content = fs.readFileSync(envPath, 'utf8');
+        const env = {};
+        content.split('\n').forEach(line => {
+            const [key, ...value] = line.split('=');
+            if (key && value) {
+                env[key.trim()] = value.join('=').trim();
+            }
+        });
+        event.reply('env-info', env);
+    } catch (e) {
+        console.error('Failed to read .env', e);
+        event.reply('env-info', {});
+    }
+});
+
+ipcMain.on('save-env', (event, newEnv) => {
+    try {
+        const envPath = path.join(PROJECT_ROOT, 'backend', '.env');
+        let content = fs.existsSync(envPath) ? fs.readFileSync(envPath, 'utf8') : '';
+
+        for (const [key, value] of Object.entries(newEnv)) {
+            const regex = new RegExp(`^${key}=.*`, 'm');
+            if (content.match(regex)) {
+                content = content.replace(regex, `${key}=${value}`);
+            } else {
+                content += `\n${key}=${value}`;
+            }
+        }
+
+        fs.writeFileSync(envPath, content.trim() + '\n', 'utf8');
+        event.reply('save-env-success', true);
+        writeLogToFile('SYSTEM', `[Config] 환경 변수 업데이트됨: ${Object.keys(newEnv).join(', ')}`);
+    } catch (e) {
+        console.error('Failed to save .env', e);
+        event.reply('save-env-success', false);
     }
 });
 

@@ -15,6 +15,19 @@ const BackupManagement = () => {
         fetchBackups();
         fetchCredentials();
         fetchRemoteBackups();
+
+        // [NEW] 구글 인증 성공 이벤트 리스너 추가 (팝업창에서 postMessage 전송 시 실행)
+        const handleAuthMessage = (event) => {
+            if (event.data === 'google-auth-success') {
+                console.log('Google Auth Success detected via message event');
+                fetchCredentials();
+                fetchRemoteBackups();
+                setMessage({ text: '구글 계정이 성공적으로 연결되었습니다.', type: 'success' });
+            }
+        };
+
+        window.addEventListener('message', handleAuthMessage);
+        return () => window.removeEventListener('message', handleAuthMessage);
     }, []);
 
     const fetchCredentials = async () => {
@@ -44,9 +57,13 @@ const BackupManagement = () => {
         try {
             const response = await systemAPI.getGoogleDriveBackups();
             if (response.data.success) {
-                // [MOD] 응답 구조 변경 대응 ({ files, folderUrl })
-                setRemoteBackups(response.data.data.files);
-                setDriveFolderUrl(response.data.data.folderUrl);
+                // [FIX] 데이터 구조 안전하게 수신 (null/undefined/배열 가능성 모두 대응)
+                const remoteData = response.data.data || {};
+                const files = remoteData.files || (Array.isArray(remoteData) ? remoteData : []);
+                const folderUrl = remoteData.folderUrl || '';
+
+                setRemoteBackups(files);
+                setDriveFolderUrl(folderUrl);
             }
         } catch (error) {
             console.error('Failed to fetch remote backups:', error);
@@ -291,7 +308,7 @@ const BackupManagement = () => {
                 border: '1px solid #e2e8f0',
                 margin: 0,
                 minHeight: 0,
-                overflow: 'hidden',
+                overflowY: 'auto', // [MOD] hidden -> auto로 변경하여 전체 스크롤 허용
                 boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)'
             }}>
                 <div style={{
@@ -584,7 +601,7 @@ const BackupManagement = () => {
                             display: 'flex',
                             flexDirection: 'column'
                         }}>
-                            {backups.length > 0 ? (
+                            {backups?.length > 0 ? (
                                 backups.map((backup, idx) => (
                                     <div key={idx} style={{
                                         display: 'flex',
@@ -647,7 +664,7 @@ const BackupManagement = () => {
                                 display: 'flex',
                                 flexDirection: 'column'
                             }}>
-                                {remoteBackups.length > 0 ? (
+                                {remoteBackups?.length > 0 ? (
                                     remoteBackups.map((file, idx) => (
                                         <div key={idx} style={{
                                             display: 'flex',

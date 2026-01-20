@@ -21,9 +21,8 @@
 .production-main-columns {
     display: flex;
     gap: 12px;
-    flex: 1;
+    /* flex: 1; 제거 - 하단 이력 섹션과의 중간 공백 제거를 위해 */
     min-height: 0;
-    /* align-items: flex-start 제거하여 자식 패널 높이 통일(stretch) */
 }
 
 /* Panel Layout */
@@ -35,8 +34,10 @@
     border-radius: 12px;
     box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
     border: 1px solid #eef2f7;
-    height: 810px;
-    /* 고정 높이로 통일하여 하단 섹션 위치 고정 */
+    min-height: 520px;
+    /* 최소 높이 보장 */
+    height: auto;
+    /* 내용에 따라 유연하게 조절 */
     overflow: hidden;
 }
 

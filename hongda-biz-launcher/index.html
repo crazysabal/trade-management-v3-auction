@@ -219,6 +219,51 @@
                 box-shadow: 0 0 0 0 rgba(241, 196, 15, 0);
             }
         }
+
+        /* [NEW] Host Tag Styles */
+        .hosts-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-bottom: 12px;
+            min-height: 20px;
+        }
+
+        .host-tag {
+            background-color: #3e3e42;
+            border: 1px solid #555;
+            border-radius: 4px;
+            padding: 2px 8px;
+            font-size: 12px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            color: #ccc;
+        }
+
+        .host-tag:hover {
+            border-color: #888;
+            color: #fff;
+        }
+
+        .host-remove {
+            color: #da3633;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 14px;
+            line-height: 1;
+        }
+
+        .host-remove:hover {
+            color: #f85149;
+        }
+
+        /* [NEW] Input Focus Style */
+        #allowed-hosts-input:focus {
+            outline: none;
+            border-color: #ffffff !important;
+            box-shadow: 0 0 5px rgba(255, 255, 255, 0.3);
+        }
     </style>
 </head>
 
@@ -239,18 +284,27 @@
             <button id="btn-all" class="btn-toggle btn-all start" onclick="toggleAll()">ALL START</button>
         </div>
 
-        <div id="status-backend" class="control-group">
-            <h3><span class="status-indicator"></span>Backend</h3>
-            <button id="btn-backend" class="btn-toggle start" onclick="toggleServer('backend')">START</button>
+        <div style="display: flex; gap: 10px; margin-bottom: 15px;">
+            <div id="status-backend" class="control-group"
+                style="flex: 1; padding: 15px 10px; margin-bottom: 0; flex-direction: column; gap: 10px; align-items: center; background-color: #2b2b2b;">
+                <h3 style="font-size: 14px; margin-bottom: 2px;"><span class="status-indicator"
+                        style="margin-right: 6px;"></span>Backend</h3>
+                <button id="btn-backend" class="btn-toggle start" style="width: 100%; padding: 8px 0; font-size: 13px;"
+                    onclick="toggleServer('backend')">START</button>
+            </div>
+
+            <div id="status-frontend" class="control-group"
+                style="flex: 1; padding: 15px 10px; margin-bottom: 0; flex-direction: column; gap: 10px; align-items: center; background-color: #2b2b2b;">
+                <h3 style="font-size: 14px; margin-bottom: 2px;"><span class="status-indicator"
+                        style="margin-right: 6px;"></span>Frontend</h3>
+                <button id="btn-frontend" class="btn-toggle start" style="width: 100%; padding: 8px 0; font-size: 13px;"
+                    onclick="toggleServer('frontend')">START</button>
+            </div>
         </div>
 
-        <div id="status-frontend" class="control-group">
-            <h3><span class="status-indicator"></span>Frontend</h3>
-            <button id="btn-frontend" class="btn-toggle start" onclick="toggleServer('frontend')">START</button>
-        </div>
-
+        <!-- [ORDER SWAP] 기기 라이선스 정보 (위로 이동) -->
         <div
-            style="margin-top: auto; padding: 18px; background-color: #1a1a1b; border-radius: 8px; font-size: 15px; color: #aaa; border: 1px dashed #444;">
+            style="margin-top: 10px; margin-bottom: 10px; padding: 18px; background-color: #1a1a1b; border-radius: 8px; border: 1px solid #333;">
             <div style="margin-bottom: 10px; color: #ccc; font-weight: bold; font-size: 15px;">기기 라이선스 정보</div>
             <div id="machine-id-display" onclick="copyMachineId()"
                 style="font-family: monospace; cursor: pointer; color: #777; font-size: 14px; word-break: break-all; line-height: 1.4;"
@@ -260,13 +314,42 @@
             <div id="copy-confirm" style="color: #238636; margin-top: 6px; font-size: 13px; display: none;">ID가 복사되었습니다!
             </div>
             <div id="license-expiry-display" style="margin-top: 12px; color: #999; font-size: 15px;">만료일: 확인 중...</div>
+
+            <!-- [NEW] 버전 정보 통합 -->
             <div id="system-version-display"
                 style="margin-top: 18px; border-top: 1px solid #333; padding-top: 12px; font-size: 14px; color: #888; font-weight: bold; display: flex; justify-content: space-between; align-items: center;">
                 <span>Version: <span id="ver-text">불러오는 중...</span></span>
-                <button onclick="checkManualUpdate()" class="clear-btn" style="padding: 2px 8px; font-size: 11px;">🛠
-                    체크</button>
+                <span style="font-size: 20px; cursor: pointer;" onclick="checkManualUpdate()" title="업데이트 확인">🔄</span>
             </div>
         </div>
+
+        <!-- [ORDER SWAP] 서버 접속 설정 섹션 (위 카드와 밀착) -->
+        <div
+            style="margin-bottom: 20px; padding: 18px; background-color: #1a1a1b; border-radius: 8px; border: 1px solid #333;">
+            <div
+                style="margin-bottom: 12px; color: #ccc; font-weight: bold; font-size: 15px; display: flex; align-items: center; gap: 6px;">
+                🌐 서버 접속 설정
+            </div>
+
+            <!-- 호스트 목록 컨테이너 -->
+            <div id="hosts-container" class="hosts-list"></div>
+
+            <div style="font-size: 13px; color: #888; margin-bottom: 8px;">외부 접속 허용 주소 추가</div>
+            <div style="display: flex; gap: 6px; margin-bottom: 10px;">
+                <input type="text" id="allowed-hosts-input" placeholder="예: 1234.iptime.org"
+                    onkeypress="if(event.key === 'Enter') addHostTag()"
+                    style="flex: 1; padding: 8px; background: #0d1117; border: 1px solid #444; color: #fff; border-radius: 4px; box-sizing: border-box; font-size: 13px;">
+                <button onclick="addHostTag()" class="btn-toggle start"
+                    style="width: 50px; height: 32px; padding: 0; font-size: 18px;">+</button>
+            </div>
+
+            <button onclick="saveAllowedHosts()" class="btn-toggle start"
+                style="width: 100%; height: 32px; font-size: 13px; background-color: #0969da;">전체 설정 저장</button>
+            <div id="save-status"
+                style="color: #238636; margin-top: 6px; font-size: 12px; display: none; text-align: center;">설정이
+                저장되었습니다.</div>
+        </div>
+
     </div>
 
     <div class="main-content">

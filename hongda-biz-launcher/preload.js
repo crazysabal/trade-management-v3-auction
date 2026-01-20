@@ -19,5 +19,10 @@ contextBridge.exposeInMainWorld('api', {
     checkUpdate: () => ipcRenderer.send('manual-check-update'),
     onUpdateNotAvailable: (callback) => ipcRenderer.on('update-not-available', (event, data) => callback(data)),
     onUpdateError: (callback) => ipcRenderer.on('update-check-error', (event, data) => callback(data)),
-    openLogsFolder: () => ipcRenderer.send('open-logs-folder')
+    openLogsFolder: () => ipcRenderer.send('open-logs-folder'),
+    // [NEW] 환경 변수 관리
+    getEnv: () => ipcRenderer.send('get-env'),
+    onEnvInfo: (callback) => ipcRenderer.on('env-info', (event, data) => callback(data)),
+    saveEnv: (env) => ipcRenderer.send('save-env', env),
+    onSaveEnvSuccess: (callback) => ipcRenderer.on('save-env-success', (event, data) => callback(data))
 });

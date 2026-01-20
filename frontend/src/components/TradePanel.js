@@ -1603,11 +1603,8 @@ function TradePanel({
   const companyOptions = useMemo(() => {
     return companies.map(company => ({
       value: company.id,
-      // [CHANGED] 별칭 (사업자명) 형태로 표시
-      label: company.business_name && company.business_name !== company.company_name
-        ? `${company.company_name} (${company.business_name})`
-        : company.company_name,
-      data: { subLabel: company.business_name, code: company.company_code } // 검색 필터용 데이터 (business_name 추가)
+      label: company.company_name,
+      data: { subLabel: company.business_name, code: company.company_code } // 검색 필터용 데이터는 유지
     }));
   }, [companies]);
 

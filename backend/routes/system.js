@@ -53,6 +53,12 @@ router.get('/auth/google/callback', async (req, res) => {
                             <p style="color: #94a3b8; font-size: 0.875rem;">이 창을 닫고 원래 화면에서 작업을 계속하세요.</p>
                             <button onclick="window.close()" style="background: #3b82f6; color: white; border: none; padding: 0.5rem 1rem; border-radius: 6px; cursor: pointer; font-weight: 600;">닫기</button>
                         </div>
+                        <script>
+                            // 부모 창(Opener)에게 성공 메시지 전송
+                            if (window.opener) {
+                                window.opener.postMessage('google-auth-success', '*');
+                            }
+                        </script>
                     </body>
                 </html>
             `);
@@ -236,9 +242,8 @@ router.post('/backup/credentials', async (req, res) => {
 // 구글 드라이브 백업 목록 조회 [NEW]
 router.get('/backup/google-drive/files', async (req, res) => {
     try {
-        // 0. 설정 확인
         if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_REFRESH_TOKEN) {
-            return res.json({ success: true, data: [] }); // 설정 없으면 빈 배열 반환
+            return res.json({ success: true, data: { files: [], folderUrl: '' } }); // 설정 없으면 일관된 구조 반환
         }
 
         const files = await googleDriveUtil.listFiles();

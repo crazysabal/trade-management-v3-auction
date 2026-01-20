@@ -173,6 +173,9 @@ window.api.onLog(({ type, data, isError }) => {
     }
 });
 
+// [NEW] 설정 변경 시 자동 재시작 플래그
+let isRestartingFrontend = false;
+
 window.api.onStatusChange(({ type, status }) => {
     serverStatus[type] = status;
     const group = document.getElementById(`status-${type}`);
@@ -188,6 +191,15 @@ window.api.onStatusChange(({ type, status }) => {
         btn.textContent = 'START';
         btn.classList.remove('stop');
         btn.classList.add('start');
+
+        // [NEW] 자동 재시작 로직
+        if (type === 'frontend' && isRestartingFrontend) {
+            isRestartingFrontend = false;
+            appendLog('system', '🔄 변경된 설정을 적용하기 위해 프론트엔드를 재시작합니다...', false);
+            setTimeout(() => {
+                window.api.startProcess('frontend', 'npm run dev', 'frontend', 3000);
+            }, 1000);
+        }
     }
 
     // 통합 버튼 상태 업데이트
@@ -305,6 +317,80 @@ async function copyMachineId() {
 
 // [NEW] 런처 실행 시 자동 시작 트리거
 let hasAutoStarted = false;
+
+// [NEW] 호스트 관리 상태 (CRUD)
+let allowedHosts = [];
+
+function renderHosts() {
+    const container = document.getElementById('hosts-container');
+    if (!container) return;
+
+    container.innerHTML = '';
+    allowedHosts.forEach((host, index) => {
+        const tag = document.createElement('div');
+        tag.className = 'host-tag';
+        tag.innerHTML = `
+            <span>${host}</span>
+            <span class="host-remove" onclick="removeHostTag(${index})">&times;</span>
+        `;
+        container.appendChild(tag);
+    });
+}
+
+function addHostTag() {
+    const input = document.getElementById('allowed-hosts-input');
+    const host = input.value.trim();
+
+    if (host && !allowedHosts.includes(host)) {
+        allowedHosts.push(host);
+        renderHosts();
+        input.value = '';
+    } else if (allowedHosts.includes(host)) {
+        alert('이미 등록된 주소입니다.');
+    }
+}
+
+function removeHostTag(index) {
+    allowedHosts.splice(index, 1);
+    renderHosts();
+}
+
+function saveAllowedHosts() {
+    // 배열을 쉼표로 합쳐서 저장
+    const hostsString = allowedHosts.join(',');
+    window.api.saveEnv({ ALLOWED_HOSTS: hostsString });
+}
+
+window.api.onEnvInfo((env) => {
+    if (env.ALLOWED_HOSTS) {
+        // 기존 쉼표 구분 문자열을 배열로 변환
+        allowedHosts = env.ALLOWED_HOSTS.split(',').map(h => h.trim()).filter(Boolean);
+        renderHosts();
+    }
+});
+
+window.api.onSaveEnvSuccess((success) => {
+    if (success) {
+        const status = document.getElementById('save-status');
+        if (status) {
+            status.style.display = 'block';
+            setTimeout(() => status.style.display = 'none', 1500);
+        }
+        appendLog('system', '✅ 서버 접속 설정이 저장되었습니다. (ALLOWED_HOSTS)', false);
+
+        // [NEW] 프론트엔드가 실행 중이면 자동 재시작 트리거
+        if (serverStatus.frontend === 'running') {
+            appendLog('system', '💡 설정을 적용하기 위해 프론트엔드 서버를 재시작합니다.', false);
+            isRestartingFrontend = true;
+            window.api.stopProcess('frontend');
+        } else {
+            appendLog('system', '💡 프론트엔드 시작 시 새로운 설정이 적용됩니다.', false);
+        }
+    } else {
+        alert('설정 저장 중 오류가 발생했습니다.');
+    }
+});
+
 window.onload = () => {
     console.log('--- 시스템 초기화 및 라이선스 체크 ---');
 
@@ -312,4 +398,5 @@ window.onload = () => {
     window.api.getMachineId();
     window.api.getLicenseInfo();
     window.api.getVersion();
+    window.api.getEnv(); // [NEW] 환경 변수 정보 요청
 };

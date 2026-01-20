@@ -213,7 +213,7 @@ const InventoryProductionManagement = () => {
 
     const handleCancelProduction = async (id) => {
         const target = history.find(h => h.id === id);
-        const weightStr = Number(target?.output_product_weight || 0) > 0 ? ` ${Number(target.output_product_weight)}kg` : '';
+        const weightStr = Number(target?.output_product_weight || 0) > 0 ? ` ${Number(target.output_product_weight)}${target.output_product_weight_unit || 'kg'}` : '';
         const gradeStr = target?.output_product_grade ? ` (${target.output_product_grade})` : '';
         const displayName = `${target?.output_product_name || '작업'}${weightStr}${gradeStr}`;
 
@@ -321,7 +321,7 @@ const InventoryProductionManagement = () => {
         });
 
         return sorted.map(product => {
-            const weightStr = product.weight ? `${parseFloat(product.weight)}kg` : '';
+            const weightStr = product.weight ? `${parseFloat(product.weight)}${product.weight_unit || 'kg'}` : '';
             return {
                 value: product.id,
                 label: `${product.product_name}${weightStr ? ` ${weightStr}` : ''}${product.grade ? ` (${product.grade})` : ''}`
@@ -480,7 +480,20 @@ const InventoryProductionManagement = () => {
                             </div>
                         </div>
                         <div className="panel-content">
-                            {filteredInventory.map(item => (
+                            {filteredInventory.length === 0 ? (
+                                <div style={{
+                                    height: '100%',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    color: '#ccc',
+                                    flexDirection: 'column',
+                                    gap: '10px'
+                                }}>
+                                    <span style={{ fontSize: '2rem' }}>📦</span>
+                                    <span>가용 재고가 없습니다.</span>
+                                </div>
+                            ) : filteredInventory.map(item => (
                                 <div
                                     key={item.id}
                                     draggable={true}

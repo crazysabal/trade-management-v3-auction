@@ -183,7 +183,7 @@ function ProductionDetailModal({ isOpen, onClose, jobId, highlightId }) {
                                                     style={{ borderBottom: '1px solid #e2e8f0' }}
                                                 >
                                                     <td style={{ padding: '0.75rem', fontWeight: isHighlighted ? '700' : 'normal' }}>
-                                                        {item.product_name} {item.product_weight}kg {item.grade}
+                                                        {item.product_name} {item.product_weight}{item.weight_unit || item.product_weight_unit || 'kg'} {item.grade}
                                                         {isHighlighted && <span style={{ marginLeft: '8px', color: '#f08c00', fontSize: '0.8rem' }}>👈 선택됨</span>}
                                                     </td>
                                                     <td style={{ padding: '0.75rem', textAlign: 'center' }}>{item.sender || '-'}</td>
@@ -225,7 +225,7 @@ function ProductionDetailModal({ isOpen, onClose, jobId, highlightId }) {
                                                     style={{ borderBottom: '1px solid #e2e8f0' }}
                                                 >
                                                     <td style={{ padding: '0.75rem', fontWeight: isHighlighted ? '700' : 'normal' }}>
-                                                        {item.product_name} {item.product_weight}kg {item.grade}
+                                                        {item.product_name} {item.product_weight}{item.weight_unit || item.product_weight_unit || 'kg'} {item.grade}
                                                         {isHighlighted && <span style={{ marginLeft: '8px', color: '#f08c00', fontSize: '0.8rem' }}>👈 선택됨</span>}
                                                     </td>
                                                     <td style={{ padding: '0.75rem', textAlign: 'right', fontWeight: 'bold', color: '#2563eb' }}>
