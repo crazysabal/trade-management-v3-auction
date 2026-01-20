@@ -241,12 +241,10 @@ function checkManualUpdate() {
 
 window.api.onUpdateNotAvailable((version) => {
     appendLog('system', `✅ 최신 버전을 사용 중입니다. (v${version})`, false);
-    alert(`이미 최신 버전(v${version})입니다.`);
 });
 
 window.api.onUpdateError((msg) => {
     appendLog('system', `❌ 업데이트 확인 중 오류 발생: ${msg}`, true);
-    alert(`업데이트 확인 실패:\n${msg}`);
 });
 
 function startAutoUpdate() {
