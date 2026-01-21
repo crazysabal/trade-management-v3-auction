@@ -31,19 +31,31 @@ router.get('/export/excel', async (req, res) => {
     `;
     const [rows] = await db.query(query);
 
-    const data = rows.map((row, index) => ({
-      '대분류': row.parent_category || '',
-      '소분류': row.sub_category || '',
-      '품목명': row.product_name,
-      '등급': row.grade || '',
-      '중량': row.weight || '',
-      '단위': row.weight_unit || 'kg',
-      '품목코드': row.product_code,
-      '정렬순서': row.sort_order || (index + 1),
-      '경매 매핑 정보': row.auction_mappings || '',
-      '비고': row.notes || '',
-      '사용여부': row.is_active ? '사용' : '미사용'
-    }));
+    let currentProductName = '';
+    let productSortCounter = 0;
+
+    const data = rows.map((row) => {
+      if (row.product_name !== currentProductName) {
+        currentProductName = row.product_name;
+        productSortCounter = 1;
+      } else {
+        productSortCounter++;
+      }
+
+      return {
+        '대분류': row.parent_category || '',
+        '소분류': row.sub_category || '',
+        '품목명': row.product_name,
+        '등급': row.grade || '',
+        '중량': row.weight || '',
+        '단위': row.weight_unit || 'kg',
+        '품목코드': row.product_code,
+        '정렬순서': row.sort_order || productSortCounter,
+        '경매 매핑 정보': row.auction_mappings || '',
+        '비고': row.notes || '',
+        '사용여부': row.is_active ? '사용' : '미사용'
+      };
+    });
 
     const wb = xlsx.utils.book_new();
     const ws = xlsx.utils.json_to_sheet(data);
@@ -75,8 +87,8 @@ router.post('/import/excel', upload.single('file'), async (req, res) => {
 
     await connection.beginTransaction();
 
-    let updatedCount = 0;
-    let insertedCount = 0;
+    let currentImportProductName = '';
+    let importSortCounter = 0;
 
     for (let i = 0; i < data.length; i++) {
       const item = data[i];
@@ -87,7 +99,15 @@ router.post('/import/excel', upload.single('file'), async (req, res) => {
       const weight = item['중량'] || item['중량(kg)']; // 하위 호환성 유지
       const weightUnit = item['단위'] || 'kg';
       const productCode = item['품목코드'];
-      const sortOrder = item['정렬순서'] || (i + 1);
+
+      if (productName !== currentImportProductName) {
+        currentImportProductName = productName;
+        importSortCounter = 1;
+      } else {
+        importSortCounter++;
+      }
+
+      const sortOrder = item['정렬순서'] || importSortCounter;
       const notes = item['비고'];
       const isActive = item['사용여부'] === '사용' ? 1 : 0;
 
