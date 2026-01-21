@@ -159,11 +159,51 @@ const UserManagement = () => {
                                 </button>
                             )}
                         </div>
+
+                        {/* 1. Admin Section (Always First Line) */}
+                        {users.find(u => u.username === 'admin') && (
+                            <div className="admin-user-row" style={{ display: 'flex', justifyContent: 'center', marginBottom: '2rem' }}>
+                                {(() => {
+                                    const user = users.find(u => u.username === 'admin');
+                                    return (
+                                        <div className="user-card admin-card" key={user.id} style={{ width: '100%', maxWidth: '350px', border: '2px solid #3b82f6' }}>
+                                            <div className="user-avatar">
+                                                {'🛡️'}
+                                            </div>
+                                            <div className="user-info">
+                                                <div className="user-main-row">
+                                                    <span className="user-name">{user.username}</span>
+                                                    <span className={`role-badge ${user.role}`}>
+                                                        {user.role || '미지정'}
+                                                    </span>
+                                                    {!user.is_active && <span className="status-badge inactive">비활성</span>}
+                                                </div>
+                                                <span className="user-subinfo">
+                                                    가입일: {(() => {
+                                                        const d = new Date(user.created_at);
+                                                        return `${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+                                                    })()}
+                                                </span>
+                                            </div>
+                                            <div className="user-actions-row">
+                                                {hasPermission('USER_MANAGEMENT', 'UPDATE') && (
+                                                    <button className="action-btn edit" onClick={() => { setEditingUser(user); setIsFormModalOpen(true); }}>
+                                                        정보수정
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </div>
+                                    );
+                                })()}
+                            </div>
+                        )}
+
+                        {/* 2. Other Users Grid */}
                         <div className="user-list-grid">
-                            {users.map(user => (
+                            {users.filter(u => u.username !== 'admin').map(user => (
                                 <div className="user-card" key={user.id}>
                                     <div className="user-avatar">
-                                        {(user.role && user.role.toLowerCase() === 'admin') ? '🛡️' : '👤'}
+                                        {'👤'}
                                     </div>
                                     <div className="user-info">
                                         <div className="user-main-row">

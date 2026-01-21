@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { purchaseInventoryAPI, warehousesAPI, inventoryAdjustmentAPI, inventoryTransferAPI, inventoryProductionAPI } from '../services/api'; // Use centralized API services
+import { purchaseInventoryAPI, warehousesAPI, inventoryAdjustmentAPI, inventoryTransferAPI, inventoryProductionAPI } from '../services/api';
+import { formatLocalDate } from '../utils/dateUtils'; // [FIX] Import date utility
 import ConfirmModal from '../components/ConfirmModal';
 import TradeDetailModal from '../components/TradeDetailModal';
 import ProductionDetailModal from '../components/ProductionDetailModal';
@@ -15,8 +16,12 @@ const InventoryHistory = ({ onOpenTrade }) => {
     const [confirmAction, setConfirmAction] = useState(null); // Function to execute on confirm
 
     // Filters
-    const [startDate, setStartDate] = useState(new Date(new Date().setMonth(new Date().getMonth() - 1)).toISOString().split('T')[0]);
-    const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
+    const [startDate, setStartDate] = useState(() => {
+        const d = new Date();
+        d.setMonth(d.getMonth() - 1);
+        return formatLocalDate(d);
+    });
+    const [endDate, setEndDate] = useState(formatLocalDate(new Date()));
     const [searchTerm, setSearchTerm] = useState('');
 
     useEffect(() => {

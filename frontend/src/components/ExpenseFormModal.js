@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { expenseAPI, expenseCategoryAPI, settingsAPI } from '../services/api';
+import { formatLocalDate } from '../utils/dateUtils'; // [FIX] Import date utility
 import ConfirmModal from '../components/ConfirmModal'; // ConfirmModal 추가
 import { useModalDraggable } from '../hooks/useModalDraggable';
 
 
 export default function ExpenseFormModalComponent({ isOpen, onClose, initialData, onSuccess }) {
     const [formData, setFormData] = useState({
-        expense_date: new Date().toISOString().split('T')[0],
+        expense_date: formatLocalDate(new Date()),
         category_id: '',
         amount: '',
         description: '',
@@ -31,7 +32,7 @@ export default function ExpenseFormModalComponent({ isOpen, onClose, initialData
             fetchPaymentMethods();
             if (initialData) {
                 setFormData({
-                    expense_date: initialData.expense_date ? initialData.expense_date.split('T')[0] : new Date().toISOString().split('T')[0],
+                    expense_date: initialData.expense_date ? initialData.expense_date.split('T')[0] : formatLocalDate(new Date()),
                     category_id: initialData.category_id || '',
                     amount: initialData.amount || '',
                     description: initialData.description || '',
@@ -39,7 +40,7 @@ export default function ExpenseFormModalComponent({ isOpen, onClose, initialData
                 });
             } else {
                 setFormData({
-                    expense_date: new Date().toISOString().split('T')[0],
+                    expense_date: formatLocalDate(new Date()),
                     category_id: '',
                     amount: '',
                     description: '',

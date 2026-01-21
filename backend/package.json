@@ -1,6 +1,6 @@
 {
   "name": "hongda-biz-backend",
-  "version": "1.0.16",
+  "version": "1.0.0",
   "description": "매입/매출 거래명세서 관리 시스템 백엔드",
   "main": "server.js",
   "scripts": {

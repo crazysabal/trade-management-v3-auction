@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { inventoryAuditAPI, warehousesAPI } from '../../services/api';
+import { formatLocalDate } from '../../utils/dateUtils'; // [FIX] Import date utility
 import ConfirmModal, { useConfirmModal } from '../ConfirmModal';
 
 const AuditHistory = ({ onStart, onSelect, limit }) => {
@@ -24,8 +25,8 @@ const AuditHistory = ({ onStart, onSelect, limit }) => {
         oneMonthAgo.setMonth(today.getMonth() - 1);
         return {
             search: '',
-            startDate: oneMonthAgo.toISOString().split('T')[0],
-            endDate: today.toISOString().split('T')[0]
+            startDate: formatLocalDate(oneMonthAgo),
+            endDate: formatLocalDate(today)
         };
     });
 
@@ -33,7 +34,7 @@ const AuditHistory = ({ onStart, onSelect, limit }) => {
     const [showStartForm, setShowStartForm] = useState(false);
     const [newAudit, setNewAudit] = useState({
         warehouse_id: '',
-        audit_date: new Date().toISOString().split('T')[0],
+        audit_date: formatLocalDate(new Date()),
         notes: ''
     });
 
@@ -152,8 +153,8 @@ const AuditHistory = ({ onStart, onSelect, limit }) => {
 
         setFilters({
             search: '',
-            startDate: oneMonthAgo.toISOString().split('T')[0],
-            endDate: today.toISOString().split('T')[0]
+            startDate: formatLocalDate(oneMonthAgo),
+            endDate: formatLocalDate(today)
         });
         // Reset does not fetch immediately, user can click Search.
         // Or should reset trigger fetch? "Reset" usually clears filters. 

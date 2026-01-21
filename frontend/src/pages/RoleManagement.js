@@ -135,6 +135,42 @@ const RoleManagement = () => {
         });
     };
 
+    const toggleAllPermissions = () => {
+        if (!selectedRole || (selectedRole.is_system && selectedRole.name === 'Administrator')) return;
+
+        // Check if all are currently checked
+        let allChecked = true;
+        for (const group of resources) {
+            for (const resource of group.items) {
+                for (const action of actions) {
+                    if (!rolePermissions[resource]?.[action]) {
+                        allChecked = false;
+                        break;
+                    }
+                }
+                if (!allChecked) break;
+            }
+            if (!allChecked) break;
+        }
+
+        const newPermissions = {};
+        if (!allChecked) {
+            // Turn ON all
+            resources.forEach(group => {
+                group.items.forEach(resource => {
+                    newPermissions[resource] = {};
+                    actions.forEach(action => {
+                        newPermissions[resource][action] = true;
+                    });
+                });
+            });
+        } else {
+            // Turn OFF all - empty object is fine, or explicit false
+            // standard state implies missing key = false
+        }
+        setRolePermissions(newPermissions);
+    };
+
     const handleSavePermissions = async () => {
         if (!selectedRole) return;
         setLoading(true);
@@ -170,7 +206,7 @@ const RoleManagement = () => {
 
             // If the role being updated is the current user's role, refresh permissions
             if (user && user.role_id === selectedRole.id) {
-                console.log('Refreshing current user permissions...');
+                // console.log('Refreshing current user permissions...');
                 refreshPermissions();
             }
 
@@ -284,7 +320,23 @@ const RoleManagement = () => {
                         {selectedRole ? `권한 설정: ${selectedRole.name}` : '역할을 선택하세요'}
                     </div>
                     {selectedRole && (
-                        <div style={{ flex: '0 0 auto' }}>
+                        <div style={{ flex: '0 0 auto', display: 'flex', gap: '0.5rem' }}>
+                            <button
+                                onClick={toggleAllPermissions}
+                                disabled={selectedRole.is_system && selectedRole.name === 'Administrator'}
+                                className="btn btn-outline-secondary"
+                                style={{
+                                    height: '40px',
+                                    padding: '0 1rem',
+                                    display: 'flex',
+                                    gap: '0.5rem',
+                                    alignItems: 'center',
+                                    fontWeight: 600,
+                                    borderRadius: '8px'
+                                }}
+                            >
+                                ✨ 전체 선택/해제
+                            </button>
                             <button
                                 onClick={handleSavePermissions}
                                 disabled={loading || (selectedRole.is_system && selectedRole.name === 'Administrator')}

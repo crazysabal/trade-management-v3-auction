@@ -23,7 +23,7 @@ const AuditSession = ({ auditId, onBack, isMobile }) => {
         try {
             const res = await inventoryAuditAPI.getById(auditId);
             if (res.data.success) {
-                console.log('AuditSession fetched items:', res.data.data.items);
+                // console.log('AuditSession fetched items:', res.data.data.items);
                 setAudit(res.data.data.master);
                 setItems(res.data.data.items);
             }

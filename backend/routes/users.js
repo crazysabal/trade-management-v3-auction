@@ -17,7 +17,7 @@ router.get('/', async (req, res) => {
                    coalesce(r.name, u.role) as role 
             FROM users u
             LEFT JOIN roles r ON u.role_id = r.id
-            ORDER BY u.created_at DESC
+            ORDER BY CASE WHEN u.username = 'admin' THEN 0 ELSE 1 END, u.created_at DESC
         `);
         res.json(users);
     } catch (err) {
@@ -77,18 +77,18 @@ router.put('/:id', async (req, res) => {
     const { role_id, is_active, password } = req.body;
     const userId = req.params.id;
 
-    console.log(`[DEBUG] Update User ID: ${userId}, PW exists: ${!!password}`);
+    // console.log(`[DEBUG] Update User ID: ${userId}, PW exists: ${!!password}`);
 
     try {
         // [SAFETY] Check if target is 'admin'
         const [[targetUser]] = await db.query('SELECT username FROM users WHERE id = ?', [userId]);
         if (!targetUser) {
-            console.log(`[DEBUG] User not found: ${userId}`);
+            // console.log(`[DEBUG] User not found: ${userId}`);
             return res.status(404).json({ message: '사용자를 찾을 수 없습니다.' });
         }
 
         const isAdminAccount = targetUser.username === 'admin';
-        console.log(`[DEBUG] Target User: ${targetUser.username}, Is Admin Account: ${isAdminAccount}`);
+        // console.log(`[DEBUG] Target User: ${targetUser.username}, Is Admin Account: ${isAdminAccount}`);
 
         let query = 'UPDATE users SET ';
         let params = [];
@@ -101,23 +101,23 @@ router.put('/:id', async (req, res) => {
         }
 
         if (password) {
-            console.log(`[DEBUG] Hashing new password for ${targetUser.username}`);
+            // console.log(`[DEBUG] Hashing new password for ${targetUser.username}`);
             const hashedPassword = await bcrypt.hash(password, 10);
             sets.push('password_hash = ?');
             params.push(hashedPassword);
         }
 
         if (sets.length === 0) {
-            console.log(`[DEBUG] No changes to apply for ${targetUser.username}`);
+            // console.log(`[DEBUG] No changes to apply for ${targetUser.username}`);
             return res.json({ message: '변경할 정보가 없거나 보호된 계정입니다.' });
         }
 
         query += sets.join(', ') + ' WHERE id = ?';
         params.push(userId);
 
-        console.log(`[DEBUG] Executing Query: ${query}`);
+        // console.log(`[DEBUG] Executing Query: ${query}`);
         const [result] = await db.query(query, params);
-        console.log(`[DEBUG] Update Result: ${result.affectedRows} row(s) updated`);
+        // console.log(`[DEBUG] Update Result: ${result.affectedRows} row(s) updated`);
 
         res.json({ message: '사용자 정보가 업데이트되었습니다.', affected: result.affectedRows });
     } catch (err) {

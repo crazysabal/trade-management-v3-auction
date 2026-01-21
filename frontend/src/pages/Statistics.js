@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { tradeAPI } from '../services/api';
 import ConfirmModal from '../components/ConfirmModal';
 import { useAuth } from '../context/AuthContext';
+import { formatLocalDate } from '../utils/dateUtils'; // [FIX] Import date utility
 
 function Statistics() {
   const [purchaseStats, setPurchaseStats] = useState([]);
@@ -16,8 +17,8 @@ function Statistics() {
   const [viewType, setViewType] = useState('daily');
 
   const [filters, setFilters] = useState({
-    start_date: new Date(new Date().setMonth(new Date().getMonth() - 1)).toISOString().split('T')[0],
-    end_date: new Date().toISOString().split('T')[0]
+    start_date: formatLocalDate(new Date(new Date().setMonth(new Date().getMonth() - 1))),
+    end_date: formatLocalDate(new Date())
   });
 
   // 패널 크기 비율 (0.3 ~ 0.7, 기본 0.5)
@@ -111,22 +112,22 @@ function Statistics() {
     switch (type) {
       case 'daily':
         // 최근 1개월
-        start_date = new Date(today.setMonth(today.getMonth() - 1)).toISOString().split('T')[0];
-        end_date = new Date().toISOString().split('T')[0];
+        start_date = formatLocalDate(new Date(today.setMonth(today.getMonth() - 1)));
+        end_date = formatLocalDate(new Date());
         break;
       case 'monthly':
         // 올해 1월 1일부터 오늘까지
         start_date = `${new Date().getFullYear()}-01-01`;
-        end_date = new Date().toISOString().split('T')[0];
+        end_date = formatLocalDate(new Date());
         break;
       case 'yearly':
         // 최근 5년
         start_date = `${new Date().getFullYear() - 4}-01-01`;
-        end_date = new Date().toISOString().split('T')[0];
+        end_date = formatLocalDate(new Date());
         break;
       default:
-        start_date = new Date(today.setMonth(today.getMonth() - 1)).toISOString().split('T')[0];
-        end_date = new Date().toISOString().split('T')[0];
+        start_date = formatLocalDate(new Date(today.setMonth(today.getMonth() - 1)));
+        end_date = formatLocalDate(new Date());
     }
 
     return { start_date, end_date };

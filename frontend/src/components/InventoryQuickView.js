@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { purchaseInventoryAPI, inventoryProductionAPI, productAPI } from '../services/api';
+import { formatLocalDate } from '../utils/dateUtils'; // [FIX] Import date utility
 import { useConfirmModal } from './ConfirmModal';
 import { createPortal } from 'react-dom';
 import SearchableSelect from './SearchableSelect';
@@ -271,7 +272,7 @@ const InventoryQuickView = ({ inventoryAdjustments = {}, refreshKey, onInventory
 
         // 1. 당일 매입 필터 적용
         if (showTodayOnly) {
-            const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+            const today = formatLocalDate(new Date()); // YYYY-MM-DD
             filtered = filtered.filter(item => {
                 const purchaseDate = item.purchase_date ? item.purchase_date.split('T')[0] : '';
                 return purchaseDate === today;

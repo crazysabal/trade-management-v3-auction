@@ -4,14 +4,34 @@ import { usePermission } from '../hooks/usePermission';
 import ConfirmModal from './ConfirmModal';
 import './Navbar.css';
 import { useMenuConfig } from '../context/MenuConfigContext';
+import { companyInfoAPI } from '../services/api'; // [NEW] Import API
+import MenuEditorModal from './MenuEditorModal'; // [NEW] Failsafe Modal
 
 const Navbar = ({ onLaunchApp }) => {
     const { user } = useAuth();
     const { hasPermission } = usePermission();
-    const { activeMenuConfig } = useMenuConfig(); // [NEW] Use dynamic config
+    const { activeMenuConfig } = useMenuConfig();
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-    // [NEW] Logout Confirmation Modal State
     const [isLogoutConfirmOpen, setIsLogoutConfirmOpen] = useState(false);
+    const [isMenuEditorOpen, setIsMenuEditorOpen] = useState(false); // [NEW] Global Menu Editor State
+    const [companyName, setCompanyName] = useState('홍다 Biz'); // [NEW] Company Name State
+
+    // [NEW] Fetch Company Name on Mount
+    React.useEffect(() => {
+        const fetchCompanyInfo = async () => {
+            try {
+                const res = await companyInfoAPI.get();
+                if (res.data.success && res.data.data) {
+                    const name = res.data.data.company_name;
+                    setCompanyName(`홍다 Biz - ${name}`);
+                    document.title = `홍다 Biz - ${name}`; // Update Browser Tab Title
+                }
+            } catch (error) {
+                console.error('Failed to fetch company info:', error);
+            }
+        };
+        fetchCompanyInfo();
+    }, []);
 
     // 드롭다운 메뉴 상태 관리
     const [activeDropdown, setActiveDropdown] = useState(null);
@@ -75,7 +95,7 @@ const Navbar = ({ onLaunchApp }) => {
         <nav className="navbar">
             <div className="navbar-container">
                 <div className="navbar-logo" onClick={() => handleLaunch('DASHBOARD')}>
-                    📊 홍다 Biz
+                    📊 {companyName}
                 </div>
 
                 {/* [NEW] Logout Button (Visible on Desktop) */}
@@ -95,6 +115,28 @@ const Navbar = ({ onLaunchApp }) => {
                             </span>
                         </div>
                     )}
+
+                    {/* [NEW] Global Menu Editor Trigger (Failsafe) */}
+                    <button
+                        onClick={() => setIsMenuEditorOpen(true)}
+                        title="메뉴 편집 (숨겨진 메뉴 복구)"
+                        style={{
+                            background: 'rgba(255, 255, 255, 0.1)',
+                            border: '1px solid rgba(255,255,255,0.2)',
+                            color: 'white',
+                            padding: '0.4rem',
+                            borderRadius: '4px',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            width: '32px',
+                            height: '32px'
+                        }}
+                    >
+                        🛠️
+                    </button>
+
                     <button
                         onClick={() => setIsLogoutConfirmOpen(true)}
                         style={{
@@ -124,6 +166,9 @@ const Navbar = ({ onLaunchApp }) => {
                         confirmText="로그아웃"
                         cancelText="취소"
                     />
+
+                    {/* Global Menu Editor Modal */}
+                    <MenuEditorModal isOpen={isMenuEditorOpen} onClose={() => setIsMenuEditorOpen(false)} />
                 </div>
 
                 <div className={`menu-icon ${isMobileMenuOpen ? 'active' : ''}`} onClick={toggleMobileMenu}>

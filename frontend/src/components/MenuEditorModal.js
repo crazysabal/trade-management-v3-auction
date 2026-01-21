@@ -2,11 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import { useMenuConfig } from '../context/MenuConfigContext';
+import { usePermission } from '../hooks/usePermission'; // [NEW]
 import ConfirmModal from './ConfirmModal';
 import { useModalDraggable } from '../hooks/useModalDraggable';
 
 const MenuEditorModal = ({ isOpen, onClose }) => {
     const { activeMenuConfig, saveMenuConfig, resetMenuConfig, defaultConfig } = useMenuConfig();
+    const { hasPermission } = usePermission(); // [NEW] Use Permission Hook
     const [localConfig, setLocalConfig] = useState([]);
     const [isSaving, setIsSaving] = useState(false);
     const [confirmModal, setConfirmModal] = useState({ isOpen: false, type: '', message: '', onConfirm: null });
@@ -14,10 +16,17 @@ const MenuEditorModal = ({ isOpen, onClose }) => {
 
     useEffect(() => {
         if (isOpen) {
-            // Deep copy to avoid mutating context directly during edit
-            setLocalConfig(JSON.parse(JSON.stringify(activeMenuConfig)));
+            // Deep copy and FILTER based on permissions
+            const filteredConfig = JSON.parse(JSON.stringify(activeMenuConfig))
+                .map(group => ({
+                    ...group,
+                    items: group.items.filter(item => hasPermission(item.id, 'READ'))
+                }))
+                .filter(group => group.items.length > 0); // Remove empty groups
+
+            setLocalConfig(filteredConfig);
         }
-    }, [isOpen, activeMenuConfig]);
+    }, [isOpen, activeMenuConfig, hasPermission]); // Add hasPermission dependency
 
     // Prevent background scroll
     useEffect(() => {
@@ -113,9 +122,6 @@ const MenuEditorModal = ({ isOpen, onClose }) => {
     return createPortal(
         <div
             className="premium-modal-overlay"
-            onClick={onClose}
-            onMouseDown={(e) => e.stopPropagation()}
-            onPointerDown={(e) => e.stopPropagation()}
             style={{
                 zIndex: 11000, // Match ConfirmModal standard
                 cursor: 'default'
@@ -134,8 +140,12 @@ const MenuEditorModal = ({ isOpen, onClose }) => {
                 onClick={(e) => e.stopPropagation()}
             >
                 {/* Header */}
-                <div className="premium-modal-header" style={{ cursor: 'grab' }} onMouseDown={handleMouseDown}>
-                    <div className="premium-modal-icon" style={{ background: '#e0f2fe', color: '#0369a1' }}>
+                <div className="premium-modal-header">
+                    <div
+                        className="premium-modal-icon"
+                        style={{ background: '#e0f2fe', color: '#0369a1', cursor: 'grab' }}
+                        onMouseDown={handleMouseDown}
+                    >
                         <span role="img" aria-label="menu">☰</span>
                     </div>
                     <div style={{ flex: 1, marginLeft: '1rem' }}>
@@ -159,7 +169,7 @@ const MenuEditorModal = ({ isOpen, onClose }) => {
                         fontSize: '0.95rem'
                     }}>
                         <span style={{ fontSize: '1.2rem' }}>💡</span>
-                        <span><b>사용 팁:</b> 메뉴 그룹을 드래그하여 순서를 바꿀 수 있습니다. (아이템 이동은 추후 지원)</span>
+                        <span><b>사용 팁:</b> 메뉴 그룹과 아이템을 드래그하여 자유롭게 순서를 변경할 수 있습니다.</span>
                     </div>
 
                     <DragDropContext onDragEnd={onDragEnd}>
@@ -231,11 +241,51 @@ const MenuEditorModal = ({ isOpen, onClose }) => {
                                                                     }}>숨김됨</span>
                                                                 )}
                                                             </div>
-                                                            <div style={{ fontSize: '0.85rem', color: '#64748b', paddingLeft: '0.25rem' }}>
-                                                                {group.items.map(item => item.label).join(', ')}
-                                                            </div>
+                                                            <Droppable droppableId={group.id} type="ITEM" direction="horizontal">
+                                                                {(provided, snapshot) => (
+                                                                    <div
+                                                                        ref={provided.innerRef}
+                                                                        {...provided.droppableProps}
+                                                                        style={{
+                                                                            display: 'flex',
+                                                                            flexWrap: 'wrap',
+                                                                            gap: '0.5rem',
+                                                                            paddingTop: '0.5rem',
+                                                                            minHeight: '10px' // Ensure drop target exists even if empty
+                                                                        }}
+                                                                    >
+                                                                        {group.items.map((item, itemIndex) => (
+                                                                            <Draggable key={item.id} draggableId={item.id} index={itemIndex}>
+                                                                                {(provided, snapshot) => (
+                                                                                    <div
+                                                                                        ref={provided.innerRef}
+                                                                                        {...provided.draggableProps}
+                                                                                        {...provided.dragHandleProps}
+                                                                                        style={{
+                                                                                            padding: '4px 10px',
+                                                                                            background: snapshot.isDragging ? '#e0f2fe' : '#f1f5f9',
+                                                                                            border: '1px solid #cbd5e1',
+                                                                                            borderRadius: '6px',
+                                                                                            color: '#334155',
+                                                                                            fontSize: '0.85rem',
+                                                                                            display: 'flex',
+                                                                                            alignItems: 'center',
+                                                                                            gap: '4px',
+                                                                                            cursor: 'grab',
+                                                                                            ...provided.draggableProps.style
+                                                                                        }}
+                                                                                    >
+                                                                                        <span>{item.icon}</span>
+                                                                                        <span>{item.label}</span>
+                                                                                    </div>
+                                                                                )}
+                                                                            </Draggable>
+                                                                        ))}
+                                                                        {provided.placeholder}
+                                                                    </div>
+                                                                )}
+                                                            </Droppable>
                                                         </div>
-
                                                         <div
                                                             onClick={() => toggleGroupVisibility(group.id)}
                                                             style={{
@@ -250,6 +300,8 @@ const MenuEditorModal = ({ isOpen, onClose }) => {
                                                                 display: 'flex',
                                                                 alignItems: 'center',
                                                                 gap: '0.5rem',
+                                                                alignSelf: 'flex-start', // Align to top
+                                                                marginTop: '0.25rem', // Visual alignment
                                                                 pointerEvents: snapshot.isDragging ? 'none' : 'auto'
                                                             }}
                                                         >

@@ -777,7 +777,7 @@ function TradePrintModal({ isOpen, onClose, tradeId }) {
         alignItems: 'flex-start',
         paddingTop: '60px',
         paddingBottom: '50px',
-        zIndex: 9999
+        zIndex: 1050 // Navbar(1000)보다 높고, 최상위 알림(9999)보다는 낮게 조정
       }}
     >
       <div
@@ -788,7 +788,7 @@ function TradePrintModal({ isOpen, onClose, tradeId }) {
           borderRadius: '8px',
           width: '95%',
           maxWidth: '800px',
-          maxHeight: 'calc(100vh - 110px)',
+          maxHeight: 'calc(100vh - 90px)', // [FIX] Navbar(60px) + Taskbar(30px) 고려
           display: 'flex',
           flexDirection: 'column',
           boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',

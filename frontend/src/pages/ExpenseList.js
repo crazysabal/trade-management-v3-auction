@@ -4,10 +4,16 @@ import ExpenseFormModal from '../components/ExpenseFormModal';
 import ConfirmModal from '../components/ConfirmModal'; // ConfirmModal 임포트
 import '../components/TradePanel.css';
 
-const ExpenseList = () => {
-    const [expenses, setExpenses] = useState([]);
-    const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0].substring(0, 7) + '-01'); // 이번 달 1일
-    const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]); // 오늘
+import { formatLocalDate } from '../utils/dateUtils'; // [FIX] Import date utility
+
+const ExpenseList = ({ isWindow }) => {
+    // [FIX] Use local date instead of UTC
+    const [startDate, setStartDate] = useState(() => {
+        const d = new Date();
+        d.setDate(1); // 1일
+        return formatLocalDate(d);
+    });
+    const [endDate, setEndDate] = useState(formatLocalDate(new Date())); // 오늘
     const [loading, setLoading] = useState(false);
 
     // 모달 상태
@@ -240,3 +246,4 @@ const ExpenseList = () => {
 };
 
 export default ExpenseList;
+

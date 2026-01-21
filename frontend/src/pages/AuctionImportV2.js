@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { openProductPopup } from '../utils/popup';
+import { formatLocalDate } from '../utils/dateUtils';
 import Select from 'react-select';
 import { auctionAPI, productAPI, tradeAPI, companyAPI, warehousesAPI } from '../services/api';
 import SearchableSelect from '../components/SearchableSelect';
@@ -201,12 +202,12 @@ function AuctionImportV2({ isWindow, onTradeChange, onClose }) {
 
     const [crawlData, setCrawlData] = useState({
         account_id: '',
-        crawl_date: new Date().toISOString().split('T')[0]
+        crawl_date: formatLocalDate(new Date())
     });
 
     const [importConfig, setImportConfig] = useState({
         supplier_id: '',
-        trade_date: new Date().toISOString().split('T')[0],
+        trade_date: formatLocalDate(new Date()),
         warehouse_id: ''
     });
 
@@ -282,15 +283,6 @@ function AuctionImportV2({ isWindow, onTradeChange, onClose }) {
             return item && item.status === 'IMPORTED';
         }).length;
     }, [selectedItems, rawData]);
-
-    // 유틸리티: 로컬 시간대 기준 YYYY-MM-DD 반환
-    const formatLocalDate = (date) => {
-        const d = date || new Date();
-        const year = d.getFullYear();
-        const month = String(d.getMonth() + 1).padStart(2, '0');
-        const day = String(d.getDate()).padStart(2, '0');
-        return `${year}-${month}-${day}`;
-    };
 
     const today = formatLocalDate(new Date());
 
@@ -1131,6 +1123,8 @@ function AuctionImportV2({ isWindow, onTradeChange, onClose }) {
                                     onChange={e => setImportConfig({ ...importConfig, trade_date: e.target.value })}
                                     style={{
                                         fontWeight: importConfig.trade_date !== today ? 'bold' : 'normal',
+                                        backgroundColor: importConfig.trade_date !== today ? '#ffe0b2' : 'white',
+                                        color: importConfig.trade_date !== today ? '#e65100' : 'inherit',
                                         margin: 0
                                     }}
                                 />

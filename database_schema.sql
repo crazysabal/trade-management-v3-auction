@@ -37,6 +37,7 @@ CREATE TABLE IF NOT EXISTS products (
     grade VARCHAR(20),
     category_id INT,
     weight DECIMAL(10,2),
+    weight_unit VARCHAR(10) DEFAULT 'kg',
     category VARCHAR(50) COMMENT '레거시 카테고리명',
     notes TEXT,
     is_active TINYINT(1) DEFAULT 1,
@@ -78,6 +79,7 @@ CREATE TABLE IF NOT EXISTS trade_details (
     parent_detail_id INT NULL COMMENT '반품 추적용',
     quantity DECIMAL(15,2) NOT NULL,
     total_weight DECIMAL(15,2),
+    weight_unit VARCHAR(10) DEFAULT 'kg',
     unit_price DECIMAL(15,2) NOT NULL,
     supply_amount DECIMAL(15,2) NOT NULL,
     tax_amount DECIMAL(15,2) DEFAULT 0.00,
@@ -105,6 +107,7 @@ CREATE TABLE IF NOT EXISTS purchase_inventory (
     remaining_quantity DECIMAL(15,2) NOT NULL,
     unit_price DECIMAL(15,2) NOT NULL,
     total_weight DECIMAL(15,2) DEFAULT 0.00,
+    weight_unit VARCHAR(10) DEFAULT 'kg',
     shipper_location VARCHAR(255) DEFAULT '',
     sender VARCHAR(255) DEFAULT '',
     status ENUM('AVAILABLE', 'DEPLETED', 'CANCELLED') DEFAULT 'AVAILABLE',
@@ -183,6 +186,7 @@ CREATE TABLE IF NOT EXISTS payment_allocations (
     payment_id INT NOT NULL,
     trade_master_id INT NOT NULL,
     amount DECIMAL(15,2) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (payment_id) REFERENCES payment_transactions(id) ON DELETE CASCADE
 );
 
@@ -348,6 +352,7 @@ CREATE TABLE IF NOT EXISTS auction_crawl_history (
 CREATE TABLE IF NOT EXISTS auction_raw_data (
     id INT AUTO_INCREMENT PRIMARY KEY,
     auction_date DATE NOT NULL,
+    account_id INT,
     arrive_no VARCHAR(50),
     shipper_location VARCHAR(100),
     sender VARCHAR(100),
@@ -361,7 +366,9 @@ CREATE TABLE IF NOT EXISTS auction_raw_data (
     trade_detail_id INT,
     status ENUM('PENDING','IMPORTED','IGNORED') DEFAULT 'PENDING',
     import_note TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (account_id) REFERENCES auction_accounts(id),
+    INDEX idx_auction_date_account (auction_date, account_id)
 );
 
 -- 24. PRODUCT MAPPING (품목 매핑)
@@ -459,8 +466,12 @@ CREATE TABLE IF NOT EXISTS users (
     role VARCHAR(20) DEFAULT 'user',
     role_id INT DEFAULT NULL,
     is_active BOOLEAN DEFAULT TRUE,
+    password VARCHAR(255),
+    user_name VARCHAR(255),
+    email VARCHAR(100),
     last_login TIMESTAMP,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (role_id) REFERENCES roles(id) ON DELETE SET NULL
 );
 
@@ -683,6 +694,63 @@ DELIMITER ;
 INSERT IGNORE INTO roles (name, description, is_system) 
 VALUES ('Administrator', 'System Administrator with full access', TRUE);
 
+-- 1.1 Permission definitions (All Menus)
+INSERT IGNORE INTO permissions (resource, action, description) VALUES
+-- Basic Info
+('COMPANY_LIST', 'READ', '거래처 목록 조회'), ('COMPANY_LIST', 'CREATE', '거래처 등록'), ('COMPANY_LIST', 'UPDATE', '거래처 수정'), ('COMPANY_LIST', 'DELETE', '거래처 삭제'),
+('PRODUCT_LIST', 'READ', '품목 목록 조회'), ('PRODUCT_LIST', 'CREATE', '품목 등록'), ('PRODUCT_LIST', 'UPDATE', '품목 수정'), ('PRODUCT_LIST', 'DELETE', '품목 삭제'),
+('WAREHOUSES', 'READ', '창고 조회'), ('WAREHOUSES', 'CREATE', '창고 등록'), ('WAREHOUSES', 'UPDATE', '창고 수정'), ('WAREHOUSES', 'DELETE', '창고 삭제'),
+('PAYMENT_METHODS', 'READ', '결제수단 조회'), ('PAYMENT_METHODS', 'CREATE', '결제수단 등록'), ('PAYMENT_METHODS', 'UPDATE', '결제수단 수정'), ('PAYMENT_METHODS', 'DELETE', '결제수단 삭제'),
+('EXPENSE_CATEGORIES', 'READ', '지출항목 조회'), ('EXPENSE_CATEGORIES', 'CREATE', '지출항목 등록'), ('EXPENSE_CATEGORIES', 'UPDATE', '지출항목 수정'), ('EXPENSE_CATEGORIES', 'DELETE', '지출항목 삭제'),
+
+-- Trades
+('TRADE_LIST', 'READ', '전표 목록 조회'), ('TRADE_LIST', 'CREATE', '전표 등록'), ('TRADE_LIST', 'UPDATE', '전표 수정'), ('TRADE_LIST', 'DELETE', '전표 삭제'),
+('PURCHASE', 'READ', '매입 전표 조회'), ('PURCHASE', 'CREATE', '매입 전표 등록'),
+('SALE', 'READ', '매출 전표 조회'), ('SALE', 'CREATE', '매출 전표 등록'),
+
+-- Auction
+('AUCTION_IMPORT', 'READ', '경매 데이터 조회'), ('AUCTION_IMPORT', 'CREATE', '경매 데이터 가져오기'), ('AUCTION_IMPORT', 'UPDATE', '경매 데이터 수정'), ('AUCTION_IMPORT', 'DELETE', '경매 데이터 삭제'),
+('AUCTION_ACCOUNTS', 'READ', '경매 계정 조회'), ('AUCTION_ACCOUNTS', 'CREATE', '경매 계정 등록'), ('AUCTION_ACCOUNTS', 'UPDATE', '경매 계정 수정'), ('AUCTION_ACCOUNTS', 'DELETE', '경매 계정 삭제'),
+
+-- Inventory
+('INVENTORY_LIST', 'READ', '재고 조회'),
+('INVENTORY_QUICK', 'READ', '재고 수정(Quick)'), ('INVENTORY_QUICK', 'UPDATE', '재고 수정'),
+('INVENTORY_TRANSFER', 'READ', '재고 이동 조회'), ('INVENTORY_TRANSFER', 'CREATE', '재고 이동 등록'),
+('INVENTORY_PRODUCTION', 'READ', '재고 작업 조회'), ('INVENTORY_PRODUCTION', 'CREATE', '재고 작업 등록'),
+('INVENTORY_PRODUCTION_HISTORY', 'READ', '재고 작업 이력 조회'),
+('MATCHING', 'READ', '매칭 관리 조회'), ('MATCHING', 'UPDATE', '매칭 실행'),
+('INVENTORY_HISTORY', 'READ', '재고 이력 조회'),
+('INVENTORY_AUDIT', 'READ', '재고 실사 조회'), ('INVENTORY_AUDIT', 'CREATE', '재고 실사 등록'), ('INVENTORY_AUDIT', 'UPDATE', '재고 실사 수정'), ('INVENTORY_AUDIT', 'DELETE', '재고 실사 삭제'),
+
+-- Payment
+('COMPANY_BALANCES', 'READ', '거래처 잔고 조회'),
+('EXPENSES', 'READ', '지출 내역 조회'), ('EXPENSES', 'CREATE', '지출 등록'), ('EXPENSES', 'UPDATE', '지출 수정'), ('EXPENSES', 'DELETE', '지출 삭제'),
+
+-- Management
+('SETTLEMENT', 'READ', '정산 리포트 조회'),
+('SETTLEMENT_HISTORY', 'READ', '정산 이력 조회'),
+
+-- Statistics
+('STATISTICS', 'READ', '통계 조회'),
+
+-- Settings
+('SETTINGS', 'READ', '시스템 설정 조회'), ('SETTINGS', 'UPDATE', '시스템 설정 수정'),
+('BACKUP_SYSTEM', 'READ', '백업 관리 조회'), ('BACKUP_SYSTEM', 'CREATE', '백업 생성'),
+('COMPANY_INFO', 'READ', '본사 정보 조회'), ('COMPANY_INFO', 'UPDATE', '본사 정보 수정'),
+('USER_MANAGEMENT', 'READ', '사용자 관리 조회'), ('USER_MANAGEMENT', 'CREATE', '사용자 등록'), ('USER_MANAGEMENT', 'UPDATE', '사용자 수정'), ('USER_MANAGEMENT', 'DELETE', '사용자 삭제'),
+('ROLE_MANAGEMENT', 'READ', '권한 관리 조회'), ('ROLE_MANAGEMENT', 'CREATE', '권한항목 등록'), ('ROLE_MANAGEMENT', 'UPDATE', '권한항목 수정'), ('ROLE_MANAGEMENT', 'DELETE', '권한항목 삭제'),
+('MESSAGE_TEST', 'READ', '테스트 페이지 조회'),
+
+-- Dashboard
+('DASHBOARD', 'READ', '대시보드 조회');
+
+-- 1.2 Grant ALL permissions to Administrator
+INSERT IGNORE INTO role_permissions (role_id, permission_id)
+SELECT r.id, p.id
+FROM roles r
+CROSS JOIN permissions p
+WHERE r.name = 'Administrator';
+
 -- 2. Create Admin User (Password: admin1234)
 INSERT IGNORE INTO users (username, password_hash, role, full_name, role_id) 
 SELECT 'admin', '$2b$10$Ap2OlDUGfAw6BU0DXnEfjeB1WFISDMY7KMFQeaCCpSjuCRIfn.kOO6', 'admin', '관리자', id 
@@ -692,3 +760,30 @@ ON DUPLICATE KEY UPDATE password_hash = VALUES(password_hash), role_id = VALUES(
 -- (Optional) Force update for admin user to ensure password is admin1234
 UPDATE users SET password_hash = '$2b$10$Ap2OlDUGfAw6BU0DXnEfjeB1WFISDMY7KMFQeaCCpSjuCRIfn.kOO6'
 WHERE username = 'admin';
+
+-- 3. SAMPLE SEED DATA (배포용 샘플 데이터)
+
+-- 3.1 COMPANIES (거래처)
+INSERT IGNORE INTO companies (company_code, business_name, company_name, company_type_flag, company_type, is_active, sort_order) VALUES
+('S001', '(주)홍다푸드', '(주)홍다푸드', 'SUPPLIER', '도매', 1, 1),
+('C001', '마르코식품', '마르코식품', 'CUSTOMER', '식당', 1, 2),
+('B001', '샘플유통', '샘플유통', 'BOTH', '유통', 1, 3);
+
+-- 3.2 WAREHOUSES (창고)
+INSERT IGNORE INTO warehouses (name, type, is_default, is_active, display_order) VALUES
+('메인 냉동고', 'MAIN', 1, 1, 1),
+('외부 창고', 'STORAGE', 0, 1, 2),
+('보관 창고', 'STORAGE', 0, 1, 3);
+
+-- 3.3 EXPENSE CATEGORIES (지출 항목)
+INSERT IGNORE INTO expense_categories (name, is_active, sort_order) VALUES
+('식비', 1, 1),
+('차량유지비', 1, 2),
+('소모품비', 1, 3),
+('임차료', 1, 4),
+('기타', 1, 5);
+
+-- 3.4 COMPANY INFO (본사/자사 정보)
+INSERT IGNORE INTO company_info 
+(company_name, business_number, ceo_name, company_type, company_category, address, phone, email, notes) VALUES
+('(주)홍다푸드', '123-45-67890', '홍길동', '도소매', '농수산물', '서울시 송파구 가락동', '02-1234-5678', 'admin@hongdafood.com', '기초 설정 정보입니다. 수정하여 사용하세요.');

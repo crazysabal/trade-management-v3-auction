@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import axios from 'axios';
 import useDraggable from '../hooks/useDraggable';
+import { formatLocalDate } from '../utils/dateUtils'; // [FIX] Import date utility
 
 const SalesLookupModal = ({
     isOpen,
@@ -14,9 +15,9 @@ const SalesLookupModal = ({
     const [startDate, setStartDate] = useState(() => {
         const d = new Date();
         d.setMonth(d.getMonth() - 3);
-        return d.toISOString().split('T')[0];
+        return formatLocalDate(d);
     });
-    const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
+    const [endDate, setEndDate] = useState(formatLocalDate(new Date()));
     const [itemsList, setItemsList] = useState([]); // [REPLACED] 전표 목록 -> 품목 목록
     const [loading, setLoading] = useState(false);
     const [searchTriggered, setSearchTriggered] = useState(false);

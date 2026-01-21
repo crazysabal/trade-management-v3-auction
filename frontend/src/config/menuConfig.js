@@ -21,6 +21,8 @@ export const MENU_CONFIG = [
             { id: 'WAREHOUSES', label: '창고 관리', icon: '🏭' },
             { id: 'PAYMENT_METHODS', label: '결제 방법 관리', icon: '💳' },
             { id: 'EXPENSE_CATEGORIES', label: '지출 관리', icon: '🏷️' },
+            { id: 'AUCTION_ACCOUNTS', label: '경매 계정 관리', icon: '🆔' },
+            { id: 'COMPANY_INFO', label: '본사 정보', icon: 'ℹ️' },
         ]
     },
     {
@@ -28,9 +30,9 @@ export const MENU_CONFIG = [
         group: '전표 관리',
         icon: '📝',
         items: [
-            { id: 'TRADE_LIST', label: '전표 목록', icon: '📝' },
-            { id: 'PURCHASE', label: '매입 전표 등록', icon: '📥' },
             { id: 'SALE', label: '매출 전표 등록', icon: '📤' },
+            { id: 'PURCHASE', label: '매입 전표 등록', icon: '📥' },
+            { id: 'TRADE_LIST', label: '전표 목록', icon: '📝' },
         ]
     },
     {
@@ -39,7 +41,6 @@ export const MENU_CONFIG = [
         icon: '🔨',
         items: [
             { id: 'AUCTION_IMPORT', label: '낙찰 데이터', icon: '🔨' },
-            { id: 'AUCTION_ACCOUNTS', label: '경매 계정', icon: '🆔' },
         ]
     },
     {
@@ -88,7 +89,6 @@ export const MENU_CONFIG = [
         items: [
             { id: 'SETTINGS', label: '시스템 설정', icon: '⚙️' },
             { id: 'BACKUP_SYSTEM', label: '데이터 백업 관리', icon: '🛡️' },
-            { id: 'COMPANY_INFO', label: '본사 정보', icon: 'ℹ️' },
             { id: 'USER_MANAGEMENT', label: '사용자/직원 관리', icon: '👥' },
             { id: 'ROLE_MANAGEMENT', label: '권한 관리', icon: '🔒' },
             { id: 'MESSAGE_TEST', label: '시스템 테스트', icon: '🧪' },

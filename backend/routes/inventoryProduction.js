@@ -378,7 +378,7 @@ router.get('/', async (req, res) => {
 
         query += ' ORDER BY ip.created_at DESC';
 
-        console.log('[DEBUG] Query:', query);
+        // console.log('[DEBUG] Query:', query);
         console.log('[DEBUG] Params:', params);
 
         let rows = [];
