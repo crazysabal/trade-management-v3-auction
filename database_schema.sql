@@ -570,6 +570,7 @@ BEGIN
     DECLARE v_count INT DEFAULT 0;
     DECLARE v_company_id INT;
     DECLARE v_warehouse_id INT;
+    DECLARE v_display_order INT DEFAULT 1;
 
     SELECT trade_type, trade_date, company_id, warehouse_id 
     INTO v_trade_type, v_trade_date, v_company_id, v_warehouse_id
