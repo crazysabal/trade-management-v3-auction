@@ -87,6 +87,8 @@ router.post('/import/excel', upload.single('file'), async (req, res) => {
 
     await connection.beginTransaction();
 
+    let updatedCount = 0;
+    let insertedCount = 0;
     let currentImportProductName = '';
     let importSortCounter = 0;
 
