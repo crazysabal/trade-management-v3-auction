@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, clipboard, nativeImage } = require('electron');
 const path = require('path');
 const { spawn } = require('child_process');
 const os = require('os');
@@ -428,6 +428,29 @@ ipcMain.on('open-external', (event, url) => {
 
 ipcMain.on('minimize-window', () => {
     if (mainWindow) mainWindow.minimize();
+});
+
+// [NEW] 클립보드 이미지 쓰기 (Base64 형식)
+ipcMain.on('write-clipboard-image', (event, base64Data) => {
+    try {
+        const image = nativeImage.createFromDataURL(base64Data);
+        clipboard.writeImage(image);
+        event.reply('write-clipboard-image-result', { success: true });
+    } catch (err) {
+        console.error('Clipboard Image Write Error:', err);
+        event.reply('write-clipboard-image-result', { success: false, error: err.message });
+    }
+});
+
+// [NEW] 클립보드 텍스트 쓰기
+ipcMain.on('write-clipboard-text', (event, text) => {
+    try {
+        clipboard.writeText(text);
+        event.reply('write-clipboard-text-result', { success: true });
+    } catch (err) {
+        console.error('Clipboard Text Write Error:', err);
+        event.reply('write-clipboard-text-result', { success: false, error: err.message });
+    }
 });
 
 ipcMain.on('open-logs-folder', () => {

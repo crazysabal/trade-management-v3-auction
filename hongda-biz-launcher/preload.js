@@ -24,5 +24,9 @@ contextBridge.exposeInMainWorld('api', {
     getEnv: () => ipcRenderer.send('get-env'),
     onEnvInfo: (callback) => ipcRenderer.on('env-info', (event, data) => callback(data)),
     saveEnv: (env) => ipcRenderer.send('save-env', env),
-    onSaveEnvSuccess: (callback) => ipcRenderer.on('save-env-success', (event, data) => callback(data))
+    onSaveEnvSuccess: (callback) => ipcRenderer.on('save-env-success', (event, data) => callback(data)),
+    // [NEW] 클립보드 확장 브릿지
+    writeClipboardImage: (base64Data) => ipcRenderer.send('write-clipboard-image', base64Data),
+    writeClipboardText: (text) => ipcRenderer.send('write-clipboard-text', text),
+    onWriteClipboardImageResult: (callback) => ipcRenderer.on('write-clipboard-image-result', (event, data) => callback(data))
 });

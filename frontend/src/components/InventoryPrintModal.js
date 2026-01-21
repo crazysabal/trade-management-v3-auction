@@ -146,35 +146,40 @@ const InventoryPrintModal = ({ isOpen, onClose, inventory, warehouses }) => {
                 }
             });
 
-            canvas.toBlob(async (blob) => {
-                if (!blob) {
-                    setConfirmModal({
-                        isOpen: true,
-                        type: 'error',
-                        title: '복사 실패',
-                        message: '이미지 생성에 실패했습니다.',
-                        onConfirm: () => setConfirmModal(prev => ({ ...prev, isOpen: false })),
-                        showCancel: false
-                    });
-                    return;
-                }
-                try {
-                    await navigator.clipboard.write([
-                        new ClipboardItem({ [blob.type]: blob })
-                    ]);
-                    // alert('재고 목록 이미지가 클립보드에 복사되었습니다.'); 
-                } catch (clipboardErr) {
-                    console.error('클립보드 쓰기 실패:', clipboardErr);
-                    setConfirmModal({
-                        isOpen: true,
-                        type: 'error',
-                        title: '복사 실패',
-                        message: '클립보드 복사에 실패했습니다.',
-                        onConfirm: () => setConfirmModal(prev => ({ ...prev, isOpen: false })),
-                        showCancel: false
-                    });
-                }
-            }, 'image/png');
+            if (window.api && window.api.writeClipboardImage) {
+                const base64Data = canvas.toDataURL('image/png');
+                window.api.writeClipboardImage(base64Data);
+                // alert('재고 목록 이미지가 클립보드에 복사되었습니다.');
+            } else {
+                canvas.toBlob(async (blob) => {
+                    if (!blob) {
+                        setConfirmModal({
+                            isOpen: true,
+                            type: 'error',
+                            title: '복사 실패',
+                            message: '이미지 생성에 실패했습니다.',
+                            onConfirm: () => setConfirmModal(prev => ({ ...prev, isOpen: false })),
+                            showCancel: false
+                        });
+                        return;
+                    }
+                    try {
+                        await navigator.clipboard.write([
+                            new ClipboardItem({ [blob.type]: blob })
+                        ]);
+                    } catch (clipboardErr) {
+                        console.error('클립보드 쓰기 실패:', clipboardErr);
+                        setConfirmModal({
+                            isOpen: true,
+                            type: 'error',
+                            title: '복사 실패',
+                            message: '클립보드 복사에 실패했습니다.',
+                            onConfirm: () => setConfirmModal(prev => ({ ...prev, isOpen: false })),
+                            showCancel: false
+                        });
+                    }
+                }, 'image/png');
+            }
 
         } catch (err) {
             console.error('캡처 실패:', err);

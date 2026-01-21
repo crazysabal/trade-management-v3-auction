@@ -41,7 +41,16 @@ const Navbar = ({ onLaunchApp }) => {
     const filteredMenu = activeMenuConfig
         .filter(group => !group.isHidden) // [NEW] Hide hidden groups
         .map(group => {
-            const visibleItems = group.items.filter(item => hasPermission(item.id, 'READ'));
+            // Deduplicate items using Set by ID to fix "duplicate key" warning
+            const seen = new Set();
+            const visibleItems = group.items.filter(item => {
+                if (seen.has(item.id)) return false;
+                if (hasPermission(item.id, 'READ')) {
+                    seen.add(item.id);
+                    return true;
+                }
+                return false;
+            });
             return { ...group, items: visibleItems };
         })
         .filter(group => group.items.length > 0);

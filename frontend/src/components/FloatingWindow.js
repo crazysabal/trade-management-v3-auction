@@ -341,30 +341,41 @@ const FloatingWindow = ({ title, icon, onClose, initialPosition = { x: 100, y: 1
                 }
             });
 
-            // 캔버스를 Blob으로 변환하여 클립보드에 복사
-            canvas.toBlob(async (blob) => {
-                try {
-                    if (!blob) throw new Error('Blob creation failed');
-                    const data = [new ClipboardItem({ 'image/png': blob })];
-                    await navigator.clipboard.write(data);
+            // 클라이언트에 따른 클립보드 복사 분기 (Electron vs Web)
+            if (window.api && window.api.writeClipboardImage) {
+                const base64Data = canvas.toDataURL('image/png');
+                window.api.writeClipboardImage(base64Data);
 
-                    // 성공 피드백 표시
-                    setShowScreenshotFeedback(true);
-                    setTimeout(() => setShowScreenshotFeedback(false), 2000);
-                } catch (err) {
-                    console.error('Clipboard copy failed:', err);
-                    setConfirmModal({
-                        isOpen: true,
-                        type: 'warning',
-                        title: '복사 실패',
-                        message: '클립보드 복사에 실패했습니다. 브라우저 설정을 확인해주세요.',
-                        onConfirm: () => setConfirmModal(prev => ({ ...prev, isOpen: false })),
-                        showCancel: false
-                    });
-                } finally {
-                    setIsCapturing(false);
-                }
-            }, 'image/png');
+                // 성공 피드백 표시
+                setShowScreenshotFeedback(true);
+                setTimeout(() => setShowScreenshotFeedback(false), 2000);
+                setIsCapturing(false);
+            } else {
+                // 웹 브라우저 표준 API 사용
+                canvas.toBlob(async (blob) => {
+                    try {
+                        if (!blob) throw new Error('Blob creation failed');
+                        const data = [new ClipboardItem({ 'image/png': blob })];
+                        await navigator.clipboard.write(data);
+
+                        // 성공 피드백 표시
+                        setShowScreenshotFeedback(true);
+                        setTimeout(() => setShowScreenshotFeedback(false), 2000);
+                    } catch (err) {
+                        console.error('Clipboard copy failed:', err);
+                        setConfirmModal({
+                            isOpen: true,
+                            type: 'warning',
+                            title: '복사 실패',
+                            message: '클립보드 복사에 실패했습니다. 브라우저 설정을 확인해주세요.',
+                            onConfirm: () => setConfirmModal(prev => ({ ...prev, isOpen: false })),
+                            showCancel: false
+                        });
+                    } finally {
+                        setIsCapturing(false);
+                    }
+                }, 'image/png');
+            }
 
         } catch (err) {
             console.error('Screenshot failed:', err);
@@ -448,7 +459,11 @@ const FloatingWindow = ({ title, icon, onClose, initialPosition = { x: 100, y: 1
                     <div
                         onClick={(e) => {
                             e.stopPropagation();
-                            navigator.clipboard.writeText(title);
+                            if (window.api && window.api.writeClipboardText) {
+                                window.api.writeClipboardText(title);
+                            } else {
+                                navigator.clipboard.writeText(title);
+                            }
                             setShowCopyFeedback(true);
                             setTimeout(() => setShowCopyFeedback(false), 2000);
                         }}

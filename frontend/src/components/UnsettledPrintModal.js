@@ -107,16 +107,21 @@ const UnsettledPrintModal = ({ isOpen, onClose, data }) => {
                 useCORS: true
             });
 
-            canvas.toBlob(async (blob) => {
-                if (!blob) return;
-                try {
-                    await navigator.clipboard.write([
-                        new ClipboardItem({ [blob.type]: blob })
-                    ]);
-                } catch (err) {
-                    console.error('클립보드 복사 실패:', err);
-                }
-            }, 'image/png');
+            if (window.api && window.api.writeClipboardImage) {
+                const base64Data = canvas.toDataURL('image/png');
+                window.api.writeClipboardImage(base64Data);
+            } else {
+                canvas.toBlob(async (blob) => {
+                    if (!blob) return;
+                    try {
+                        await navigator.clipboard.write([
+                            new ClipboardItem({ [blob.type]: blob })
+                        ]);
+                    } catch (err) {
+                        console.error('클립보드 복사 실패:', err);
+                    }
+                }, 'image/png');
+            }
         } catch (err) {
             console.error('캡처 실패:', err);
         }

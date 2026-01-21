@@ -50,6 +50,7 @@ export const companyAPI = {
     headers: { 'Content-Type': 'multipart/form-data' }
   }),
   bulkImport: (data) => api.post('/companies/bulk-import', data),
+  bulkDelete: (ids) => api.post('/companies/bulk-delete', { ids }),
 };
 
 // 품목 API
@@ -137,6 +138,7 @@ export const auctionAPI = {
   getAccounts: () => api.get('/auction/accounts'),
   saveAccount: (data) => api.post('/auction/accounts', data),
   updateAccount: (id, data) => api.put(`/auction/accounts/${id}`, data),
+  clearAccountSession: (id) => api.delete(`/auction/accounts/${id}/session`),
 
   // 크롤링 실행
   crawl: (data) => api.post('/auction/crawl', data),

@@ -14,6 +14,7 @@ const ExpenseList = ({ isWindow }) => {
         return formatLocalDate(d);
     });
     const [endDate, setEndDate] = useState(formatLocalDate(new Date())); // 오늘
+    const [expenses, setExpenses] = useState([]); // [FIX] Added missing state
     const [loading, setLoading] = useState(false);
 
     // 모달 상태

@@ -91,6 +91,42 @@ function AuctionAccounts({ isWindow }) {
     }
   };
 
+  const handleClearSession = (account) => {
+    setModal({
+      isOpen: true,
+      type: 'warning',
+      title: '세션 초기화',
+      message: `[${account.account_name}] 계정의 세션 정보(쿠키 및 브라우저 캐시)를 초기화하시겠습니까? 다시 로그인해야 할 수 있습니다.`,
+      confirmText: '초기화',
+      showCancel: true,
+      onConfirm: async () => {
+        try {
+          await auctionAPI.clearAccountSession(account.id);
+          setModal({
+            isOpen: true,
+            type: 'success',
+            title: '초기화 완료',
+            message: '세션 정보가 정상적으로 초기화되었습니다.',
+            confirmText: '확인',
+            showCancel: false,
+            onConfirm: () => { }
+          });
+        } catch (error) {
+          console.error('세션 초기화 오류:', error);
+          setModal({
+            isOpen: true,
+            type: 'error',
+            title: '초기화 실패',
+            message: '세션 초기화 중 오류가 발생했습니다.',
+            confirmText: '확인',
+            showCancel: false,
+            onConfirm: () => { }
+          });
+        }
+      }
+    });
+  };
+
   return (
     <div className="auction-accounts" style={{ padding: isWindow ? '1rem' : undefined }}>
       {!isWindow && (
@@ -238,12 +274,20 @@ function AuctionAccounts({ isWindow }) {
                       </span>
                     </td>
                     <td className="text-center">
-                      <button
-                        onClick={() => handleEdit(account)}
-                        className="btn btn-sm btn-primary"
-                      >
-                        수정
-                      </button>
+                      <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center' }}>
+                        <button
+                          onClick={() => handleClearSession(account)}
+                          className="btn btn-sm btn-secondary"
+                        >
+                          세션 초기화
+                        </button>
+                        <button
+                          onClick={() => handleEdit(account)}
+                          className="btn btn-sm btn-primary"
+                        >
+                          수정
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))

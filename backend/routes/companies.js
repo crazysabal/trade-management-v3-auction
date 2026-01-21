@@ -110,29 +110,31 @@ router.get('/export-excel', async (req, res) => {
     excelRows.push(headers);
 
     // Row 5~: 데이터
-    excelRows.push([
-      index + 1,                                  // 순번
-      item.business_number,                       // 거래처등록번호
-      "",                                         // 종사업장번호 (Empty)
-      item.business_name,                         // 거래처 상호 (법인명) [CHANGED]
-      item.ceo_name,                              // 대표자명
-      item.address,                               // 사업자주소
-      item.company_type,                          // 업태
-      item.company_category,                      // 종목
-      "",                                         // 부서명 (Empty)
-      item.contact_person,                        // 성명 (담당자)
-      item.phone,                                 // 전화번호
-      item.contact_phone,                         // 휴대전화번호
-      item.fax,                                   // 팩스번호
-      item.email,                                 // 이메일주소
-      item.notes,                                 // 비고
-      "",                                         // 구분 (이전 위치: 비워둠)
-      item.created_at ? new Date(item.created_at).toISOString().slice(0, 10) : "", // 등록일자
-      item.company_name || "",                    // 거래처 별칭 (시스템상 company_name) [CHANGED]
-      item.company_type_flag === 'CUSTOMER' ? '매출처' : (item.company_type_flag === 'SUPPLIER' ? '매입처' : '매입/매출'), // 매입/매출 구분
-      item.e_tax_invoice ? "발행" : "미발행",     // 전자계산서 (발행 여부)
-      item.is_active ? "사용" : "미사용"          // 사용여부
-    ]);
+    rows.forEach((item, index) => {
+      excelRows.push([
+        index + 1,                                  // 순번
+        item.business_number,                       // 거래처등록번호
+        "",                                         // 종사업장번호 (Empty)
+        item.business_name,                         // 거래처 상호 (법인명) [CHANGED]
+        item.ceo_name,                              // 대표자명
+        item.address,                               // 사업자주소
+        item.company_type,                          // 업태
+        item.company_category,                      // 종목
+        "",                                         // 부서명 (Empty)
+        item.contact_person,                        // 성명 (담당자)
+        item.phone,                                 // 전화번호
+        item.contact_phone,                         // 휴대전화번호
+        item.fax,                                   // 팩스번호
+        item.email,                                 // 이메일주소
+        item.notes,                                 // 비고
+        "",                                         // 구분 (이전 위치: 비워둠)
+        item.created_at ? new Date(item.created_at).toISOString().slice(0, 10) : "", // 등록일자
+        item.company_name || "",                    // 거래처 별칭 (시스템상 company_name) [CHANGED]
+        item.company_type_flag === 'CUSTOMER' ? '매출처' : (item.company_type_flag === 'SUPPLIER' ? '매입처' : '매입/매출'), // 매입/매출 구분
+        item.e_tax_invoice ? "발행" : "미발행",     // 전자계산서 (발행 여부)
+        item.is_active ? "사용" : "미사용"          // 사용여부
+      ]);
+    });
 
     const workbook = xlsx.utils.book_new();
     const worksheet = xlsx.utils.aoa_to_sheet(excelRows); // json_to_sheet 대신 aoa_to_sheet 사용
@@ -314,131 +316,6 @@ router.post('/', async (req, res) => {
   }
 });
 
-// 엑셀 내보내기
-router.get('/export-excel', async (req, res) => {
-  try {
-    const { search, type, is_active } = req.query;
-
-    let query = 'SELECT * FROM companies WHERE 1=1';
-    const params = [];
-
-    if (search) {
-      query += ' AND (company_name LIKE ? OR company_code LIKE ?)';
-      params.push(`%${search}%`, `%${search}%`);
-    }
-
-    if (type) {
-      if (type === 'SUPPLIER') {
-        query += ' AND company_type_flag IN (?, ?)';
-        params.push('SUPPLIER', 'BOTH');
-      } else if (type === 'CUSTOMER') {
-        query += ' AND company_type_flag IN (?, ?)';
-        params.push('CUSTOMER', 'BOTH');
-      } else {
-        query += ' AND company_type_flag = ?';
-        params.push(type);
-      }
-    }
-
-    if (is_active === 'true' || is_active === 'false') {
-      query += ' AND is_active = ?';
-      params.push(is_active === 'true' ? 1 : 0);
-    }
-
-    query += ' ORDER BY sort_order, company_code';
-
-    const [rows] = await db.query(query, params);
-
-    // 엑셀 데이터 생성 (2차원 배열 방식)
-    const excelRows = [];
-
-    // Row 1: 사업자 정보 (고정값)
-    excelRows.push(["사업자 등록번호", "504-81-93859", "상호", "팔공청과（주）", "대표자 명", "홍율흠"]);
-
-    // Row 2, 3: 공백 (또는 필요한 내용)
-    excelRows.push([]);
-    excelRows.push([]);
-
-    // Row 4: 헤더 (New XLSX Format)
-    const headers = [
-      "순번", "거래처등록번호", "종사업장번호", "거래처 상호", "대표자명",
-      "사업자주소", "업태", "종목", "부서명", "성명",
-      "전화번호", "휴대전화번호", "팩스번호", "이메일주소", "비고",
-      "구분", "등록일자", "거래처 별칭", "구분"
-    ];
-    excelRows.push(headers);
-
-    // Row 5~: 데이터
-    rows.forEach((item, index) => {
-      excelRows.push([
-        index + 1,                                  // 순번
-        item.business_number,                       // 거래처등록번호
-        "",                                         // 종사업장번호 (Empty)
-        item.business_name,                         // 거래처 상호 (법인명) [CHANGED]
-        item.ceo_name,                              // 대표자명
-        item.address,                               // 사업자주소
-        item.company_type,                          // 업태
-        item.company_category,                      // 종목
-        "",                                         // 부서명 (Empty)
-        item.contact_person,                        // 성명 (담당자)
-        item.phone,                                 // 전화번호
-        item.contact_phone,                         // 휴대전화번호
-        item.fax,                                   // 팩스번호
-        item.email,                                 // 이메일주소
-        item.notes,                                 // 비고
-        item.company_type_flag === 'CUSTOMER' ? '매출처' : (item.company_type_flag === 'SUPPLIER' ? '매입처' : '매입/매출'), // 구분
-        item.created_at ? new Date(item.created_at).toISOString().slice(0, 10) : "", // 등록일자
-        item.company_name || "",                    // 거래처 별칭 (시스템상 company_name) [CHANGED]
-        ""                                          // 구분 (마지막 컬럼 - 용도 불명확하므로 빈값)
-      ]);
-    });
-
-    const workbook = xlsx.utils.book_new();
-    const worksheet = xlsx.utils.aoa_to_sheet(excelRows); // json_to_sheet 대신 aoa_to_sheet 사용
-
-    // 컬럼 너비 설정
-    const wscols = [
-      { wch: 6 },  // 순번
-      { wch: 15 }, // 등록번호
-      { wch: 5 },  // 종사업장
-      { wch: 25 }, // 상호
-      { wch: 10 }, // 대표자
-      { wch: 40 }, // 주소
-      { wch: 15 }, // 업태
-      { wch: 15 }, // 종목
-      { wch: 10 }, // 부서 [MOVED]
-      { wch: 10 }, // 성명 [MOVED]
-      { wch: 15 }, // 전화
-      { wch: 15 }, // 휴대전화
-      { wch: 15 }, // 팩스
-      { wch: 25 }, // 이메일
-      { wch: 30 }, // 비고
-      { wch: 8 },  // 구분
-      { wch: 12 }, // 등록일자
-      { wch: 20 }, // 거래처 별칭 [NEW]
-      { wch: 8 }   // 구분
-    ];
-    worksheet['!cols'] = wscols;
-
-    // 셀 병합 (상단 사업자 정보) - B1:C1 처럼 보이지만 A1,B1,C1... 인덱스 기준
-    // A1:"사업자 등록번호", B1:"504...", C1:"상호", D1:"팔공...", E1:"대표자 명", F1:"홍율흠"
-    // 병합 필요 여부는 템플릿에 따라 다르나, 보통은 1:1 매칭되어 있을 것임.
-
-    xlsx.utils.book_append_sheet(workbook, worksheet, '거래처목록');
-
-    const buffer = xlsx.write(workbook, { type: 'buffer', bookType: 'xlsx' });
-
-    const fileName = `companies_${new Date().toISOString().slice(0, 10)}.xlsx`;
-
-    res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
-    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-    res.send(buffer);
-
-  } catch (error) {
-    console.error('엑셀 내보내기 오류:', error);
-    res.status(500).json({ success: false, message: '엑셀 생성 중 오류가 발생했습니다.' });
-  }
-});
 
 // 엑셀 파일 업로드 및 미리보기
 router.post('/upload-preview', upload.single('file'), async (req, res) => {
@@ -592,12 +469,15 @@ router.post('/bulk-import', async (req, res) => {
       return res.status(400).json({ success: false, message: '등록할 데이터가 없습니다.' });
     }
 
+    console.log(`[bulk-import] 일괄 등록 요청 수신: ${companies.length}건`); // [LOG] Start
+
     const results = {
       success: [],
       failed: []
     };
 
     for (const company of companies) {
+      // ... existing loop ...
       try {
         // 거래처코드 자동 생성
         const company_code = await generateCompanyCode();
@@ -615,9 +495,8 @@ router.post('/bulk-import', async (req, res) => {
           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             company_code,
-            company_code,
-            company.company_name || '', // 별칭
-            company.business_name || company.company_name || '', // 법인명 (없으면 별칭으로 채움) [CHANGED]
+            company.company_name || '', // 별칭 (이름)
+            company.business_name || company.company_name || '', // 상호 (법인명)
             company.business_number || '',
             company.ceo_name || '',
             company.company_type || '',
@@ -645,6 +524,7 @@ router.post('/bulk-import', async (req, res) => {
           company_code
         });
       } catch (err) {
+        console.error(`[bulk-import] Row ${company._rowNum} 실패: ${company.company_name} - ${err.message}`); // [LOG] Error Detail
         results.failed.push({
           rowNum: company._rowNum,
           company_name: company.company_name,
@@ -652,6 +532,8 @@ router.post('/bulk-import', async (req, res) => {
         });
       }
     }
+
+    console.log(`[bulk-import] 처리 완료. 성공: ${results.success.length}, 실패: ${results.failed.length}`); // [LOG] End
 
     res.json({
       success: true,
@@ -757,7 +639,7 @@ router.delete('/:id', async (req, res) => {
     if (trades.length > 0) {
       return res.status(400).json({
         success: false,
-        message: '거래 전표에 사용중인 거래처는 삭제할 수 없습니다.'
+        message: '거래 내역이 있는 거래처는 삭제할 수 없습니다.'
       });
     }
 
@@ -770,6 +652,54 @@ router.delete('/:id', async (req, res) => {
     res.json({ success: true, message: '거래처가 삭제되었습니다.' });
   } catch (error) {
     console.error('거래처 삭제 오류:', error);
+    res.status(500).json({ success: false, message: '서버 오류가 발생했습니다.' });
+  }
+});
+
+// 거래처 일괄 삭제 [NEW]
+router.post('/bulk-delete', async (req, res) => {
+  try {
+    const { ids } = req.body;
+
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ success: false, message: '삭제할 대상이 없습니다.' });
+    }
+
+    const results = {
+      success: [],
+      failed: []
+    };
+
+    for (const id of ids) {
+      try {
+        // 거래 전표에 사용중인지 체크
+        const [trades] = await db.query(
+          'SELECT id FROM trade_masters WHERE company_id = ? LIMIT 1',
+          [id]
+        );
+
+        if (trades.length > 0) {
+          throw new Error('거래 내역이 있는 거래처는 삭제할 수 없습니다.');
+        }
+
+        const [result] = await db.query('DELETE FROM companies WHERE id = ?', [id]);
+        if (result.affectedRows === 0) {
+          throw new Error('거래처를 찾을 수 없습니다.');
+        }
+
+        results.success.push(id);
+      } catch (err) {
+        results.failed.push({ id, error: err.message });
+      }
+    }
+
+    res.json({
+      success: true,
+      message: `${results.success.length}개 삭제 성공, ${results.failed.length}개 실패`,
+      data: results
+    });
+  } catch (error) {
+    console.error('거래처 일괄 삭제 오류:', error);
     res.status(500).json({ success: false, message: '서버 오류가 발생했습니다.' });
   }
 });

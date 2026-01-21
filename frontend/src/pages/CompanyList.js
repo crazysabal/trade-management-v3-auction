@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, memo } from 'react';
+import { createPortal } from 'react-dom';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import { Link } from 'react-router-dom';
 import { companyAPI } from '../services/api';
@@ -387,27 +388,31 @@ function CompanyList({ isWindow }) {
       onConfirm: async () => {
         try {
           await companyAPI.delete(id);
-          setModal({
-            isOpen: true,
-            type: 'success',
-            title: '삭제 완료',
-            message: '거래처가 삭제되었습니다.',
-            confirmText: '확인',
-            showCancel: false,
-            onConfirm: () => { }
-          });
+          setTimeout(() => {
+            setModal({
+              isOpen: true,
+              type: 'success',
+              title: '삭제 완료',
+              message: '거래처가 삭제되었습니다.',
+              confirmText: '확인',
+              showCancel: false,
+              onConfirm: () => { }
+            });
+          }, 100);
           loadCompanies(true); // Silent reload to preserve scroll
         } catch (error) {
           console.error('거래처 삭제 오류:', error);
-          setModal({
-            isOpen: true,
-            type: 'warning',
-            title: '삭제 실패',
-            message: error.response?.data?.message || '거래처 삭제에 실패했습니다.',
-            confirmText: '확인',
-            showCancel: false,
-            onConfirm: () => { }
-          });
+          setTimeout(() => {
+            setModal({
+              isOpen: true,
+              type: 'warning',
+              title: '삭제 실패',
+              message: error.response?.data?.message || '거래처 삭제에 실패했습니다.',
+              confirmText: '확인',
+              showCancel: false,
+              onConfirm: () => { }
+            });
+          }, 100);
         }
       }
     });
@@ -683,29 +688,33 @@ function CompanyList({ isWindow }) {
           const response = await companyAPI.bulkImport({ companies: selectedCompanies });
 
           const failedCount = response.data.data.failed.length;
-          const successCount = response.data.data.success;
+          const successCount = response.data.data.success.length;
 
           if (failedCount > 0) {
             console.log('실패 목록:', response.data.data.failed);
-            setModal({
-              isOpen: true,
-              type: 'warning',
-              title: '등록 결과',
-              message: `${successCount}개 성공, ${failedCount}개 실패`,
-              confirmText: '확인',
-              showCancel: false,
-              onConfirm: () => { }
-            });
+            setTimeout(() => {
+              setModal({
+                isOpen: true,
+                type: 'warning',
+                title: '등록 결과',
+                message: `${successCount}개 성공, ${failedCount}개 실패`,
+                confirmText: '확인',
+                showCancel: false,
+                onConfirm: () => { }
+              });
+            }, 100);
           } else {
-            setModal({
-              isOpen: true,
-              type: 'success',
-              title: '등록 완료',
-              message: response.data.message,
-              confirmText: '확인',
-              showCancel: false,
-              onConfirm: () => { }
-            });
+            setTimeout(() => {
+              setModal({
+                isOpen: true,
+                type: 'success',
+                title: '등록 완료',
+                message: response.data.message,
+                confirmText: '확인',
+                showCancel: false,
+                onConfirm: () => { }
+              });
+            }, 100);
           }
 
           setShowUploadModal(false);
@@ -835,17 +844,34 @@ function CompanyList({ isWindow }) {
       showCancel: true,
       onConfirm: async () => {
         try {
-          await Promise.all(selectedIds.map(id => companyAPI.delete(id)));
+          const response = await companyAPI.bulkDelete(selectedIds);
+          const { success, failed } = response.data.data;
+
+          if (failed.length > 0) {
+            setTimeout(() => {
+              setModal({
+                isOpen: true,
+                type: 'warning',
+                title: '일괄 삭제 결과',
+                message: `${success.length}개 삭제 성공, ${failed.length}개 실패 (거래 내역이 있는 업체 제외)`,
+                confirmText: '확인',
+                showCancel: false,
+                onConfirm: () => { }
+              });
+            }, 100);
+          } else {
+            setModal(prev => ({ ...prev, isOpen: false }));
+          }
+
           setSelectedIds([]);
           loadCompanies(true); // Silent reload
-          setModal(prev => ({ ...prev, isOpen: false }));
         } catch (error) {
           console.error('일괄 삭제 오류:', error);
           setModal({
             isOpen: true,
             type: 'warning',
             title: '삭제 실패',
-            message: '삭제 중 오류가 발생했습니다. 거래 내역이 있는 거래처는 삭제할 수 없습니다.',
+            message: '일괄 삭제 중 서버 오류가 발생했습니다.',
             confirmText: '확인',
             showCancel: false,
             onConfirm: () => { }

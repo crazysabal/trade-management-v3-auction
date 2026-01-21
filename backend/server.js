@@ -9,11 +9,11 @@ const app = express();
 // 미들웨어
 app.use(cors({
 }));
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
 app.get('/', (req, res) => {
   res.send('Backend Server is Running');
 });
-app.use(express.urlencoded({ extended: true }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 // 라우터
 const authRouter = require('./routes/auth'); // Moved and assigned to variable

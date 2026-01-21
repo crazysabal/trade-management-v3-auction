@@ -107,10 +107,49 @@ router.put('/accounts/:id', async (req, res) => {
 
     await db.query(query, params);
 
-    res.json({ success: true, message: '경매 계정이 수정되었습니다.' });
+    // 자동 세션 초기화: 계정 정보가 변경되면 기존 세션(쿠키 및 캐시)을 즉시 삭제
+    try {
+      const accountId = req.params.id;
+      const cookieFile = path.join(COOKIES_PATH, `account_${accountId}.json`);
+      const userDataDir = path.join(__dirname, '../puppeteer_data', `account_${accountId}`);
+
+      if (fs.existsSync(cookieFile)) {
+        fs.unlinkSync(cookieFile);
+      }
+      if (fs.existsSync(userDataDir)) {
+        fs.rmSync(userDataDir, { recursive: true, force: true });
+      }
+    } catch (sessionError) {
+      console.error('자동 세션 초기화 중 오류 (무시됨):', sessionError);
+    }
+
+    res.json({ success: true, message: '경매 계정이 수정되었으며 세션이 초기화되었습니다.' });
   } catch (error) {
     console.error('경매 계정 수정 오류:', error);
     res.status(500).json({ success: false, message: '서버 오류가 발생했습니다.' });
+  }
+});
+
+// 경매 계정 세션 삭제 (쿠키 및 유저 데이터 삭제)
+router.delete('/accounts/:id/session', async (req, res) => {
+  try {
+    const accountId = req.params.id;
+    const cookieFile = path.join(COOKIES_PATH, `account_${accountId}.json`);
+    const userDataDir = path.join(__dirname, '../puppeteer_data', `account_${accountId}`);
+
+    if (fs.existsSync(cookieFile)) {
+      fs.unlinkSync(cookieFile);
+    }
+
+    if (fs.existsSync(userDataDir)) {
+      // fs.rmSync is available in Node.js 14+ for recursive directory removal
+      fs.rmSync(userDataDir, { recursive: true, force: true });
+    }
+
+    res.json({ success: true, message: '세션 정보가 초기화되었습니다.' });
+  } catch (error) {
+    console.error('세션 초기화 오류:', error);
+    res.status(500).json({ success: false, message: '세션 초기화 중 오류가 발생했습니다.' });
   }
 });
 

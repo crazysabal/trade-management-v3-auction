@@ -1,6 +1,6 @@
 {
     "name": "hongda-biz-launcher",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "description": "Server Launcher for Hongda Biz System",
     "main": "main.js",
     "scripts": {

@@ -97,7 +97,7 @@ router.post('/import/excel', upload.single('file'), async (req, res) => {
         let [parents] = await connection.query('SELECT id FROM categories WHERE category_name = ? AND parent_id IS NULL', [parentCatName]);
         let parentId;
         if (parents.length === 0) {
-          const [res] = await connection.query('INSERT INTO categories (category_name) VALUES (?)', [parentCatName]);
+          const [res] = await connection.query('INSERT INTO categories (category_name, level) VALUES (?, 1)', [parentCatName]);
           parentId = res.insertId;
         } else {
           parentId = parents[0].id;
@@ -106,7 +106,7 @@ router.post('/import/excel', upload.single('file'), async (req, res) => {
         // 소분류 찾기 또는 생성
         let [subs] = await connection.query('SELECT id FROM categories WHERE category_name = ? AND parent_id = ?', [subCatName, parentId]);
         if (subs.length === 0) {
-          const [res] = await connection.query('INSERT INTO categories (category_name, parent_id) VALUES (?, ?)', [subCatName, parentId]);
+          const [res] = await connection.query('INSERT INTO categories (category_name, parent_id, level) VALUES (?, ?, 2)', [subCatName, parentId]);
           categoryId = res.insertId;
         } else {
           categoryId = subs[0].id;
