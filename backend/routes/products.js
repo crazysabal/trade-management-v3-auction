@@ -14,7 +14,7 @@ router.get('/export/excel', async (req, res) => {
   try {
     const query = `
       SELECT pc.category_name as parent_category, c.category_name as sub_category, 
-             p.product_name, p.grade, p.weight, p.weight_unit, p.product_code, p.notes, p.is_active,
+             p.product_name, p.grade, p.weight, p.weight_unit, p.product_code, p.notes, p.is_active, p.sort_order,
              GROUP_CONCAT(
                CONCAT(pm.auction_product_name, 
                       IF(pm.auction_weight != '' OR pm.auction_grade != '', 
@@ -31,7 +31,7 @@ router.get('/export/excel', async (req, res) => {
     `;
     const [rows] = await db.query(query);
 
-    const data = rows.map(row => ({
+    const data = rows.map((row, index) => ({
       '대분류': row.parent_category || '',
       '소분류': row.sub_category || '',
       '품목명': row.product_name,
@@ -39,6 +39,7 @@ router.get('/export/excel', async (req, res) => {
       '중량': row.weight || '',
       '단위': row.weight_unit || 'kg',
       '품목코드': row.product_code,
+      '정렬순서': row.sort_order || (index + 1),
       '경매 매핑 정보': row.auction_mappings || '',
       '비고': row.notes || '',
       '사용여부': row.is_active ? '사용' : '미사용'
@@ -77,7 +78,8 @@ router.post('/import/excel', upload.single('file'), async (req, res) => {
     let updatedCount = 0;
     let insertedCount = 0;
 
-    for (const item of data) {
+    for (let i = 0; i < data.length; i++) {
+      const item = data[i];
       const parentCatName = item['대분류'];
       const subCatName = item['소분류'];
       const productName = item['품목명'];
@@ -85,6 +87,7 @@ router.post('/import/excel', upload.single('file'), async (req, res) => {
       const weight = item['중량'] || item['중량(kg)']; // 하위 호환성 유지
       const weightUnit = item['단위'] || 'kg';
       const productCode = item['품목코드'];
+      const sortOrder = item['정렬순서'] || (i + 1);
       const notes = item['비고'];
       const isActive = item['사용여부'] === '사용' ? 1 : 0;
 
@@ -120,14 +123,14 @@ router.post('/import/excel', upload.single('file'), async (req, res) => {
       if (existing.length > 0) {
         productId = existing[0].id;
         await connection.query(
-          `UPDATE products SET product_name = ?, grade = ?, weight = ?, weight_unit = ?, category_id = ?, notes = ?, is_active = ? WHERE id = ?`,
-          [productName, grade || null, weight || null, weightUnit, categoryId, notes || '', isActive, productId]
+          `UPDATE products SET product_name = ?, grade = ?, weight = ?, weight_unit = ?, category_id = ?, notes = ?, is_active = ?, sort_order = ? WHERE id = ?`,
+          [productName, grade || null, weight || null, weightUnit, categoryId, notes || '', isActive, sortOrder, productId]
         );
         updatedCount++;
       } else {
         const [insRes] = await connection.query(
-          `INSERT INTO products (product_code, product_name, grade, weight, weight_unit, category_id, notes, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-          [productCode, productName, grade || null, weight || null, weightUnit, categoryId, notes || '', isActive]
+          `INSERT INTO products (product_code, product_name, grade, weight, weight_unit, category_id, notes, is_active, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [productCode, productName, grade || null, weight || null, weightUnit, categoryId, notes || '', isActive, sortOrder]
         );
         productId = insRes.insertId;
         insertedCount++;
