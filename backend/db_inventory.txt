@@ -1,0 +1,8 @@
+mysql: [Warning] Using a password on the command line interface can be insecure.
+Field	Type	Null	Key	Default	Extra
+id	int	NO	PRI	NULL	auto_increment
+product_id	int	NO	UNI	NULL	
+quantity	decimal(15,2)	YES		NULL	
+weight	decimal(15,2)	YES		NULL	
+purchase_price	decimal(15,2)	YES		NULL	
+last_updated	timestamp	YES		CURRENT_TIMESTAMP	DEFAULT_GENERATED on update CURRENT_TIMESTAMP

@@ -1,0 +1,34 @@
+mysql: [Warning] Using a password on the command line interface can be insecure.
+*************************** 1. row ***************************
+               Trigger: before_trade_detail_delete
+              sql_mode: IGNORE_SPACE,ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION
+SQL Original Statement: CREATE DEFINER=`root`@`localhost` TRIGGER `before_trade_detail_delete` BEFORE DELETE ON `trade_details` FOR EACH ROW BEGIN
+    DECLARE v_trade_type VARCHAR(20);
+    DECLARE v_matched_count INT DEFAULT 0;
+    SELECT trade_type INTO v_trade_type
+    FROM trade_masters WHERE id = OLD.trade_master_id;
+    IF v_trade_type = 'PURCHASE' THEN
+        SELECT COUNT(*) INTO v_matched_count
+        FROM sale_purchase_matching spm
+        JOIN purchase_inventory pi ON spm.purchase_inventory_id = pi.id
+        WHERE pi.trade_detail_id = OLD.id;
+        IF v_matched_count > 0 THEN
+            SIGNAL SQLSTATE '45000' 
+            SET MESSAGE_TEXT = '이미 매출과 매칭된 매입은 삭제할 수 없습니다.';
+        END IF;
+        DELETE FROM purchase_inventory WHERE trade_detail_id = OLD.id;
+    END IF;
+    IF v_trade_type = 'SALE' THEN
+        UPDATE purchase_inventory pi
+        JOIN sale_purchase_matching spm ON pi.id = spm.purchase_inventory_id
+        SET pi.remaining_quantity = pi.remaining_quantity + spm.matched_quantity,
+            pi.status = 'AVAILABLE'
+        WHERE spm.sale_detail_id = OLD.id;
+        DELETE FROM sale_purchase_matching WHERE sale_detail_id = OLD.id;
+    END IF;
+    DELETE FROM inventory_transactions WHERE trade_detail_id = OLD.id;
+END
+  character_set_client: utf8mb4
+  collation_connection: utf8mb4_unicode_ci
+    Database Collation: utf8mb4_unicode_ci
+               Created: 2026-01-19 16:10:38.74
