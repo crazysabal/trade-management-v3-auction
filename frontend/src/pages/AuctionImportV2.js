@@ -145,10 +145,12 @@ const AuctionItemRow = React.memo(({
                     />
                 </div>
             </td>
-            <td>{item.arrive_no}</td>
-            <td>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <strong>{item.product_name}</strong>
+            <td style={{ textAlign: 'center' }}>{item.arrive_no}</td>
+            <td style={{ textAlign: 'center' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                    <strong>
+                        {item.product_name} {totalWeight > 0 && `${totalWeight}${item.product_weight_unit || item.weight_unit || 'kg'}`}
+                    </strong>
                     {item.status === 'IMPORTED' && (
                         <span style={{ backgroundColor: '#6c757d', color: 'white', padding: '1px 5px', borderRadius: '3px', fontSize: '0.7rem' }}>
                             등록완료
@@ -161,11 +163,10 @@ const AuctionItemRow = React.memo(({
                     )}
                 </div>
             </td>
-            <td style={{ textAlign: 'center' }}>{totalWeight > 0 ? `${totalWeight}${item.product_weight_unit || item.weight_unit || 'kg'}` : '-'}</td>
-            <td>{item.sender || '-'}</td>
+            <td style={{ textAlign: 'center' }}>{item.sender || '-'}</td>
             <td style={{ textAlign: 'center' }}>{item.grade || '-'}</td>
-            <td className="text-right">{item.count || 0}개</td>
-            <td className="text-right">{formattedPrice}원</td>
+            <td style={{ textAlign: 'center' }}>{item.count || 0}개</td>
+            <td style={{ textAlign: 'center' }}>{formattedPrice}원</td>
             <td>
                 <SearchableSelect
                     value={mappedProductId}
@@ -179,7 +180,7 @@ const AuctionItemRow = React.memo(({
                     styles={selectStyles}
                 />
             </td>
-            <td>{item.shipper_location || '-'}</td>
+            <td style={{ textAlign: 'center' }}>{item.shipper_location || '-'}</td>
         </tr>
     );
 });
@@ -209,6 +210,11 @@ function AuctionImportV2({ isWindow, onTradeChange, onClose }) {
         supplier_id: '',
         trade_date: formatLocalDate(new Date()),
         warehouse_id: ''
+    });
+
+    const [filter, setFilter] = useState({
+        text: '',
+        status: 'ALL' // ALL, PENDING, IMPORTED
     });
 
     const [modal, setModal] = useState({
@@ -263,18 +269,110 @@ function AuctionImportV2({ isWindow, onTradeChange, onClose }) {
     // [NEW] 모든 항목이 매핑되었는지 확인 (전표 생성 버튼 활성 조건)
     const allMapped = useMemo(() => {
         if (rawData.length === 0) return false;
-        // IMPORTED 상태인 항목은 제외하고 체크 (이미 처리된 것이므로)
         const pendings = rawData.filter(item => item.status !== 'IMPORTED');
-        if (pendings.length === 0) return false;
+        if (pendings.length === 0) return true; // 대기 중인 항목이 없으면 모두 매핑된 것으로 간주 (또는 완료됨)
         return pendings.every(item => !!getMappedProductId(item.product_name, item.weight, item.grade));
     }, [rawData, getMappedProductId]);
 
-    // [Refined] 헤더 체크박스 상태 계산 (Memoized)
+    // [NEW] 전체 목록의 총액 계산 (필터링된 결과 기준)
+    const filteredData = useMemo(() => {
+        return rawData.filter(item => {
+            // 1. 상태 필터
+            if (filter.status === 'PENDING' && item.status !== 'PENDING') return false;
+            if (filter.status === 'IMPORTED' && item.status !== 'IMPORTED') return false;
+
+            // 2. 검색어 필터 (Premium Multi-keyword AND Search)
+            if (filter.text) {
+                const keywords = filter.text.toLowerCase().trim().split(/\s+/).filter(k => k);
+                if (keywords.length > 0) {
+                    const statusText = item.status === 'IMPORTED' ? '완료' : '대기';
+                    const mappedId = getMappedProductId(item.product_name, item.weight, item.grade);
+                    const mappedProduct = mappedId ? products.find(p => p.id === mappedId) : null;
+
+                    const weightUnit = item.product_weight_unit || item.weight_unit || 'kg';
+                    const weightStr = item.weight ? `${item.weight}${weightUnit}` : ''; // "5kg" 형식 지원
+
+                    const formatCurrency = (val) => new Intl.NumberFormat('ko-KR').format(val || 0);
+
+                    // [Refined] 숫자 데이터 정규화 (콤마 등 제거 후 숫자로 변환)
+                    const parseNumber = (val) => {
+                        if (typeof val === 'number') return val;
+                        return parseFloat(String(val || 0).replace(/[^0-9.-]/g, '')) || 0;
+                    };
+
+                    const priceNum = parseNumber(item.unit_price || item.price); // unit_price 우선 사용
+                    const priceStr = String(priceNum);
+                    const priceFormatted = formatCurrency(priceNum);
+
+                    const countNum = parseNumber(item.count);
+                    const countStr = String(countNum);
+
+                    const searchableText = [
+                        item.product_name || '',
+                        item.weight || '',
+                        weightUnit,
+                        weightStr,
+                        item.grade || '',
+                        item.sender || '',
+                        item.arrive_no || '',
+                        item.shipper_location || '',
+                        // 수량 다양하게 포함
+                        countStr,
+                        `${countNum}`,
+                        `${countStr}개`,
+                        String(item.count || ''),
+                        // 단가 다양하게 포함 (합계는 제외)
+                        priceStr,
+                        priceFormatted,
+                        `${priceNum}`,
+                        `${priceStr}원`,
+                        `${priceFormatted}원`,
+                        String(item.unit_price || item.price || ''),
+                        statusText,
+                        // 매핑된 정보도 검색 대상에 포함
+                        mappedProduct?.product_name || '',
+                        mappedProduct?.product_code || '',
+                        mappedProduct?.category_name || '',
+                        mappedProduct?.spec || ''
+                    ].join(' ').toLowerCase();
+
+                    return keywords.every(keyword => searchableText.includes(keyword));
+                }
+            }
+            return true;
+        });
+    }, [rawData, filter, getMappedProductId, products]);
+
+    // [NEW] 전체 목록의 총합 및 수량 계산 (필터링된 결과 기준)
+    const { totalAmountSum, totalCountSum } = useMemo(() => {
+        return filteredData.reduce((acc, item) => {
+            acc.totalAmountSum += Math.floor(item.total_price || 0);
+            acc.totalCountSum += parseFloat(item.count || 0);
+            return acc;
+        }, { totalAmountSum: 0, totalCountSum: 0 });
+    }, [filteredData]);
+
+    // [NEW] 선택된 항목들의 합계 금액 및 수량
+    const { selectedAmountSum, selectedCountSum } = useMemo(() => {
+        return filteredData
+            .filter(item => selectedItems.has(item.id))
+            .reduce((acc, item) => {
+                acc.selectedAmountSum += Math.floor(item.total_price || 0);
+                acc.selectedCountSum += parseFloat(item.count || 0);
+                return acc;
+            }, { selectedAmountSum: 0, selectedCountSum: 0 });
+    }, [filteredData, selectedItems]);
+
+    // [NEW] 평균 단가 계산 (가중 평균)
+    const totalAvgPrice = totalCountSum > 0 ? Math.round(totalAmountSum / totalCountSum) : 0;
+    const selectedAvgPrice = selectedCountSum > 0 ? Math.round(selectedAmountSum / selectedCountSum) : 0;
+
+    // [Refined] 헤더 체크박스 상태 계산 (Memoized) - 필터링된 데이터 기준
     const { isAllSelected, isHeaderDisabled } = useMemo(() => {
-        const disabled = rawData.length === 0;
-        const allSelected = !disabled && rawData.every(item => selectedItems.has(item.id));
+        const disabled = filteredData.length === 0;
+        const allSelected = !disabled && filteredData.every(item => selectedItems.has(item.id));
         return { isAllSelected: allSelected, isHeaderDisabled: disabled };
-    }, [rawData, selectedItems]);
+    }, [filteredData, selectedItems]);
 
     // [NEW] 선택된 항목 중 '등록 완료' 상태인 항목 개수 (상태 초기화 버튼용)
     const selectedImportedCount = useMemo(() => {
@@ -334,6 +432,42 @@ function AuctionImportV2({ isWindow, onTradeChange, onClose }) {
         }
     };
 
+    // [NEW] 경매일자가 변경되면 거래일자도 자동으로 동기화
+    useEffect(() => {
+        setImportConfig(prev => ({
+            ...prev,
+            trade_date: crawlData.crawl_date
+        }));
+    }, [crawlData.crawl_date]);
+
+    // [NEW] 전역 품목 변경 이벤트 수신
+    useEffect(() => {
+        const handleRefresh = async () => {
+            // console.log('♻️ 품목 변경 감지: 경매 매핑용 품목 정보 새로고침');
+            try {
+                // 품목과 매핑 정보만 조용히 새로고침
+                const [productsRes, mappingsRes] = await Promise.all([
+                    productAPI.getAll({ is_active: 'true' }),
+                    auctionAPI.getMappings()
+                ]);
+
+                setProducts(productsRes.data?.data || []);
+
+                const mappingObj = {};
+                (mappingsRes.data?.data || []).forEach(m => {
+                    if (m.system_product_id) {
+                        const key = getMappingKey(m.auction_product_name, m.auction_weight, m.auction_grade);
+                        mappingObj[key] = m.system_product_id;
+                    }
+                });
+                setMappings(mappingObj);
+            } catch (err) {
+                console.error('경매 품목 동기화 실패:', err);
+            }
+        };
+        window.addEventListener('PRODUCT_DATA_CHANGED', handleRefresh);
+        return () => window.removeEventListener('PRODUCT_DATA_CHANGED', handleRefresh);
+    }, [getMappingKey]);
 
     const fetchRawData = async (isSilent = false) => {
         if (isSilent) setIsTableLoading(true);
@@ -524,12 +658,12 @@ function AuctionImportV2({ isWindow, onTradeChange, onClose }) {
 
     const handleSelectAll = useCallback((checked) => {
         if (checked) {
-            const allIds = rawData.map(item => item.id);
+            const allIds = filteredData.map(item => item.id);
             setSelectedItems(new Set(allIds));
         } else {
             setSelectedItems(new Set());
         }
-    }, [rawData]);
+    }, [filteredData]);
 
 
 
@@ -868,7 +1002,7 @@ function AuctionImportV2({ isWindow, onTradeChange, onClose }) {
 
             {step === 1 && (
                 <div className="card">
-                    <h2 className="card-title" style={{ margin: 0, border: 'none', padding: 0 }}>낙찰 데이터 크롤링</h2>
+
                     <div className="form-row" style={{ display: 'flex', alignItems: 'center', gap: '1.25rem', marginTop: '0.5rem' }}>
                         <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: '10px', width: '420px', flex: 'none', margin: 0 }}>
                             <label className="required" style={{ whiteSpace: 'nowrap', fontWeight: '900', minWidth: '80px', margin: 0, fontSize: '0.9rem', color: '#2c3e50' }}>경매 계정</label>
@@ -937,45 +1071,161 @@ function AuctionImportV2({ isWindow, onTradeChange, onClose }) {
                         display: 'flex',
                         flexDirection: 'column',
                         overflow: 'hidden',
-                        marginBottom: '1rem', // 간격 복구
-                        borderRadius: '8px', // 모든 모서리 라운드 복구
-                        padding: '1.25rem' // 표준 패딩
+                        marginBottom: '1rem',
+                        borderRadius: '8px',
+                        padding: '1.25rem'
                     }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexShrink: 0 }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                                <h2 style={{ margin: 0 }}>품목 매칭</h2>
-                                <div style={{
+                        {/* [NEW] 선택된 계정/날짜 정보 요약 헤더 */}
+                        <div style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            backgroundColor: '#e3f2fd',
+                            padding: '10px 15px',
+                            borderRadius: '6px',
+                            marginBottom: '1rem',
+                            borderLeft: '5px solid #2196f3'
+                        }}>
+                            <span style={{ fontSize: '0.9rem', color: '#1976d2', fontWeight: 'bold', marginRight: '5px' }}>📌 현재 데이터 :</span>
+                            <span style={{ fontSize: '1rem', fontWeight: 'bold', color: '#2c3e50' }}>
+                                {(() => {
+                                    const acc = accounts.find(a => String(a.id) === String(crawlData.account_id));
+                                    return acc ? acc.account_name : '알 수 없는 계정';
+                                })()}
+                            </span>
+                            <span style={{ margin: '0 10px', color: '#ccc' }}>|</span>
+                            <span style={{ fontSize: '1rem', fontWeight: 'bold', color: '#2c3e50' }}>
+                                {accounts.find(a => String(a.id) === String(crawlData.account_id))?.username || '-'}
+                            </span>
+                            <span style={{ margin: '0 10px', color: '#ccc' }}>|</span>
+                            <span style={{ fontSize: '1rem', fontWeight: 'bold', color: '#e67e22' }}>
+                                {crawlData.crawl_date}
+                            </span>
+
+                            {/* [NEW] 전체/대기/완료/매칭 카운트 이동 */}
+                            <div style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '12px',
+                                marginLeft: '20px',
+                                padding: '2px 12px',
+                                background: 'rgba(255,255,255,0.5)',
+                                borderRadius: '4px'
+                            }}>
+                                <span style={{ fontSize: '0.85rem', color: '#555', fontWeight: '500' }}>전체 <b style={{ color: '#2c3e50' }}>{rawData.length}</b></span>
+                                <span style={{ fontSize: '0.85rem', color: '#555', fontWeight: '500' }}>대기 <b style={{ color: '#3498db' }}>{rawData.filter(i => i.status === 'PENDING').length}</b></span>
+                                <span style={{ fontSize: '0.85rem', color: '#555', fontWeight: '500' }}>완료 <b style={{ color: '#27ae60' }}>{rawData.filter(i => i.status === 'IMPORTED').length}</b></span>
+                                <span style={{ fontSize: '0.85rem', color: '#555', fontWeight: '500' }}>매칭 <b style={{ color: '#8e44ad' }}>{mappedCount}</b></span>
+                            </div>
+
+                            <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center' }}>
+                                <span style={{ margin: '0 10px', color: '#ccc' }}>|</span>
+                                <span style={{ fontSize: '0.9rem', color: '#1976d2', fontWeight: 'bold', marginRight: '8px' }}>
+                                    {selectedItems.size > 0 ? '💰 선택 합계 :' : '💰 전체 합계 :'}
+                                </span>
+                                <span style={{ fontSize: '1.1rem', fontWeight: '900', color: selectedItems.size > 0 ? '#e74c3c' : '#2c3e50' }}>
+                                    {(selectedItems.size > 0 ? selectedAmountSum : totalAmountSum).toLocaleString()}원
+                                </span>
+                            </div>
+                        </div>
+
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '1rem', flexShrink: 0 }}>
+                            {/* 상태 필터 */}
+                            <div style={{ display: 'flex', border: '1px solid #ddd', borderRadius: '4px', overflow: 'hidden', height: '36px', flexShrink: 0 }}>
+                                {[
+                                    { id: 'ALL', label: '전체' },
+                                    { id: 'PENDING', label: '대기' },
+                                    { id: 'IMPORTED', label: '완료' }
+                                ].map(btn => (
+                                    <button
+                                        key={btn.id}
+                                        onClick={() => setFilter(prev => ({ ...prev, status: btn.id }))}
+                                        style={{
+                                            padding: '0 15px',
+                                            border: 'none',
+                                            fontSize: '0.85rem',
+                                            fontWeight: 'bold',
+                                            cursor: 'pointer',
+                                            backgroundColor: filter.status === btn.id ? '#3498db' : '#fff',
+                                            color: filter.status === btn.id ? '#fff' : '#555',
+                                            borderRight: btn.id !== 'IMPORTED' ? '1px solid #ddd' : 'none'
+                                        }}
+                                    >
+                                        {btn.label}
+                                    </button>
+                                ))}
+                            </div>
+
+                            {/* 검색창 (남은 영역 차지) */}
+                            <div style={{ position: 'relative', flex: 1 }}>
+                                <input
+                                    type="text"
+                                    placeholder="품목, 출하주, 입하번호, 산지, 상태 등 검색 (공백으로 다중 검색)..."
+                                    className="form-control"
+                                    value={filter.text}
+                                    onChange={(e) => setFilter(prev => ({ ...prev, text: e.target.value }))}
+                                    style={{ width: '100%', height: '36px', fontSize: '0.9rem', paddingLeft: '12px' }}
+                                />
+                                {filter.text && (
+                                    <button
+                                        onClick={() => setFilter(prev => ({ ...prev, text: '' }))}
+                                        style={{
+                                            position: 'absolute',
+                                            right: '10px',
+                                            top: '50%',
+                                            transform: 'translateY(-50%)',
+                                            border: 'none',
+                                            background: 'none',
+                                            color: '#999',
+                                            cursor: 'pointer',
+                                            fontSize: '1rem'
+                                        }}
+                                    >✕</button>
+                                )}
+                            </div>
+
+                            {/* 검색결과 뱃지 */}
+                            {filter.text && (
+                                <span style={{
+                                    fontSize: '0.85rem',
+                                    color: '#e67e22',
+                                    fontWeight: 'bold',
+                                    background: '#fff3e0',
+                                    padding: '0 12px',
+                                    height: '34px',
                                     display: 'flex',
                                     alignItems: 'center',
-                                    gap: '15px', // 간격 소폭 확대
-                                    marginLeft: '1.5rem',
-                                    padding: '6px 20px', // 패딩 확대
-                                    background: '#f8f9fa',
-                                    borderRadius: '25px',
-                                    border: '1px solid #e9ecef',
-                                    boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.02)'
+                                    borderRadius: '17px',
+                                    border: '1px solid #ffe0b2',
+                                    flexShrink: 0
                                 }}>
-                                    <span style={{ fontSize: '0.95rem', color: '#555', fontWeight: '500' }}>전체 <b style={{ color: '#2c3e50', marginLeft: '3px', fontSize: '1.05rem' }}>{rawData.length}</b></span>
-                                    <span style={{ fontSize: '0.95rem', color: '#555', fontWeight: '500' }}>대기 <b style={{ color: '#3498db', marginLeft: '3px', fontSize: '1.05rem' }}>{rawData.filter(i => i.status === 'PENDING').length}</b></span>
-                                    <span style={{ fontSize: '0.95rem', color: '#555', fontWeight: '500' }}>완료 <b style={{ color: '#27ae60', marginLeft: '3px', fontSize: '1.05rem' }}>{rawData.filter(i => i.status === 'IMPORTED').length}</b></span>
-                                    <span style={{ fontSize: '0.95rem', color: '#555', fontWeight: '500' }}>매칭 <b style={{ color: '#8e44ad', marginLeft: '3px', fontSize: '1.05rem' }}>{mappedCount}</b></span>
-                                </div>
-                            </div>
-                            <div style={{ display: 'flex', gap: '8px' }}>
+                                    🔍 {filteredData.length}건
+                                </span>
+                            )}
+
+                            {/* 액션 버튼 */}
+                            <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
                                 <button onClick={() => setStep(1)} className="btn btn-secondary" style={{ fontSize: '0.9rem', padding: '6px 12px', whiteSpace: 'nowrap' }}>
                                     🔄 처음으로
                                 </button>
-
-                                <button
-                                    onClick={handleRefreshProducts}
-                                    className="btn btn-secondary"
-                                    style={{ fontSize: '0.9rem', padding: '6px 12px', whiteSpace: 'nowrap' }}
-                                >
-                                    🔄 품목 새로고침
-                                </button>
                                 {selectedImportedCount > 0 && (
-                                    <button onClick={handleResetStatus} className="btn btn-warning" style={{ fontSize: '0.9rem', padding: '6px 12px', whiteSpace: 'nowrap' }}>
-                                        상태 초기화 ({selectedImportedCount})
+                                    <button
+                                        onClick={handleResetStatus}
+                                        className="btn"
+                                        style={{
+                                            fontSize: '0.9rem',
+                                            padding: '6px 16px',
+                                            whiteSpace: 'nowrap',
+                                            backgroundColor: '#ff9800',
+                                            color: 'white',
+                                            border: 'none',
+                                            boxShadow: '0 2px 4px rgba(230, 126, 34, 0.3)',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '6px',
+                                            fontWeight: 'bold'
+                                        }}
+                                    >
+                                        ↩️ 상태 초기화 ({selectedImportedCount})
                                     </button>
                                 )}
                             </div>
@@ -1028,7 +1278,8 @@ function AuctionImportV2({ isWindow, onTradeChange, onClose }) {
                                                 borderBottom: '1px solid #2c3e50',
                                                 boxShadow: '0 1px 2px rgba(0,0,0,0.1)',
                                                 height: '40px',
-                                                verticalAlign: 'middle'
+                                                verticalAlign: 'middle',
+                                                textAlign: 'center'
                                             };
                                             return (
                                                 <>
@@ -1042,8 +1293,7 @@ function AuctionImportV2({ isWindow, onTradeChange, onClose }) {
                                                         />
                                                     </th>
                                                     <th style={{ ...headerStyle, width: '80px', whiteSpace: 'nowrap' }}>입하번호</th>
-                                                    <th style={{ ...headerStyle, minWidth: '150px', whiteSpace: 'nowrap' }}>품목명</th>
-                                                    <th style={{ ...headerStyle, textAlign: 'center', width: '80px', whiteSpace: 'nowrap' }}>중량</th>
+                                                    <th style={{ ...headerStyle, minWidth: '150px', whiteSpace: 'nowrap' }}>품목명(중량)</th>
                                                     <th style={{ ...headerStyle, width: '100px', whiteSpace: 'nowrap' }}>출하주</th>
                                                     <th style={{ ...headerStyle, textAlign: 'center', width: '60px', whiteSpace: 'nowrap' }}>등급</th>
                                                     <th style={{ ...headerStyle, width: '80px', whiteSpace: 'nowrap' }}>수량</th>
@@ -1056,7 +1306,7 @@ function AuctionImportV2({ isWindow, onTradeChange, onClose }) {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {rawData.map(item => {
+                                    {filteredData.map(item => {
                                         const mappedId = getMappedProductId(item.product_name, item.weight, item.grade);
                                         const formattedPrice = Math.floor(item.unit_price || 0).toLocaleString();
                                         const duplicate = isDuplicate(item);
@@ -1130,29 +1380,37 @@ function AuctionImportV2({ isWindow, onTradeChange, onClose }) {
                                 />
                             </div>
 
-                            <button
-                                className="btn btn-primary"
-                                disabled={rawData.length === 0 || !allMapped}
-                                style={{
-                                    height: '42px',
-                                    padding: '0 24px',
-                                    fontSize: '0.95rem',
-                                    fontWeight: 'bold',
-                                    marginLeft: 'auto',
-                                    whiteSpace: 'nowrap',
-                                    boxShadow: '0 2px 4px rgba(52, 152, 219, 0.2)',
-                                    backgroundColor: (!allMapped && rawData.length > 0) ? '#94a3b8' : undefined,
-                                    cursor: (!allMapped && rawData.length > 0) ? 'not-allowed' : 'pointer'
-                                }}
-                                onClick={processImport}
-                                title={!allMapped && rawData.length > 0 ? "모든 품목을 매칭해야 전표 생성이 가능합니다." : ""}
-                            >
-                                {!allMapped && rawData.length > 0 ? '미매칭 품목 존재' : '매입 전표 생성'}
-                            </button>
+                            {(() => {
+                                const pendingCount = rawData.filter(i => i.status === 'PENDING').length;
+                                const isAllCompleted = rawData.length > 0 && pendingCount === 0;
+
+                                return (
+                                    <button
+                                        className="btn btn-primary"
+                                        disabled={rawData.length === 0 || !allMapped || isAllCompleted}
+                                        style={{
+                                            height: '42px',
+                                            padding: '0 24px',
+                                            fontSize: '0.95rem',
+                                            fontWeight: 'bold',
+                                            marginLeft: 'auto',
+                                            whiteSpace: 'nowrap',
+                                            boxShadow: '0 2px 4px rgba(52, 152, 219, 0.2)',
+                                            backgroundColor: (!allMapped || isAllCompleted) ? '#94a3b8' : undefined,
+                                            cursor: (!allMapped || isAllCompleted) ? 'not-allowed' : 'pointer'
+                                        }}
+                                        onClick={processImport}
+                                        title={!allMapped ? "모든 대기 항목을 매칭해야 합니다." : ""}
+                                    >
+                                        {isAllCompleted ? '모두 완료됨' : (!allMapped ? '미매칭 품목 존재' : '매입 전표 생성')}
+                                    </button>
+                                );
+                            })()}
                         </div>
                     </div>
                 </>
-            )}
+            )
+            }
 
             <ConfirmModal
                 isOpen={modal.isOpen}
@@ -1164,7 +1422,7 @@ function AuctionImportV2({ isWindow, onTradeChange, onClose }) {
                 showCancel={modal.showCancel}
                 confirmText={modal.confirmText}
             />
-        </div>
+        </div >
     );
 }
 

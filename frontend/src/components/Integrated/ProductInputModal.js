@@ -347,6 +347,8 @@ const ProductInputModal = ({ isOpen, onClose, onSuccess, initialData = null, isE
 
                 await productAPI.update(initialData.id, updatePayload);
                 onSuccess();
+                // [NEW] 전역 이벤트 발행: 품목 정보 변경됨을 알림
+                window.dispatchEvent(new CustomEvent('PRODUCT_DATA_CHANGED'));
                 onClose();
             } else {
                 // Create Logic (Multi-Grade / Multi-Weight Support)
@@ -455,6 +457,8 @@ const ProductInputModal = ({ isOpen, onClose, onSuccess, initialData = null, isE
                         onConfirm: () => {
                             setConfirmModal(prev => ({ ...prev, isOpen: false }));
                             onSuccess(); // Refresh list
+                            // [NEW] 전역 이벤트 발행: 품목 정보 변경됨을 알림
+                            window.dispatchEvent(new CustomEvent('PRODUCT_DATA_CHANGED'));
                             onClose();   // Close main modal
                         },
                         showCancel: false
@@ -470,6 +474,8 @@ const ProductInputModal = ({ isOpen, onClose, onSuccess, initialData = null, isE
                             setConfirmModal(prev => ({ ...prev, isOpen: false }));
                             if (successCount > 0) {
                                 onSuccess(); // Partial success refresh
+                                // [NEW] 전역 이벤트 발행 (부분 성공 포함)
+                                window.dispatchEvent(new CustomEvent('PRODUCT_DATA_CHANGED'));
                                 onClose();
                             }
                         },

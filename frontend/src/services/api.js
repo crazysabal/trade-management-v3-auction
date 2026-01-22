@@ -139,6 +139,7 @@ export const auctionAPI = {
   saveAccount: (data) => api.post('/auction/accounts', data),
   updateAccount: (id, data) => api.put(`/auction/accounts/${id}`, data),
   clearAccountSession: (id) => api.delete(`/auction/accounts/${id}/session`),
+  deleteAccount: (id) => api.delete(`/auction/accounts/${id}`),
 
   // 크롤링 실행
   crawl: (data) => api.post('/auction/crawl', data),

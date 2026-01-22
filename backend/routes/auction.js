@@ -153,6 +153,32 @@ router.delete('/accounts/:id/session', async (req, res) => {
   }
 });
 
+// 경매 계정 삭제
+router.delete('/accounts/:id', async (req, res) => {
+  try {
+    const accountId = req.params.id;
+
+    // 1. 데이터베이스에서 계정 삭제
+    await db.query('DELETE FROM auction_accounts WHERE id = ?', [accountId]);
+
+    // 2. 관련 세션 파일 삭제 (쿠키 및 유저 데이터)
+    const cookieFile = path.join(COOKIES_PATH, `account_${accountId}.json`);
+    const userDataDir = path.join(__dirname, '../puppeteer_data', `account_${accountId}`);
+
+    if (fs.existsSync(cookieFile)) {
+      fs.unlinkSync(cookieFile);
+    }
+    if (fs.existsSync(userDataDir)) {
+      fs.rmSync(userDataDir, { recursive: true, force: true });
+    }
+
+    res.json({ success: true, message: '경매 계정과 관련 세션 정보가 삭제되었습니다.' });
+  } catch (error) {
+    console.error('경매 계정 삭제 오류:', error);
+    res.status(500).json({ success: false, message: '서버 오류가 발생했습니다.' });
+  }
+});
+
 // 쿠키 저장 함수
 async function saveCookies(page, accountId) {
   const cookies = await page.cookies();

@@ -403,6 +403,8 @@ function ProductManager({ selectedCategoryId }) {
                     await productAPI.delete(id);
                     setModal(prev => ({ ...prev, isOpen: false }));
                     loadProducts();
+                    // [NEW] 전역 이벤트 발행: 품목 삭제됨
+                    window.dispatchEvent(new CustomEvent('PRODUCT_DATA_CHANGED'));
                 } catch (e) {
                     const errorMsg = e.response?.data?.message || '삭제 중 오류가 발생했습니다.';
                     setModal({
@@ -471,8 +473,10 @@ function ProductManager({ selectedCategoryId }) {
                 confirmText: '확인',
                 showCancel: false,
                 onConfirm: () => {
-                    setModal(prev => ({ ...prev, isOpen: false }));
+                    setConfirmModal(prev => ({ ...prev, isOpen: false }));
                     loadProducts();
+                    // [NEW] 전역 이벤트 발행: 품목 그룹 일괄 수정됨
+                    window.dispatchEvent(new CustomEvent('PRODUCT_DATA_CHANGED'));
                 }
             });
 
@@ -515,6 +519,8 @@ function ProductManager({ selectedCategoryId }) {
                             onConfirm: () => {
                                 setModal(prev => ({ ...prev, isOpen: false }));
                                 loadProducts();
+                                // [NEW] 전역 이벤트 발행: 품목 그룹 일괄 삭제됨
+                                window.dispatchEvent(new CustomEvent('PRODUCT_DATA_CHANGED'));
                             }
                         });
                     }, 100);
@@ -597,6 +603,8 @@ function ProductManager({ selectedCategoryId }) {
             loadCategories(); // New categories might have been created
             // 전역 이벤트 발송하여 좌측 분류 관리 패널(CategoryManager) 동기화
             window.dispatchEvent(new CustomEvent('refresh-categories'));
+            // [NEW] 품목 정보 변경 알림
+            window.dispatchEvent(new CustomEvent('PRODUCT_DATA_CHANGED'));
         } catch (error) {
             console.error('엑셀 가져오기 오류:', error);
             setModal({

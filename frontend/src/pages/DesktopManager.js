@@ -33,6 +33,7 @@ import ExpenseCategoryManagement from './ExpenseCategoryManagement';
 import CompanyInfo from './CompanyInfo';
 import MessageTestPage from './MessageTestPage';
 import AuctionImportV2 from './AuctionImportV2';
+import AuctionStatement from './AuctionStatement';
 import AuctionAccounts from './AuctionAccounts';
 import UserManagement from './UserManagement';
 import PaymentMethodManagement from './PaymentMethodManagement';
@@ -292,6 +293,7 @@ const DesktopManager = () => {
         if (appType === 'BACKUP_SYSTEM') size = { width: 800, height: 750 };
         if (appType === 'SALE' || appType === 'PURCHASE') size = { width: 1000, height: 820 };
         if (appType === 'AUCTION_IMPORT') size = { width: 'auto', height: 820 };
+        if (appType === 'AUCTION_STATEMENT') size = { width: 1200, height: 850 };
         if (appType === 'COMPANY_INFO') size = { width: 'auto', height: 500 };
         if (appType === 'INVENTORY_QUICK') {
             size = { width: 'auto', height: 820 }; // Default
@@ -393,6 +395,7 @@ const DesktopManager = () => {
 
             case 'MATCHING': return <MatchingPage isWindow={true} refreshKey={tradeRefreshKey} onTradeChange={handleTradeChange} {...componentProps} />;
             case 'AUCTION_IMPORT': return <AuctionImportV2 isWindow={true} onTradeChange={handleTradeChange} onClose={() => closeWindow(win.id)} {...componentProps} />;
+            case 'AUCTION_STATEMENT': return <AuctionStatement isWindow={true} {...componentProps} />;
             case 'AUCTION_ACCOUNTS': return <AuctionAccounts isWindow={true} {...componentProps} />;
             case 'COMPANY_BALANCES': return <CompanyBalances isWindow={true} {...componentProps} />;
             case 'EXPENSES': return <ExpenseList isWindow={true} {...componentProps} />;

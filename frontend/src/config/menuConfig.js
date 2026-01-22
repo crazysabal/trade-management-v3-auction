@@ -41,6 +41,7 @@ export const MENU_CONFIG = [
         icon: '🔨',
         items: [
             { id: 'AUCTION_IMPORT', label: '낙찰 데이터', icon: '🔨' },
+            { id: 'AUCTION_STATEMENT', label: '낙찰 명세서', icon: '📄' },
         ]
     },
     {

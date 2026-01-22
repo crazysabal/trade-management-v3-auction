@@ -127,6 +127,43 @@ function AuctionAccounts({ isWindow }) {
     });
   };
 
+  const handleDeleteAccount = (account) => {
+    setModal({
+      isOpen: true,
+      type: 'warning',
+      title: '계정 삭제',
+      message: `[${account.account_name}] 계정과 관련 세션 정보를 모두 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.`,
+      confirmText: '삭제',
+      showCancel: true,
+      onConfirm: async () => {
+        try {
+          await auctionAPI.deleteAccount(account.id);
+          setModal({
+            isOpen: true,
+            type: 'success',
+            title: '삭제 완료',
+            message: '계정이 정상적으로 삭제되었습니다.',
+            confirmText: '확인',
+            showCancel: false,
+            onConfirm: () => { }
+          });
+          loadAccounts();
+        } catch (error) {
+          console.error('계정 삭제 오류:', error);
+          setModal({
+            isOpen: true,
+            type: 'error',
+            title: '삭제 실패',
+            message: '계정 삭제 중 오류가 발생했습니다.',
+            confirmText: '확인',
+            showCancel: false,
+            onConfirm: () => { }
+          });
+        }
+      }
+    });
+  };
+
   return (
     <div className="auction-accounts" style={{ padding: isWindow ? '1rem' : undefined }}>
       {!isWindow && (
@@ -286,6 +323,12 @@ function AuctionAccounts({ isWindow }) {
                           className="btn btn-sm btn-primary"
                         >
                           수정
+                        </button>
+                        <button
+                          onClick={() => handleDeleteAccount(account)}
+                          className="btn btn-sm btn-danger"
+                        >
+                          삭제
                         </button>
                       </div>
                     </td>

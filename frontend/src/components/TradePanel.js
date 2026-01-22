@@ -422,58 +422,10 @@ function TradePanel({
     return false;
   }, [initialData, master, details, pendingPayments, deletedPaymentIds, modifiedPayments]);
 
-  // 변경사항 상태 동기화
-  useEffect(() => {
-    const isDirty = checkDirty();
-    // 무한 루프 방지: 값이 실제로 변경되었을 때만 부모에게 알림
-    if (lastReportedDirty.current !== isDirty) {
-      lastReportedDirty.current = isDirty;
-      if (onDirtyChange) {
-        onDirtyChange(isDirty);
-      }
-    }
-  }, [checkDirty, onDirtyChange]);
+  // --- 기초 데이터 및 전표 로드 함수 ---
 
-  // 초기 데이터 로드
-  useEffect(() => {
-    loadInitialData();
-  }, []);
-
-  // initialTradeId가 있으면 해당 전표 로드
-  useEffect(() => {
-    // 로딩 상태와 무관하게 데이터가 준비되면 전표 로드 시작 (연속 로딩 UX)
-    if (initialTradeId) {
-      // 1. 현재 로드된 전표와 다른 경우
-      if (String(initialTradeId) !== String(currentTradeId)) {
-        loadTrade(initialTradeId);
-      }
-      // 2. 같은 전표지만 외부에서 다시 보기를 요청한 경우 (timestamp 변경됨)
-      else if (initialViewMode && !isViewMode) {
-        setIsViewMode(true);
-      }
-    }
-
-    // timestamp가 변경되면(외부에서 호출 시) 무조건 효과를 다시 실행하여 체크
-    // currentTradeId는 내부 네비게이션 시 변경되므로 의존성에서 제외 (자동 리로드 방지)
-  }, [initialTradeId, timestamp]);
-
-  // [NEW] 상세 행 추가 시 자동 스크롤 하단 이동
-  const prevDetailsLength = useRef(details.length);
-  useEffect(() => {
-    if (details.length > prevDetailsLength.current) {
-      // 행이 추가된 경우에만 스크롤 (삭제 시에는 유지)
-      if (tableContainerRef.current) {
-        setTimeout(() => {
-          tableContainerRef.current.scrollTop = tableContainerRef.current.scrollHeight;
-        }, 50); // 렌더링 완료 후 스크롤을 위해 약간의 지연
-      }
-    }
-    prevDetailsLength.current = details.length;
-  }, [details.length]);
-
-  const loadInitialData = async () => {
+  const fetchBaseData = useCallback(async () => {
     try {
-      setLoading(true);
       const typeFilter = isPurchase ? 'SUPPLIER' : 'CUSTOMER';
       const [companiesRes, productsRes, warehousesRes] = await Promise.all([
         companyAPI.getAll({ is_active: 'true', type: typeFilter }),
@@ -483,8 +435,6 @@ function TradePanel({
       setCompanies(companiesRes.data.data);
       setProducts(productsRes.data.data);
       setWarehouses(warehousesRes.data.data || []);
-      const defaultWh = (warehousesRes.data.data || []).find(w => w.is_default);
-      const defaultWhId = (isPurchase && defaultWh) ? defaultWh.id : '';
 
       // 결제 방법 로드
       try {
@@ -495,9 +445,25 @@ function TradePanel({
       } catch (err) {
         console.error('결제 방법 로딩 오류:', err);
       }
+      return {
+        warehouses: warehousesRes.data.data || []
+      };
+    } catch (error) {
+      console.error('기초 데이터 로딩 오류:', error);
+      return { warehouses: [] };
+    }
+  }, [isPurchase]);
 
-      // 초기 데이터 설정
+  const loadInitialData = async () => {
+    try {
+      setLoading(true);
+      const { warehouses: whs } = await fetchBaseData();
+
+      // 초기 데이터 설정 (신규 전표일 때만)
       if (!initialTradeId) {
+        const defaultWh = whs.find(w => w.is_default);
+        const defaultWhId = (isPurchase && defaultWh) ? defaultWh.id : '';
+
         setMaster(prev => ({ ...prev, warehouse_id: defaultWhId }));
         setInitialData({
           master: { ...master, warehouse_id: defaultWhId },
@@ -507,39 +473,10 @@ function TradePanel({
     } catch (error) {
       console.error('초기 데이터 로딩 오류:', error);
       showModal('warning', '로딩 실패', '데이터를 불러오는데 실패했습니다.');
-      setLoading(false); // 에러 시에는 로딩 해제
     } finally {
-      // 전표를 이어서 로드해야 하는 경우 로딩 상태 유지 (깜빡임 방지)
       if (!initialTradeId) {
         setLoading(false);
       }
-    }
-  };
-
-  // 품목 새로고침
-  const refreshProducts = async () => {
-    try {
-      const productsRes = await productAPI.getAll({ is_active: 'true' });
-      setProducts(productsRes.data?.data || []);
-      showModal('success', '새로고침 완료', '품목 목록이 갱신되었습니다.');
-    } catch (error) {
-      console.error('품목 새로고침 오류:', error);
-    }
-  };
-
-
-  // 거래처 잔고 정보 로드
-  const loadCompanySummary = async (companyId, type, date, excludeTradeId = null) => {
-    if (!companyId) {
-      setCompanySummary(null);
-      return;
-    }
-    try {
-      const response = await paymentAPI.getCompanyTodaySummary(companyId, type, date, excludeTradeId);
-      setCompanySummary(response.data.data);
-    } catch (error) {
-      console.error('거래처 잔고 조회 오류:', error);
-      setCompanySummary(null);
     }
   };
 
@@ -632,6 +569,87 @@ function TradePanel({
       setLoading(false);
     }
   };
+
+  // --- Effects ---
+
+  // 변경사항 상태 동기화
+  useEffect(() => {
+    const isDirty = checkDirty();
+    // 무한 루프 방지: 값이 실제로 변경되었을 때만 부모에게 알림
+    if (lastReportedDirty.current !== isDirty) {
+      lastReportedDirty.current = isDirty;
+      if (onDirtyChange) {
+        onDirtyChange(isDirty);
+      }
+    }
+  }, [checkDirty, onDirtyChange]);
+
+  // 초기 데이터 로드
+  useEffect(() => {
+    loadInitialData();
+  }, []);
+
+  // [NEW] 전역 품목 변경 이벤트 수신
+  useEffect(() => {
+    const handleRefresh = () => {
+      // console.log('♻️ 품목 변경 감지: 전표 입력창 품목 목록 새로고침');
+      fetchBaseData(); // 품목 등 기초 정보만 다시 불러오고, 폼 상태(initialData 등)는 건드리지 않음
+    };
+    window.addEventListener('PRODUCT_DATA_CHANGED', handleRefresh);
+    return () => window.removeEventListener('PRODUCT_DATA_CHANGED', handleRefresh);
+  }, [fetchBaseData]);
+
+  // initialTradeId가 있으면 해당 전표 로드
+  useEffect(() => {
+    // 로딩 상태와 무관하게 데이터가 준비되면 전표 로드 시작 (연속 로딩 UX)
+    if (initialTradeId) {
+      // 1. 현재 로드된 전표와 다른 경우
+      if (String(initialTradeId) !== String(currentTradeId)) {
+        loadTrade(initialTradeId);
+      }
+      // 2. 같은 전표지만 외부에서 다시 보기를 요청한 경우 (timestamp 변경됨)
+      else if (initialViewMode && !isViewMode) {
+        setIsViewMode(true);
+      }
+    }
+
+    // timestamp가 변경되면(외부에서 호출 시) 무조건 효과를 다시 실행하여 체크
+    // currentTradeId는 내부 네비게이션 시 변경되므로 의존성에서 제외 (자동 리로드 방지)
+  }, [initialTradeId, timestamp]);
+
+  // [NEW] 상세 행 추가 시 자동 스크롤 하단 이동
+  const prevDetailsLength = useRef(details.length);
+  useEffect(() => {
+    if (details.length > prevDetailsLength.current) {
+      // 행이 추가된 경우에만 스크롤 (삭제 시에는 유지)
+      if (tableContainerRef.current) {
+        setTimeout(() => {
+          tableContainerRef.current.scrollTop = tableContainerRef.current.scrollHeight;
+        }, 50); // 렌더링 완료 후 스크롤을 위해 약간의 지연
+      }
+    }
+    prevDetailsLength.current = details.length;
+  }, [details.length]);
+
+
+
+
+  // 거래처 잔고 정보 로드
+  const loadCompanySummary = async (companyId, type, date, excludeTradeId = null) => {
+    if (!companyId) {
+      setCompanySummary(null);
+      return;
+    }
+    try {
+      const response = await paymentAPI.getCompanyTodaySummary(companyId, type, date, excludeTradeId);
+      setCompanySummary(response.data.data);
+    } catch (error) {
+      console.error('거래처 잔고 조회 오류:', error);
+      setCompanySummary(null);
+    }
+  };
+
+
 
   // 날짜 변경
   const handleDateChange = async (days) => {
@@ -1818,14 +1836,6 @@ function TradePanel({
           <div className="trade-card-header">
             <h2 className="trade-card-title">품목 상세</h2>
             <div className="trade-card-actions">
-              <button
-                type="button"
-                className="btn btn-secondary btn-custom btn-sm"
-                onClick={refreshProducts}
-                disabled={isViewMode}
-              >
-                품목 새로고침
-              </button>
               {/* 재고 버튼 (매출일 때만 표시) */}
               {!isPurchase && onLaunchApp && (
                 <button
