@@ -63,6 +63,11 @@ async function createWindow() {
     });
 
     mainWindow.loadFile('index.html');
+
+    // [FIX] 창이 닫힐 때 참조를 제거하여 파괴된 객체 접근 방지
+    mainWindow.on('closed', () => {
+        mainWindow = null;
+    });
 }
 
 // [SINGLE INSTANCE LOCK] 중복 실행 방지
@@ -73,7 +78,7 @@ if (!gotTheLock) {
 } else {
     app.on('second-instance', (event, commandLine, workingDirectory) => {
         // 두 번째 인스턴스 실행 시 기존 창을 포커스
-        if (mainWindow) {
+        if (mainWindow && !mainWindow.isDestroyed()) {
             if (mainWindow.isMinimized()) mainWindow.restore();
             mainWindow.focus();
         }
@@ -204,7 +209,9 @@ async function checkUpdateOnline() {
                     const isNewer = compareVersions(remoteVersion, localVersion) > 0;
 
                     if (isNewer) {
-                        mainWindow.webContents.send('update-available', { local: localVersion, remote: remoteVersion });
+                        if (mainWindow && !mainWindow.isDestroyed()) {
+                            mainWindow.webContents.send('update-available', { local: localVersion, remote: remoteVersion });
+                        }
                         resolve({ available: true, local: localVersion, remote: remoteVersion });
                     } else {
                         resolve({ available: false, local: localVersion, remote: remoteVersion });
@@ -276,12 +283,14 @@ function killAllProcesses() {
 // [GLOBAL ERROR HANDLER] 프로그램이 갑자기 꺼지는 것을 방지
 process.on('uncaughtException', (err) => {
     console.error('Uncaught Exception:', err);
-    if (mainWindow && mainWindow.webContents) {
-        mainWindow.webContents.send('log-data', {
-            type: 'backend',
-            data: `\n[Fatal Error] 시스템 오류가 발생했습니다: ${err.message}\n`,
-            isError: true
-        });
+    if (mainWindow && !mainWindow.isDestroyed()) {
+        try {
+            mainWindow.webContents.send('log-data', {
+                type: 'backend',
+                data: `\n[Fatal Error] 시스템 오류가 발생했습니다: ${err.message}\n`,
+                isError: true
+            });
+        } catch (e) { /* ignore */ }
     }
     writeLogToFile('FATAL', `시스템 오류가 발생했습니다: ${err.message}\n${err.stack}`);
 });
@@ -331,13 +340,17 @@ ipcMain.on('start-process', async (event, { type, command, cwd, port }) => {
         const diagLog = `[System] Starting ${type.toUpperCase()}...\n` +
             `- Root: ${PROJECT_ROOT}\n` +
             `- Target: ${targetCwd}\n`;
-        if (mainWindow) mainWindow.webContents.send('log-data', { type, data: diagLog });
+        if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send('log-data', { type, data: diagLog });
+        }
         writeLogToFile('SYSTEM', diagLog);
 
         // 경로 존재 여부 체크 (ENOENT 방지 핵심)
         if (!fs.existsSync(targetCwd)) {
             const errMsg = `[Error] 실행 경로를 찾을 수 없습니다: ${targetCwd}\n설치 폴더 구조를 확인해주세요.\n`;
-            if (mainWindow) mainWindow.webContents.send('log-data', { type, data: errMsg, isError: true });
+            if (mainWindow && !mainWindow.isDestroyed()) {
+                mainWindow.webContents.send('log-data', { type, data: errMsg, isError: true });
+            }
             writeLogToFile('ERROR', errMsg);
             return;
         }
@@ -345,7 +358,9 @@ ipcMain.on('start-process', async (event, { type, command, cwd, port }) => {
         if (port) {
             try {
                 await killPort(port);
-                if (mainWindow) mainWindow.webContents.send('log-data', { type, data: `[System] Port ${port} cleaned.\n` });
+                if (mainWindow && !mainWindow.isDestroyed()) {
+                    mainWindow.webContents.send('log-data', { type, data: `[System] Port ${port} cleaned.\n` });
+                }
             } catch (e) { /* ignore */ }
         }
 
@@ -373,37 +388,47 @@ ipcMain.on('start-process', async (event, { type, command, cwd, port }) => {
 
         child.stdout.on('data', (d) => {
             const decodedData = smartDecode(d);
-            if (mainWindow) mainWindow.webContents.send('log-data', { type, data: decodedData });
+            if (mainWindow && !mainWindow.isDestroyed()) {
+                mainWindow.webContents.send('log-data', { type, data: decodedData });
+            }
             writeLogToFile(type, decodedData);
         });
 
         child.stderr.on('data', (d) => {
             const decodedData = smartDecode(d);
-            if (mainWindow) mainWindow.webContents.send('log-data', { type, data: decodedData, isError: true });
+            if (mainWindow && !mainWindow.isDestroyed()) {
+                mainWindow.webContents.send('log-data', { type, data: decodedData, isError: true });
+            }
             writeLogToFile(`${type}_ERROR`, decodedData);
         });
 
         child.on('error', (err) => {
-            if (mainWindow) mainWindow.webContents.send('log-data', {
-                type,
-                data: `\n[Process Error] 실행 실패: ${err.message}\n`,
-                isError: true
-            });
+            if (mainWindow && !mainWindow.isDestroyed()) {
+                mainWindow.webContents.send('log-data', {
+                    type,
+                    data: `\n[Process Error] 실행 실패: ${err.message}\n`,
+                    isError: true
+                });
+            }
         });
 
         child.on('close', (code) => {
             processes[type] = null;
-            if (mainWindow) mainWindow.webContents.send('process-status', { type, status: 'stopped', code });
-            if (mainWindow) mainWindow.webContents.send('log-data', { type, data: `\n[Process exited with code ${code}]\n` });
+            if (mainWindow && !mainWindow.isDestroyed()) {
+                mainWindow.webContents.send('process-status', { type, status: 'stopped', code });
+                mainWindow.webContents.send('log-data', { type, data: `\n[Process exited with code ${code}]\n` });
+            }
         });
 
     } catch (err) {
         console.error('Handled start error:', err);
-        if (mainWindow) mainWindow.webContents.send('log-data', {
-            type,
-            data: `\n[Fatal Error] 명령 실행 중 오류 발생: ${err.message}\n`,
-            isError: true
-        });
+        if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send('log-data', {
+                type,
+                data: `\n[Fatal Error] 명령 실행 중 오류 발생: ${err.message}\n`,
+                isError: true
+            });
+        }
     }
 });
 
@@ -427,7 +452,7 @@ ipcMain.on('open-external', (event, url) => {
 });
 
 ipcMain.on('minimize-window', () => {
-    if (mainWindow) mainWindow.minimize();
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.minimize();
 });
 
 // [NEW] 클립보드 이미지 쓰기 (Base64 형식)
