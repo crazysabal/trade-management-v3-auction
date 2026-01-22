@@ -280,9 +280,9 @@ GOOGLE_REFRESH_TOKEN=${process.env.GOOGLE_REFRESH_TOKEN || ''}
         await connection.end();
         console.log('✅ 데이터베이스 테이블 및 초기 데이터 생성 성공!');
 
-        // [추가] 재고 동기화 트리거 강제 업데이트 (v1.0.9+ 고정 패치)
-        console.log('\n! 최신 재고 연동 트리거 정합성을 확인합니다...');
-        await runCommand('node scripts/migration_v1_0_9_inventory_trigger.js', path.join(__dirname, 'backend'));
+        // [추가] 재고 동기화 트리거 강제 업데이트 및 데이터 전수 정화 (v1.0.12+ 고정 패치)
+        console.log('\n! 최신 재고 연동 트리거 정합성 확인 및 데이터 정화 작업을 시작합니다...');
+        await runCommand('node scripts/migration_v1_0_12_hard_sync.js', path.join(__dirname, 'backend'));
     } catch (error) {
         console.error('❌ DB 초기화 실패:', error.message);
         console.log('! [주의] MySQL이 실행 중인지, 비밀번호가 맞는지 확인해주세요.');

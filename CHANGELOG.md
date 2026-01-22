@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.0.12] - 2026-01-22
+
+### Fixed
+- **Inventory Recovery**: Implemented a mandatory global data synchronization during updates to fix corrupted inventory aggregate values caused by previous version bugs. This ensures "Insufficient Stock" errors are resolved for existing data.
+- **Triggers**: Finalized inventory triggers to maintain data integrity during trade updates.
+
 ## [1.0.11] - 2026-01-22
 
 ### Fixed
