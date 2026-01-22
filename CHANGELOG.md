@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.0.11] - 2026-01-22
+
+### Fixed
+- **Setup Stability**: Enhanced `master_setup.js` to automatically enforce inventory trigger synchronization during updates.
+- **Inventory Sync**: Fixed critical "Insufficient Stock" error during trade updates by ensuring aggregate inventory restoration.
+
 ## [1.0.10] - 2026-01-22
 
 ### Fixed
