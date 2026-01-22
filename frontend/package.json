@@ -1,6 +1,6 @@
 {
   "name": "hongda-biz-frontend",
-  "version": "1.0.18",
+  "version": "1.0.20",
   "private": true,
   "dependencies": {
     "@hello-pangea/dnd": "^18.0.1",

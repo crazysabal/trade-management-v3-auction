@@ -2,12 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
-## [1.0.18] - 2026-01-22
+## [1.0.20] - 2026-01-22
 
-### Fixed
-- **Launcher Stability**: Fixed the `TypeError: Object has been destroyed` error that occurred when the launcher tried to communicate with a window that was already closed. Added safe guards (`!mainWindow.isDestroyed()`) to all IPC and process event handlers.
+### Changed
+- **Auction Import Sorting Hierarchy**: Redefined the sorting priority for auction items. The new hierarchy is: 1. Status (PENDING first), 2. Arrival Number (Ascending), 3. Grade Priority (based on system sort order), 4. Weight (Descending).
 
-## [1.0.17] - 2026-01-22
+## [1.0.19] - 2026-01-22
 
 ### Added
 - **Zero-Touch Automated Migration**: Added a server-side migration system that automatically updates database triggers and performs a "Hard Sync" of inventory data upon server start. No manual script execution is required by the user.

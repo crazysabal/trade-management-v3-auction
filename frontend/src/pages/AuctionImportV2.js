@@ -498,17 +498,22 @@ function AuctionImportV2({ isWindow, onTradeChange, onClose }) {
                 if (a.status === 'PENDING' && b.status === 'IMPORTED') return -1;
                 if (a.status === 'IMPORTED' && b.status === 'PENDING') return 1;
 
-                // 2순위: 입하번호
+                // 2순위: 입하번호 (오름차순)
                 const numA = parseInt(a.arrive_no, 10) || 0;
                 const numB = parseInt(b.arrive_no, 10) || 0;
                 if (numA !== numB) return numA - numB;
 
-                // 3순위: 등급 우선순위
+                // 3순위: 등급 우선순위 (시스템 설정 순번 기준)
                 const gradeA = (a.grade || '').trim().toUpperCase();
                 const gradeB = (b.grade || '').trim().toUpperCase();
                 const priorityA = gradePriorityMap[gradeA] ?? 9999;
                 const priorityB = gradePriorityMap[gradeB] ?? 9999;
-                return priorityA - priorityB;
+                if (priorityA !== priorityB) return priorityA - priorityB;
+
+                // 4순위: 중량 내림차순 (동일 등급 내 무거운 순)
+                const weightA = getWeightInKg(a.weight, a.product_weight_unit || a.weight_unit);
+                const weightB = getWeightInKg(b.weight, b.product_weight_unit || b.weight_unit);
+                return weightB - weightA;
             });
             setRawData(sortedData);
 
