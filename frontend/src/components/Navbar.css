@@ -240,3 +240,145 @@
         /* 모바일 드롭다운 높이 축소 */
     }
 }
+
+/* [NEW] Navbar Actions & Responsive Layouts */
+.navbar-actions {
+    position: absolute;
+    right: 2rem;
+    top: 50%;
+    transform: translateY(-50%);
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.user-profile-desktop {
+    color: white;
+    font-size: 0.9rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.btn-menu-edit {
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: white;
+    padding: 0.4rem;
+    border-radius: 4px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    transition: background 0.2s;
+}
+
+.btn-menu-edit:hover {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+.btn-logout-desktop {
+    background: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    color: white;
+    padding: 0.4rem 0.8rem;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.85rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    transition: all 0.2s;
+}
+
+.btn-logout-desktop:hover {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.5);
+}
+
+/* Mobile specific overrides */
+@media screen and (max-width: 1200px) {
+    .navbar-actions {
+        display: none;
+        /* Hide top actions to give space to Title */
+    }
+
+    .navbar-logo {
+        max-width: 70%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        margin-left: 50px;
+    }
+
+    .mobile-user-section {
+        border-top: 1px solid #334155;
+        margin-top: auto;
+        /* Push to bottom of mobile menu */
+        padding: 1.5rem 1rem;
+        background-color: #0f172a;
+    }
+
+    .mobile-user-info {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+    }
+
+    .user-text {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        color: white;
+        flex: 1;
+        min-width: 0;
+    }
+
+    .username {
+        font-weight: 600;
+        font-size: 0.95rem;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .role-badge {
+        font-size: 0.7rem;
+        padding: 2px 6px;
+        border-radius: 4px;
+        background: #3b82f6;
+        font-weight: bold;
+        white-space: nowrap;
+    }
+
+    .role-badge.admin {
+        background: #ef4444;
+    }
+
+    .mobile-logout-btn {
+        padding: 0.4rem 0.75rem;
+        background: transparent;
+        border: 1px solid rgba(255, 255, 255, 0.3);
+        color: #cbd5e1;
+        border-radius: 6px;
+        font-size: 0.85rem;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.2s;
+        white-space: nowrap;
+    }
+
+    .mobile-logout-btn:hover {
+        background: rgba(255, 255, 255, 0.1);
+        color: white;
+    }
+}
+
+@media screen and (max-width: 480px) {
+    .navbar-logo {
+        font-size: 1rem;
+        max-width: 60%;
+    }
+}

@@ -667,11 +667,23 @@ BEGIN
             SET MESSAGE_TEXT = '이미 매출과 매칭된 매입은 삭제할 수 없습니다.';
         END IF;
         
+        -- Aggregate Inventory 차감 (매입 취소이므로 재고 감소)
+        UPDATE inventory 
+        SET quantity = quantity - OLD.quantity,
+            weight = weight - IFNULL(OLD.total_weight, 0)
+        WHERE product_id = OLD.product_id;
+        
         -- purchase_inventory에서 삭제
         DELETE FROM purchase_inventory WHERE trade_detail_id = OLD.id;
     END IF;
     
     IF v_trade_type = 'SALE' THEN
+        -- Aggregate Inventory 복구 (매출 취소이므로 재고 증가)
+        UPDATE inventory 
+        SET quantity = quantity + OLD.quantity,
+            weight = weight + IFNULL(OLD.total_weight, 0)
+        WHERE product_id = OLD.product_id;
+
         -- 매출 삭제 시: 매칭된 재고 복원
         UPDATE purchase_inventory pi
         JOIN sale_purchase_matching spm ON pi.id = spm.purchase_inventory_id

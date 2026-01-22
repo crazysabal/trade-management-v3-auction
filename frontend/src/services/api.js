@@ -276,6 +276,7 @@ export const systemAPI = {
   getCredentials: () => api.get('/system/backup/credentials'),
   saveCredentials: (data) => api.post('/system/backup/credentials', data),
   getGoogleDriveBackups: () => api.get('/system/backup/google-drive/files'), // 구글 드라이브 백업 파일 목록 조회 [NEW]
+  getVersion: () => api.get('/system/version'),
 };
 
 export default api;

@@ -1,19 +1,63 @@
 import React, { useState, useEffect } from 'react';
-import { settingsAPI } from '../services/api';
+import { settingsAPI, systemAPI } from '../services/api';
 import MenuEditorModal from '../components/MenuEditorModal'; // [NEW]
 
 const Settings = ({ ...rest }) => {
     const [menuModalOpen, setMenuModalOpen] = useState(false); // [NEW]
+    const [versionInfo, setVersionInfo] = useState(null);
+
+    useEffect(() => {
+        const fetchVersion = async () => {
+            try {
+                const res = await systemAPI.getVersion();
+                if (res.data.success) {
+                    setVersionInfo(res.data.data);
+                }
+            } catch (error) {
+                console.error('Failed to fetch version info:', error);
+            }
+        };
+        fetchVersion();
+    }, []);
 
     return (
         <div className="settings-container fade-in">
-            <div className="page-header" style={{ display: 'flex', alignItems: 'center' }}>
+            <div className="page-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <h1 className="page-title" style={{ margin: 0 }}>⚙️ 시스템 설정</h1>
+                {versionInfo && (
+                    <div style={{ fontSize: '0.9rem', color: '#64748b', fontWeight: '500', background: '#f1f5f9', padding: '4px 12px', borderRadius: '20px' }}>
+                        Version {versionInfo.version}
+                    </div>
+                )}
             </div>
 
             <div className="settings-content" style={{ marginTop: '20px' }}>
                 <div className="general-settings">
                     <div className="settings-section">
+                        <h2>시스템 정보</h2>
+                        <div className="setting-item" style={{
+                            backgroundColor: 'white',
+                            padding: '1.5rem',
+                            borderRadius: '12px',
+                            border: '1px solid #e2e8f0',
+                            boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+                            marginBottom: '1rem'
+                        }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <span style={{ color: '#64748b', fontSize: '0.9rem' }}>현재 버전</span>
+                                    <span style={{ fontWeight: '600', color: '#1e293b' }}>v{versionInfo?.version || '로딩 중...'}</span>
+                                </div>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <span style={{ color: '#64748b', fontSize: '0.9rem' }}>업데이트 날짜</span>
+                                    <span style={{ fontWeight: '600', color: '#1e293b' }}>{versionInfo?.date || '-'}</span>
+                                </div>
+                                <div style={{ marginTop: '0.5rem', padding: '0.75rem', backgroundColor: '#f8fafc', borderRadius: '8px', fontSize: '0.85rem', color: '#475569', borderLeft: '4px solid #3b82f6' }}>
+                                    {versionInfo?.description || '시스템 정보가 없습니다.'}
+                                </div>
+                            </div>
+                        </div>
+
                         <h2>윈도우 관리 설정</h2>
                         <div className="setting-item" style={{
                             backgroundColor: 'white',

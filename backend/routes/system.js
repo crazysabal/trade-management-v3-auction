@@ -254,4 +254,19 @@ router.get('/backup/google-drive/files', async (req, res) => {
     }
 });
 
+// 시스템 버전 정보 조회
+router.get('/version', (req, res) => {
+    try {
+        const versionPath = path.join(__dirname, '../../version.json');
+        if (!fs.existsSync(versionPath)) {
+            return res.json({ success: true, version: '1.0.0' }); // 기본값
+        }
+        const data = JSON.parse(fs.readFileSync(versionPath, 'utf8'));
+        res.json({ success: true, data });
+    } catch (error) {
+        console.error('Version check error:', error);
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
 module.exports = router;

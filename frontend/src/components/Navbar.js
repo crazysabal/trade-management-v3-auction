@@ -107,11 +107,11 @@ const Navbar = ({ onLaunchApp }) => {
                     📊 {companyName}
                 </div>
 
-                {/* [NEW] Logout Button (Visible on Desktop) */}
-                <div className="navbar-actions" style={{ position: 'absolute', right: '2rem', top: '50%', transform: 'translateY(-50%)', display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                    {/* [NEW] User Display */}
+                {/* [MODIFIED] Navbar Actions - Moved style to CSS class */}
+                <div className="navbar-actions">
+                    {/* [NEW] User Display (Visible on Desktop) */}
                     {user && (
-                        <div style={{ color: 'white', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <div className="user-profile-desktop">
                             <span>👤 {user.username}</span>
                             <span style={{
                                 fontSize: '0.7rem',
@@ -127,39 +127,16 @@ const Navbar = ({ onLaunchApp }) => {
 
                     {/* [NEW] Global Menu Editor Trigger (Failsafe) */}
                     <button
+                        className="btn-menu-edit"
                         onClick={() => setIsMenuEditorOpen(true)}
                         title="메뉴 편집 (숨겨진 메뉴 복구)"
-                        style={{
-                            background: 'rgba(255, 255, 255, 0.1)',
-                            border: '1px solid rgba(255,255,255,0.2)',
-                            color: 'white',
-                            padding: '0.4rem',
-                            borderRadius: '4px',
-                            cursor: 'pointer',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            width: '32px',
-                            height: '32px'
-                        }}
                     >
                         🛠️
                     </button>
 
                     <button
+                        className="btn-logout-desktop"
                         onClick={() => setIsLogoutConfirmOpen(true)}
-                        style={{
-                            background: 'transparent',
-                            border: '1px solid rgba(255,255,255,0.3)',
-                            color: 'white',
-                            padding: '0.4rem 0.8rem',
-                            borderRadius: '4px',
-                            cursor: 'pointer',
-                            fontSize: '0.85rem',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '0.5rem'
-                        }}
                     >
                         🔒 로그아웃
                     </button>
@@ -220,6 +197,23 @@ const Navbar = ({ onLaunchApp }) => {
                             </li>
                         );
                     })}
+
+                    {/* [NEW] Mobile User Info & Logout Section */}
+                    {isMobileMenuOpen && user && (
+                        <li className="nav-item mobile-user-section">
+                            <div className="mobile-user-info">
+                                <div className="user-text">
+                                    <span className="username">👤 {user.username}</span>
+                                    <span className={`role-badge ${user.role === 'admin' ? 'admin' : ''}`}>
+                                        {user.role === 'admin' ? 'ADMIN' : 'USER'}
+                                    </span>
+                                </div>
+                                <button className="mobile-logout-btn" onClick={() => setIsLogoutConfirmOpen(true)}>
+                                    🔒 로그아웃
+                                </button>
+                            </div>
+                        </li>
+                    )}
                 </ul>
             </div>
         </nav>

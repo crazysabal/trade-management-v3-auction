@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.0.9] - 2026-01-22
+
+### Fixed
+- **Inventory Sync**: Fixed a critical issue where aggregate inventory was not restored when deleting or updating a trade detail. This prevents the "Insufficient Stock" error during trade updates.
+- **Navbar UI**: Refined mobile layout to position the logout button next to user info for better space efficiency.
+
 ## [1.0.8] - 2026-01-22
 
 ### Added
