@@ -108,6 +108,7 @@ export const inventoryAPI = {
   getTransactions: (params) => api.get('/inventory/transactions', { params }),
   adjust: (data) => api.post('/inventory/adjust', data),
   getStats: () => api.get('/inventory/stats'),
+  recalculate: () => api.post('/inventory/recalculate'),
 };
 
 // 매입 건별 재고 API (신규)

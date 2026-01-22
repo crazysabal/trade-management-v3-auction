@@ -2,11 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
-## [1.0.7] - 2026-01-22
+## [1.0.8] - 2026-01-22
 
 ### Added
 - **Auction Statement**: Added "낙찰 명세서" menu item under "Auction Management" to view external auction results (`tgjungang.co.kr`).
 - **Real-time Product Sync**: Implemented `PRODUCT_DATA_CHANGED` event system. Modifications in `ProductManager` now instantly refresh `AuctionImportV2` and `TradePanel`.
+- **Stock Recalculation**: Added a "재고 복구 (Sync)" button in `InventoryList` to fix discrepancies between aggregate inventory and lot-based stock.
 
 ### Changed
 - **Auction Import**: "Register Purchase" button now correctly identifies pending items and displays "모두 완료됨" (All Completed) when finished.

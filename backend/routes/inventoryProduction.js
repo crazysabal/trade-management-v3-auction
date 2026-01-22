@@ -280,6 +280,24 @@ router.delete('/:id', async (req, res) => {
                  WHERE id = ?`,
                 [ing.used_quantity, ing.used_inventory_id]
             );
+
+            // [FIX] Restore Aggregate Inventory (Ingredient)
+            // Fetch product_id and weight for the ingredient
+            const [ingProdRows] = await connection.query(
+                'SELECT pi.product_id, p.weight FROM purchase_inventory pi JOIN products p ON pi.product_id = p.id WHERE pi.id = ?',
+                [ing.used_inventory_id]
+            );
+            if (ingProdRows.length > 0) {
+                const item = ingProdRows[0];
+                const restoreWeight = Number(ing.used_quantity) * Number(item.weight || 0);
+                await connection.query(
+                    `UPDATE inventory 
+                     SET quantity = quantity + ?,
+                         weight = weight + ?
+                     WHERE product_id = ?`,
+                    [ing.used_quantity, restoreWeight, item.product_id]
+                );
+            }
         }
 
         // 4. Delete Records (Reverse Order)
@@ -291,6 +309,15 @@ router.delete('/:id', async (req, res) => {
         await connection.query('DELETE FROM inventory_productions WHERE id = ?', [productionId]);
 
         // 4-3. Delete Output Inventory
+        // [FIX] Update Aggregate Inventory (Output) before deleting
+        const outputTotalWeight = Number(inventory.original_quantity) * Number(inventory.weight || 0);
+        await connection.query(
+            `UPDATE inventory 
+             SET quantity = quantity - ?,
+                 weight = weight - ?
+             WHERE product_id = ?`,
+            [inventory.original_quantity, outputTotalWeight, inventory.product_id]
+        );
         await connection.query('DELETE FROM purchase_inventory WHERE id = ?', [outputInventoryId]);
 
         // 4-4. Delete Trade Details & Master (Input & Output)

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { purchaseInventoryAPI } from '../services/api';
+import { purchaseInventoryAPI, inventoryAPI } from '../services/api';
 import { Link } from 'react-router-dom';
 import ConfirmModal from '../components/ConfirmModal';
 import TradeDetailModal from '../components/TradeDetailModal';
@@ -251,6 +251,47 @@ function InventoryList() {
     setProductionModal({
       isOpen: true,
       productionId: productionId
+    });
+  };
+
+  // 재고 정합성 복구 (재계산)
+  const handleRecalculateInventory = () => {
+    setModal({
+      isOpen: true,
+      type: 'warning',
+      title: '재고 정합성 복구',
+      message: '전체 재고 데이터를 다시 계산하시겠습니까?\n이 작업은 소진된 재고와 현재 재고의 합계를 다시 일치시킵니다.',
+      confirmText: '복구 시작',
+      showCancel: true,
+      onConfirm: async () => {
+        try {
+          setLoading(true);
+          await inventoryAPI.recalculate();
+          await loadData();
+          setModal({
+            isOpen: true,
+            type: 'success',
+            title: '복구 완료',
+            message: '재고 정합성 복구가 완료되었습니다.',
+            confirmText: '확인',
+            showCancel: false,
+            onConfirm: () => { }
+          });
+        } catch (error) {
+          console.error('재고 복구 오류:', error);
+          setModal({
+            isOpen: true,
+            type: 'warning',
+            title: '복구 실패',
+            message: '재고 복구 중 오류가 발생했습니다: ' + (error.response?.data?.message || error.message),
+            confirmText: '확인',
+            showCancel: false,
+            onConfirm: () => { }
+          });
+        } finally {
+          setLoading(false);
+        }
+      }
     });
   };
 
@@ -546,6 +587,22 @@ function InventoryList() {
             }}
           >
             🔄 새로고침
+          </button>
+          <button
+            onClick={handleRecalculateInventory}
+            style={{
+              padding: '0.4rem 0.8rem',
+              backgroundColor: '#e67e22',
+              color: 'white',
+              border: 'none',
+              borderRadius: '6px',
+              cursor: 'pointer',
+              fontSize: '0.85rem',
+              fontWeight: '500'
+            }}
+            title="재고 정합성 복구 (데이터가 맞지 않을 때 사용)"
+          >
+            🛠️ 재고 복구 (Sync)
           </button>
         </div>
 

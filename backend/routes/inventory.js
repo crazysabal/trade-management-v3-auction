@@ -476,4 +476,47 @@ router.get('/stats', async (req, res) => {
   }
 });
 
+// 재고 데이터 전수 재계산 (정합성 복귀용)
+router.post('/recalculate', async (req, res) => {
+  const connection = await db.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    console.log('[Inventory] Starting global stock recalculation...');
+
+    // 1. 모든 집계 재고를 0으로 초기화 (현재 활성 제품 대상)
+    await connection.query('UPDATE inventory SET quantity = 0, weight = 0');
+
+    // 2. purchase_inventory(Lot) 기준으로 집계 재고 재생성
+    // 각 Lot의 잔량(remaining_quantity)과 해당 품목의 기준 중량을 곱하여 집계
+    const syncQuery = `
+      INSERT INTO inventory (product_id, quantity, weight, purchase_price)
+      SELECT 
+        pi.product_id, 
+        SUM(pi.remaining_quantity) as total_qty, 
+        SUM(pi.remaining_quantity * IFNULL(p.weight, 0)) as total_weight,
+        MAX(pi.unit_price) as last_price
+      FROM purchase_inventory pi
+      JOIN products p ON pi.product_id = p.id
+      WHERE pi.status != 'DEPLETED' OR pi.remaining_quantity > 0
+      GROUP BY pi.product_id
+      ON DUPLICATE KEY UPDATE
+        quantity = VALUES(quantity),
+        weight = VALUES(weight),
+        purchase_price = VALUES(purchase_price)
+    `;
+
+    await connection.query(syncQuery);
+
+    await connection.commit();
+    res.json({ success: true, message: '전체 재고 정합성 복구가 완료되었습니다.' });
+  } catch (error) {
+    await connection.rollback();
+    console.error('재고 재계산 오류:', error);
+    res.status(500).json({ success: false, message: '재고 복구 중 오류가 발생했습니다: ' + error.message });
+  } finally {
+    connection.release();
+  }
+});
+
 module.exports = router;
