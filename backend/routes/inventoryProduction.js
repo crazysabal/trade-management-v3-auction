@@ -30,9 +30,10 @@ router.post('/', async (req, res) => {
         let companyId = null; // Use the company of the first ingredient
         let warehouseId = null; // Use the warehouse of the first ingredient (Output location)
 
-        // [NEW] Get Output Product's Weight Unit
-        const [outProdRows] = await connection.query('SELECT weight_unit FROM products WHERE id = ?', [output_product_id]);
+        // [NEW] Get Output Product's Weight Unit & Weight
+        const [outProdRows] = await connection.query('SELECT weight_unit, weight FROM products WHERE id = ?', [output_product_id]);
         const outputWeightUnit = outProdRows[0]?.weight_unit || 'kg';
+        const outputUnitWeight = outProdRows[0]?.weight || 0;
 
         for (const ing of ingredients) {
             const [rows] = await connection.query('SELECT * FROM purchase_inventory WHERE id = ? FOR UPDATE', [ing.inventory_id]);
@@ -72,6 +73,19 @@ router.post('/', async (req, res) => {
             [tradeMasterId, output_product_id, output_quantity, newUnitPrice, totalCost, totalCost, sender, outputWeightUnit]
         );
         const tradeDetailId = detailResult.insertId;
+
+        // 3.1 [FIX] Manually Update Aggregate Inventory (Output)
+        // Since trigger doesn't handle 'PRODUCTION', we must update 'inventory' table here.
+        const outputTotalWeight = Number(output_quantity) * Number(outputUnitWeight);
+        await connection.query(
+            `INSERT INTO inventory (product_id, quantity, weight, purchase_price)
+             VALUES (?, ?, ?, ?)
+             ON DUPLICATE KEY UPDATE
+                quantity = quantity + VALUES(quantity),
+                weight = weight + VALUES(weight),
+                purchase_price = VALUES(purchase_price)`, // Update purchase price to latest? Or weighted average? Trigger overwrites it. We follow suite.
+            [output_product_id, output_quantity, outputTotalWeight, newUnitPrice]
+        );
 
         // 4. Create Purchase Inventory (This is the Result Item)
         // [NEW] Handle display_order inheritance/shift (Based on FIRST ingredient)
@@ -151,7 +165,7 @@ router.post('/', async (req, res) => {
             // Re-fetching inside loop is bad for perf but ok for low volume.
 
             const [localRows] = await connection.query(
-                'SELECT pi.product_id, pi.unit_price, pi.sender, p.weight_unit FROM purchase_inventory pi JOIN products p ON pi.product_id = p.id WHERE pi.id = ?',
+                'SELECT pi.product_id, pi.unit_price, pi.sender, p.weight_unit, p.weight FROM purchase_inventory pi JOIN products p ON pi.product_id = p.id WHERE pi.id = ?',
                 [ing.inventory_id]
             );
             const item = localRows[0];
@@ -172,6 +186,16 @@ router.post('/', async (req, res) => {
                     item.sender,
                     item.weight_unit || 'kg'
                 ]
+            );
+
+            // 6.1 [FIX] Manually Update Aggregate Inventory (Ingredient)
+            const ingredientTotalWeight = Number(ing.use_quantity) * Number(item.weight || 0);
+            await connection.query(
+                `UPDATE inventory 
+                 SET quantity = quantity - ?,
+                     weight = weight - ?
+                 WHERE product_id = ?`,
+                [ing.use_quantity, ingredientTotalWeight, item.product_id]
             );
         }
 

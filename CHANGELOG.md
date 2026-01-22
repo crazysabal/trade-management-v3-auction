@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [1.0.6] - 2026-01-22
+## [1.0.7] - 2026-01-22
 
 ### Added
 - **Auction Statement**: Added "낙찰 명세서" menu item under "Auction Management" to view external auction results (`tgjungang.co.kr`).
@@ -16,6 +16,7 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 - **TradePanel**: Resolved `ReferenceError` where `fetchBaseData` was called before initialization.
 - **Performance**: Optimized re-rendering in `AuctionImportV2` using `useMemo` for mapping logic.
+- **Critical Bug Fix**: Resolved "Insufficient Inventory" error during sales of split/produced items. Added manual synchronization to `inventory` aggregate table for "PRODUCTION" events, as the database trigger previously ignored them.
 
 ## [1.0.5] - 2026-01-21
 - **Auction Account Management**: Fixes for account deletion and session cleanup.
