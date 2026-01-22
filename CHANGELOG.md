@@ -2,7 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
-## [1.0.12] - 2026-01-22
+## [1.0.16] - 2026-01-22
+
+### Fixed
+- **Product Sorting**: Standardized the default sort order for product lists across the system. It now sorts by `product_name` first, ensuring that items within the same group stay together even after a bulk import/export reset.
+
+## [1.0.15] - 2026-01-22
+
+### Added
+- **Zero-Touch Automated Migration**: Added a server-side migration system that automatically updates database triggers and performs a "Hard Sync" of inventory data upon server start. No manual script execution is required by the user.
 
 ### Fixed
 - **Inventory Recovery**: Implemented a mandatory global data synchronization during updates to fix corrupted inventory aggregate values caused by previous version bugs. This ensures "Insufficient Stock" errors are resolved for existing data.

@@ -1,11 +1,13 @@
-require('dotenv').config({ path: require('path').join(__dirname, '../.env') });
-const db = require('../config/database');
+/**
+ * v1.0.12 - 재고 데이터 전수 동기화 및 트리거 최종 보정 마이그레이션
+ * 서버 시작 시 자동으로 실행되어 트리거를 최신화하고 꼬여있는 재고 데이터를 복구합니다.
+ */
+module.exports = async (db) => {
+    console.log('--- [v1.0.12 Migration] 재고 트리거 갱신 및 데이터 하드 싱크 시작 ---');
 
-async function runMigration() {
-    console.log('--- [v1.0.12] 재고 데이터 전수 동기화 및 트리거 최종 보정 시작 ---');
     try {
-        // [1] 트리거 정합성 재확인 (v1.0.9~v1.0.11 핵심 로직 포함)
-        console.log('🔄 데이터베이스 트리거 최신화 중...');
+        // [1] 트리거 정합성 최신화
+        console.log('[Migration] 트리거(INSERT/DELETE) 교체 중...');
         await db.query('DROP TRIGGER IF EXISTS after_trade_detail_insert');
         await db.query('DROP TRIGGER IF EXISTS before_trade_detail_delete');
 
@@ -116,18 +118,15 @@ BEGIN
     END IF;
     DELETE FROM inventory_transactions WHERE trade_detail_id = OLD.id;
 END`;
+
         await db.query(insertTriggerSQL);
         await db.query(deleteTriggerSQL);
-        console.log('✅ 트리거 업데이트 완료');
+        console.log('[Migration] 트리거 업데이트 완료');
 
         // [2] 꼬인 데이터 전수 복구 (Hard Sync)
-        // 기존 bugs로 인해 inventory 테이블이 음수이거나 잘못된 값을 가진 경우를 위해
-        // Lot(purchase_inventory) 정보를 기준으로 집계 재고를 강제 재계산합니다.
-        console.log('🔄 꼬인 재고 데이터 전수 복구 중...');
-
-        // 1. 초기화 (모든 활성 품목 대상)
+        console.log('[Migration] 꼬인 재고 데이터 전수 복구 중 (Hard Sync)...');
+        // 1. 초기화
         await db.query('UPDATE inventory SET quantity = 0, weight = 0');
-
         // 2. Lot 기반 재계산
         const syncSQL = `
             INSERT INTO inventory (product_id, quantity, weight, purchase_price)
@@ -146,15 +145,11 @@ END`;
                 purchase_price = VALUES(purchase_price)
         `;
         await db.query(syncSQL);
-        console.log('✅ 재고 데이터 동기화 완료');
+        console.log('[Migration] 재고 데이터 동기화 완료');
 
-        console.log('🏁 v1.0.12 통합 마이그레이션 및 데이터 정화 작업이 완료되었습니다.');
-
+        console.log('✅ [v1.0.12 Migration] 작업 성공');
     } catch (err) {
-        console.error('❌ 작업 중 오류 발생:', err.message);
-    } finally {
-        process.exit();
+        console.error('❌ [v1.0.12 Migration] 실패:', err.message);
+        throw err; // MigrationRunner에서 캐치하도록 throw
     }
-}
-
-runMigration();
+};

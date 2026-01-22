@@ -27,7 +27,7 @@ router.get('/export/excel', async (req, res) => {
       LEFT JOIN categories pc ON c.parent_id = pc.id
       LEFT JOIN product_mapping pm ON p.id = pm.system_product_id AND pm.is_active = 1
       GROUP BY p.id, pc.category_name, c.category_name
-      ORDER BY p.sort_order, p.product_code
+      ORDER BY p.product_name, p.sort_order, p.product_code
     `;
     const [rows] = await db.query(query);
 
@@ -35,8 +35,11 @@ router.get('/export/excel', async (req, res) => {
     let productSortCounter = 0;
 
     const data = rows.map((row) => {
-      if (row.product_name !== currentProductName) {
-        currentProductName = row.product_name;
+      const name = (row.product_name || '').trim();
+
+      // 품목명이 없거나(empty), 다른 품목명이 나오면 순번 초기화
+      if (!name || name !== currentProductName) {
+        currentProductName = name;
         productSortCounter = 1;
       } else {
         productSortCounter++;
@@ -50,7 +53,7 @@ router.get('/export/excel', async (req, res) => {
         '중량': row.weight || '',
         '단위': row.weight_unit || 'kg',
         '품목코드': row.product_code,
-        '정렬순서': row.sort_order || productSortCounter,
+        '정렬순서': productSortCounter,
         '경매 매핑 정보': row.auction_mappings || '',
         '비고': row.notes || '',
         '사용여부': row.is_active ? '사용' : '미사용'
@@ -165,25 +168,29 @@ router.post('/import/excel', upload.single('file'), async (req, res) => {
         await connection.query('DELETE FROM product_mapping WHERE system_product_id = ?', [productId]);
 
         if (mappingStr && mappingStr.trim()) {
-          const mappings = mappingStr.split(',').map(m => m.trim()).filter(m => m);
+          const mappings = Array.from(new Set(mappingStr.split(',').map(m => m.trim()).filter(m => m)));
           for (const m of mappings) {
-            // 파싱: AuctionName(Weight/Grade)
+            // 파싱: AuctionName(Weight/Grade) - 마지막 괄호를 찾도록 개선
             let auctionName = m;
             let auctionWeight = '';
             let auctionGrade = '';
 
-            const match = m.match(/^(.+?)\((.*?)\/(.*?)\)$/);
+            const match = m.match(/^(.*)\(([^/]+)\/([^)]+)\)$/);
             if (match) {
-              auctionName = match[1];
-              auctionWeight = match[2];
-              auctionGrade = match[3];
+              auctionName = match[1].trim();
+              auctionWeight = match[2].trim();
+              auctionGrade = match[3].trim();
             }
 
-            await connection.query(
-              `INSERT INTO product_mapping (auction_product_name, auction_weight, auction_grade, system_product_id, is_active) 
-               VALUES (?, ?, ?, ?, 1)`,
-              [auctionName, auctionWeight, auctionGrade, productId]
-            );
+            try {
+              await connection.query(
+                `INSERT IGNORE INTO product_mapping (auction_product_name, auction_weight, auction_grade, system_product_id, is_active) 
+                 VALUES (?, ?, ?, ?, 1)`,
+                [auctionName, auctionWeight, auctionGrade, productId]
+              );
+            } catch (err) {
+              console.warn(`[Import Notice] 매핑 건너뜀 (이미 존재하거나 오류): ${m}`, err.message);
+            }
           }
         }
       }
@@ -238,7 +245,7 @@ router.get('/', async (req, res) => {
       params.push(is_active === 'true' ? 1 : 0);
     }
 
-    query += ' ORDER BY p.sort_order, p.product_code';
+    query += ' ORDER BY p.product_name, p.sort_order, p.product_code';
 
     const [rows] = await db.query(query, params);
     res.json({ success: true, data: rows });
