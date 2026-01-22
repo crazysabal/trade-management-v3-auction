@@ -411,8 +411,16 @@ const InventoryQuickView = ({ inventoryAdjustments = {}, refreshKey, onInventory
                 return;
             }
 
-            // 기본 선택값 설정 (가장 큰 중량의 하위 품목을 우선적으로 선택하거나 비워둠)
-            const defaultTarget = validTargets.sort((a, b) => getWeightInGrams(b.weight, b.weight_unit) - getWeightInGrams(a.weight, a.weight_unit))[0];
+            // 정렬: 순번(sort_order) 우선, 그 다음 중량 큰 순서
+            const sortedTargets = [...validTargets].sort((a, b) => {
+                const orderA = a.sort_order || 9999;
+                const orderB = b.sort_order || 9999;
+                if (orderA !== orderB) return orderA - orderB;
+                return getWeightInGrams(b.weight, b.weight_unit) - getWeightInGrams(a.weight, a.weight_unit);
+            });
+
+            // 기본 선택값 설정 (정렬된 첫 번째 항목)
+            const defaultTarget = sortedTargets[0];
 
             setQuickSplitModal({
                 isOpen: true,
@@ -421,7 +429,7 @@ const InventoryQuickView = ({ inventoryAdjustments = {}, refreshKey, onInventory
                 splitCount: Math.round(curGrams / getWeightInGrams(defaultTarget.weight, defaultTarget.weight_unit)).toString(),
                 sourceUseQuantity: Math.floor(inventory.remaining_quantity || 0).toString(),
                 products: productsList,
-                validTargets: validTargets // 필터링된 목록 저장
+                validTargets: sortedTargets // 정렬된 목록 저장
             });
         } catch (err) {
             console.error('품목 로딩 실패:', err);

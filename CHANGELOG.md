@@ -2,12 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.0.17] - 2026-01-22
+
+### Changed
+- **Inventory Quick Split**: The sorting order of the "Result Product" selection in the stock split modal has been improved. It now prioritizes the database `sort_order` first, followed by weight (descending), making it easier to select common target products.
+
 ## [1.0.16] - 2026-01-22
-
-### Fixed
-- **Product Sorting**: Standardized the default sort order for product lists across the system. It now sorts by `product_name` first, ensuring that items within the same group stay together even after a bulk import/export reset.
-
-## [1.0.15] - 2026-01-22
 
 ### Added
 - **Zero-Touch Automated Migration**: Added a server-side migration system that automatically updates database triggers and performs a "Hard Sync" of inventory data upon server start. No manual script execution is required by the user.
