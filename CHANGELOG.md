@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.0.27] - 2026-01-23
+
+### Fixed
+- **System Stability**: Resolved "Unknown column 'notes' in 'field list'" error by ensuring the `notes` column exists in `inventory_transactions`. This fixes a critical issue where deleting production records would fail in environments missing this column.
+
 ## [1.0.26] - 2026-01-23
 
 ### Fixed
