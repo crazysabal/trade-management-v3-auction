@@ -380,12 +380,12 @@ const UnsettledPrintModal = ({ isOpen, onClose, data }) => {
                                                                     </td>
                                                                     <td>{d.sender_name || '-'}</td>
                                                                     <td>{d.grade} {d.size && `(${d.size})`}</td>
-                                                                    <td>{parseFloat(d.quantity || 0).toString()}</td>
+                                                                    <td className="text-right">{parseFloat(d.quantity || 0).toString()}</td>
                                                                     <td className="text-right">{formatCurrency(d.unit_price)}</td>
                                                                     <td className="text-right" style={{ color: d.trade_type === 'SALE' ? '#000' : '#d32f2f' }}>
                                                                         {formatCurrency(amount * sign)}
                                                                     </td>
-                                                                    <td className="text-left" style={{ fontSize: '7.5pt' }}>
+                                                                    <td className="text-left" style={{ fontSize: '9pt', whiteSpace: 'pre-wrap' }}>
                                                                         {d.note}
                                                                     </td>
                                                                 </tr>
@@ -405,7 +405,7 @@ const UnsettledPrintModal = ({ isOpen, onClose, data }) => {
                                                                     <td className="text-right" style={{ color: amount < 0 ? '#d32f2f' : '#000' }}>
                                                                         {formatCurrency(amount)}
                                                                     </td>
-                                                                    <td className="text-left" style={{ fontSize: '7.5pt', color: '#666' }}>
+                                                                    <td className="text-left">
                                                                         {d.payment_method}
                                                                     </td>
                                                                 </tr>

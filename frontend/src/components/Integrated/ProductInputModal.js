@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { productAPI, categoryAPI } from '../../services/api';
 import SearchableSelect from '../SearchableSelect';
 import ConfirmModal from '../ConfirmModal';
@@ -39,6 +39,14 @@ const ProductInputModal = ({ isOpen, onClose, onSuccess, initialData = null, isE
     // Temp inputs for tags
     const [gradeInput, setGradeInput] = useState('');
     const [weightInput, setWeightInput] = useState('');
+    // Refs for focus management
+    const categoryRef = useRef(null);
+    const productNameRef = useRef(null);
+    const gradeRef = useRef(null);
+    const weightRef = useRef(null);
+    const multiGradeRef = useRef(null);
+    const multiWeightRef = useRef(null);
+    const submitRef = useRef(null);
 
     // Internal Modal (Confirmations)
     const [confirmModal, setConfirmModal] = useState({
@@ -77,6 +85,11 @@ const ProductInputModal = ({ isOpen, onClose, onSuccess, initialData = null, isE
                 // Load for Copy (Add Grade)
                 loadProductToCopy(copyFromId);
             }
+
+            // Auto-focus on Category
+            setTimeout(() => {
+                categoryRef.current?.focus();
+            }, 100);
         }
     }, [isOpen, initialData, isEdit, copyFromId]);
 
@@ -206,11 +219,17 @@ const ProductInputModal = ({ isOpen, onClose, onSuccess, initialData = null, isE
                 }));
             }
             setInput('');
-        } else if (e.key === 'Backspace' && !input && formData[field].length > 0) {
-            // Remove last tag
-            const newList = [...formData[field]];
-            newList.pop();
-            setFormData(prev => ({ ...prev, [field]: newList }));
+        } else if (e.key === 'Enter' && !input) {
+            // [NEW] Empty Enter -> Move to next field
+            e.preventDefault();
+            if (field === 'grades') {
+                if (isMultiWeight) multiWeightRef.current?.focus();
+                else weightRef.current?.focus();
+            } else if (field === 'weights') {
+                // Focus submit button if possible, or just stay
+                // Focus submit button
+                submitRef.current?.focus();
+            }
         }
     };
 
@@ -267,6 +286,17 @@ const ProductInputModal = ({ isOpen, onClose, onSuccess, initialData = null, isE
                 setIsMultiWeight(false);
             }
         }
+
+        // Auto-focus after toggle
+        setTimeout(() => {
+            if (field === 'grades') {
+                if (enable) multiGradeRef.current?.focus();
+                else gradeRef.current?.focus();
+            } else if (field === 'weights') {
+                if (enable) multiWeightRef.current?.focus();
+                else weightRef.current?.focus();
+            }
+        }, 50);
     };
 
     // Local SegmentedControl was removed in favor of global one
@@ -538,7 +568,7 @@ const ProductInputModal = ({ isOpen, onClose, onSuccess, initialData = null, isE
                         {!isEdit && isAddingGrade && (
                             <div style={{ marginBottom: '1.5rem', padding: '0.75rem', backgroundColor: '#fffbeb', borderRadius: '8px', border: '1px solid #fcd34d' }}>
                                 <p style={{ margin: 0, fontSize: '0.9rem', color: '#92400e' }}>
-                                    📌 "{formData.product_name}${formData.weight ? `(${parseFloat(formData.weight)}${formData.weight_unit || 'kg'})` : ''}" 품목에 새로운 등급을 추가합니다.
+                                    📌 "{formData.product_name}" 품목에 새로운 등급을 추가합니다.
                                 </p>
                             </div>
                         )}
@@ -546,13 +576,41 @@ const ProductInputModal = ({ isOpen, onClose, onSuccess, initialData = null, isE
 
                         {/* Main Form */}
                         <div className="form-group" style={{ display: 'flex', alignItems: 'center', marginBottom: '1rem', gap: '12px' }}>
+                            <label style={{ width: '100px', flexShrink: 0, fontWeight: '600', color: '#475569' }}>분류</label>
+                            <div style={{ flex: 1 }}>
+                                <SearchableSelect
+                                    ref={categoryRef}
+                                    options={categoryOptions}
+                                    value={formData.category_id || ''}
+                                    onChange={opt => {
+                                        setFormData({ ...formData, category_id: opt?.value || '' });
+                                        if (opt) productNameRef.current?.focus();
+                                    }}
+                                    placeholder="분류 선택"
+                                    isDisabled={isAddingGrade || isEdit}
+                                />
+                            </div>
+                            {/* Symmetry spacer */}
+                            {!isEdit && <div style={{ width: '110px', flexShrink: 0 }} />}
+                        </div>
+
+
+                        <div className="form-group" style={{ display: 'flex', alignItems: 'center', marginBottom: '1rem', gap: '12px' }}>
                             <label style={{ width: '100px', flexShrink: 0, fontWeight: '600', color: '#475569' }}>품목명</label>
                             <div style={{ flex: 1 }}>
                                 <input
+                                    ref={productNameRef}
                                     type="text"
                                     name="product_name"
                                     value={formData.product_name || ''}
                                     onChange={handleChange}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter' && formData.product_name) {
+                                            e.preventDefault();
+                                            if (isMultiGrade) multiGradeRef.current?.focus();
+                                            else gradeRef.current?.focus();
+                                        }
+                                    }}
                                     style={{ width: '100%', height: '40px', backgroundColor: (isAddingGrade || isEdit) ? '#f1f5f9' : 'white', cursor: (isAddingGrade || isEdit) ? 'not-allowed' : 'text' }}
                                     disabled={isAddingGrade || isEdit}
                                     placeholder="예: 사과"
@@ -562,21 +620,6 @@ const ProductInputModal = ({ isOpen, onClose, onSuccess, initialData = null, isE
                                         ⚠️ 품목명 수정은 목록 상단의 ✏️ 아이콘을 이용해주세요.
                                     </p>
                                 )}
-                            </div>
-                            {/* Symmetry spacer */}
-                            {!isEdit && <div style={{ width: '110px', flexShrink: 0 }} />}
-                        </div>
-
-                        <div className="form-group" style={{ display: 'flex', alignItems: 'center', marginBottom: '1rem', gap: '12px' }}>
-                            <label style={{ width: '100px', flexShrink: 0, fontWeight: '600', color: '#475569' }}>분류</label>
-                            <div style={{ flex: 1 }}>
-                                <SearchableSelect
-                                    options={categoryOptions}
-                                    value={formData.category_id || ''}
-                                    onChange={opt => setFormData({ ...formData, category_id: opt?.value || '' })}
-                                    placeholder="분류 선택"
-                                    isDisabled={isAddingGrade || isEdit}
-                                />
                             </div>
                             {/* Symmetry spacer */}
                             {!isEdit && <div style={{ width: '110px', flexShrink: 0 }} />}
@@ -602,6 +645,7 @@ const ProductInputModal = ({ isOpen, onClose, onSuccess, initialData = null, isE
                                                 <Tag key={idx} text={g} onRemove={() => removeTag(idx, 'grades')} />
                                             ))}
                                             <input
+                                                ref={multiGradeRef}
                                                 type="text"
                                                 value={gradeInput}
                                                 onChange={(e) => setGradeInput(e.target.value)}
@@ -614,11 +658,18 @@ const ProductInputModal = ({ isOpen, onClose, onSuccess, initialData = null, isE
                                     </div>
                                 ) : (
                                     <input
+                                        ref={gradeRef}
                                         type="text"
                                         name="grade"
                                         value={formData.grade || ''}
                                         onChange={handleChange}
-                                        onKeyDown={handlePreventEnter}
+                                        onKeyDown={(e) => {
+                                            handlePreventEnter(e);
+                                            if (e.key === 'Enter' && formData.grade) {
+                                                if (isMultiWeight) multiWeightRef.current?.focus();
+                                                else weightRef.current?.focus();
+                                            }
+                                        }}
                                         placeholder="예: 특"
                                         style={{ width: '100%', height: '40px' }}
                                     />
@@ -659,6 +710,7 @@ const ProductInputModal = ({ isOpen, onClose, onSuccess, initialData = null, isE
                                                     <Tag key={idx} text={`${w}${formData.weight_unit || 'kg'}`} onRemove={() => removeTag(idx, 'weights')} />
                                                 ))}
                                                 <input
+                                                    ref={multiWeightRef}
                                                     type="text"
                                                     value={weightInput}
                                                     onChange={(e) => setWeightInput(e.target.value)}
@@ -671,12 +723,18 @@ const ProductInputModal = ({ isOpen, onClose, onSuccess, initialData = null, isE
                                         </div>
                                     ) : (
                                         <input
+                                            ref={weightRef}
                                             type="number"
                                             step="0.1"
                                             name="weight"
                                             value={formData.weight || ''}
                                             onChange={handleChange}
-                                            onKeyDown={handlePreventEnter}
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter') {
+                                                    e.preventDefault();
+                                                    submitRef.current?.focus();
+                                                }
+                                            }}
                                             style={{ width: '100%', height: '40px' }}
                                         />
                                     )}
@@ -688,7 +746,13 @@ const ProductInputModal = ({ isOpen, onClose, onSuccess, initialData = null, isE
                                             { label: 'g', value: 'g' }
                                         ]}
                                         value={formData.weight_unit || 'kg'}
-                                        onChange={(val) => setFormData(prev => ({ ...prev, weight_unit: val }))}
+                                        onChange={(val) => {
+                                            setFormData(prev => ({ ...prev, weight_unit: val }));
+                                            setTimeout(() => {
+                                                if (isMultiWeight) multiWeightRef.current?.focus();
+                                                else weightRef.current?.focus();
+                                            }, 50);
+                                        }}
                                     />
                                 </div>
                                 {!isEdit && (
@@ -714,12 +778,38 @@ const ProductInputModal = ({ isOpen, onClose, onSuccess, initialData = null, isE
                                 </div>
                             )}
                         </div>
+
+                        <div className="form-group" style={{ display: 'flex', alignItems: 'flex-start', marginBottom: '1rem', gap: '12px' }}>
+                            <label style={{ width: '100px', flexShrink: 0, fontWeight: '600', color: '#475569', marginTop: '8px' }}>비고</label>
+                            <div style={{ flex: 1 }}>
+                                <textarea
+                                    name="notes"
+                                    value={formData.notes || ''}
+                                    onChange={handleChange}
+                                    placeholder="특이사항 입력"
+                                    style={{
+                                        width: '100%',
+                                        height: '80px',
+                                        fontSize: '1rem',
+                                        fontWeight: 'normal',
+                                        padding: '10px',
+                                        resize: 'none'
+                                    }}
+                                />
+                            </div>
+                            {!isEdit && <div style={{ width: '110px', flexShrink: 0 }} />}
+                        </div>
                     </form>
                 </div>
 
                 <div className="modal-footer">
                     <button className="modal-btn modal-btn-cancel" onClick={onClose}>취소</button>
-                    <button className="modal-btn modal-btn-primary" type="submit" form="product-form">
+                    <button
+                        ref={submitRef}
+                        className="modal-btn modal-btn-primary"
+                        type="submit"
+                        form="product-form"
+                    >
                         {isEdit ? '수정 저장' : '등록'}
                     </button>
                 </div>

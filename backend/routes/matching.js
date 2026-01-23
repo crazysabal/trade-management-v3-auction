@@ -97,6 +97,7 @@ router.get('/all-sales', async (req, res) => {
         tm.company_id,
         c.business_name as customer_name, -- [Changed] company_name -> business_name (법인명)
         c.company_name,                   -- [Changed] alias -> company_name (별칭)
+        c.sort_order,
         COUNT(td.id) as item_count,
         SUM(td.quantity) as total_quantity,
         SUM(CASE WHEN td.matching_status = 'MATCHED' THEN td.quantity ELSE 0 END) as matched_quantity,
@@ -122,8 +123,8 @@ router.get('/all-sales', async (req, res) => {
       WHERE tm.trade_type = 'SALE'
         AND tm.trade_date >= ?
         AND tm.trade_date <= ?
-      GROUP BY tm.id, tm.trade_number, tm.trade_date, tm.total_amount, tm.company_id, c.business_name, c.company_name
-      ORDER BY tm.trade_date DESC, tm.id DESC
+      GROUP BY tm.id, tm.trade_number, tm.trade_date, tm.total_amount, tm.company_id, c.business_name, c.company_name, c.sort_order
+      ORDER BY DATE(tm.trade_date) DESC, c.sort_order ASC, c.business_name ASC
     `, [filterStartDate, filterEndDate]);
 
     // 각 전표의 전체 매칭 상태 계산 + 잔고 조회
@@ -309,7 +310,7 @@ router.post('/', async (req, res) => {
       const [invUpd] = await connection.query(`
         UPDATE purchase_inventory 
         SET remaining_quantity = remaining_quantity - ?, 
-            status = CASE WHEN remaining_quantity - ? <= 0 THEN 'DEPLETED' ELSE 'AVAILABLE' END
+            status = CASE WHEN remaining_quantity - ? <= 0.0001 THEN 'DEPLETED' ELSE 'AVAILABLE' END
         WHERE id = ? AND remaining_quantity >= ?
       `, [matchQty, matchQty, purchase_inventory_id, matchQty]);
 
@@ -463,7 +464,7 @@ router.post('/auto', async (req, res) => {
       const [invUpd] = await connection.query(`
         UPDATE purchase_inventory 
         SET remaining_quantity = remaining_quantity - ?, 
-            status = CASE WHEN remaining_quantity - ? <= 0 THEN 'DEPLETED' ELSE 'AVAILABLE' END
+            status = CASE WHEN remaining_quantity - ? <= 0.0001 THEN 'DEPLETED' ELSE 'AVAILABLE' END
         WHERE id = ? AND remaining_quantity >= ?
       `, [matchQty, matchQty, inventory.id, matchQty]);
 
@@ -915,8 +916,8 @@ router.get('/trade/:trade_master_id/inventory', async (req, res) => {
       JOIN trade_details td ON pi.trade_detail_id = td.id
       JOIN trade_masters tm ON td.trade_master_id = tm.id
       JOIN companies c ON tm.company_id = c.id
-      WHERE pi.status = 'AVAILABLE' 
-        AND pi.remaining_quantity > 0
+      WHERE pi.remaining_quantity > 0
+        AND pi.status != 'CANCELLED' 
       ORDER BY pi.purchase_date ASC, pi.id ASC
     `);
 

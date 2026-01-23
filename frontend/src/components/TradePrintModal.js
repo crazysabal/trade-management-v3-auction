@@ -327,6 +327,8 @@ function TradePrintModal({ isOpen, onClose, tradeId }) {
     }
     .notes-content {
       padding: 2px;
+      white-space: pre-wrap !important;
+      word-break: break-all;
     }
     .balance-section {
       flex: 1;
@@ -679,10 +681,10 @@ function TradePrintModal({ isOpen, onClose, tradeId }) {
               <tr key={detail.id || index}>
                 <td>{startIndex + index + 1}</td>
                 <td className="text-left">{formatProductName(detail)}</td>
-                <td>{formatNumber(detail.quantity)}</td>
+                <td className="text-right">{formatNumber(detail.quantity)}</td>
                 <td className="text-right">{formatCurrency(detail.unit_price)}</td>
                 <td className="text-right">{formatCurrency(detail.supply_amount || (detail.quantity * detail.unit_price))}</td>
-                <td className="text-left" style={{ fontSize: '7pt' }}>{detail.notes || ''}</td>
+                <td className="text-left" style={{ fontSize: '9pt', whiteSpace: 'pre-wrap' }}>{detail.notes || ''}</td>
               </tr>
             ))}
             {/* 빈 행 추가 (A4 용지에 맞게 총 20행 유지) */}

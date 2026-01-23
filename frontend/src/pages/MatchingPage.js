@@ -172,8 +172,13 @@ function MatchingPage({ isWindow, refreshKey, onTradeChange }) {
 
       // 오름차순 정렬 (날짜순, 같은 날짜면 거래처명순)
       unmatched.sort((a, b) => {
-        const dateCompare = a.trade_date.localeCompare(b.trade_date);
+        const dateA = a.trade_date.split('T')[0];
+        const dateB = b.trade_date.split('T')[0];
+        const dateCompare = dateA.localeCompare(dateB);
         if (dateCompare !== 0) return dateCompare;
+        const sortA = a.sort_order || 9999;
+        const sortB = b.sort_order || 9999;
+        if (sortA !== sortB) return sortA - sortB;
         return a.customer_name.localeCompare(b.customer_name);
       });
 

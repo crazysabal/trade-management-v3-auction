@@ -793,6 +793,12 @@ function TradePanel({
 
     if (companyId) {
       loadCompanySummary(companyId, tradeType, date);
+      // [NEW] 거래처 선택 후 빈 행이 생기면 품목으로 포커스 자동 이동
+      setTimeout(() => {
+        if (productRefs.current[0]) {
+          productRefs.current[0].focus();
+        }
+      }, 100);
     } else {
       setCompanySummary(null);
     }
@@ -837,13 +843,14 @@ function TradePanel({
       sender_name: '',
       notes: ''
     };
+    const nextIndex = details.length;
     setDetails([...details, newRow]);
 
     setTimeout(() => {
-      if (productRefs.current[details.length]) {
-        productRefs.current[details.length].focus();
+      if (productRefs.current[nextIndex]) {
+        productRefs.current[nextIndex].focus();
       }
-    }, 50);
+    }, 100);
   };
 
   // 드래그앤드롭 핸들러
@@ -2071,10 +2078,17 @@ function TradePanel({
             <h2 className="card-title trade-card-title" style={{ marginBottom: '0.5rem' }}>비고</h2>
             <textarea
               value={master.notes}
-              onChange={(e) => setMaster({ ...master, notes: e.target.value })}
+              onChange={(e) => {
+                const lines = e.target.value.split('\n');
+                if (lines.length > 4) {
+                  setMaster({ ...master, notes: lines.slice(0, 4).join('\n') });
+                } else {
+                  setMaster({ ...master, notes: e.target.value });
+                }
+              }}
               className="trade-textarea"
               placeholder="메모 입력..."
-              style={{ flex: 1, resize: 'none', width: '100%', height: '100%' }}
+              style={{ flex: 1, resize: 'none', width: '100%', height: '100%', fontSize: '1rem', padding: '10px' }}
               disabled={!master.company_id || isViewMode}
             />
           </div>

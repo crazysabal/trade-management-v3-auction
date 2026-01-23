@@ -102,7 +102,7 @@ router.get('/', async (req, res) => {
       params.push(`%${search}%`, `%${search}%`);
     }
 
-    query += ' ORDER BY tm.trade_date DESC, tm.id DESC';
+    query += ' ORDER BY DATE(tm.trade_date) DESC, c.sort_order ASC, c.business_name ASC, tm.id DESC';
 
     const [rows] = await db.query(query, params);
     res.json({ success: true, data: rows });
