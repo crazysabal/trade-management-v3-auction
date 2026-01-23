@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.0.26] - 2026-01-23
+
+### Fixed
+- **Weight Unit Data Integrity**: Fixed a critical issue where items split into specific units (e.g., 500g) were being recorded as `kg` in the ledger.
+  - **Backend**: Added fallback logic to automatically fetch product unit metadata and calculate total weight if missing from the request.
+  - **Frontend**: Updated `TradePanel` to correctly preserve and transmit `weight_unit` and `product_weight` when adding items to a trade.
+
 ## [1.0.20] - 2026-01-22
 
 ### Changed

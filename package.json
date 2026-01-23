@@ -4,5 +4,6 @@
     "@modelcontextprotocol/sdk": "^1.25.1",
     "mysql2": "^3.16.0",
     "zod": "^4.2.1"
-  }
+  },
+  "version": "1.0.26"
 }

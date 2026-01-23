@@ -1,29 +1,29 @@
 {
-    "name": "hongda-biz-launcher",
-    "version": "1.0.5",
-    "description": "Server Launcher for Hongda Biz System",
-    "main": "main.js",
-    "scripts": {
-        "start": "electron .",
-        "dist": "electron-builder --win portable"
+  "name": "hongda-biz-launcher",
+  "version": "1.0.25",
+  "description": "Server Launcher for Hongda Biz System",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win portable"
+  },
+  "dependencies": {
+    "iconv-lite": "^0.7.2",
+    "kill-port": "^2.0.1"
+  },
+  "devDependencies": {
+    "electron": "^39.2.7",
+    "electron-builder": "^26.4.0",
+    "electron-packager": "^17.1.2"
+  },
+  "build": {
+    "appId": "com.tm.launcher",
+    "productName": "홍다 Biz 런쳐",
+    "win": {
+      "target": "portable"
     },
-    "dependencies": {
-        "iconv-lite": "^0.7.2",
-        "kill-port": "^2.0.1"
-    },
-    "devDependencies": {
-        "electron": "^39.2.7",
-        "electron-builder": "^26.4.0",
-        "electron-packager": "^17.1.2"
-    },
-    "build": {
-        "appId": "com.tm.launcher",
-        "productName": "홍다 Biz 런쳐",
-        "win": {
-            "target": "portable"
-        },
-        "directories": {
-            "output": "dist"
-        }
+    "directories": {
+      "output": "dist"
     }
+  }
 }

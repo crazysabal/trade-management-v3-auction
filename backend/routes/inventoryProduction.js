@@ -66,16 +66,16 @@ router.post('/', async (req, res) => {
         const tradeMasterId = tradeResult.insertId;
 
         // 3. Create Trade Detail
+        const outputTotalWeight = Number(output_quantity) * Number(outputUnitWeight);
         const [detailResult] = await connection.query(
             `INSERT INTO trade_details 
-            (trade_master_id, seq_no, product_id, quantity, unit_price, supply_amount, tax_amount, total_amount, sender, weight_unit) 
-            VALUES (?, 1, ?, ?, ?, ?, 0, ?, ?, ?)`,
-            [tradeMasterId, output_product_id, output_quantity, newUnitPrice, totalCost, totalCost, sender, outputWeightUnit]
+            (trade_master_id, seq_no, product_id, quantity, total_weight, unit_price, supply_amount, tax_amount, total_amount, sender, weight_unit) 
+            VALUES (?, 1, ?, ?, ?, ?, ?, 0, ?, ?, ?)`,
+            [tradeMasterId, output_product_id, output_quantity, outputTotalWeight, newUnitPrice, totalCost, totalCost, sender, outputWeightUnit]
         );
         const tradeDetailId = detailResult.insertId;
 
-        // 3.1 [FIX] Manually Update Aggregate Inventory (Output)
-        // Since trigger doesn't handle 'PRODUCTION', we must update 'inventory' table here.
+        /* [V1.0.21 REMOVED] - Trigger handles this now
         const outputTotalWeight = Number(output_quantity) * Number(outputUnitWeight);
         await connection.query(
             `INSERT INTO inventory (product_id, quantity, weight, purchase_price)
@@ -86,6 +86,7 @@ router.post('/', async (req, res) => {
                 purchase_price = VALUES(purchase_price)`, // Update purchase price to latest? Or weighted average? Trigger overwrites it. We follow suite.
             [output_product_id, output_quantity, outputTotalWeight, newUnitPrice]
         );
+        */
 
         // 4. Create Purchase Inventory (This is the Result Item)
         // [NEW] Handle display_order inheritance/shift (Based on FIRST ingredient)
@@ -119,10 +120,10 @@ router.post('/', async (req, res) => {
             `INSERT INTO purchase_inventory 
             (trade_detail_id, product_id, company_id, warehouse_id, 
              purchase_date, original_quantity, remaining_quantity, 
-             unit_price, sender, status, display_order, weight_unit, created_at) 
-            VALUES (?, ?, ?, ?, NOW(), ?, ?, ?, ?, 'AVAILABLE', ?, ?, NOW())`,
+             unit_price, total_weight, sender, status, display_order, weight_unit, created_at) 
+            VALUES (?, ?, ?, ?, NOW(), ?, ?, ?, ?, ?, 'AVAILABLE', ?, ?, NOW())`,
             [tradeDetailId, output_product_id, companyId, warehouseId,
-                output_quantity, output_quantity, newUnitPrice, sender, targetDisplayOrder, outputWeightUnit]
+                output_quantity, output_quantity, newUnitPrice, outputTotalWeight, sender, targetDisplayOrder, outputWeightUnit]
         );
         const newInventoryId = invResult.insertId;
 
@@ -171,15 +172,17 @@ router.post('/', async (req, res) => {
             const item = localRows[0];
             const usageCost = Number(item.unit_price) * Number(ing.use_quantity);
 
+            const ingredientTotalWeight = Number(ing.use_quantity) * Number(item.weight || 0);
             await connection.query(
                 `INSERT INTO trade_details 
-                (trade_master_id, seq_no, product_id, quantity, unit_price, supply_amount, tax_amount, total_amount, sender, weight_unit) 
-                VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, ?)`,
+                (trade_master_id, seq_no, product_id, quantity, total_weight, unit_price, supply_amount, tax_amount, total_amount, sender, weight_unit) 
+                VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)`,
                 [
                     tradeMasterId,
                     seqNo++,
                     item.product_id,
                     -Number(ing.use_quantity), // Negative Quantity
+                    -ingredientTotalWeight,    // Negative Weight
                     item.unit_price,
                     -usageCost, // Negative Amount
                     -usageCost,
@@ -188,7 +191,7 @@ router.post('/', async (req, res) => {
                 ]
             );
 
-            // 6.1 [FIX] Manually Update Aggregate Inventory (Ingredient)
+            /* [V1.0.21 REMOVED] - Trigger handles this now
             const ingredientTotalWeight = Number(ing.use_quantity) * Number(item.weight || 0);
             await connection.query(
                 `UPDATE inventory 
@@ -197,6 +200,7 @@ router.post('/', async (req, res) => {
                  WHERE product_id = ?`,
                 [ing.use_quantity, ingredientTotalWeight, item.product_id]
             );
+            */
         }
 
         await connection.commit();
@@ -281,8 +285,7 @@ router.delete('/:id', async (req, res) => {
                 [ing.used_quantity, ing.used_inventory_id]
             );
 
-            // [FIX] Restore Aggregate Inventory (Ingredient)
-            // Fetch product_id and weight for the ingredient
+            /* [V1.0.21 REMOVED] - Trigger handles this now
             const [ingProdRows] = await connection.query(
                 'SELECT pi.product_id, p.weight FROM purchase_inventory pi JOIN products p ON pi.product_id = p.id WHERE pi.id = ?',
                 [ing.used_inventory_id]
@@ -298,6 +301,7 @@ router.delete('/:id', async (req, res) => {
                     [ing.used_quantity, restoreWeight, item.product_id]
                 );
             }
+            */
         }
 
         // 4. Delete Records (Reverse Order)
@@ -309,7 +313,7 @@ router.delete('/:id', async (req, res) => {
         await connection.query('DELETE FROM inventory_productions WHERE id = ?', [productionId]);
 
         // 4-3. Delete Output Inventory
-        // [FIX] Update Aggregate Inventory (Output) before deleting
+        /* [V1.0.21 REMOVED] - Trigger handles this now
         const outputTotalWeight = Number(inventory.original_quantity) * Number(inventory.weight || 0);
         await connection.query(
             `UPDATE inventory 
@@ -318,6 +322,7 @@ router.delete('/:id', async (req, res) => {
              WHERE product_id = ?`,
             [inventory.original_quantity, outputTotalWeight, inventory.product_id]
         );
+        */
         await connection.query('DELETE FROM purchase_inventory WHERE id = ?', [outputInventoryId]);
 
         // 4-4. Delete Trade Details & Master (Input & Output)

@@ -1,0 +1,46 @@
+=== [홍다 비즈 1.0.20 인벤토리 진단 및 복구 리포트] ===
+
+[0] 재고 정합성 자동 복구 (Sync) 실행 중...
+✅ 재고 복구가 완료되었습니다.
+
+[3] 품목 ID 100 정밀 점검:
+ - [inventory 테이블] 현재 데이터: {"id":25,"product_id":100,"quantity":"40.00","weight":"20000.00","purchase_price":"7875.00","last_updated":"2026-01-23T02:02:58.000Z"}
+
+[3.1] 모든 Lot 내역 (purchase_inventory):
+ - ID:2868 | 잔량:40.00/40.00 | 상태:AVAILABLE | 전표상세ID:3334 | 생성일:Fri Jan 23 2026 10:51:06 GMT+0900 (대한민국 표준시)
+
+[3.2] 불일치 분석 오차: 0.00
+
+[4] 품목 ID 100 모든 흔적 점검 (trade_details):
+ - [DRAFT] [PRODUCTION] MasterID:305 | DetailID:3334 | 2026-01-22 | 수량: 40.00 (seq:1)
+
+[6] 품목 정보: {"id":100,"product_code":"F070","product_name":"딸기","grade":"특","category_id":12,"weight":"500.00","weight_unit":"g","category":null,"notes":"","is_active":1,"created_at":"2025-12-05T05:41:41.000Z","updated_at":"2026-01-22T05:47:46.000Z","sort_order":1}
+
+[8] 시스템 설정 점검:
+
+[9] 품목 ID 100 재고 수불부 상세:
+ - [OUT] ID:1458 | Thu Jan 22 2026 00:00:00 GMT+0900 (대한민국 표준시) | 수량:40.00 | Before:40.00 | After:0.00 | DetailID:null
+ - [IN] ID:1334 | Wed Jan 21 2026 00:00:00 GMT+0900 (대한민국 표준시) | 수량:13.00 | Before:2084.00 | After:2097.00 | DetailID:null
+ - [IN] ID:1333 | Wed Jan 21 2026 00:00:00 GMT+0900 (대한민국 표준시) | 수량:21.00 | Before:2063.00 | After:2084.00 | DetailID:null
+ - [IN] ID:1306 | Wed Jan 21 2026 00:00:00 GMT+0900 (대한민국 표준시) | 수량:13.00 | Before:2050.00 | After:2063.00 | DetailID:null
+ - [IN] ID:1305 | Wed Jan 21 2026 00:00:00 GMT+0900 (대한민국 표준시) | 수량:21.00 | Before:2029.00 | After:2050.00 | DetailID:null
+ - [IN] ID:1275 | Tue Jan 20 2026 00:00:00 GMT+0900 (대한민국 표준시) | 수량:110.00 | Before:1919.00 | After:2029.00 | DetailID:null
+ - [IN] ID:1238 | Wed Jan 21 2026 00:00:00 GMT+0900 (대한민국 표준시) | 수량:13.00 | Before:1906.00 | After:1919.00 | DetailID:null
+ - [IN] ID:1216 | Tue Jan 20 2026 00:00:00 GMT+0900 (대한민국 표준시) | 수량:110.00 | Before:1796.00 | After:1906.00 | DetailID:null
+ - [IN] ID:1203 | Tue Jan 20 2026 00:00:00 GMT+0900 (대한민국 표준시) | 수량:110.00 | Before:1686.00 | After:1796.00 | DetailID:null
+ - [IN] ID:1190 | Tue Jan 20 2026 00:00:00 GMT+0900 (대한민국 표준시) | 수량:110.00 | Before:1576.00 | After:1686.00 | DetailID:null
+ - [IN] ID:1177 | Tue Jan 20 2026 00:00:00 GMT+0900 (대한민국 표준시) | 수량:110.00 | Before:1466.00 | After:1576.00 | DetailID:null
+ - [IN] ID:1164 | Tue Jan 20 2026 00:00:00 GMT+0900 (대한민국 표준시) | 수량:110.00 | Before:1356.00 | After:1466.00 | DetailID:null
+ - [IN] ID:1151 | Tue Jan 20 2026 00:00:00 GMT+0900 (대한민국 표준시) | 수량:110.00 | Before:1246.00 | After:1356.00 | DetailID:null
+ - [IN] ID:1109 | Tue Jan 20 2026 00:00:00 GMT+0900 (대한민국 표준시) | 수량:110.00 | Before:1136.00 | After:1246.00 | DetailID:null
+ - [IN] ID:1096 | Tue Jan 20 2026 00:00:00 GMT+0900 (대한민국 표준시) | 수량:110.00 | Before:1026.00 | After:1136.00 | DetailID:null
+ - [IN] ID:1083 | Tue Jan 20 2026 00:00:00 GMT+0900 (대한민국 표준시) | 수량:110.00 | Before:916.00 | After:1026.00 | DetailID:null
+ - [IN] ID:869 | Sat Jan 17 2026 00:00:00 GMT+0900 (대한민국 표준시) | 수량:73.00 | Before:843.00 | After:916.00 | DetailID:null
+ - [IN] ID:650 | Tue Jan 13 2026 00:00:00 GMT+0900 (대한민국 표준시) | 수량:72.00 | Before:771.00 | After:843.00 | DetailID:null
+ - [IN] ID:647 | Tue Jan 13 2026 00:00:00 GMT+0900 (대한민국 표준시) | 수량:31.00 | Before:740.00 | After:771.00 | DetailID:null
+ - [IN] ID:646 | Tue Jan 13 2026 00:00:00 GMT+0900 (대한민국 표준시) | 수량:60.00 | Before:680.00 | After:740.00 | DetailID:null
+
+[7] 문제의 전표 (ID 53) 상세 점검:
+ - 전표 ID 53을 찾을 수 없습니다.
+
+=============================================

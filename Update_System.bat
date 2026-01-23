@@ -5,14 +5,17 @@ echo ================================================
 echo    Hongda Biz Smart Update
 echo ================================================
 echo.
-echo [1/4] Closing running processes...
-taskkill /f /im node.exe > nul 2>&1
+echo [1/4] Closing running processes (Port 3000, 5000)...
+for /f "tokens=5" %%a in ('netstat -aon ^| findstr :5000') do taskkill /f /pid %%a 2>nul
+for /f "tokens=5" %%a in ('netstat -aon ^| findstr :3000') do taskkill /f /pid %%a 2>nul
 taskkill /f /im HongdaBiz.exe > nul 2>&1
 taskkill /f /im TradeManagement.exe > nul 2>&1
 timeout /t 2 /nobreak > nul
+
 echo [2/4] Checking version and replacing files...
 node scripts/update_manager.js
 if errorlevel 1 goto :error
+
 echo.
 echo [3/4] Installing packages for new features...
 echo [Backend...]
@@ -21,6 +24,7 @@ echo [Frontend...]
 cd frontend && call npm install && cd ..
 echo [Launcher...]
 cd hongda-biz-launcher && call npm install && cd ..
+
 echo.
 echo [4/4] Optimizing system and finishing...
 echo.

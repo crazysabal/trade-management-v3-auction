@@ -149,8 +149,29 @@ const TradeController = {
 
             // 4. 상세 등록
             if (details && details.length > 0) {
+                // [NEW] 품목 정보 캐싱 (서버 사이드 보정용)
+                const productIds = [...new Set(details.map(d => d.product_id))];
+                const [productData] = await connection.query(
+                    'SELECT id, weight, weight_unit FROM products WHERE id IN (?)',
+                    [productIds]
+                );
+                const productMap = productData.reduce((acc, p) => {
+                    acc[p.id] = p;
+                    return acc;
+                }, {});
+
                 for (let i = 0; i < details.length; i++) {
                     const detail = details[i];
+                    const pInfo = productMap[detail.product_id] || {};
+
+                    // [v1.0.26] 무게 및 단위 보정
+                    const weight_unit = detail.weight_unit || pInfo.weight_unit || 'kg';
+                    let total_weight = detail.total_weight;
+                    if (!total_weight || parseFloat(total_weight) === 0) {
+                        const unitWeight = parseFloat(pInfo.weight) || 0;
+                        total_weight = unitWeight * (parseFloat(detail.quantity) || 0);
+                    }
+
                     const [detailResult] = await connection.query(
                         `INSERT INTO trade_details (
                           trade_master_id, seq_no, product_id, parent_detail_id,
@@ -159,7 +180,7 @@ const TradeController = {
                         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
                         [
                             masterId, i + 1, detail.product_id, detail.parent_detail_id || null,
-                            detail.quantity, detail.total_weight || 0, detail.weight_unit || 'kg', detail.unit_price, detail.supply_amount || 0, detail.tax_amount || 0,
+                            detail.quantity, total_weight || 0, weight_unit, detail.unit_price, detail.supply_amount || 0, detail.tax_amount || 0,
                             detail.total_amount || detail.supply_amount || 0,
                             detail.auction_price || detail.unit_price || 0,
                             detail.notes || '', detail.shipper_location || null,
@@ -561,11 +582,14 @@ const TradeController = {
                                     `UPDATE purchase_inventory SET
                                        product_id = ?,
                                        original_quantity = ?, remaining_quantity = ?,
+                                       total_weight = ?,
                                        unit_price = ?, weight_unit = ?, status = ?,
                                       shipper_location = ?, sender = ?
                                       WHERE id = ?`,
                                     [
-                                        detail.product_id, newQty, newRemaining, detail.unit_price, detail.weight_unit || 'kg', newUniqueStatus,
+                                        detail.product_id, newQty, newRemaining,
+                                        detail.total_weight || 0,
+                                        detail.unit_price, detail.weight_unit || 'kg', newUniqueStatus,
                                         detail.shipper_location || null, detail.sender_name || detail.sender || null,
                                         existing.inventory_id
                                     ]

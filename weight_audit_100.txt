@@ -1,0 +1,24 @@
+{
+  "audit": [
+    {
+      "source": "TRADE_DETAIL",
+      "id": 3357,
+      "quantity": "40.00",
+      "total_weight": "20000.00"
+    },
+    {
+      "source": "PURCHASE_INV",
+      "id": 2889,
+      "quantity": "40.00",
+      "total_weight": "20000.00"
+    }
+  ],
+  "inventory": {
+    "id": 25,
+    "product_id": 100,
+    "quantity": "40.00",
+    "weight": "40000.00",
+    "purchase_price": "7875.00",
+    "last_updated": "2026-01-23T02:05:23.000Z"
+  }
+}

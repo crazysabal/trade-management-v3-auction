@@ -33,6 +33,9 @@ router.post('/', async (req, res) => {
             throw new Error(`차감 수량이 현재 재고(${currentQty})보다 많습니다.`);
         }
 
+        const newQty = currentQty + changeQty;
+        const newStatus = (newQty <= 0) ? 'DEPLETED' : 'AVAILABLE';
+
         // 2. 조정 이력 저장
         await connection.query(
             `INSERT INTO inventory_adjustments 
@@ -41,15 +44,24 @@ router.post('/', async (req, res) => {
             [purchase_inventory_id, adjustment_type, changeQty, reason]
         );
 
-        // 3. 재고 수량 업데이트 및 상태 변경
-        const newQty = currentQty + changeQty;
-        const newStatus = (newQty <= 0) ? 'DEPLETED' : inventory.status;
-
         await connection.query(
             `UPDATE purchase_inventory 
              SET remaining_quantity = ?, status = ? 
              WHERE id = ?`,
             [newQty, newStatus, purchase_inventory_id]
+        );
+
+        // [V1.0.21 FIX] Update Aggregate Inventory
+        const [prodInfo] = await connection.query('SELECT weight FROM products WHERE id = ?', [inventory.product_id]);
+        const unitWeight = prodInfo[0]?.weight || 0;
+        const weightChange = changeQty * unitWeight;
+
+        await connection.query(
+            `UPDATE inventory 
+             SET quantity = quantity + ?,
+                 weight = weight + ?
+             WHERE product_id = ?`,
+            [changeQty, weightChange, inventory.product_id]
         );
 
         await connection.commit();
@@ -129,6 +141,19 @@ router.delete('/:id', async (req, res) => {
              SET remaining_quantity = ?, status = ? 
              WHERE id = ?`,
             [newQty, newStatus, purchase_inventory_id]
+        );
+
+        // [V1.0.21 FIX] Update Aggregate Inventory (Revert)
+        const [prodInfo] = await connection.query('SELECT weight FROM products WHERE id = ?', [inventory.product_id]);
+        const unitWeight = prodInfo[0]?.weight || 0;
+        const weightRevert = revertQty * unitWeight;
+
+        await connection.query(
+            `UPDATE inventory 
+             SET quantity = quantity + ?,
+                 weight = weight + ?
+             WHERE product_id = ?`,
+            [revertQty, weightRevert, inventory.product_id]
         );
 
         // 5. 조정 내역 삭제 (Hard Delete)

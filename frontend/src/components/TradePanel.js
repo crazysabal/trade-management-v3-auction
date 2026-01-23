@@ -1010,6 +1010,9 @@ function TradePanel({
       quantity: qty,
       unit_price: price,
       supply_amount: qty * price,
+      weight_unit: item.weight_unit || item.product_weight_unit || 'kg',
+      product_weight: item.product_weight || 0,
+      total_weight: (parseFloat(item.product_weight) || 0) * qty,
       shipper_location: item.shipper_location || '',
       sender_name: item.sender || '',
       notes: item.sender || '', // 출하주(sender)를 비고란에 자동 입력
@@ -1437,6 +1440,8 @@ function TradePanel({
             quantity: parseFloat(d.quantity) || 0,
             unit_price: parseFloat(d.unit_price) || 0,
             supply_amount: parseFloat(d.supply_amount) || 0,
+            weight_unit: d.weight_unit,
+            total_weight: parseFloat(d.total_weight) || 0,
             tax_amount: 0,
             shipper_location: d.shipper_location || '',
             sender_name: d.sender_name || '',
