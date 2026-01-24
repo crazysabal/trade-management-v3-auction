@@ -84,6 +84,7 @@ function TradePrintModal({ isOpen, onClose, tradeId }) {
   }, [user?.id]);
 
   const printRef = useRef(null);
+  const previewRef = useRef(null);
   const { handleMouseDown, draggableStyle } = useModalDraggable(isOpen);
 
   // 줌 레벨 저장
@@ -479,6 +480,7 @@ function TradePrintModal({ isOpen, onClose, tradeId }) {
     try {
       // 미리보기 영역 선택 (첫 번째 페이지 또는 전체 컨테이너)
       // 현재는 첫 번째 페이지만 캡처한다고 가정하거나, 모든 페이지를 포함하는 컨테이너를 찾음
+      const previewContainer = previewRef.current;
       if (!previewContainer) {
         setConfirmModal({
           isOpen: true,
@@ -950,7 +952,7 @@ function TradePrintModal({ isOpen, onClose, tradeId }) {
               <style>{commonStyles}</style>
 
               {/* 미리보기용 (모든 페이지 표시) - A4 이등분 실제 크기 (142mm x 200mm) */}
-              <div className="preview-container-for-copy" style={{ zoom: zoomLevel, transformOrigin: 'top center' }}>
+              <div ref={previewRef} className="preview-container-for-copy" style={{ zoom: zoomLevel, transformOrigin: 'top center' }}>
                 {Array.from({ length: totalPages }).map((_, pageIndex) => (
                   <div key={`preview-${pageIndex}`} style={{ marginBottom: pageIndex < totalPages - 1 ? '20px' : 0 }}>
                     {totalPages > 1 && (
@@ -1003,7 +1005,7 @@ function TradePrintModal({ isOpen, onClose, tradeId }) {
         title={confirmModal.title}
         message={confirmModal.message}
         onConfirm={confirmModal.onConfirm}
-        onCancel={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+        onClose={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
         confirmText="확인"
         showCancel={false}
       />

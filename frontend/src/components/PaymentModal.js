@@ -100,13 +100,16 @@ const PaymentModal = ({
   }, [payment.amount, unpaidTrades]);
 
   const handleAmountChange = (e) => {
-    const val = e.target.value.replace(/[^0-9]/g, '');
+    const inputValue = e.target.value;
+    const isNegative = inputValue.startsWith('-');
+    const val = inputValue.replace(/[^0-9]/g, '');
     const numVal = parseInt(val || '0', 10);
+    const finalVal = isNegative ? -numVal : numVal;
 
     setPayment(prev => ({
       ...prev,
-      amount: numVal,
-      displayAmount: numVal === 0 ? '' : numVal.toLocaleString()
+      amount: finalVal,
+      displayAmount: val === '' ? (isNegative ? '-' : '') : (isNegative ? '-' : '') + numVal.toLocaleString()
     }));
   };
 

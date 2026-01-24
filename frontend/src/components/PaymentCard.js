@@ -404,7 +404,7 @@ function PaymentCard({
                         type="button"
                         onClick={() => setEditingPayment({
                           ...payment,
-                          displayAmount: new Intl.NumberFormat('ko-KR').format(Math.abs(payment.amount))
+                          displayAmount: new Intl.NumberFormat('ko-KR').format(payment.amount)
                         })}
                         style={{
                           padding: '3px 8px',
@@ -476,7 +476,7 @@ function PaymentCard({
                     type="button"
                     onClick={() => setEditingPendingPayment({
                       ...payment,
-                      displayAmount: new Intl.NumberFormat('ko-KR').format(Math.abs(payment.amount))
+                      displayAmount: new Intl.NumberFormat('ko-KR').format(payment.amount)
                     })}
                     style={{
                       padding: '3px 8px',

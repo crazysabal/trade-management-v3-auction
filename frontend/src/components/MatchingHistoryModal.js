@@ -85,44 +85,37 @@ function MatchingHistoryModal({
                             {matchings.map((m) => (
                                 <div key={m.matching_id} className="matching-history-card">
                                     {/* 정보 영역 */}
-                                    <div className="matching-card-info">
-                                        {/* 1행: 품목명 + 상세 */}
-                                        <div className="matching-card-row">
-                                            <span style={{ fontWeight: 600, color: '#2d3748', fontSize: '0.95rem' }}>
-                                                {m.product_name}
-                                            </span>
-                                            {m.product_weight && (
-                                                <span style={{ color: '#64748b', fontSize: '0.9rem' }}>
-                                                    {parseFloat(m.product_weight)}kg
+                                    <div className="matching-card-info" style={{ gap: '0' }}>
+                                        <div className="matching-card-row" style={{ gap: '6px', flexWrap: 'wrap', alignItems: 'center' }}>
+                                            <span style={{ fontWeight: 600, color: '#2d3748' }}>{m.product_name}</span>
+                                            <span style={{ color: '#475569' }}>{parseFloat(m.product_weight)}{m.product_weight_unit || m.weight_unit || m.unit || 'kg'}</span>
+                                            <span style={{ color: '#3b82f6', fontWeight: 500 }}>{m.sender || '-'}</span>
+                                            {m.grade && (
+                                                <span style={{
+                                                    color: '#3b82f6',
+                                                    backgroundColor: '#eff6ff',
+                                                    padding: '1px 6px',
+                                                    borderRadius: '4px',
+                                                    fontSize: '0.7rem',
+                                                    fontWeight: 'bold',
+                                                    border: '1px solid #dbeafe'
+                                                }}>
+                                                    {m.grade}
                                                 </span>
                                             )}
-                                        </div>
-
-                                        {/* 2행: 매입처/출하주 */}
-                                        <div className="matching-card-row">
-                                            <span className="matching-card-value" style={{ color: '#475569', fontSize: '0.85rem' }}>
-                                                {m.company_name || m.purchase_company}
+                                            <span style={{ fontWeight: 600, color: '#16a34a', marginLeft: '4px' }}>
+                                                {formatNumber(m.matched_quantity)}개
                                             </span>
-                                            <span style={{ color: '#cbd5e1' }}>|</span>
-                                            <span className="matching-card-value" style={{ color: '#3b82f6' }}>
-                                                {m.sender || '-'}
-                                            </span>
-                                            <span style={{ color: '#94a3b8', fontSize: '0.85rem' }}>
-                                                ({m.grade || '-'})
+                                            <span style={{ fontWeight: 600, color: '#1f2937', marginLeft: '4px' }}>
+                                                {formatCurrency(m.purchase_unit_price)}원
                                             </span>
                                         </div>
 
-                                        {/* 3행: 수량/금액 */}
-                                        <div className="matching-card-row" style={{ marginTop: '0.2rem' }}>
-                                            <span className="matching-card-label">수량</span>
-                                            <span className="matching-card-value highlight">
-                                                {formatNumber(m.matched_quantity)}
-                                            </span>
-                                            <span style={{ color: '#cbd5e1' }}>|</span>
-                                            <span className="matching-card-label">단가</span>
-                                            <span className="matching-card-value">
-                                                {formatCurrency(m.purchase_unit_price)}
-                                            </span>
+                                        {/* 2행: 매입처 | 날짜 */}
+                                        <div className="matching-card-row" style={{ marginTop: '0.3rem', fontSize: '0.85rem' }}>
+                                            <span style={{ color: '#64748b' }}>{m.purchase_company || m.company_name}</span>
+                                            <span style={{ color: '#cbd5e1', margin: '0 6px' }}>|</span>
+                                            <span style={{ color: '#94a3b8' }}>{formatDateShort(m.purchase_date)}</span>
                                         </div>
                                     </div>
 

@@ -21,6 +21,7 @@ const InventoryTransferManagement = () => {
     const [draggedItem, setDraggedItem] = useState(null); // 드래그 중인 재고
     const [draggedWarehouse, setDraggedWarehouse] = useState(null); // 드래그 중인 창고 (순서변경)
     const [dragOverWarehouseId, setDragOverWarehouseId] = useState(null); // 드래그 오버 중인 창고 ID (Highlight용)
+    const [isHandlePressed, setIsHandlePressed] = useState(false); // 창고 드래그 핸들 눌림 여부
 
     // Modal State
     const [transferModal, setTransferModal] = useState({ isOpen: false, inventory: null, inventoryList: [], toWarehouseId: '' });
@@ -105,32 +106,6 @@ const InventoryTransferManagement = () => {
         }, 0);
     };
 
-    // 통합 DragOver 핸들러
-    const handleColumnDragOver = (e, index, warehouseId) => {
-        e.preventDefault();
-        e.dataTransfer.dropEffect = 'move';
-
-        // 1. 창고 순서 변경 모드일 때
-        if (reorderMode) {
-            if (draggedWarehouse === null || draggedWarehouse === index) return;
-            const newWarehouses = [...warehouses];
-            const draggedItem = newWarehouses[draggedWarehouse];
-            newWarehouses.splice(draggedWarehouse, 1);
-            newWarehouses.splice(index, 0, draggedItem);
-            setDraggedWarehouse(index);
-            setWarehouses(newWarehouses);
-            return;
-        }
-
-        // 2. 재고 이동 모드일 때 (Highlight 처리)
-        if (draggedItem) {
-            setDragOverWarehouseId(warehouseId);
-        }
-    };
-
-    const handleColumnDragLeave = (e) => {
-        // Implement logic if needed
-    };
 
     // Card DragOver (for reordering within column)
     const handleCardDragOver = (e, targetItem) => {
@@ -253,7 +228,7 @@ const InventoryTransferManagement = () => {
 
     // --- Drag & Drop Handlers (Warehouse Reorder) ---
     const handleWarehouseDragStart = (e, index) => {
-        if (!reorderMode) {
+        if (!isHandlePressed) {
             e.preventDefault();
             return;
         }
@@ -261,30 +236,42 @@ const InventoryTransferManagement = () => {
         e.dataTransfer.effectAllowed = 'move';
     };
 
+    const handleColumnDragOver = (e, index, warehouseId) => {
+        e.preventDefault();
+
+        // 1. 창고 순서 변경 (드래그 중인 것이 창고인 경우)
+        if (draggedWarehouse !== null && draggedWarehouse !== index) {
+            const newWarehouses = [...warehouses];
+            const draggedWh = newWarehouses[draggedWarehouse];
+            newWarehouses.splice(draggedWarehouse, 1);
+            newWarehouses.splice(index, 0, draggedWh);
+            setWarehouses(newWarehouses);
+            setDraggedWarehouse(index); // 새로운 인덱스로 업데이트하여 부드러운 위치 변경 유도
+            return;
+        }
+
+        // 2. 재고 이동시 타겟 창고 강조 (드래그 중인 것이 재고인 경우)
+        if (draggedItem && String(draggedItem.warehouse_id) !== String(warehouseId)) {
+            setDragOverWarehouseId(warehouseId);
+        }
+    };
+
+    const handleColumnDragLeave = () => {
+        // 특별한 로직 필요 없음 (Highlight는 Drop이나 End에서 정리)
+    };
+
     const handleWarehouseDragEnd = async () => {
         setDraggedWarehouse(null);
         setDragOverWarehouseId(null);
         setDraggedItem(null);
+        setIsHandlePressed(false); // Reset handle state
 
-        if (reorderMode) {
-            try {
-                const orderedIds = warehouses.map(w => w.id);
-                await warehousesAPI.reorder(orderedIds);
-            } catch (err) {
-                console.error('순서 저장 실패:', err);
-                setConfirmModal({
-                    isOpen: true,
-                    type: 'error',
-                    title: '순서 저장 실패',
-                    message: '창고 순서를 저장하는 중 오류가 발생했습니다.',
-                    onConfirm: () => setConfirmModal(prev => ({ ...prev, isOpen: false })),
-                    showCancel: false
-                });
-                loadData();
-            }
-        } else {
-            // 재고 순서 변경 후 Drop이 아니라 DragEnd가 불릴 수도 있으므로
-            // 하지만 재고 순서는 handleDrop에서 처리함
+        try {
+            const orderedIds = warehouses.map(w => w.id);
+            await warehousesAPI.reorder(orderedIds);
+        } catch (err) {
+            console.error('순서 저장 실패:', err);
+            loadData();
         }
     };
 
@@ -293,7 +280,19 @@ const InventoryTransferManagement = () => {
         setPrintModalOpen(true);
     };
 
-    // --- Filtering & Statistics ---
+    // 날짜 포맷 (MM-DD)
+    const formatDateShort = (dateString) => {
+        if (!dateString) return '-';
+        try {
+            const date = new Date(dateString);
+            const month = date.getMonth() + 1;
+            const day = date.getDate();
+            return `${month}-${day}`;
+        } catch (e) {
+            return dateString;
+        }
+    };
+
     // 1. 검색어로 필터링된 전체 인벤토리 (useMemo로 최적화 및 통계 계산용)
     const filteredInventory = React.useMemo(() => {
         const keywords = searchKeyword.toLowerCase().trim().split(/\s+/).filter(k => k);
@@ -375,24 +374,6 @@ const InventoryTransferManagement = () => {
                     >
                         🖨 목록 출력
                     </button>
-                    <button
-                        onClick={() => setReorderMode(!reorderMode)}
-                        className={`btn-reorder ${reorderMode ? 'active' : ''}`}
-                    >
-                        {reorderMode ? '순서 저장 완료' : '창고 순서 변경'}
-                    </button>
-                    <div className="width-control">
-                        <span className="width-label">너비:</span>
-                        <input
-                            type="range"
-                            min="250"
-                            max="450"
-                            step="10"
-                            value={columnWidth}
-                            onChange={(e) => setColumnWidth(Number(e.target.value))}
-                            className="width-slider"
-                        />
-                    </div>
 
                     {/* 전체 재고 통계 (우측 정렬) */}
                     <div className={`stats-summary-container ${searchKeyword ? 'filtered' : ''}`}>
@@ -433,7 +414,7 @@ const InventoryTransferManagement = () => {
                             return (
                                 <div
                                     key={wh.id}
-                                    draggable={reorderMode}
+                                    draggable={isHandlePressed}
                                     onDragStart={(e) => handleWarehouseDragStart(e, index)}
                                     onDragOver={(e) => handleColumnDragOver(e, index, wh.id)}
                                     onDragLeave={handleColumnDragLeave}
@@ -441,16 +422,22 @@ const InventoryTransferManagement = () => {
                                     onDrop={(e) => handleDrop(e, wh.id)}
                                     className={`warehouse-column ${draggedItem && dragOverWarehouseId === wh.id ? 'highlight' : ''} ${draggedWarehouse === index ? 'dragging' : ''}`}
                                     style={{
-                                        minWidth: `${columnWidth}px`,
-                                        width: `${columnWidth}px`
-                                        // width는 동적이므로 인라인 유지 (slider 제어)
+                                        width: 'auto',
+                                        flexShrink: 0
                                     }}
                                 >
                                     {/* Header */}
                                     <div className={`warehouse-header ${draggedItem && dragOverWarehouseId === wh.id ? 'highlight' : (wh.is_default ? 'default' : '')}`}>
                                         <div style={{ display: 'flex', alignItems: 'center', width: '100%', gap: '10px' }}>
+                                            <div
+                                                className="warehouse-drag-handle"
+                                                onMouseDown={() => setIsHandlePressed(true)}
+                                                onMouseUp={() => setIsHandlePressed(false)}
+                                                title="드래그하여 순서 변경"
+                                            >
+                                                ⋮⋮
+                                            </div>
                                             <h3 className="warehouse-title" style={{ margin: 0 }}>
-                                                {reorderMode && '↕ '}
                                                 {wh.name} {!wh.is_active && <span className="inactive-label">(비활성)</span>}
                                             </h3>
 
@@ -480,24 +467,30 @@ const InventoryTransferManagement = () => {
                                         {whData.map(item => (
                                             <div
                                                 key={item.id}
-                                                draggable={!reorderMode}
+                                                draggable={true}
                                                 onDragStart={(e) => handleDragStart(e, item)}
                                                 onDragOver={(e) => handleCardDragOver(e, item)}
                                                 onClick={(e) => toggleSelection(e, item.id)}
                                                 data-order={[...selectedItems].indexOf(item.id) + 1}
                                                 className={`inventory-card ${draggedItem?.id === item.id ? 'dragging' : ''} ${selectedItems.has(item.id) ? 'selected' : ''}`}
-                                                style={{ cursor: reorderMode ? 'default' : 'pointer' }}
+                                                style={{ cursor: 'pointer' }}
                                             >
                                                 <div className="card-content">
                                                     <div className="card-main-info" style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-                                                        <span style={{ marginRight: 0, fontWeight: 600, color: '#2d3748' }}>{item.product_name}</span>
-                                                        {Number(item.product_weight) > 0 && (
-                                                            <span style={{ color: '#4a5568' }}>
-                                                                &nbsp;{Number(item.product_weight)}{item.product_weight_unit || item.weight_unit || 'kg'}
+                                                        <span style={{ color: '#1e293b' }}>
+                                                            {item.product_name}
+                                                            {Number(item.product_weight) > 0 && ` ${Number(item.product_weight)}${item.product_weight_unit || item.weight_unit || 'kg'}`}
+                                                        </span>
+                                                        <span style={{ color: '#cbd5e1' }}>/</span>
+                                                        <span style={{ fontWeight: '600', color: '#1e293b' }}>{item.sender}</span>
+                                                        <span style={{ color: '#cbd5e1' }}>/</span>
+                                                        {item.grade ? (
+                                                            <span className="grade-badge">
+                                                                {item.grade}
                                                             </span>
+                                                        ) : (
+                                                            <span style={{ color: '#1e293b' }}>-</span>
                                                         )}
-                                                        <span style={{ color: '#2b6cb0' }}>{item.sender}</span>
-                                                        {item.grade && <span style={{ color: '#718096' }}>({item.grade})</span>}
 
                                                         <span style={{ flex: 1 }}></span> {/* Spacer */}
 
@@ -513,7 +506,7 @@ const InventoryTransferManagement = () => {
                                                         <div style={{ display: 'flex', gap: '8px', fontSize: '0.8rem', color: '#7f8c8d', alignItems: 'center', lineHeight: '1' }}>
                                                             <span title={item.business_name}>{item.company_name || '-'}</span>
                                                             <span style={{ fontSize: '0.7rem', color: '#bdc3c7' }}>|</span>
-                                                            <span>{item.purchase_date}</span>
+                                                            <span>{formatDateShort(item.purchase_date)}</span>
                                                         </div>
 
                                                         <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginLeft: 'auto' }}>

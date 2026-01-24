@@ -2,10 +2,26 @@
 
 All notable changes to this project will be documented in this file.
 
-## [1.0.31] - 2026-01-24
+## [1.0.40] - 2026-01-24
+
+### Added
+- **Cross-Window Synchronization**: Implemented a real-time event system. Changes in "Company Management" now instantly refresh dropdown options in all open "Trade Registration" windows without interrupting work-in-progress.
+- **Stationary Kanban Architecture**: Redesigned the "Inventory Transfer" layout. The search bar, statistics, and warehouse headers now remain fixed at the top while only the inventory data scrolls, providing a rock-solid context for logistics.
+- **Drag-Handle Reordering**: Added intuitive drag handles (⋮⋮) to warehouse columns in the Kanban view. Reordering is persisted to the backend automatically.
+
+### Changed
+- **Unified Visual Identity**: Aligned "Inventory Transfer" and "Quick Inventory" styles. Both now use consistent `Product / Sender / Grade` formatting with optimized spacers, separators, and font sizes.
+- **Dynamic Kanban Layout**: Optimized column widths to adjust automatically based on content while maintaining a stable minimum width for readability.
+- **UX Refinements**: Simplified "Inventory Transfer" date format to `MM-DD` and updated balance card terminology in "Trade Registration" (e.g., "현재 전표 합계" -> "금일 합계").
 
 ### Fixed
-- **System Stability**: Resolved "Unknown column 'created_by' in 'field list'" error by ensuring `payment_transactions` has necessary audit and metadata columns (`bank_name`, `account_number`, `reference_number`, `created_by`). This fix prevents registration failures during deposit/withdrawal entries.
+- **Dropdown Stability**: Resolved focus/selection drift in `SearchableSelect`. Keyboard navigation (Up/Down) now correctly maintains visual selection state.
+- **Data Integrity**: Fixed Strawberry 500g unit display issue. Items specifically split into grams now correctly display their unit (e.g., "500g") across all inventory views.
+- **Modal Focus Management**: Prevented background fields from stealing focus while success modals (Delete/Save) are active. Spacebar now reliably closes alerts.
+- **Print Preview Stability**: Resolved a `ReferenceError` during image capture and a `TypeError` causing confirmation modals to crash.
+- **System Stability**: Resolved "Unknown column 'created_by' in 'field list'" error in payment transactions.
+
+## [1.0.31] - 2026-01-24
 
 ## [1.0.27] - 2026-01-23
 

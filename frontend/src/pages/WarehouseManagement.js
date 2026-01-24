@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import { warehousesAPI } from '../services/api';
 import WarehouseModal from '../components/WarehouseModal';
-import ConfirmModal from '../components/ConfirmModal';
+import { useConfirmModal } from '../components/ConfirmModal';
 import useTableDnd from '../hooks/useTableDnd';
 import TableDndRow from '../components/TableDndRow';
 import './Settings.css'; // 설정 페이지 스타일 재사용
@@ -12,14 +12,12 @@ const WarehouseManagement = () => {
     const [loading, setLoading] = useState(false);
     const [status, setStatus] = useState({ type: '', message: '' });
 
-    // 모달 상태
+    // 창고 추가/수정 모달 상태
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editData, setEditData] = useState(null);
 
-    // 삭제 확인 모달 상태
-    const [deleteModal, setDeleteModal] = useState({ isOpen: false, id: null, name: '' });
-    // 경고 모달 상태 (재고 있음)
-    const [warningModal, setWarningModal] = useState({ isOpen: false, message: '' });
+    // 모달 관리용 훅 (Standard 80: useConfirmModal 통합)
+    const { openModal, ConfirmModalComponent } = useConfirmModal();
 
     // 드래그 앤 드롭 Refs - 제거됨 (Standard 35.30: useTableDnd 사용)
 
@@ -102,26 +100,40 @@ const WarehouseManagement = () => {
     };
 
     const handleDelete = (warehouse) => {
-        if (warehouse.stock_count > 0) {
-            setWarningModal({
-                isOpen: true,
-                message: `현재 이 창고에는 ${warehouse.stock_count}건의 재고가 남아있습니다.\n재고가 있는 창고는 삭제할 수 없습니다.`
-            });
-            return;
-        }
-        setDeleteModal({ isOpen: true, id: warehouse.id, name: warehouse.name });
+        // [Standard 80] 통합 모달 시스템으로 변경
+        openModal({
+            type: 'delete',
+            title: '창고 삭제',
+            message: `[${warehouse.name}] 창고를 정말 삭제하시겠습니까?`,
+            confirmText: '삭제',
+            onConfirm: () => confirmDelete(warehouse)
+        });
     };
 
-    const confirmDelete = async () => {
-        if (!deleteModal.id) return;
+    const confirmDelete = async (warehouse) => {
         try {
-            await warehousesAPI.delete(deleteModal.id);
+            await warehousesAPI.delete(warehouse.id);
             showStatus('success', '창고가 삭제되었습니다.');
             fetchWarehouses();
         } catch (error) {
-            showStatus('error', error.response?.data?.message || '삭제 중 오류가 발생했습니다.');
-        } finally {
-            setDeleteModal({ isOpen: false, id: null, name: '' });
+            const message = error.response?.data?.message || '';
+
+            // 사용 이력이 있어 삭제가 거부된 경우, 비활성화를 대신 제안
+            if (message.includes('사용된 이력') || message.includes('삭제할 수 없습니다')) {
+                // 부드러운 전환을 위해 약간의 지연 처리
+                setTimeout(() => {
+                    openModal({
+                        type: 'warning',
+                        title: '삭제 대신 비활성화',
+                        message: `${message}\n\n지금 바로 이 창고를 '미사용' 상태로 변경하시겠습니까?`,
+                        confirmText: '비활성화로 변경',
+                        cancelText: '취소',
+                        onConfirm: () => toggleActive(warehouse)
+                    });
+                }, 150);
+            } else {
+                showStatus('error', message || '삭제 중 오류가 발생했습니다.');
+            }
         }
     };
 
@@ -286,27 +298,7 @@ const WarehouseManagement = () => {
                 initialData={editData}
             />
 
-            <ConfirmModal
-                isOpen={deleteModal.isOpen}
-                onClose={() => setDeleteModal({ ...deleteModal, isOpen: false })}
-                onConfirm={confirmDelete}
-                title="창고 삭제"
-                message={`[${deleteModal.name}] 창고를 정말 삭제하시겠습니까?`}
-                type="delete"
-                confirmText="삭제"
-                cancelText="취소"
-            />
-
-            <ConfirmModal
-                isOpen={warningModal.isOpen}
-                onClose={() => setWarningModal({ isOpen: false, message: '' })}
-                onConfirm={() => setWarningModal({ isOpen: false, message: '' })}
-                title="삭제 불가"
-                message={warningModal.message}
-                type="warning"
-                confirmText="확인"
-                showCancel={false}
-            />
+            {ConfirmModalComponent}
         </div>
     );
 };

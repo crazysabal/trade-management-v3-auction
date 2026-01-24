@@ -12,6 +12,7 @@ const InventoryQuickView = ({ inventoryAdjustments = {}, refreshKey, onInventory
     const [filteredInventory, setFilteredInventory] = useState([]);
     const [loading, setLoading] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
+    const searchInputRef = React.useRef(null);
     const { openModal, ConfirmModalComponent } = useConfirmModal();
     const [panelStatus, setPanelStatus] = useState(() => {
         if (!window.__salesPanelRegistry) return { count: 0, hasReadyPanel: false };
@@ -356,7 +357,14 @@ const InventoryQuickView = ({ inventoryAdjustments = {}, refreshKey, onInventory
                 type: 'warning',
                 title: '활성 전표 없음',
                 message: '현재 열려 있는 매출 전표 창이 없습니다.\n먼저 매출 전표 등록 창을 열어주세요.',
-                showCancel: false
+                showCancel: false,
+                onClose: () => {
+                    // 경고창 닫을 때 포커스 다시 행으로 돌려줌
+                    setTimeout(() => {
+                        const selectedRow = document.querySelector('.inventory-row.is-selected');
+                        if (selectedRow) selectedRow.focus();
+                    }, 50);
+                }
             });
             return;
         }
@@ -550,10 +558,24 @@ const InventoryQuickView = ({ inventoryAdjustments = {}, refreshKey, onInventory
             <div style={{ marginBottom: '1rem', display: 'flex', gap: '8px', alignItems: 'center' }}>
                 <div style={{ flex: 1, position: 'relative' }}>
                     <input
+                        ref={searchInputRef}
                         type="text"
                         placeholder="🔍 품목, 매입처, 출하주, 창고 검색 (띄어쓰기로 다중 검색)"
                         value={searchTerm}
                         onChange={handleSearch}
+                        onKeyDown={(e) => {
+                            if (e.key === 'ArrowDown') {
+                                e.preventDefault();
+                                const firstRow = document.querySelector('.inventory-row');
+                                if (firstRow) {
+                                    firstRow.focus();
+                                    // 첫 행의 ID를 찾아 선택 상태로 만듬
+                                    if (filteredInventory.length > 0) {
+                                        setSelectedId(filteredInventory[0].id);
+                                    }
+                                }
+                            }
+                        }}
                         style={{
                             width: '100%',
                             height: '38px',
@@ -704,6 +726,11 @@ const InventoryQuickView = ({ inventoryAdjustments = {}, refreshKey, onInventory
                                                     const prevItem = filteredInventory[prevIndex];
                                                     setSelectedId(prevItem.id);
                                                     e.currentTarget.previousElementSibling?.focus();
+                                                } else if (index === 0) {
+                                                    // 목록의 최상단에서 위로 방향키 입력 시 검색창으로 포커스
+                                                    e.preventDefault();
+                                                    setSelectedId(null); // 선택 해제
+                                                    searchInputRef.current?.focus();
                                                 }
                                             }
                                         }}
@@ -758,9 +785,11 @@ const InventoryQuickView = ({ inventoryAdjustments = {}, refreshKey, onInventory
                                         </td>
                                         <td style={{ padding: '0.5rem', whiteSpace: 'nowrap' }}>
                                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                <span style={{ fontWeight: '600', color: '#1e293b' }}>{formatProductName(item)}</span>
-                                                <span style={{ color: '#64748b', fontSize: '0.85rem' }}>{item.sender || '-'}</span>
-                                                {item.grade && (
+                                                <span style={{ color: '#1e293b' }}>{formatProductName(item)}</span>
+                                                <span style={{ color: '#cbd5e1' }}>/</span>
+                                                <span style={{ fontWeight: '600', color: '#1e293b' }}>{item.sender || '-'}</span>
+                                                <span style={{ color: '#cbd5e1' }}>/</span>
+                                                {item.grade ? (
                                                     <span style={{
                                                         color: '#3b82f6',
                                                         backgroundColor: '#eff6ff',
@@ -772,6 +801,8 @@ const InventoryQuickView = ({ inventoryAdjustments = {}, refreshKey, onInventory
                                                     }}>
                                                         {item.grade}
                                                     </span>
+                                                ) : (
+                                                    <span style={{ color: '#1e293b' }}>-</span>
                                                 )}
                                             </div>
                                         </td>

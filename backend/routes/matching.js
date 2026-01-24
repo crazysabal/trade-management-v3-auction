@@ -29,6 +29,9 @@ router.get('/pending-sales', async (req, res) => {
         p.product_name,
         p.grade,
         p.weight as product_weight,
+        p.weight_unit,
+        p.weight_unit as product_weight_unit,
+        p.weight_unit as unit,
         tm.id as trade_master_id,
         tm.trade_number,
         tm.trade_date,
@@ -211,7 +214,7 @@ router.post('/', async (req, res) => {
 
     // 1. 매출 상세 정보 조회
     const [saleDetails] = await connection.query(`
-      SELECT td.*, tm.trade_type, p.product_name, p.weight, p.grade
+      SELECT td.*, tm.trade_type, p.product_name, p.weight, p.weight_unit, p.weight_unit as product_weight_unit, p.weight_unit as unit, p.grade
       FROM trade_details td
       JOIN trade_masters tm ON td.trade_master_id = tm.id
       JOIN products p ON td.product_id = p.id
@@ -263,7 +266,7 @@ router.post('/', async (req, res) => {
 
       // 매입 재고 확인
       const [inventory] = await connection.query(`
-        SELECT pi.*, p.product_name, p.weight, p.grade
+        SELECT pi.*, p.product_name, p.weight, p.weight_unit, p.weight_unit as product_weight_unit, p.weight_unit as unit, p.grade
         FROM purchase_inventory pi
         JOIN products p ON pi.product_id = p.id
         WHERE pi.id = ? AND pi.status = 'AVAILABLE'
@@ -663,7 +666,7 @@ router.post('/trade', async (req, res) => {
 
       // 매출 상세 정보 조회
       const [saleDetails] = await connection.query(`
-        SELECT td.*, tm.trade_type, p.product_name, p.weight, p.grade
+        SELECT td.*, tm.trade_type, p.product_name, p.weight, p.weight_unit, p.weight_unit as product_weight_unit, p.weight_unit as unit, p.grade
         FROM trade_details td
         JOIN trade_masters tm ON td.trade_master_id = tm.id
         JOIN products p ON td.product_id = p.id
@@ -713,7 +716,7 @@ router.post('/trade', async (req, res) => {
 
         // 매입 재고 확인
         const [inventory] = await connection.query(`
-          SELECT pi.*, p.product_name, p.weight, p.grade
+          SELECT pi.*, p.product_name, p.weight, p.weight_unit, p.weight_unit as product_weight_unit, p.weight_unit as unit, p.grade
           FROM purchase_inventory pi
           JOIN products p ON pi.product_id = p.id
           WHERE pi.id = ? AND pi.status = 'AVAILABLE'
@@ -845,7 +848,10 @@ router.get('/trade/:trade_master_id/inventory', async (req, res) => {
         ) as matched_quantity,
         p.product_name,
         p.grade,
-        p.weight as product_weight
+        p.weight as product_weight,
+        p.weight_unit,
+        p.weight_unit as product_weight_unit,
+        p.weight_unit as unit
       FROM trade_details td
       JOIN products p ON td.product_id = p.id
       WHERE td.trade_master_id = ?
@@ -870,6 +876,9 @@ router.get('/trade/:trade_master_id/inventory', async (req, res) => {
           p.product_name,
           p.grade,
           p.weight as product_weight,
+          p.weight_unit,
+          p.weight_unit as product_weight_unit,
+          p.weight_unit as unit,
           c.business_name as purchase_company,
           c.company_name as alias
         FROM sale_purchase_matching spm
@@ -908,6 +917,9 @@ router.get('/trade/:trade_master_id/inventory', async (req, res) => {
         p.product_name,
         p.grade,
         p.weight as product_weight,
+        p.weight_unit,
+        p.weight_unit as product_weight_unit,
+        p.weight_unit as unit,
         tm.trade_number,
         c.business_name as company_name,
         c.company_name as alias

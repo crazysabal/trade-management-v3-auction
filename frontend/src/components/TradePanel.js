@@ -410,8 +410,9 @@ function TradePanel({
       if (String(current.product_id || '') !== String(initial.product_id || '')) return true;
       if (Number(current.quantity || 0) !== Number(initial.quantity || 0)) return true;
       if (Number(current.unit_price || 0) !== Number(initial.unit_price || 0)) return true;
+      if ((current.sender_name || '') !== (initial.sender_name || '')) return true;
+      if ((current.shipper_location || '') !== (initial.shipper_location || '')) return true;
       if ((current.notes || '') !== (initial.notes || '')) return true;
-
     }
 
     // 입금/출금 변경사항 확인
@@ -589,14 +590,18 @@ function TradePanel({
     loadInitialData();
   }, []);
 
-  // [NEW] 전역 품목 변경 이벤트 수신
+  // [NEW] 전역 데이터(품목/거래처) 변경 이벤트 수신
   useEffect(() => {
     const handleRefresh = () => {
-      // console.log('♻️ 품목 변경 감지: 전표 입력창 품목 목록 새로고침');
-      fetchBaseData(); // 품목 등 기초 정보만 다시 불러오고, 폼 상태(initialData 등)는 건드리지 않음
+      // console.log('♻️ 데이터 변경 감지: 전표 입력창 기초 정보 새로고침');
+      fetchBaseData(); // 기초 정보만 다시 불러오고, 폼 상태는 보존함
     };
     window.addEventListener('PRODUCT_DATA_CHANGED', handleRefresh);
-    return () => window.removeEventListener('PRODUCT_DATA_CHANGED', handleRefresh);
+    window.addEventListener('COMPANY_DATA_CHANGED', handleRefresh);
+    return () => {
+      window.removeEventListener('PRODUCT_DATA_CHANGED', handleRefresh);
+      window.removeEventListener('COMPANY_DATA_CHANGED', handleRefresh);
+    };
   }, [fetchBaseData]);
 
   // initialTradeId가 있으면 해당 전표 로드
@@ -744,8 +749,10 @@ function TradePanel({
   };
 
   // 폼 초기화
-  // 폼 초기화
-  const resetForm = (date, companyId = '') => {
+  const resetForm = (date, companyId = '', options = {}) => {
+    // options: { autoFocus: boolean }
+    const { autoFocus = true } = options;
+
     // 날짜 기본값 로직 일원화
     const effectiveDate = date || formatLocalDate(new Date());
 
@@ -793,14 +800,17 @@ function TradePanel({
 
     if (companyId) {
       loadCompanySummary(companyId, tradeType, date);
+    } else {
+      setCompanySummary(null);
+    }
+
+    if (companyId && autoFocus) {
       // [NEW] 거래처 선택 후 빈 행이 생기면 품목으로 포커스 자동 이동
       setTimeout(() => {
         if (productRefs.current[0]) {
           productRefs.current[0].focus();
         }
       }, 100);
-    } else {
-      setCompanySummary(null);
     }
 
     // [FIX] 초기화 시 재고 현황 목록의 임시 조정 수치를 초기화하기 위해 알림 발송
@@ -1551,9 +1561,18 @@ function TradePanel({
     try {
       await tradeAPI.delete(currentTradeId);
       setDeleteConfirmModal({ isOpen: false, confirmText: '' });
-      showModal('success', '삭제 완료', '전표가 삭제되었습니다.');
-      // 삭제 후 같은 거래처 유지
-      resetForm(master.trade_date, master.company_id);
+
+      showModal('success', '삭제 완료', '전표가 삭제되었습니다.', () => {
+        // 알림창 확인 후 첫 번째 품목 필드로 포커스 이동
+        setTimeout(() => {
+          if (productRefs.current[0]) {
+            productRefs.current[0].focus();
+          }
+        }, 100);
+      });
+
+      // 삭제 후 같은 거래처 유지, 자동 포커스는 알림창 확인 시 수행하므로 꺼둠
+      resetForm(master.trade_date, master.company_id, { autoFocus: false });
 
       // 전표 변경 알림 (재고 목록 리프레시 등)
       if (onTradeChange) {
@@ -2100,7 +2119,7 @@ function TradePanel({
             {/* 잔고 정보 리스트 */}
             <div className="balance-list">
               <div className="balance-item">
-                <span className="balance-text-label">현재 전표 합계</span>
+                <span className="balance-text-label">금일 합계</span>
                 <span className="balance-text-value" style={{ color: isPurchase ? '#2980b9' : '#e67e22', fontWeight: '800' }}>
                   {formatCurrency(currentTodayTotal)}원
                 </span>
@@ -2117,7 +2136,7 @@ function TradePanel({
                 <span className="balance-text-value">{formatCurrency(summary.previous_balance)}원</span>
               </div>
               <div className="balance-item">
-                <span className="balance-text-label">전잔고 + 오늘 총계</span>
+                <span className="balance-text-label">합계 금액</span>
                 <span className="balance-text-value">{formatCurrency(currentSubtotal)}원</span>
               </div>
 
@@ -2287,7 +2306,7 @@ function TradePanel({
                               type="button"
                               onClick={() => setEditingPendingPayment({
                                 ...payment,
-                                displayAmount: new Intl.NumberFormat('ko-KR').format(Math.abs(payment.amount))
+                                displayAmount: new Intl.NumberFormat('ko-KR').format(payment.amount)
                               })}
                               className="btn btn-custom btn-primary btn-xs"
                             >

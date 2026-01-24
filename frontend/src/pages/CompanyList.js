@@ -310,6 +310,10 @@ function CompanyList({ isWindow }) {
     setCompanies(result);
   }, [filters, originalCompanies]);
 
+  const dispatchCompanyChange = () => {
+    window.dispatchEvent(new CustomEvent('COMPANY_DATA_CHANGED'));
+  };
+
   // 최초 마운트 시 한 번만 전체 데이터 로드
   useEffect(() => {
     loadCompanies();
@@ -371,9 +375,11 @@ function CompanyList({ isWindow }) {
       setCompanies(prev => prev.map(c => c.id === updatedCompany.id ? { ...c, ...updatedCompany } : c));
       setOriginalCompanies(prev => prev.map(c => c.id === updatedCompany.id ? { ...c, ...updatedCompany } : c));
       companiesRef.current = companiesRef.current.map(c => c.id === updatedCompany.id ? { ...c, ...updatedCompany } : c);
+      dispatchCompanyChange(); // 알림 발송
     } else {
       // 신규 등록인 경우 목록 갱신
       loadCompanies();
+      dispatchCompanyChange(); // 알림 발송
     }
   };
 
@@ -400,6 +406,7 @@ function CompanyList({ isWindow }) {
             });
           }, 100);
           loadCompanies(true); // Silent reload to preserve scroll
+          dispatchCompanyChange(); // 알림 발송
         } catch (error) {
           console.error('거래처 삭제 오류:', error);
           setTimeout(() => {
@@ -480,6 +487,7 @@ function CompanyList({ isWindow }) {
           setSelectedIds([]);
           setIsSelectMode(false);
           loadCompanies(true); // Silent reload
+          dispatchCompanyChange(); // 알림 발송
         } catch (error) {
           console.error('다중 삭제 오류:', error);
           setModal({
@@ -539,6 +547,7 @@ function CompanyList({ isWindow }) {
       setCompanies(prev => prev.map(c =>
         c.id === company.id ? { ...c, company_type_flag: nextType } : c
       ));
+      dispatchCompanyChange(); // 알림 발송
     } catch (error) {
       console.error('거래처 구분 변경 오류:', error);
       setModal({
@@ -563,6 +572,7 @@ function CompanyList({ isWindow }) {
       setCompanies(prev => prev.map(c =>
         c.id === company.id ? { ...c, is_active: !c.is_active } : c
       ));
+      dispatchCompanyChange(); // 알림 발송
     } catch (error) {
       console.error('상태 변경 오류:', error);
       setModal({
@@ -588,6 +598,7 @@ function CompanyList({ isWindow }) {
       setCompanies(prev => prev.map(c =>
         c.id === company.id ? { ...c, e_tax_invoice: !c.e_tax_invoice } : c
       ));
+      dispatchCompanyChange(); // 알림 발송
     } catch (error) {
       console.error('전자계산서 설정 변경 오류:', error);
       setModal({
@@ -722,6 +733,7 @@ function CompanyList({ isWindow }) {
           setUploadFile(null);
           setSelectedRows([]);
           loadCompanies();
+          dispatchCompanyChange(); // 알림 발송
         } catch (error) {
           console.error('일괄 등록 오류:', error);
           setModal({

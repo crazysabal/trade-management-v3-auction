@@ -40,21 +40,27 @@ router.delete('/:id', async (req, res) => {
         await connection.beginTransaction();
         const { id } = req.params;
 
-        // 1. 재고 확인
-        const [stockCheck] = await connection.query(`
-            SELECT COUNT(*) as count 
-            FROM purchase_inventory 
-            WHERE warehouse_id = ? 
-            AND remaining_quantity > 0 
-            AND status = 'AVAILABLE'
-        `, [id]);
+        // 1. 상세 사용 이력 확인 (단순 현재 재고뿐만 아니라 과거 모든 기록 확인)
+        const [usageCheck] = await connection.query(`
+            SELECT 
+                (SELECT COUNT(*) FROM purchase_inventory WHERE warehouse_id = ?) as inventory_history,
+                (SELECT COUNT(*) FROM trade_masters WHERE warehouse_id = ?) as trade_history,
+                (SELECT COUNT(*) FROM warehouse_transfers WHERE from_warehouse_id = ? OR to_warehouse_id = ?) as transfer_history,
+                (SELECT COUNT(*) FROM inventory_audits WHERE warehouse_id = ?) as audit_history
+        `, [id, id, id, id, id]);
 
-        if (stockCheck[0].count > 0) {
-            throw new Error('재고가 남아있는 창고는 삭제할 수 없습니다.');
+        const usage = usageCheck[0];
+        const totalUsage = Object.values(usage).reduce((a, b) => a + b, 0);
+
+        if (totalUsage > 0) {
+            let detail = [];
+            if (usage.inventory_history > 0) detail.push('재고 기록');
+            if (usage.trade_history > 0) detail.push('거래 전표');
+            if (usage.transfer_history > 0) detail.push('이동 이력');
+            if (usage.audit_history > 0) detail.push('실사 기록');
+
+            throw new Error(`이 창고는 이미 사용된 이력(${detail.join(', ')})이 있어 삭제할 수 없습니다. 대신 '미사용' 상태로 변경하여 관리해 주세요.`);
         }
-
-        // 2. 사용 이력 확인 (선택적: 이력이 있으면 비활성화를 권장하지만, 삭제를 막을지 여부는 정책 결정)
-        // 일단 재고만 없으면 삭제 가능하도록 처리 (FK 제약조건이 있다면 DB 에러 발생함)
 
         await connection.query('DELETE FROM warehouses WHERE id = ?', [id]);
 
@@ -62,8 +68,15 @@ router.delete('/:id', async (req, res) => {
         res.json({ success: true });
     } catch (error) {
         await connection.rollback();
-        console.error('창고 삭제 오류:', error);
-        res.status(400).json({ success: false, message: error.message || '삭제 실패' });
+
+        // 비즈니스 로직에 따른 의도된 에러(400)인 경우 스택 트레이스 없이 로그 출력
+        if (error.status === 400 || error.message.includes('삭제할 수 없습니다')) {
+            console.warn(`창고 삭제 제한: ${error.message}`);
+            return res.status(400).json({ success: false, message: error.message });
+        }
+
+        console.error('창고 삭제 서버 오류:', error);
+        res.status(500).json({ success: false, message: '서er 오류가 발생했습니다.' });
     } finally {
         connection.release();
     }

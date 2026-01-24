@@ -117,9 +117,7 @@ function MatchingQuantityInputModal({
                     }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                             <span style={{ color: '#64748b' }}>품목/중량</span>
-                            <span style={{ fontWeight: '600', color: '#334155' }}>
-                                {inventory?.product_name} {inventory?.product_weight ? `${parseFloat(inventory?.product_weight)}${inventory?.weight_unit || inventory?.product_weight_unit || 'kg'}` : ''}
-                            </span>
+                            {inventory?.product_name} {inventory?.product_weight ? `${parseFloat(inventory?.product_weight)}${inventory?.product_weight_unit || inventory?.weight_unit || inventory?.unit || 'kg'}` : ''}
                         </div>
                         <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                             <span style={{ color: '#64748b' }}>출하주/등급</span>

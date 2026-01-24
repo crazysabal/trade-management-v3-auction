@@ -2,21 +2,27 @@
 
 .inventory-transfer-page {
     padding: 0.5rem;
-    height: calc(100vh - 60px);
+    height: 100% !important;
+    /* Fill the FloatingWindow exactly */
     display: flex;
     flex-direction: column;
     background-color: #f1f5f9;
+    overflow: hidden;
+    /* Prevent page-level vertical scroll */
 }
 
-.page-header {
+/* Page Header - Stationary at top of flex container */
+.inventory-transfer-page .page-header {
     display: flex;
     align-items: center;
-    padding: 0.75rem;
+    padding: 0.75rem 1rem;
+    margin-bottom: 8px;
     background-color: white;
     border: 1px solid #e9ecef;
     border-radius: 8px;
-    margin-bottom: 0.5rem;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+    flex-shrink: 0;
+    /* Never collapse */
 }
 
 .page-title {
@@ -62,16 +68,17 @@
 
 .kanban-container {
     flex: 1;
+    /* Occupy remaining vertical space */
     display: flex;
     gap: 0.75rem;
     overflow-x: auto;
-    padding-bottom: 0.25rem;
-    /* 스크롤바 공간 고려 */
-    align-items: flex-start;
-    padding: 0;
-    /* 컨테이너 자체 패딩 제거 (외부 패딩 사용) */
+    /* Horizontal scroll for columns */
+    overflow-y: hidden;
+    /* No vertical scroll at container level */
+    padding-bottom: 0.5rem;
+    align-items: stretch;
+    /* Columns fill vertical space */
     background-color: transparent;
-    /* 배경색 투명 (전체 배경 사용) */
 }
 
 .loading-container {
@@ -82,15 +89,18 @@
 
 /* Warehouse Column */
 .warehouse-column {
-    min-width: 350px;
+    min-width: 300px;
+    height: 100%;
+    max-height: 100%;
+    /* Fill available height */
     background-color: #f8f9fa;
     border-radius: 8px;
     border: 1px solid #e9ecef;
     display: flex;
     flex-direction: column;
-    max-height: 100%;
     transition: all 0.2s;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+    overflow: hidden;
 }
 
 .warehouse-column.highlight {
@@ -102,7 +112,10 @@
     opacity: 0.5;
 }
 
-.warehouse-header {
+/* Warehouse Header - Fixed at top of column (no sticky needed with per-column scroll) */
+.inventory-transfer-page .warehouse-header {
+    flex-shrink: 0;
+    /* Prevent header from shrinking */
     padding: 0.6rem 0.8rem;
     border-bottom: 1px solid #e9ecef;
     border-top-left-radius: 8px;
@@ -113,12 +126,12 @@
     background-color: white;
 }
 
-.warehouse-header.default {
-    background-color: #e3f2fd;
+.inventory-transfer-page .warehouse-header.default {
+    background-color: #e3f2fd !important;
 }
 
-.warehouse-header.highlight {
-    background-color: #b2f5ea;
+.inventory-transfer-page .warehouse-header.highlight {
+    background-color: #b2f5ea !important;
 }
 
 .warehouse-title {
@@ -138,12 +151,42 @@
     border-radius: 10px;
 }
 
-/* Inventory List */
+.warehouse-drag-handle {
+    cursor: grab;
+    color: #94a3b8;
+    font-size: 1.2rem;
+    padding: 2px 4px;
+    border-radius: 4px;
+    transition: all 0.2s;
+    user-select: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.warehouse-drag-handle:hover {
+    background-color: #f1f5f9;
+    color: #475569;
+}
+
+.warehouse-drag-handle:active {
+    cursor: grabbing;
+    background-color: #e2e8f0;
+}
+
+.warehouse-column.dragging {
+    opacity: 0.4;
+    border: 2px dashed #3b82f6;
+    transform: scale(0.98);
+}
+
+/* Inventory List - Scrolls independently within each column */
 .inventory-list {
     flex: 1;
     overflow-y: auto;
+    /* Each column scrolls independently */
     padding: 0.5rem;
-    min-height: 100px;
+    min-height: 50px;
 }
 
 .inventory-empty {
@@ -170,6 +213,18 @@
     box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
 }
 
+.grade-badge {
+    color: #3b82f6;
+    background-color: #eff6ff;
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: bold;
+    border: 1px solid #dbeafe;
+    margin-left: 4px;
+    white-space: nowrap;
+}
+
 .inventory-card.dragging {
     opacity: 0.5;
     background-color: #f8f9fa;
@@ -183,9 +238,10 @@
 }
 
 .card-main-info {
-    font-weight: bold;
-    font-size: 1rem;
-    color: #2c3e50;
+    font-size: 0.9rem;
+    /* Matched to InventoryQuickView */
+    color: #1e293b;
+    /* Matched to QuickView text color */
     line-height: 1.4;
     word-break: keep-all;
 }
