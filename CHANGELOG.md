@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.0.31] - 2026-01-24
+
+### Fixed
+- **System Stability**: Resolved "Unknown column 'created_by' in 'field list'" error by ensuring `payment_transactions` has necessary audit and metadata columns (`bank_name`, `account_number`, `reference_number`, `created_by`). This fix prevents registration failures during deposit/withdrawal entries.
+
 ## [1.0.27] - 2026-01-23
 
 ### Fixed
