@@ -76,6 +76,7 @@ router.get('/:id', async (req, res) => {
                 td.sender,
                 pi.purchase_date,
                 pi.unit_price as unit_cost,
+                pi.remaining_quantity as current_quantity,
                 c.company_name as purchase_store_name
             FROM inventory_audit_items ai
             LEFT JOIN products p ON ai.product_id = p.id
@@ -219,6 +220,47 @@ router.put('/:id/items', async (req, res) => {
 });
 
 /**
+ * 특정 실사 항목의 전산 재고를 현재 재고로 동기화
+ */
+router.put('/:auditId/items/:itemId/sync', async (req, res) => {
+    const { auditId, itemId } = req.params;
+    const connection = await db.getConnection();
+    try {
+        await connection.beginTransaction();
+
+        // 1. 현재 시스템 재고 조회
+        const [current] = await connection.query(`
+            SELECT pi.remaining_quantity 
+            FROM purchase_inventory pi
+            JOIN inventory_audit_items ai ON pi.id = ai.inventory_id
+            WHERE ai.id = ? AND ai.audit_id = ?
+        `, [itemId, auditId]);
+
+        if (current.length === 0) {
+            throw new Error('항목을 찾을 수 없습니다.');
+        }
+
+        const currentQty = current[0].remaining_quantity;
+
+        // 2. 실사 항목의 전산 재고 업데이트 (실사 수량도 함께 맞춤)
+        await connection.query(`
+            UPDATE inventory_audit_items 
+            SET system_quantity = ?, actual_quantity = ?
+            WHERE id = ? AND audit_id = ?
+        `, [currentQty, currentQty, itemId, auditId]);
+
+        await connection.commit();
+        res.json({ success: true, current_quantity: currentQty });
+    } catch (error) {
+        await connection.rollback();
+        console.error('재고 동기화 오류:', error);
+        res.status(500).json({ success: false, message: error.message || '서버 오류가 발생했습니다.' });
+    } finally {
+        connection.release();
+    }
+});
+
+/**
  * 실사 확정 (재고 조정 반영)
  */
 router.post('/:id/finalize', async (req, res) => {
@@ -259,6 +301,35 @@ router.post('/:id/finalize', async (req, res) => {
                     (purchase_inventory_id, adjustment_type, quantity_change, reason)
                     VALUES (?, 'CORRECTION', ?, ?)
                 `, [item.inventory_id, diff, `재고 실사 조정 (ID: ${id})`]);
+
+                // [V1.0.33 ADD] 집계 재고 업데이트
+                const [prod] = await connection.query('SELECT weight FROM products WHERE id = ?', [item.product_id]);
+                const unitWeight = prod[0]?.weight || 0;
+                const weightDiff = diff * unitWeight;
+
+                await connection.query(`
+                    UPDATE inventory 
+                    SET quantity = quantity + ?,
+                        weight = weight + ?
+                    WHERE product_id = ?
+                `, [diff, weightDiff, item.product_id]);
+
+                // [V1.0.33 ADD] 수불부 기록
+                await connection.query(`
+                    INSERT INTO inventory_transactions 
+                    (transaction_date, transaction_type, product_id, quantity, weight,
+                     before_quantity, after_quantity, notes, created_by, reference_number)
+                    VALUES (NOW(), 'ADJUST', ?, ?, ?, ?, ?, ?, ?, ?)
+                `, [
+                    item.product_id,
+                    diff,
+                    weightDiff,
+                    item.system_quantity,
+                    item.actual_quantity,
+                    `재고 실사 보정 (Audit ID: ${id})`,
+                    'system',
+                    `Audit: ${id}`
+                ]);
             }
         }
 
@@ -313,6 +384,38 @@ router.post('/:id/revert', async (req, res) => {
                     (purchase_inventory_id, adjustment_type, quantity_change, reason)
                     VALUES (?, 'CORRECTION', ?, ?)
                 `, [item.inventory_id, -diff, `재고 실사 원복 (ID: ${id})`]);
+
+                // [V1.0.33 ADD] 집계 재고 업데이트 (원복)
+                const [prod] = await connection.query('SELECT p.id, p.weight FROM products p JOIN inventory_audit_items ai ON p.id = ai.product_id WHERE ai.id = ?', [item.id]);
+                const productId = prod[0]?.id;
+                const unitWeight = prod[0]?.weight || 0;
+                const weightRevert = (-diff) * unitWeight;
+
+                if (productId) {
+                    await connection.query(`
+                        UPDATE inventory 
+                        SET quantity = quantity + ?,
+                            weight = weight + ?
+                        WHERE product_id = ?
+                    `, [-diff, weightRevert, productId]);
+
+                    // [V1.0.33 ADD] 수불부 기록 (원복)
+                    await connection.query(`
+                        INSERT INTO inventory_transactions 
+                        (transaction_date, transaction_type, product_id, quantity, weight,
+                         before_quantity, after_quantity, notes, created_by, reference_number)
+                        VALUES (NOW(), 'ADJUST', ?, ?, ?, ?, ?, ?, ?, ?)
+                    `, [
+                        productId,
+                        -diff,
+                        weightRevert,
+                        item.actual_quantity,
+                        item.system_quantity,
+                        `재고 실사 원복 (Audit ID: ${id})`,
+                        'system',
+                        `Audit Revert: ${id}`
+                    ]);
+                }
             }
         }
 

@@ -316,11 +316,12 @@ const TradeController = {
             if (tradeType === 'PURCHASE') {
                 // 기존 상세 및 재고/매칭 정보 조회
                 const [existingRows] = await connection.query(
-                    `SELECT td.id as detail_id, td.product_id, td.quantity as trade_quantity, pi.id as inventory_id, 
+                    `SELECT td.id as detail_id, td.product_id, td.quantity as trade_quantity, td.parent_detail_id,
+                     pi.id as inventory_id, 
                      pi.original_quantity, pi.remaining_quantity,
                      COALESCE(SUM(spm.matched_quantity), 0) as matched_quantity
                      FROM trade_details td
-                     JOIN purchase_inventory pi ON td.id = pi.trade_detail_id
+                     LEFT JOIN purchase_inventory pi ON td.id = pi.trade_detail_id
                      LEFT JOIN sale_purchase_matching spm ON pi.id = spm.purchase_inventory_id
                      WHERE td.trade_master_id = ?
                      GROUP BY td.id, td.product_id, pi.id`,
@@ -557,43 +558,57 @@ const TradeController = {
                             ]
                         );
 
-                        // Purchase Inventory 업데이트 (Linked List 전체 업데이트)
+                        // Purchase Inventory 업데이트
                         for (const existing of existingList) {
-                            if (isSplit) {
-                                // 분할된 경우: 수량/중량은 변경 불가(위에서 검증됨), 메타데이터만 업데이트
-                                await connection.query(
-                                    `UPDATE purchase_inventory SET
-                                       product_id = ?,
-                                       unit_price = ?, weight_unit = ?,
-                                      shipper_location = ?, sender = ?
-                                      WHERE id = ?`,
-                                    [
-                                        detail.product_id, detail.unit_price, detail.weight_unit || 'kg', detail.shipper_location || null, detail.sender_name || detail.sender || null, existing.inventory_id
-                                    ]
-                                );
-                            } else {
-                                // 단일 재고: 수량 등 전체 업데이트
-                                const matchedQty = parseFloat(existing.matched_quantity) || 0;
-                                const newQty = parseFloat(detail.quantity);
-                                const newRemaining = newQty - matchedQty;
-                                const newUniqueStatus = newRemaining <= 0 ? 'DEPLETED' : 'AVAILABLE';
+                            if (detail.parent_detail_id && parseFloat(detail.quantity) < 0) {
+                                // [NEW] 반출 항목인 경우: 원본 재고 차감량 보정
+                                const qtyDiff = parseFloat(detail.quantity) - parseFloat(existing.trade_quantity);
+                                if (Math.abs(qtyDiff) > 0.0001) {
+                                    await connection.query(
+                                        `UPDATE purchase_inventory 
+                                         SET remaining_quantity = remaining_quantity + ?,
+                                             status = CASE WHEN remaining_quantity + ? <= 0 THEN 'DEPLETED' ELSE 'AVAILABLE' END
+                                         WHERE trade_detail_id = ?`,
+                                        [qtyDiff, qtyDiff, detail.parent_detail_id]
+                                    );
+                                }
+                            } else if (existing.inventory_id) {
+                                if (isSplit) {
+                                    // 분할된 경우: 수량/중량은 변경 불가(위에서 검증됨), 메타데이터만 업데이트
+                                    await connection.query(
+                                        `UPDATE purchase_inventory SET
+                                           product_id = ?,
+                                           unit_price = ?, weight_unit = ?,
+                                          shipper_location = ?, sender = ?
+                                          WHERE id = ?`,
+                                        [
+                                            detail.product_id, detail.unit_price, detail.weight_unit || 'kg', detail.shipper_location || null, detail.sender_name || detail.sender || null, existing.inventory_id
+                                        ]
+                                    );
+                                } else {
+                                    // 단일 재고: 수량 등 전체 업데이트
+                                    const matchedQty = parseFloat(existing.matched_quantity) || 0;
+                                    const newQty = parseFloat(detail.quantity);
+                                    const newRemaining = newQty - matchedQty;
+                                    const newUniqueStatus = newRemaining <= 0 ? 'DEPLETED' : 'AVAILABLE';
 
-                                await connection.query(
-                                    `UPDATE purchase_inventory SET
-                                       product_id = ?,
-                                       original_quantity = ?, remaining_quantity = ?,
-                                       total_weight = ?,
-                                       unit_price = ?, weight_unit = ?, status = ?,
-                                      shipper_location = ?, sender = ?
-                                      WHERE id = ?`,
-                                    [
-                                        detail.product_id, newQty, newRemaining,
-                                        detail.total_weight || 0,
-                                        detail.unit_price, detail.weight_unit || 'kg', newUniqueStatus,
-                                        detail.shipper_location || null, detail.sender_name || detail.sender || null,
-                                        existing.inventory_id
-                                    ]
-                                );
+                                    await connection.query(
+                                        `UPDATE purchase_inventory SET
+                                           product_id = ?,
+                                           original_quantity = ?, remaining_quantity = ?,
+                                           total_weight = ?,
+                                           unit_price = ?, weight_unit = ?, status = ?,
+                                          shipper_location = ?, sender = ?
+                                          WHERE id = ?`,
+                                        [
+                                            detail.product_id, newQty, newRemaining,
+                                            detail.total_weight || 0,
+                                            detail.unit_price, detail.weight_unit || 'kg', newUniqueStatus,
+                                            detail.shipper_location || null, detail.sender_name || detail.sender || null,
+                                            existing.inventory_id
+                                        ]
+                                    );
+                                }
                             }
                         }
 

@@ -17,7 +17,7 @@ const SettlementPage = ({ isWindow, initialHistory }) => {
 
   // Selected History Item (For View Mode)
   const [selectedHistory, setSelectedHistory] = useState(null);
-
+  const [paymentMethods, setPaymentMethods] = useState([]);
   const [loading, setLoading] = useState(false);
 
   const defaultSettlementData = {
@@ -26,8 +26,9 @@ const SettlementPage = ({ isWindow, initialHistory }) => {
     system_cash_balance: 0, actual_cash_balance: 0,
     closing_note: '', closedAt: null,
     cash_inflow: 0, cash_outflow: 0, cash_expense: 0,
-    inventoryLoss: 0, // [NEW]
-    cashFlowDetails: [], expenseDetails: []
+    inventoryLoss: 0,
+    cashFlowDetails: [], expenseDetails: [],
+    actualMethodValues: {} // [NEW] { 'CASH': 10000, 'VOUCHER': 0 ... }
   };
 
   // Financial Data State
@@ -49,6 +50,7 @@ const SettlementPage = ({ isWindow, initialHistory }) => {
   useEffect(() => {
     fetchHistory();
     initializeNextSettlement();
+    fetchPaymentMethods();
   }, []);
 
   // [New] Deep link support
@@ -68,6 +70,17 @@ const SettlementPage = ({ isWindow, initialHistory }) => {
       }
     } catch (e) {
       console.error("History error", e);
+    }
+  };
+
+  const fetchPaymentMethods = async () => {
+    try {
+      const res = await axios.get('/api/settings/payment-methods?is_active=1');
+      if (res.data.success) {
+        setPaymentMethods(res.data.data);
+      }
+    } catch (e) {
+      console.error("Payment methods error", e);
     }
   };
 
@@ -100,24 +113,31 @@ const SettlementPage = ({ isWindow, initialHistory }) => {
     }
   };
 
-  // --- Effect: When Dates Change (in New Mode) ---
+  // --- Effect: When Dates Change or History Selected ---
   useEffect(() => {
+    let start, end;
     if (mode === 'new') {
-      const startStr = format(nextStartDate, 'yyyy-MM-dd');
-      const endStr = format(targetEndDate, 'yyyy-MM-dd');
-      // Only fetch if end >= start
-      if (targetEndDate >= nextStartDate) {
-        fetchSettlementData(startStr, endStr);
-      }
+      start = nextStartDate;
+      end = targetEndDate;
+    } else if (mode === 'view' && selectedHistory) {
+      start = parseISO(selectedHistory.start_date);
+      end = parseISO(selectedHistory.end_date);
     }
-  }, [mode, nextStartDate, targetEndDate]);
+
+    if (start && end && end >= start) {
+      const startStr = format(start, 'yyyy-MM-dd');
+      const endStr = format(end, 'yyyy-MM-dd');
+      fetchSettlementData(startStr, endStr);
+    }
+  }, [mode, nextStartDate, targetEndDate, selectedHistory]);
 
   // --- Effect: When History Selected ---
   useEffect(() => {
     if (mode === 'view' && selectedHistory) {
       // Flatten history item to settlementData structure
       const h = selectedHistory;
-      setSettlementData({
+      setSettlementData(prev => ({
+        ...prev,
         revenue: parseFloat(h.revenue),
         cogs: parseFloat(h.cogs),
         grossProfit: parseFloat(h.gross_profit),
@@ -141,7 +161,9 @@ const SettlementPage = ({ isWindow, initialHistory }) => {
         cash_outflow: parseFloat(h.cash_outflow || 0),
         cash_expense: parseFloat(h.cash_expense || 0),
         inventoryLoss: parseFloat(h.inventory_loss || 0)
-      });
+      }));
+      // [FIX] Update targetEndDate to show the correct end date of the history item
+      setTargetEndDate(parseISO(h.end_date));
     }
   }, [mode, selectedHistory]);
 
@@ -159,40 +181,53 @@ const SettlementPage = ({ isWindow, initialHistory }) => {
       const todayInv = endClosingRes.data.success ? parseFloat(endClosingRes.data.data.today_inventory_value || 0) : 0;
       const periodPurch = parseFloat(sData.periodPurchase || 0);
 
-      // [New Mode] Use Fixed Previous Inventory (from last closing)
-      // [View Mode] Logic handled elsewhere, but this function is only for 'new' mode.
-      const prevInv = fixedPrevInventory;
+      // [FIX] In 'view' mode, use the historical prev_inventory instead of the 'next draft' one
+      const prevInv = (mode === 'view' && selectedHistory)
+        ? parseFloat(selectedHistory.prev_inventory || 0)
+        : fixedPrevInventory;
 
       // Asset Flow Logic: Begin + Purch - End = COGS
-      // With Loss: Begin + Purch + Loss(Negative) - End = COGS
       const invLoss = parseFloat(sData.inventoryLoss || 0);
       const derivedCogs = prevInv + periodPurch + invLoss - todayInv;
 
-      setSettlementData({
-        revenue: sData.revenue,
-        cogs: sData.cogs,
-        grossProfit: sData.grossProfit,
-        expenses: sData.expenses,
-        netProfit: sData.netProfit,
-        zeroCostCount: sData.counts.zeroCostItems,
+      setSettlementData(prev => {
+        const newData = {
+          ...prev,
+          cashFlowDetails: sData.cashFlowDetails || [],
+          expenseDetails: sData.expenseDetails || [],
+          // [NEW] Metadata for UI
+          isReconstructed: endClosingRes.data.data?.is_reconstructed,
+          liveInventoryValue: endClosingRes.data.data?.live_inventory_value
+        };
 
-        prev_inventory_value: prevInv,
-        today_purchase_cost: periodPurch,
-        today_inventory_value: todayInv,
-        calculated_cogs: derivedCogs,          // Theoretical COGS based on Assets
+        // 'new' 모드일 때만 합계 수치들을 업데이트 (계산 로직 수행)
+        if (mode === 'new') {
+          return {
+            ...newData,
+            revenue: sData.revenue,
+            cogs: sData.cogs,
+            grossProfit: sData.grossProfit,
+            expenses: sData.expenses,
+            netProfit: sData.netProfit,
+            zeroCostCount: sData.counts.zeroCostItems,
 
-        system_cash_balance: endClosingRes.data.success ? parseFloat(endClosingRes.data.data.system_cash_balance || 0) : 0,
-        actual_cash_balance: endClosingRes.data.success ? parseFloat(endClosingRes.data.data.actual_cash_balance || 0) : 0,
+            prev_inventory_value: prevInv,
+            today_purchase_cost: periodPurch,
+            today_inventory_value: todayInv,
+            calculated_cogs: derivedCogs,          // Theoretical COGS based on Assets
 
-        closing_note: '',
-        closedAt: null,
+            system_cash_balance: endClosingRes.data.success ? parseFloat(endClosingRes.data.data.system_cash_balance || 0) : 0,
+            actual_cash_balance: endClosingRes.data.success ? parseFloat(endClosingRes.data.data.actual_cash_balance || 0) : 0,
 
-        cash_inflow: sData.cashFlow ? parseFloat(sData.cashFlow.inflow || 0) : 0,
-        cash_outflow: sData.cashFlow ? parseFloat(sData.cashFlow.outflow || 0) : 0,
-        cash_expense: sData.cashFlow ? parseFloat(sData.cashFlow.expense || 0) : 0,
-        inventoryLoss: invLoss,
-        cashFlowDetails: sData.cashFlowDetails || [],
-        expenseDetails: sData.expenseDetails || []
+            cash_inflow: sData.cashFlow ? parseFloat(sData.cashFlow.inflow || 0) : 0,
+            cash_outflow: sData.cashFlow ? parseFloat(sData.cashFlow.outflow || 0) : 0,
+            cash_expense: sData.cashFlow ? parseFloat(sData.cashFlow.expense || 0) : 0,
+            inventoryLoss: invLoss,
+          };
+        }
+
+        // 'view' 모드일 때는 기존 데이터(selectedHistory에서 온 값들)를 유지함
+        return newData;
       });
     } catch (e) {
       console.error(e);
@@ -294,7 +329,12 @@ const SettlementPage = ({ isWindow, initialHistory }) => {
     });
   };
 
-  const formatCurrency = (val) => new Intl.NumberFormat('ko-KR', { style: 'currency', currency: 'KRW' }).format(val || 0);
+  const formatCurrency = (val) => new Intl.NumberFormat('ko-KR').format(val || 0) + '원';
+
+  const formatWithCommas = (val) => {
+    if (!val && val !== 0) return '';
+    return val.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  };
 
   const isLatestHistory = historyList.length > 0 && selectedHistory && selectedHistory.id === historyList[0].id;
 
@@ -305,7 +345,7 @@ const SettlementPage = ({ isWindow, initialHistory }) => {
       {/* Sidebar: Timeline */}
       <div className="settlement-sidebar">
         <div className="sidebar-header">
-          <h3>📅 마감 이력</h3>
+          <h3>📅 정산 이력</h3>
           <button className="btn-new-settle" onClick={() => { initializeNextSettlement(); setMode('new'); }}>+ 새 정산</button>
         </div>
         <div className="history-list timeline">
@@ -346,7 +386,7 @@ const SettlementPage = ({ isWindow, initialHistory }) => {
             ) : (
               <>
                 <span className="badge view">이력 조회</span>
-                <h3>마감 상세 조회</h3>
+                <h3>정산 상세 조회</h3>
               </>
             )}
           </div>
@@ -391,7 +431,7 @@ const SettlementPage = ({ isWindow, initialHistory }) => {
         <div className="section-pnl">
           <h2>📊 손익 리포트 ({mode === 'new'
             ? `${format(nextStartDate, 'MM/dd')} ~ ${format(targetEndDate, 'MM/dd')}`
-            : (selectedHistory ? `${format(parseISO(selectedHistory.start_date), 'MM/dd')} ~ ${format(parseISO(selectedHistory.end_date), 'MM/dd')}` : '마감 이력')})</h2>
+            : (selectedHistory ? `${format(parseISO(selectedHistory.start_date), 'MM/dd')} ~ ${format(parseISO(selectedHistory.end_date), 'MM/dd')}` : '정산 이력')})</h2>
           <div className="pnl-summary-row">
             <div className="pnl-box revenue">
               <span className="lbl">매출액</span>
@@ -433,7 +473,7 @@ const SettlementPage = ({ isWindow, initialHistory }) => {
 
         {/* Closing Section */}
         <div className="section-closing">
-          <h2>{mode === 'new' ? '📝 마감 확인 및 확정' : '📝 마감 당시 기록'}</h2>
+          <h2>{mode === 'new' ? '📝 정산 확인 및 확정' : '📝 정산 당시 기록'}</h2>
 
           <div className="closing-grid">
             <div className="card-panel">
@@ -459,18 +499,30 @@ const SettlementPage = ({ isWindow, initialHistory }) => {
                 )}
                 <div className="flow-op">-</div>
                 <div className="flow-row">
-                  <span className="lbl">기말 재고 ({mode === 'new' ? format(targetEndDate, 'MM/dd') : (selectedHistory ? format(parseISO(selectedHistory.end_date), 'MM/dd') : '-')})</span>
+                  <span className="lbl">
+                    기말 재고 ({mode === 'new' ? format(targetEndDate, 'MM/dd') : (selectedHistory ? format(parseISO(selectedHistory.end_date), 'MM/dd') : '-')})
+                    {settlementData.isReconstructed && <span className="recon-badge">역산됨</span>}
+                  </span>
                   <span className="val">{formatCurrency(settlementData.today_inventory_value)}</span>
                 </div>
+                {settlementData.isReconstructed && (
+                  <div className="recon-note">
+                    * {format(targetEndDate, 'MM/dd')} 당시 저장된 기록이 없어 수불부를 기반으로 역산된 추정치입니다.
+                  </div>
+                )}
                 <div className="divider"></div>
                 <div className="flow-row result">
-                  <span className="lbl">산출 원가</span>
+                  <span className="lbl">산출 원가 (재고 기준)</span>
                   <span className="val">{formatCurrency(settlementData.calculated_cogs)}</span>
                 </div>
                 <div className="comparison-note">
-                  <span>손익계산서 원가: {formatCurrency(settlementData.cogs)}</span>
+                  <span>판매 매칭 원가: {formatCurrency(settlementData.cogs)}</span>
                   {Math.abs(settlementData.cogs - settlementData.calculated_cogs) > 100 && (
-                    <span className="diff-warning"> (차이: {formatCurrency(settlementData.cogs - settlementData.calculated_cogs)})</span>
+                    <div className="diff-warning-box">
+                      ⚠️ 오차 발생: {formatCurrency(settlementData.cogs - settlementData.calculated_cogs)}
+                      <br />
+                      <small>(과거 재고 역산 과정에서 실시간 단가 적용 등으로 인한 차이가 발생할 수 있습니다.)</small>
+                    </div>
                   )}
                 </div>
               </div>
@@ -481,46 +533,86 @@ const SettlementPage = ({ isWindow, initialHistory }) => {
               <div className="asset-flow-box">
                 <div className="flow-row">
                   <span className="lbl">입금</span>
-                  <span className="val text-blue">+{formatCurrency(settlementData.cash_inflow)}</span>
+                  <span className={`val ${settlementData.cash_inflow >= 0 ? 'text-blue' : 'text-red'}`}>
+                    {(settlementData.cash_inflow >= 0 ? '+' : '') + formatCurrency(settlementData.cash_inflow)}
+                  </span>
                 </div>
                 <div className="flow-row">
                   <span className="lbl">출금</span>
-                  <span className="val text-red">-{formatCurrency(settlementData.cash_outflow)}</span>
+                  <span className={`val ${settlementData.cash_outflow >= 0 ? 'text-red' : 'text-blue'}`}>
+                    {(settlementData.cash_outflow >= 0 ? '-' : '+') + formatCurrency(Math.abs(settlementData.cash_outflow))}
+                  </span>
                 </div>
                 <div className="flow-row">
                   <span className="lbl">지출</span>
-                  <span className="val text-red">-{formatCurrency(settlementData.cash_expense)}</span>
+                  <span className={`val ${settlementData.cash_expense >= 0 ? 'text-red' : 'text-blue'}`}>
+                    {(settlementData.cash_expense >= 0 ? '-' : '+') + formatCurrency(Math.abs(settlementData.cash_expense))}
+                  </span>
                 </div>
 
-                {/* [NEW] Detailed Breakdown (Collapsible or Always Visible) */}
-                <div className="flow-breakdown">
-                  {settlementData.cashFlowDetails && (
-                    <>
-                      {/* Inflow Breakdown */}
-                      {settlementData.cashFlowDetails.filter(d => d.transaction_type === 'RECEIPT').map((d, i) => (
-                        <div key={`in-${i}`} className="flow-sub-row">
-                          <span className="sub-lbl">↳ {d.payment_method || '미지정'}</span>
-                          <span className="sub-val">+{formatCurrency(d.total)}</span>
-                        </div>
-                      ))}
+                {/* [NEW] Detailed Breakdown - Grouped by Payment Method */}
+                {/* [NEW] Detailed Breakdown - Grouped by Payment Method & Detail */}
+                <div className="flow-breakdown" style={{ marginTop: '1.2rem' }}>
+                  {(() => {
+                    const groups = {};
 
-                      {/* Outflow Breakdown */}
-                      {settlementData.cashFlowDetails.filter(d => d.transaction_type === 'PAYMENT').map((d, i) => (
-                        <div key={`out-${i}`} className="flow-sub-row">
-                          <span className="sub-lbl">↳ {d.payment_method || '미지정'}</span>
-                          <span className="sub-val">-{formatCurrency(d.total)}</span>
-                        </div>
-                      ))}
+                    // Group Inflow/Outflow/Expenses and keep list
+                    (settlementData.cashFlowDetails || []).forEach(d => {
+                      const method = d.payment_method || '미지정';
+                      if (!groups[method]) groups[method] = { receipts: 0, payments: 0, expenses: 0, list: [] };
+                      if (d.transaction_type === 'RECEIPT') {
+                        groups[method].receipts += parseFloat(d.amount);
+                        groups[method].list.push({ type: 'RECEIPT', label: d.detail, amount: d.amount });
+                      } else {
+                        groups[method].payments += parseFloat(d.amount);
+                        groups[method].list.push({ type: 'PAYMENT', label: d.detail, amount: d.amount });
+                      }
+                    });
 
-                      {/* Expense Breakdown */}
-                      {settlementData.expenseDetails && settlementData.expenseDetails.map((d, i) => (
-                        <div key={`exp-${i}`} className="flow-sub-row">
-                          <span className="sub-lbl">↳ [지출] {d.payment_method || '미지정'}</span>
-                          <span className="sub-val">-{formatCurrency(d.total)}</span>
+                    (settlementData.expenseDetails || []).forEach(d => {
+                      const method = d.payment_method || '미지정';
+                      if (!groups[method]) groups[method] = { receipts: 0, payments: 0, expenses: 0, list: [] };
+                      groups[method].expenses += parseFloat(d.amount);
+                      groups[method].list.push({ type: 'EXPENSE', label: d.detail, amount: d.amount });
+                    });
+
+                    if (Object.keys(groups).length === 0) return <div className="empty-flow" style={{ fontSize: '0.85rem', color: '#888', textAlign: 'center', padding: '1rem' }}>해당 기간의 상세 내역이 없습니다.</div>;
+
+                    return Object.entries(groups).map(([method, vals], idx) => (
+                      <div key={idx} className="method-group-box" style={{ marginBottom: '1rem', background: '#f8fafc', padding: '0.8rem', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                        <div style={{ fontWeight: 700, fontSize: '0.9rem', color: '#334155', marginBottom: '8px', display: 'flex', justifyContent: 'space-between' }}>
+                          <span>💳 {method}</span>
+                          <span style={{ fontSize: '0.8rem', fontWeight: 400 }}>{vals.list.length}건</span>
                         </div>
-                      ))}
-                    </>
-                  )}
+
+                        {/* Detail List */}
+                        <div className="group-detail-list">
+                          {vals.list.map((item, i) => {
+                            const impact = item.type === 'RECEIPT' ? item.amount : -item.amount;
+                            return (
+                              <div key={i} className="flow-sub-row" style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem', padding: '2px 0' }}>
+                                <span className="sub-lbl" style={{ color: '#475569', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, marginRight: '8px' }}>
+                                  <span style={{ fontSize: '0.7rem', color: '#94a3b8', marginRight: '4px' }}>[{item.type === 'RECEIPT' ? '입금' : item.type === 'PAYMENT' ? '출금' : '지출'}]</span>
+                                  {item.label}
+                                </span>
+                                <span className={`sub-val ${impact >= 0 ? 'text-blue' : 'text-red'}`} style={{ fontWeight: 500, whiteSpace: 'nowrap' }}>
+                                  {formatCurrency(impact)}
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+
+                        {/* Summary for this method */}
+                        <div className="flow-sub-row" style={{ marginTop: '6px', borderTop: '1px solid #e2e8f0', paddingTop: '6px', textAlign: 'right' }}>
+                          <span style={{ fontSize: '0.8rem', color: '#64748b', marginRight: '8px' }}>수단별 소계:</span>
+                          <span className={`sub-val ${vals.receipts - vals.payments - vals.expenses >= 0 ? 'text-blue' : 'text-red'}`} style={{ fontWeight: 700 }}>
+                            {formatCurrency(vals.receipts - vals.payments - vals.expenses)}
+                          </span>
+                        </div>
+                      </div>
+                    ));
+                  })()}
                 </div>
 
                 <div className="divider"></div>
@@ -535,50 +627,104 @@ const SettlementPage = ({ isWindow, initialHistory }) => {
             </div>
 
             <div className="card-panel">
-              <h4>최종 마감 승인</h4>
-              <div className="form-line">
-                <label>기준일 전산 시재</label>
-                <input value={formatCurrency(settlementData.system_cash_balance)} disabled />
-              </div>
-              <div className={`form-line ${mode === 'new' ? 'active' : ''}`}>
-                <label>기준일 실사 시재</label>
-                <input
-                  className={mode === 'new' ? 'editable' : ''}
-                  value={settlementData.actual_cash_balance.toLocaleString()}
-                  onChange={(e) => mode === 'new' && setSettlementData(p => ({ ...p, actual_cash_balance: parseInt(e.target.value.replace(/,/g, '')) || 0 }))}
-                  disabled={mode === 'view'}
-                />
-              </div>
-              <div className="form-line result">
-                <label>시재 오차</label>
-                <span className={`diff-val ${cashDifference === 0 ? 'ok' : 'ng'}`}>
-                  {cashDifference > 0 ? '+' : ''}{formatCurrency(cashDifference)}
-                </span>
-              </div>
-
-              {mode === 'view' && (
-                <div className="read-only-note" style={{ marginTop: '1rem' }}>
-                  <label>마감 승인 일시</label>
-                  <div className="val">{settlementData.closedAt ? format(parseISO(settlementData.closedAt), 'yyyy-MM-dd HH:mm:ss') : '-'}</div>
+              <h4>📋 실물 자산 정산 ({mode === 'new' ? '확인' : '기록'})</h4>
+              <div className="asset-flow-box">
+                <div className="audit-table-header" style={{ display: 'flex', fontSize: '0.85rem', fontWeight: 800, color: '#334155', marginBottom: '8px', padding: '0 4px', borderBottom: '2px solid #e2e8f0', paddingBottom: '4px' }}>
+                  <span style={{ flex: 1.5 }}>결제 수단</span>
+                  <span style={{ flex: 1.2, textAlign: 'right' }}>전산(기간)</span>
+                  <span style={{ flex: 1.2, textAlign: 'right' }}>실제(입력)</span>
                 </div>
-              )}
 
-              <textarea
-                className="memo-box"
-                placeholder={mode === 'new' ? "마감 노트 입력 (예: 시재 오차 사유, 특이사항)" : "(내용 없음)"}
-                value={settlementData.closing_note}
-                onChange={(e) => setSettlementData(p => ({ ...p, closing_note: e.target.value }))}
-                disabled={mode === 'view'}
-                style={{ marginTop: mode === 'view' ? '0.5rem' : '1rem' }}
-              />
+                {(() => {
+                  // [IMPORTANT] Use dynamic methods from DB
+                  // If not loaded yet, fallback to common ones
+                  const methods = paymentMethods.length > 0
+                    ? paymentMethods.filter(m => mode === 'new' ? m.is_active : true)
+                    : [{ code: 'CASH', name: '현금' }, { code: 'BANK', name: '계좌이체' }];
 
-              {mode === 'new' ? (
-                <button className="confirm-btn" onClick={performSave}>정산 확정</button>
-              ) : (
-                isLatestHistory && (
-                  <button className="rollback-btn" onClick={handleDelete}>🗑️ 정산 확정 취소</button>
-                )
-              )}
+                  // Create Name -> Code mapping for normalization (for cashFlowDetails/expenseDetails)
+                  const nameToCode = {};
+                  paymentMethods.forEach(pm => {
+                    nameToCode[pm.name] = pm.code;
+                    nameToCode[pm.code] = pm.code;
+                  });
+
+                  // Calculate system period totals per method (normalize to codes)
+                  const systemTotals = {};
+                  (settlementData.cashFlowDetails || []).forEach(d => {
+                    const code = nameToCode[d.payment_method] || d.payment_method;
+                    if (!systemTotals[code]) systemTotals[code] = 0;
+                    systemTotals[code] += (d.transaction_type === 'RECEIPT' ? d.amount : -d.amount);
+                  });
+                  (settlementData.expenseDetails || []).forEach(d => {
+                    const code = nameToCode[d.payment_method] || d.payment_method;
+                    if (!systemTotals[code]) systemTotals[code] = 0;
+                    systemTotals[code] -= d.amount;
+                  });
+
+                  return methods.map(m => {
+                    const code = m.code;
+                    const sysVal = systemTotals[code] || 0;
+                    const actVal = settlementData.actualMethodValues?.[code] ?? (mode === 'view' ? sysVal : '');
+                    const diff = (parseFloat(actVal) || 0) - sysVal;
+
+                    return (
+                      <div key={code} className={`audit-row ${Math.abs(diff) > 0 ? 'has-diff' : ''}`} style={{ display: 'flex', alignItems: 'center', marginBottom: '6px', padding: '6px', borderRadius: '6px', background: Math.abs(diff) > 0 ? '#fff1f2' : '#f8fafc', border: '1px solid', borderColor: Math.abs(diff) > 0 ? '#fda4af' : '#e2e8f0' }}>
+                        <span style={{ flex: 1.5, fontSize: '0.85rem', fontWeight: 600 }}>{m.name}</span>
+                        <span style={{ flex: 1.2, textAlign: 'right', fontSize: '0.8rem', color: '#475569' }}>{formatCurrency(sysVal)}</span>
+                        <div style={{ flex: 1.2, display: 'flex', justifyContent: 'flex-end' }}>
+                          <input
+                            type="text"
+                            placeholder="0"
+                            style={{ width: '90%', textAlign: 'right', padding: '4px 8px', fontSize: '1rem', fontWeight: '800', border: '1px solid #cbd5e1', borderRadius: '4px', color: '#1d4ed8', backgroundColor: mode === 'new' ? '#fff' : '#f8fafc' }}
+                            value={formatWithCommas(actVal)}
+                            onChange={(e) => {
+                              if (mode !== 'new') return;
+                              const rawVal = e.target.value.replace(/[^0-9-]/g, '');
+                              setSettlementData(prev => ({
+                                ...prev,
+                                actualMethodValues: { ...prev.actualMethodValues, [code]: rawVal }
+                              }));
+                            }}
+                            disabled={mode === 'view'}
+                          />
+                        </div>
+                        {Math.abs(diff) > 0 && (
+                          <div style={{ position: 'absolute', right: '-85px', fontSize: '0.75rem', color: '#e11d48', fontWeight: 700 }}>
+                            {diff > 0 ? '+' : ''}{formatCurrency(diff)}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  });
+                })()}
+
+                <div className="divider" style={{ margin: '12px 0' }}></div>
+
+                {mode === 'view' && (
+                  <div className="read-only-note" style={{ marginTop: '1rem' }}>
+                    <label>마감 승인 일시</label>
+                    <div className="val">{settlementData.closedAt ? format(parseISO(settlementData.closedAt), 'yyyy-MM-dd HH:mm:ss') : '-'}</div>
+                  </div>
+                )}
+
+                <textarea
+                  className="memo-box"
+                  placeholder={mode === 'new' ? "마감 노트 입력 (예: 시재 오차 사유, 특이사항)" : "(내용 없음)"}
+                  value={settlementData.closing_note}
+                  onChange={(e) => setSettlementData(p => ({ ...p, closing_note: e.target.value }))}
+                  disabled={mode === 'view'}
+                  style={{ marginTop: mode === 'view' ? '0.5rem' : '1rem' }}
+                />
+
+                {mode === 'new' ? (
+                  <button className="confirm-btn" onClick={performSave}>정산 확정</button>
+                ) : (
+                  isLatestHistory && (
+                    <button className="rollback-btn" onClick={handleDelete}>🗑️ 정산 확정 취소</button>
+                  )
+                )}
+              </div>
             </div>
           </div>
         </div>

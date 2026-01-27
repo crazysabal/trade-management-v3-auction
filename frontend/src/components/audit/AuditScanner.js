@@ -373,11 +373,15 @@ const AuditScanner = ({ audit, items, onUpdate, isSaving, onRefresh, reorderMode
     }, [draggingId, localItems]);
 
     // MEMOIZED Item Component to prevent excessive re-renders
-    const AuditScannerItem = React.memo(({ item, index, draggingId, dropTarget, reorderMode, audit, onAdjustQty, onHandleQtyChange, onHandleCheck, onTouchStart, setItemRef, formatQty }) => {
+    const AuditScannerItem = React.memo(({ item, index, draggingId, dropTarget, reorderMode, audit, onAdjustQty, onHandleQtyChange, onHandleCheck, onTouchStart, setItemRef, formatQty, onSync }) => {
         const systemQty = parseFloat(item.system_quantity);
+        const currentQty = parseFloat(item.current_quantity !== undefined ? item.current_quantity : item.system_quantity);
         const actualQty = parseFloat(item.actual_quantity);
         const hasDiff = actualQty !== systemQty;
         const isChecked = !!item.is_checked;
+
+        // 전산재고와 실제 시스템 재고 간의 불일치 여부
+        const isOutOfSync = Math.abs(systemQty - currentQty) > 0.0001;
 
         const isDraggingThis = draggingId === item.id;
         const isDropTarget = dropTarget === index; // This index is stable within the list
@@ -466,6 +470,19 @@ const AuditScanner = ({ audit, items, onUpdate, isSaving, onRefresh, reorderMode
                                 <div style={{ textAlign: 'center', minWidth: '60px' }}>
                                     <div style={{ fontSize: '0.75rem', color: '#a0aec0' }}>전산재고</div>
                                     <div style={{ fontSize: '1.2rem', fontWeight: 700, color: '#4a5568' }}>{formatQty(systemQty)}</div>
+                                    {isOutOfSync && audit.status === 'IN_PROGRESS' && (
+                                        <div style={{ marginTop: '4px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
+                                            <div style={{ fontSize: '0.65rem', color: '#e53e3e', backgroundColor: '#fff5f5', padding: '1px 3px', borderRadius: '2px', border: '1px solid #feb2b2', whiteSpace: 'nowrap' }}>
+                                                실시간: {formatQty(currentQty)}
+                                            </div>
+                                            <button
+                                                onClick={(e) => { e.stopPropagation(); onSync(item.id); }}
+                                                style={{ border: 'none', background: '#3182ce', color: 'white', borderRadius: '3px', padding: '2px 6px', fontSize: '0.65rem', fontWeight: 600, cursor: 'pointer' }}
+                                            >
+                                                🔄 동기화
+                                            </button>
+                                        </div>
+                                    )}
                                 </div>
 
                                 <div style={{ display: 'flex', flex: 1, alignItems: 'center', gap: '5px', justifyContent: 'flex-end' }}>
@@ -620,6 +637,16 @@ const AuditScanner = ({ audit, items, onUpdate, isSaving, onRefresh, reorderMode
                         onTouchStart={handleTouchStart}
                         setItemRef={(idx, el) => itemRefs.current[idx] = el}
                         formatQty={formatQty}
+                        onSync={async (itemId) => {
+                            try {
+                                const res = await inventoryAuditAPI.syncItem(audit.id, itemId);
+                                if (res.data.success) {
+                                    onRefresh(); // 부모 컴포넌트 새로고침
+                                }
+                            } catch (error) {
+                                console.error('동기화 실패:', error);
+                            }
+                        }}
                     />
                 ))}
 

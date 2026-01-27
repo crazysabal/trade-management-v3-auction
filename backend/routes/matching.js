@@ -269,7 +269,7 @@ router.post('/', async (req, res) => {
         SELECT pi.*, p.product_name, p.weight, p.weight_unit, p.weight_unit as product_weight_unit, p.weight_unit as unit, p.grade
         FROM purchase_inventory pi
         JOIN products p ON pi.product_id = p.id
-        WHERE pi.id = ? AND pi.status = 'AVAILABLE'
+        WHERE pi.id = ? AND pi.status != 'CANCELLED' AND pi.remaining_quantity > 0
         FOR UPDATE
       `, [purchase_inventory_id]);
 
@@ -435,7 +435,7 @@ router.post('/auto', async (req, res) => {
     // 3. 사용 가능한 매입 재고 조회 (FIFO: 오래된 것부터)
     const [availableInventory] = await connection.query(`
       SELECT * FROM purchase_inventory
-      WHERE product_id = ? AND status = 'AVAILABLE' AND remaining_quantity > 0
+      WHERE product_id = ? AND status != 'CANCELLED' AND remaining_quantity > 0.0001
       ORDER BY purchase_date ASC, id ASC
       FOR UPDATE
     `, [productId]);
@@ -719,7 +719,7 @@ router.post('/trade', async (req, res) => {
           SELECT pi.*, p.product_name, p.weight, p.weight_unit, p.weight_unit as product_weight_unit, p.weight_unit as unit, p.grade
           FROM purchase_inventory pi
           JOIN products p ON pi.product_id = p.id
-          WHERE pi.id = ? AND pi.status = 'AVAILABLE'
+          WHERE pi.id = ? AND pi.status != 'CANCELLED' AND pi.remaining_quantity > 0
           FOR UPDATE
         `, [purchase_inventory_id]);
 
@@ -761,13 +761,13 @@ router.post('/trade', async (req, res) => {
 
         // 매입 재고 차감
         const newRemainingQty = remainingQty - matchQty;
-        const newStatus = newRemainingQty <= 0 ? 'DEPLETED' : 'AVAILABLE';
 
         await connection.query(`
           UPDATE purchase_inventory 
-          SET remaining_quantity = ?, status = ?
+          SET remaining_quantity = ?, 
+              status = CASE WHEN ? <= 0.0001 THEN 'DEPLETED' ELSE 'AVAILABLE' END
           WHERE id = ?
-        `, [newRemainingQty, newStatus, purchase_inventory_id]);
+        `, [newRemainingQty, newRemainingQty, purchase_inventory_id]);
       }
 
       // 매출 상세 매칭 상태 업데이트

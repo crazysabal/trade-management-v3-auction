@@ -35,7 +35,7 @@ const SettlementHistory = ({ isWindow, onOpenDetail }) => {
         }
     };
 
-    const formatCurrency = (val) => new Intl.NumberFormat('ko-KR', { style: 'currency', currency: 'KRW' }).format(val || 0);
+    const formatCurrency = (val) => new Intl.NumberFormat('ko-KR').format(val || 0) + '원';
 
     return (
         <div className="settlement-history-page" style={{ padding: '20px', height: '100%', overflow: 'auto', background: '#fff' }}>

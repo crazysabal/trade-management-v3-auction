@@ -106,7 +106,6 @@ router.get('/summary', async (req, res) => {
         const cashFlow = {
             inflow: parseFloat(receiptResult[0].total || 0),
             outflow: parseFloat(paymentResult[0].total || 0),
-            outflow: parseFloat(paymentResult[0].total || 0),
             expense: parseFloat(cashExpenseResult[0].total || 0)
         };
 
@@ -137,45 +136,47 @@ router.get('/summary', async (req, res) => {
                 },
                 cashFlow, // [NEW] Period Cash Flow
                 cashFlowDetails: await (async () => {
-                    // 1. Fetch Method Map
                     const [methods] = await db.query('SELECT code, name FROM payment_methods');
                     const methodMap = methods.reduce((acc, m) => { acc[m.code] = m.name; return acc; }, {});
 
-                    // 2. Fetch Aggregates (Group by Code)
                     const [rows] = await db.query(`
                         SELECT 
-                            transaction_type, 
-                            payment_method, 
-                            COALESCE(SUM(amount), 0) as total
-                        FROM payment_transactions
-                        WHERE transaction_date BETWEEN ? AND ?
-                        GROUP BY transaction_type, payment_method
+                            pt.transaction_type, 
+                            pt.payment_method, 
+                            pt.amount,
+                            c.company_name,
+                            pt.notes
+                        FROM payment_transactions pt
+                        LEFT JOIN companies c ON pt.company_id = c.id
+                        WHERE pt.transaction_date BETWEEN ? AND ?
                     `, [startDate, endDate]);
 
-                    // 3. Map Code to Name
                     return rows.map(r => ({
                         transaction_type: r.transaction_type,
                         payment_method: methodMap[r.payment_method] || r.payment_method || '미지정',
-                        total: r.total
+                        amount: parseFloat(r.amount),
+                        detail: r.company_name || r.notes || '상세없음'
                     }));
                 })(),
                 expenseDetails: await (async () => {
-                    // (Reuse Map if possible, but fetching again is cheap/safe context)
                     const [methods] = await db.query('SELECT code, name FROM payment_methods');
                     const methodMap = methods.reduce((acc, m) => { acc[m.code] = m.name; return acc; }, {});
 
                     const [rows] = await db.query(`
                         SELECT 
-                            payment_method,
-                            COALESCE(SUM(amount), 0) as total
-                        FROM expenses
-                        WHERE expense_date BETWEEN ? AND ?
-                        GROUP BY payment_method
+                            e.payment_method,
+                            e.amount,
+                            ec.name as category_name,
+                            e.description
+                        FROM expenses e
+                        LEFT JOIN expense_categories ec ON e.category_id = ec.id
+                        WHERE e.expense_date BETWEEN ? AND ?
                     `, [startDate, endDate]);
 
                     return rows.map(r => ({
                         payment_method: methodMap[r.payment_method] || r.payment_method || '미지정',
-                        total: r.total
+                        amount: parseFloat(r.amount),
+                        detail: `[${r.category_name || '기타'}] ${r.description || ''}`.trim()
                     }));
                 })()
             }
@@ -313,13 +314,148 @@ router.get('/closing/:date', async (req, res) => {
         const todayPurchase = parseFloat(purchaseRows[0]?.total || 0);
 
         // 3. 금일 재고 (System Inventory)
-        // 현재 purchase_inventory 테이블의 총 자산 가치
-        // 주의: 과거 날짜 조회 시에도 '현재' 재고를 가져오는 한계가 있음 (Snapshot 부재). 
-        // -> 사장님이 "전산상의 재고"라고 했으므로 현재 시스템 재고를 신뢰함.
-        const [invRows] = await db.query(
+        // [MODIFIED] 우선 daily_closing_stocks 스냅샷을 확인하고, 없으면 수불부(inventory_transactions)를 기반으로 역산함.
+        let todayInventory = 0;
+        let isReconstructed = false;
+
+        // 3-1. 저장된 스냅샷(상세) 확인
+        const [snapshotRows] = await db.query(
+            `SELECT COALESCE(SUM(total_value), 0) as total FROM daily_closing_stocks WHERE closing_date = ?`,
+            [date]
+        );
+
+        // 실시간 재고 (비교용)
+        const [liveInvRows] = await db.query(
             `SELECT COALESCE(SUM(remaining_quantity * unit_price), 0) as total FROM purchase_inventory WHERE status = 'AVAILABLE'`
         );
-        const todayInventory = parseFloat(invRows[0]?.total || 0);
+        const liveInventoryValue = parseFloat(liveInvRows[0]?.total || 0);
+
+        if (snapshotRows[0].total > 0) {
+            todayInventory = parseFloat(snapshotRows[0].total);
+            isReconstructed = false; // 저장된 실제 기록임
+        } else {
+            // 오늘 날짜인지 확인
+            const todayStr = new Date().toISOString().split('T')[0];
+
+            if (date === todayStr) {
+                todayInventory = liveInventoryValue;
+            } else {
+                // 과거 날짜인 경우: 현재 실시간 재고에서 정산일 이후의 수량 변동을 역산 (Method D: Matched Cost)
+                // 단순히 평균단가를 쓰는 것이 아니라, 매칭된 원가(Sale Purchase Matching)를 우선 적용하여 정확도 향상
+
+                // 1. 기준일 이후의 모든 재고 변동 내역 조회
+                const [txs] = await db.query(`
+                    SELECT 
+                        it.id, it.transaction_type, it.quantity, it.unit_price, 
+                        it.trade_detail_id, it.after_quantity, it.before_quantity, it.product_id,
+                        (it.after_quantity - it.before_quantity) as qty_change,
+                        tm.trade_type
+                    FROM inventory_transactions it
+                    LEFT JOIN trade_details td ON it.trade_detail_id = td.id
+                    LEFT JOIN trade_masters tm ON td.trade_master_id = tm.id
+                    JOIN products p ON it.product_id = p.id
+                    WHERE DATE(it.transaction_date) > ? AND p.is_active = 1
+                `, [date]);
+
+                if (txs.length === 0) {
+                    todayInventory = liveInventoryValue;
+                } else {
+                    // 2. 해당 내역 중 'SALE' 건에 대한 매칭 정보를 일괄 조회
+                    const saleDetailIds = txs
+                        .filter(t => t.trade_type === 'SALE' && t.trade_detail_id)
+                        .map(t => t.trade_detail_id);
+
+                    let matchMap = {};
+                    if (saleDetailIds.length > 0) {
+                        const [matches] = await db.query(`
+                            SELECT spm.sale_detail_id, spm.matched_quantity, pi.unit_price
+                            FROM sale_purchase_matching spm
+                            JOIN purchase_inventory pi ON spm.purchase_inventory_id = pi.id
+                            WHERE spm.sale_detail_id IN (?)
+                        `, [saleDetailIds]);
+
+                        matches.forEach(m => {
+                            if (!matchMap[m.sale_detail_id]) matchMap[m.sale_detail_id] = [];
+                            matchMap[m.sale_detail_id].push(m);
+                        });
+                    }
+
+                    // 3. Fallback용 단가 조회 보강
+                    // AVAILABLE 상태뿐만 아니라, 품절된(SOLD_OUT) 내역까지 포함하여 해당 품목의 가장 최근 입고 단가를 조회 (Method E)
+                    const [latestPriceRows] = await db.query(`
+                        SELECT pi.product_id, pi.unit_price
+                        FROM purchase_inventory pi
+                        INNER JOIN (
+                            SELECT product_id, MAX(id) as max_id
+                            FROM purchase_inventory
+                            GROUP BY product_id
+                        ) latest ON pi.id = latest.max_id
+                    `);
+                    const fallbackPriceMap = {};
+                    latestPriceRows.forEach(r => fallbackPriceMap[r.product_id] = parseFloat(r.unit_price || 0));
+
+                    // 현재 재고 테이블의 수동 설정 단가 (2차 백업)
+                    const [prodRows] = await db.query('SELECT product_id, purchase_price FROM inventory');
+                    const inventoryPriceMap = {};
+                    prodRows.forEach(r => inventoryPriceMap[r.product_id] = parseFloat(r.purchase_price || 0));
+
+                    // 4. 변동 가액 합산
+                    let netValueChange = 0;
+
+                    for (const tx of txs) {
+                        const qtyChange = parseFloat(tx.qty_change);
+                        if (qtyChange === 0) continue;
+                        const qtyAbs = Math.abs(qtyChange);
+                        const pid = tx.product_id;
+
+                        let cost = 0;
+
+                        if (tx.trade_type === 'SALE') {
+                            // CASE 1: Sale (OUT) - 매칭된 원가 사용
+                            const matchedList = matchMap[tx.trade_detail_id] || [];
+                            let matchedCost = 0;
+                            let matchedQty = 0;
+
+                            for (const m of matchedList) {
+                                const q = parseFloat(m.matched_quantity);
+                                matchedCost += q * parseFloat(m.unit_price);
+                                matchedQty += q;
+                            }
+
+                            const remaining = qtyAbs - matchedQty;
+                            if (remaining > 0) {
+                                // 개선된 Fallback: 최근 입고가 우선, 없으면 재고 테이블 설정가 (Method E)
+                                const fbPrice = fallbackPriceMap[pid] || inventoryPriceMap[pid] || 0;
+                                matchedCost += remaining * fbPrice;
+                            }
+
+                            // 매출로 재고가 감소했으므로 가액 변동은 음수
+                            cost = -matchedCost;
+
+                        } else if (tx.trade_type === 'PURCHASE') {
+                            // CASE 2: Purchase (IN) - 매입 단가(unit_price) 사용
+                            // (트랜잭션에 기록된 unit_price는 매입단가임)
+                            cost = qtyChange * parseFloat(tx.unit_price);
+
+                        } else {
+                            // CASE 3: Others (Adjust, Production) - 트랜잭션 단가 우선, 없으면 최근 입고가/재고 설정가 순 (Method F)
+                            const txPrice = parseFloat(tx.unit_price || 0);
+                            const fbPrice = txPrice > 0 ? txPrice : (fallbackPriceMap[pid] || inventoryPriceMap[pid] || 0);
+                            cost = qtyChange * fbPrice;
+                        }
+
+                        netValueChange += (Number.isNaN(cost) ? 0 : cost);
+                    }
+
+                    // 역산: 기준일 재고 = 현재 - 변동분
+                    const rawInventory = liveInventoryValue - netValueChange;
+                    todayInventory = Math.max(0, Number.isNaN(rawInventory) ? liveInventoryValue : rawInventory);
+
+                    console.log(`[RECON DEBUG] date: ${date}, live: ${liveInventoryValue}, net: ${netValueChange}, result: ${todayInventory}`);
+                }
+                isReconstructed = true;
+            }
+        }
 
         // 4. 금일 매출 (Today Sales)
         // trade_masters WHERE trade_type='SALE' AND trade_date = date
@@ -338,12 +474,63 @@ router.get('/closing/:date', async (req, res) => {
         const calculatedCogs = totalAsset - todayInventory;
         const grossProfit = todaySales - calculatedCogs;
 
-        // 6. 현금 시재 확인용 (기존 로직 유지)
-        const [receiptRows] = await db.query(`SELECT COALESCE(SUM(amount), 0) as total FROM payment_transactions WHERE transaction_type = 'RECEIPT' AND transaction_date <= ?`, [date]);
-        const [paymentRows] = await db.query(`SELECT COALESCE(SUM(amount), 0) as total FROM payment_transactions WHERE transaction_type = 'PAYMENT' AND transaction_date <= ?`, [date]);
-        const [expenseRows] = await db.query(`SELECT COALESCE(SUM(amount), 0) as total FROM expenses WHERE expense_date <= ?`, [date]);
+        // 6. 현금 시재 확인용 (결제 수단별 누적 잔액 계산)
+        // [IMPORTANT] 결제 수단 매핑 (명칭 -> 코드) 정규화
+        const [methodMapRows] = await db.query('SELECT code, name FROM payment_methods');
+        const nameToCode = {};
+        methodMapRows.forEach(m => {
+            nameToCode[m.name] = m.code;
+            nameToCode[m.code] = m.code; // 코드 자체로 들어있는 경우 대비
+        });
 
-        const systemCashBalance = parseFloat(receiptRows[0].total) - parseFloat(paymentRows[0].total) - parseFloat(expenseRows[0].total);
+        const normalizeMethod = (m) => nameToCode[m] || m;
+
+        // 누적 입금
+        const [receiptGroupRows] = await db.query(`
+            SELECT payment_method, COALESCE(SUM(amount), 0) as total 
+            FROM payment_transactions 
+            WHERE transaction_type = 'RECEIPT' AND transaction_date <= ?
+            GROUP BY payment_method
+        `, [date]);
+
+        // 누적 출금
+        const [paymentGroupRows] = await db.query(`
+            SELECT payment_method, COALESCE(SUM(amount), 0) as total 
+            FROM payment_transactions 
+            WHERE transaction_type = 'PAYMENT' AND transaction_date <= ?
+            GROUP BY payment_method
+        `, [date]);
+
+        // 누적 지출
+        const [expenseGroupRows] = await db.query(`
+            SELECT payment_method, COALESCE(SUM(amount), 0) as total 
+            FROM expenses 
+            WHERE expense_date <= ?
+            GROUP BY payment_method
+        `, [date]);
+
+        // 수단별 맵 구성 (코드로 통일)
+        const methodBalances = {};
+        receiptGroupRows.forEach(r => {
+            const code = normalizeMethod(r.payment_method);
+            methodBalances[code] = (methodBalances[code] || 0) + parseFloat(r.total);
+        });
+        paymentGroupRows.forEach(r => {
+            const code = normalizeMethod(r.payment_method);
+            methodBalances[code] = (methodBalances[code] || 0) - parseFloat(r.total);
+        });
+        expenseGroupRows.forEach(r => {
+            const code = normalizeMethod(r.payment_method);
+            methodBalances[code] = (methodBalances[code] || 0) - parseFloat(r.total);
+        });
+
+        // 전체 통합 잔액
+        const systemCashBalance = Object.values(methodBalances).reduce((sum, val) => sum + val, 0);
+
+        // [FIX] 개별 총계 계산 (기존 receiptRows 등 누락 대응)
+        const totalInflow = receiptGroupRows.reduce((sum, r) => sum + parseFloat(r.total), 0);
+        const totalOutflow = paymentGroupRows.reduce((sum, r) => sum + parseFloat(r.total), 0);
+        const totalExpense = expenseGroupRows.reduce((sum, r) => sum + parseFloat(r.total), 0);
 
         // 응답 구성
         res.json({
@@ -366,11 +553,16 @@ router.get('/closing/:date', async (req, res) => {
                 difference: 0,
                 closing_note: '',
 
+                // [NEW] 
+                method_balances: methodBalances,
+                is_reconstructed: isReconstructed,
+                live_inventory_value: liveInventoryValue,
+
                 // [NEW] Cash Flow Breakdown (Cumulative)
                 cashFlow: {
-                    inflow: parseFloat(receiptRows[0].total || 0),
-                    outflow: parseFloat(paymentRows[0].total || 0),
-                    expense: parseFloat(expenseRows[0].total || 0)
+                    inflow: totalInflow,
+                    outflow: totalOutflow,
+                    expense: totalExpense
                 }
             }
         });
@@ -469,8 +661,12 @@ router.get('/history', async (req, res) => {
  */
 router.post('/close', async (req, res) => {
     const { startDate, endDate, summaryData, note } = req.body;
+    const connection = await db.getConnection();
     try {
-        await db.query(`
+        await connection.beginTransaction();
+
+        // 1. period_closings 저장
+        await connection.query(`
             INSERT INTO period_closings 
             (
                 start_date, end_date, revenue, cogs, gross_profit, expenses, net_profit, note, closed_at,
@@ -512,11 +708,33 @@ router.post('/close', async (req, res) => {
             summaryData.inventoryLoss || 0
         ]);
 
-        res.json({ success: true, message: '정산이 완료되었습니다.' });
+        // 1.5 daily_closings 플레이스홀더 확인 (외래키 제약조건 방지)
+        await connection.query(`
+            INSERT IGNORE INTO daily_closings (closing_date, closed_by, closing_note)
+            VALUES (?, 'system', '정산 자동 생성')
+        `, [endDate]);
+
+        // 2. 해당 종료일에 대한 상세 재고 스냅샷 저장
+        // 기존 스냅샷이 없거나 정산일에 맞게 갱신함
+        await connection.query(`DELETE FROM daily_closing_stocks WHERE closing_date = ?`, [endDate]);
+        await connection.query(`
+            INSERT INTO daily_closing_stocks 
+            (closing_date, purchase_inventory_id, system_quantity, actual_quantity, unit_price, total_value)
+            SELECT 
+                ?, id, remaining_quantity, remaining_quantity, unit_price, (remaining_quantity * unit_price)
+            FROM purchase_inventory
+            WHERE status = 'AVAILABLE' AND remaining_quantity > 0
+        `, [endDate]);
+
+        await connection.commit();
+        res.json({ success: true, message: '정산이 완료되었으며 재고 스냅샷이 저장되었습니다.' });
 
     } catch (error) {
+        await connection.rollback();
         console.error('정산 저장 오류:', error);
         res.status(500).json({ success: false, message: '서버 오류가 발생했습니다.' });
+    } finally {
+        connection.release();
     }
 });
 
@@ -573,34 +791,59 @@ router.post('/closing', async (req, res) => {
 
         const systemCashBalance = parseFloat(receiptRows[0].total) - parseFloat(paymentRows[0].total) - parseFloat(expenseRows[0].total);
 
-        await db.query(`
-            INSERT INTO daily_closings 
-            (
-                closing_date, 
+        const connection = await db.getConnection();
+        try {
+            await connection.beginTransaction();
+
+            // 1. daily_closings 저장
+            await connection.query(`
+                INSERT INTO daily_closings 
+                (
+                    closing_date, 
+                    prev_inventory_value, today_purchase_cost, today_inventory_value,
+                    calculated_cogs, today_sales_revenue, gross_profit,
+                    system_cash_balance, actual_cash_balance, closing_note, closed_by
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'system')
+                ON DUPLICATE KEY UPDATE
+                prev_inventory_value = VALUES(prev_inventory_value),
+                today_purchase_cost = VALUES(today_purchase_cost),
+                today_inventory_value = VALUES(today_inventory_value),
+                calculated_cogs = VALUES(calculated_cogs),
+                today_sales_revenue = VALUES(today_sales_revenue),
+                gross_profit = VALUES(gross_profit),
+                system_cash_balance = VALUES(system_cash_balance),
+                actual_cash_balance = VALUES(actual_cash_balance),
+                closing_note = VALUES(closing_note),
+                closed_at = CURRENT_TIMESTAMP
+            `, [
+                date,
                 prev_inventory_value, today_purchase_cost, today_inventory_value,
                 calculated_cogs, today_sales_revenue, gross_profit,
-                system_cash_balance, actual_cash_balance, closing_note, closed_by
-            )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'system')
-            ON DUPLICATE KEY UPDATE
-            prev_inventory_value = VALUES(prev_inventory_value),
-            today_purchase_cost = VALUES(today_purchase_cost),
-            today_inventory_value = VALUES(today_inventory_value),
-            calculated_cogs = VALUES(calculated_cogs),
-            today_sales_revenue = VALUES(today_sales_revenue),
-            gross_profit = VALUES(gross_profit),
-            system_cash_balance = VALUES(system_cash_balance),
-            actual_cash_balance = VALUES(actual_cash_balance),
-            closing_note = VALUES(closing_note),
-            closed_at = CURRENT_TIMESTAMP
-        `, [
-            date,
-            prev_inventory_value, today_purchase_cost, today_inventory_value,
-            calculated_cogs, today_sales_revenue, gross_profit,
-            systemCashBalance, actual_cash_balance, closing_note
-        ]);
+                systemCashBalance, actual_cash_balance, closing_note
+            ]);
 
-        res.json({ success: true, message: '마감 데이터가 저장되었습니다.' });
+            // 2. daily_closing_stocks 스냅샷 저장 (품목별 상세 재고)
+            // 기존 스냅샷 삭제 후 재입력
+            await connection.query(`DELETE FROM daily_closing_stocks WHERE closing_date = ?`, [date]);
+
+            await connection.query(`
+                INSERT INTO daily_closing_stocks 
+                (closing_date, purchase_inventory_id, system_quantity, actual_quantity, unit_price, total_value)
+                SELECT 
+                    ?, id, remaining_quantity, remaining_quantity, unit_price, (remaining_quantity * unit_price)
+                FROM purchase_inventory
+                WHERE status = 'AVAILABLE' AND remaining_quantity > 0
+            `, [date]);
+
+            await connection.commit();
+            res.json({ success: true, message: '마감 데이터 및 재고 스냅샷이 저장되었습니다.' });
+        } catch (err) {
+            await connection.rollback();
+            throw err;
+        } finally {
+            connection.release();
+        }
 
     } catch (error) {
         console.error('일일 마감 저장 오류:', error);

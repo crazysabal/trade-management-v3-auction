@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useRef, memo } from 'react';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
-import { purchaseInventoryAPI } from '../../services/api';
+import { purchaseInventoryAPI, inventoryAuditAPI } from '../../services/api';
 import useTableDnd from '../../hooks/useTableDnd';
 import TableDndRow from '../TableDndRow';
 
@@ -13,11 +13,16 @@ const AuditRow = memo(function AuditRow({
     onUpdate,
     columnWidths,
     provided,
-    snapshot
+    snapshot,
+    onSync
 }) {
     const systemQty = parseFloat(item.system_quantity);
+    const currentQty = parseFloat(item.current_quantity !== undefined ? item.current_quantity : item.system_quantity);
     const actualQty = parseFloat(item.actual_quantity);
     const diff = actualQty - systemQty;
+
+    // 전산재고와 실제 시스템 재고 간의 불일치 여부
+    const isOutOfSync = Math.abs(systemQty - currentQty) > 0.0001;
 
     const handleQtyChange = (itemId, value) => {
         const numValue = value === '' ? 0 : parseInt(value, 10);
@@ -91,8 +96,34 @@ const AuditRow = memo(function AuditRow({
                     {item.purchase_store_name || item.sender || '매입처 미지정'} | {item.purchase_date || '-'}
                 </div>
             </td>
-            <td style={{ textAlign: 'right', fontWeight: 600, color: '#4a5568', ...(snapshot.isDragging ? { width: columnWidths[canReorder ? 2 : 1] } : {}) }}>
-                {formatQty(systemQty)}
+            <td style={{ textAlign: 'right', fontWeight: 600, color: '#4a5568', position: 'relative', ...(snapshot.isDragging ? { width: columnWidths[canReorder ? 2 : 1] } : {}) }}>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+                    <span style={{ fontSize: '1rem' }}>{formatQty(systemQty)}</span>
+                    {isOutOfSync && audit.status === 'IN_PROGRESS' && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '2px' }}>
+                            <span style={{ fontSize: '0.7rem', color: '#e53e3e', backgroundColor: '#fff5f5', padding: '1px 4px', borderRadius: '3px', fontWeight: 500, border: '1px solid #feb2b2' }}>
+                                실시간: {formatQty(currentQty)}
+                            </span>
+                            <button
+                                onClick={(e) => { e.stopPropagation(); onSync(item.id); }}
+                                title="현재 시스템 재고로 전산재고 동기화"
+                                style={{
+                                    border: 'none',
+                                    background: '#3182ce',
+                                    color: 'white',
+                                    borderRadius: '3px',
+                                    padding: '1px 4px',
+                                    fontSize: '0.7rem',
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center'
+                                }}
+                            >
+                                🔄 동기화
+                            </button>
+                        </div>
+                    )}
+                </div>
             </td>
             <td style={{ textAlign: 'center', ...(snapshot.isDragging ? { width: columnWidths[canReorder ? 3 : 2] } : {}) }}>
                 <input
@@ -354,6 +385,17 @@ const AuditDesk = ({ audit, items, onUpdate, isSaving, reorderMode, setReorderMo
                                                         columnWidths={columnWidths}
                                                         provided={provided}
                                                         snapshot={snapshot}
+                                                        onSync={async (itemId) => {
+                                                            try {
+                                                                const res = await inventoryAuditAPI.syncItem(audit.id, itemId);
+                                                                if (res.data.success) {
+                                                                    onRefresh(); // 부모 컴포넌트 새로고침 (데이터 다시 가져오기)
+                                                                }
+                                                            } catch (error) {
+                                                                console.error('동기화 실패:', error);
+                                                                alert('동기화 중 오류가 발생했습니다.');
+                                                            }
+                                                        }}
                                                     />
                                                 </TableDndRow>
                                             )}

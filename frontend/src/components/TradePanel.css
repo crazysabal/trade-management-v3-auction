@@ -121,7 +121,7 @@
 }
 
 .trade-table td {
-    padding: 2px 4px;
+    padding: 3px 6px;
     border-bottom: 1px solid #eee;
     vertical-align: middle;
     font-size: 0.9rem;
@@ -195,11 +195,14 @@
 /* Table Input Styles */
 .trade-input-table {
     width: 100%;
-    padding: 0.25rem;
+    padding: 0 0.5rem;
     border: 1px solid #ddd;
     border-radius: 4px;
-    font-size: 0.9rem;
+    font-size: 0.95rem;
     box-sizing: border-box;
+    height: 30px;
+    background: #fff;
+    line-height: normal;
 }
 
 .trade-input-table:focus {
@@ -554,6 +557,18 @@
     /* Light Gray */
     color: #374151;
     border: 1px solid #e5e7eb;
+}
+
+.balance-box.today.sale {
+    background-color: #fff7ed;
+    color: #c2410c;
+    border: 1px solid #fdba74;
+}
+
+.balance-box.today.purchase {
+    background-color: #f0f9ff;
+    color: #0369a1;
+    border: 1px solid #7dd3fc;
 }
 
 .balance-box-label {

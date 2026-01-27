@@ -101,6 +101,7 @@ const InventoryHistory = ({ onOpenTrade }) => {
         switch (type) {
             case 'PURCHASE': return '매입 입고';
             case 'SALE': return qty < 0 ? '반품 입고' : '매출 출고';
+            case 'VENDOR_RETURN': return '매입 반품';
             case 'PRODUCTION_IN': return '생산 입고';
             case 'PRODUCTION_OUT': return '생산 출고';
             case 'IN': return '입고';
@@ -124,6 +125,7 @@ const InventoryHistory = ({ onOpenTrade }) => {
                 return 'in';
             case 'SALE':
                 return qty < 0 ? 'in' : 'out';
+            case 'VENDOR_RETURN':
             case 'PRODUCTION_OUT':
             case 'OUT':
             case 'TRANSFER_OUT':
@@ -482,7 +484,7 @@ const InventoryHistory = ({ onOpenTrade }) => {
                                                 {(() => {
                                                     const qty = Number(item.quantity);
                                                     // 1. 출고 계열
-                                                    if (['SALE', 'OUT', 'PRODUCTION_OUT', 'TRANSFER_OUT'].includes(item.transaction_type)) {
+                                                    if (['SALE', 'OUT', 'PRODUCTION_OUT', 'TRANSFER_OUT', 'VENDOR_RETURN'].includes(item.transaction_type)) {
                                                         // 수량이 음수면 반품 입고이므로 + 기호, 양수면 일반 출고이므로 - 기호
                                                         return (qty < 0 ? '+' : '-') + formatNumber(Math.abs(qty));
                                                     }

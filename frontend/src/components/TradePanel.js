@@ -7,6 +7,7 @@ import './TradePanel.css';
 import TradeDeleteConfirmModal from './TradeDeleteConfirmModal';
 import SearchableSelect from './SearchableSelect';
 import SalesLookupModal from './SalesLookupModal'; // Import SalesLookupModal
+import PurchaseLookupModal from './PurchaseLookupModal';
 import { useModalDraggable } from '../hooks/useModalDraggable';
 
 function TradePanel({
@@ -73,9 +74,9 @@ function TradePanel({
 
   // 통화 포맷팅 (원화, 소수점 버림)
   const formatCurrency = (amount) => {
-    if (amount === null || amount === undefined || amount === '' || isNaN(amount)) return '';
     // 숫자가 아니면 그대로 반환 (마이너스 부호 입력 등 대응)
     if (amount === '-') return amount;
+    if (amount === null || amount === undefined || amount === '' || isNaN(amount)) return '';
     return Math.trunc(amount).toLocaleString(); // Math.trunc: 음수 반올림 방향 유지
   };
 
@@ -260,9 +261,74 @@ function TradePanel({
 
   // Sales Lookup Modal State
   const [isSalesLookupOpen, setIsSalesLookupOpen] = useState(false);
+  const [isPurchaseLookupOpen, setIsPurchaseLookupOpen] = useState(false);
 
   // 변경 감지
   const [initialData, setInitialData] = useState(null);
+
+  // 반출 처리: 선택한 매입 내역을 마이너스 수량으로 로드 (Sale Return과 동일 로직)
+  const handlePurchaseLink = async (selectedPurchase) => {
+    try {
+      const fullTrade = await tradeAPI.getById(selectedPurchase.id);
+      if (!fullTrade) throw new Error('전표 정보를 가져올 수 없습니다.');
+
+      const tradeData = fullTrade.data.data;
+      let targetDetails = tradeData.details;
+      if (selectedPurchase.selectedItemId) {
+        targetDetails = tradeData.details.filter(d => d.id === selectedPurchase.selectedItemId);
+      }
+
+      const newDetails = targetDetails.map(d => ({
+        product_id: d.product_id,
+        product_name: d.product_name,
+        quantity: -Math.abs(
+          (d.id === selectedPurchase.selectedItemId && selectedPurchase.remaining_quantity)
+            ? parseFloat(selectedPurchase.remaining_quantity)
+            : d.quantity
+        ), // 수량 음수 변환 (잔여 수량 우선 적용)
+        unit_price: d.unit_price,
+        supply_amount: -Math.abs(d.supply_amount || d.total_amount || 0),
+        notes: '(반출)',
+        parent_detail_id: d.id,
+        inventory_id: d.matched_inventory_id || d.inventory_id,
+        origin_quantity: Math.abs(d.quantity),
+        available_stock: (d.id === selectedPurchase.selectedItemId && selectedPurchase.remaining_quantity)
+          ? parseFloat(selectedPurchase.remaining_quantity)
+          : null,
+        total_returned_quantity: parseFloat(d.item_returned_quantity) || 0,
+        shipper_id: d.shipper_id,
+        location_id: d.location_id,
+        is_agricultural: d.is_agricultural
+      }));
+
+      setDetails(prev => {
+        const existingValid = prev.filter(d => d.product_id);
+        return [...existingValid, ...newDetails];
+      });
+      setIsPurchaseLookupOpen(false);
+
+      setModal({
+        isOpen: true,
+        type: 'info',
+        title: '반출 항목 추가됨',
+        message: '선택한 매입 내역이 반출(마이너스) 품목으로 추가되었습니다.\n기존 목록 아래에서 확인하실 수 있습니다.',
+        confirmText: '확인',
+        showCancel: false,
+        onConfirm: () => setModal(prev => ({ ...prev, isOpen: false }))
+      });
+    } catch (error) {
+      console.error('반출 처리 중 오류:', error);
+      setModal({
+        isOpen: true,
+        type: 'error',
+        title: '반출 처리 실패',
+        message: '반출 품목을 생성하는 중 오류가 발생했습니다.',
+        confirmText: '확인',
+        showCancel: false,
+        onConfirm: () => setModal(prev => ({ ...prev, isOpen: false }))
+      });
+    }
+  };
 
   // 반품 처리: 선택한 매출 내역을 마이너스 수량으로 로드
   const handleSalesLink = async (selectedSale) => {
@@ -303,16 +369,19 @@ function TradePanel({
       }));
 
 
-      // 3. 상태 업데이트
-      setDetails(newDetails);
+      // 3. [IMPROVED] 상태 업데이트: 기존 목록을 지우지 않고 아래에 추가함
+      setDetails(prev => {
+        const existingValid = prev.filter(d => d.product_id); // 비어있지 않은 행만 유지
+        return [...existingValid, ...newDetails];
+      });
       setIsSalesLookupOpen(false);
 
       // 4. 알림
       setModal({
         isOpen: true,
         type: 'info',
-        title: '반품 전표 생성됨',
-        message: '선택한 매출 내역이 반품(마이너스) 상태로 입력되었습니다.\n내용을 확인 후 저장하세요.',
+        title: '반품 항목 추가됨',
+        message: '선택한 매출 내역이 반품(마이너스) 품목으로 추가되었습니다.\n기존 목록 아래에서 확인하실 수 있습니다.',
         confirmText: '확인',
         showCancel: false,
         onConfirm: () => setModal(prev => ({ ...prev, isOpen: false }))
@@ -1099,7 +1168,33 @@ function TradePanel({
       delete newDetails[index].matched_inventory_id;
     }
 
-    // 재고 수량 동기화 및 초과 검증
+    // [FIX] 매입 반출(Purchase Return) - inventory_id와 무관하게 동작해야 함
+    if (field === 'quantity' && isPurchase && newDetails[index].available_stock !== undefined && newDetails[index].available_stock !== null) {
+      const limit = parseFloat(newDetails[index].available_stock);
+      const newQty = value === '' ? 0 : (parseFloat(value) || 0);
+      const currentReturn = Math.abs(newQty);
+
+      if (currentReturn > limit) {
+        showModal('warning', '수량 초과',
+          `[${newDetails[index].product_name}] 품목의 반출 수량이 현재 재고를 초과합니다.\n\n` +
+          `현재 재고: ${limit}\n` +
+          `입력 수량: ${currentReturn}\n` +
+          `(재고보다 많이 반출할 수 없습니다)`
+        );
+
+        // 값 복원
+        const oldQty = parseFloat(newDetails[index].quantity) || 0;
+        let originalVal = focusValueRef.current[index] !== undefined ? parseFloat(focusValueRef.current[index]) : oldQty;
+        if (isNaN(originalVal)) originalVal = -limit; // 최소한의 방어
+
+        // 복원 값으로 업데이트하고 종료
+        newDetails[index].quantity = originalVal;
+        setDetails(newDetails);
+        return;
+      }
+    }
+
+    // 재고 수량 동기화 및 초과 검증 (기존 로직: inventory_id가 있는 경우만)
     if (field === 'quantity' && newDetails[index].inventory_id && onInventoryUpdate) {
       const oldQty = parseFloat(newDetails[index].quantity) || 0;
       const newQty = value === '' ? 0 : (parseFloat(value) || 0);
@@ -1109,6 +1204,29 @@ function TradePanel({
 
       const originQty = newDetails[index].origin_quantity;
       const totalReturnedOther = newDetails[index].total_returned_quantity || 0;
+
+      // -1. 매입 반출(Purchase Return) 시 현재 재고(available_stock) 초과 검사 (즉시 차단)
+      if (isPurchase && newDetails[index].available_stock !== undefined && newDetails[index].available_stock !== null) {
+        const limit = parseFloat(newDetails[index].available_stock);
+        const currentReturn = Math.abs(newQty);
+
+        if (currentReturn > limit) {
+          showModal('warning', '수량 초과',
+            `[${newDetails[index].product_name}] 품목의 반출 수량이 현재 재고를 초과합니다.\n\n` +
+            `현재 재고: ${limit}\n` +
+            `입력 수량: ${currentReturn}\n` +
+            `(재고보다 많이 반출할 수 없습니다)`
+          );
+
+          // 값 복원
+          let originalVal = focusValueRef.current[index] !== undefined ? parseFloat(focusValueRef.current[index]) : oldQty;
+          if (isNaN(originalVal)) originalVal = -limit; // 최소한의 방어
+
+          newDetails[index].quantity = originalVal;
+          setDetails(newDetails);
+          return;
+        }
+      }
 
       // 0. 반품 한도 초과 검사 (판매한 수량보다 많이 반품하는 경우)
       if (originQty !== undefined && (Math.abs(newQty) + totalReturnedOther) > originQty && newQty < 0) {
@@ -1367,6 +1485,21 @@ function TradePanel({
           const originQty = parseFloat(d.origin_quantity);
           const otherReturned = parseFloat(d.total_returned_quantity) || 0;
           const currentReturn = Math.abs(parseFloat(d.quantity));
+
+          // [NEW] 매입 반출(Purchase Return) 시 현재 재고(available_stock) 초과 검사
+          if (isPurchase && d.available_stock !== undefined && d.available_stock !== null) {
+            const limit = parseFloat(d.available_stock);
+            if (currentReturn > limit) {
+              showModal('warning', '저장 실패',
+                `[${d.product_name}] 품목의 반출 수량이 현재 재고를 초과합니다.\n\n` +
+                `현재 재고: ${limit}\n` +
+                `입력 수량: ${currentReturn}\n` +
+                `(재고보다 많이 반출할 수 없습니다)`
+              );
+              isSaving.current = false;
+              return;
+            }
+          }
 
           if (!isNaN(originQty) && (currentReturn + otherReturned) > originQty) {
             showModal('warning', '저장 실패',
@@ -1878,8 +2011,8 @@ function TradePanel({
                   재고
                 </button>
               )}
-              {/* 반품 버튼 (매출일 때만 표시) */}
-              {!isPurchase && (
+              {/* 반품/반출 버튼 (거래처가 있을 때만 활성화) */}
+              {!isPurchase ? (
                 <button
                   type="button"
                   className="btn btn-warning btn-custom btn-sm"
@@ -1888,6 +2021,16 @@ function TradePanel({
                   style={{ backgroundColor: '#f39c12', color: 'white', border: 'none' }}
                 >
                   반품
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="btn btn-danger btn-custom btn-sm"
+                  onClick={() => setIsPurchaseLookupOpen(true)}
+                  disabled={!master.company_id || isViewMode}
+                  style={{ backgroundColor: '#e74c3c', color: 'white', border: 'none' }}
+                >
+                  반출
                 </button>
               )}
               <button
@@ -1978,7 +2121,7 @@ function TradePanel({
                         value={detail.quantity !== undefined && detail.quantity !== null ? formatCurrency(detail.quantity) : ''}
                         onChange={(e) => {
                           const inputValue = e.target.value;
-                          const isNegative = inputValue.startsWith('-');
+                          const isNegative = inputValue.includes('-');
                           const numericPart = inputValue.replace(/[^0-9.]/g, ''); // 숫자와 소수점만 허용
                           const val = (isNegative ? '-' : '') + numericPart;
                           handleDetailChange(index, 'quantity', val);
@@ -2000,7 +2143,11 @@ function TradePanel({
                         value={detail.unit_price !== undefined && detail.unit_price !== null ? formatCurrency(detail.unit_price) : ''}
                         onChange={(e) => {
                           const inputValue = e.target.value;
-                          const isNegative = inputValue.startsWith('-');
+                          // [Safety Guard] 보상 품목(CLAIM-001)인 경우에만 마이너스 단가 허용
+                          const currentProduct = products.find(p => p.id === detail.product_id);
+                          const isClaimProduct = currentProduct?.product_code === 'CLAIM-001';
+
+                          const isNegative = inputValue.includes('-') && isClaimProduct;
                           const numericPart = inputValue.replace(/[^0-9.]/g, '');
                           const val = (isNegative ? '-' : '') + numericPart;
                           handleDetailChange(index, 'unit_price', val);
@@ -2116,14 +2263,16 @@ function TradePanel({
           <div className="trade-balance-card" style={{ backgroundColor: cardColor }}>
 
 
+            {/* 금일 합계 강조 박스 */}
+            <div className={`balance-box today ${isPurchase ? 'purchase' : 'sale'}`}>
+              <span className="balance-box-label">금일 합계</span>
+              <span className="balance-box-value">
+                {formatCurrency(currentTodayTotal)}원
+              </span>
+            </div>
+
             {/* 잔고 정보 리스트 */}
             <div className="balance-list">
-              <div className="balance-item">
-                <span className="balance-text-label">금일 합계</span>
-                <span className="balance-text-value" style={{ color: isPurchase ? '#2980b9' : '#e67e22', fontWeight: '800' }}>
-                  {formatCurrency(currentTodayTotal)}원
-                </span>
-              </div>
               <div className="balance-item">
                 <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                   <span className="balance-text-label">전잔고</span>
@@ -3186,6 +3335,21 @@ function TradePanel({
           document.body
         )
       }
+      <SalesLookupModal
+        isOpen={isSalesLookupOpen}
+        onClose={() => setIsSalesLookupOpen(false)}
+        companyId={master.company_id}
+        companyName={companies.find(c => c.id === master.company_id)?.company_name}
+        onSelect={handleSalesLink}
+      />
+
+      <PurchaseLookupModal
+        isOpen={isPurchaseLookupOpen}
+        onClose={() => setIsPurchaseLookupOpen(false)}
+        companyId={master.company_id}
+        companyName={companies.find(c => c.id === master.company_id)?.company_name}
+        onSelect={handlePurchaseLink}
+      />
     </div >
   );
 }

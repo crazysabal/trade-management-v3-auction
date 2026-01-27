@@ -253,6 +253,31 @@ router.get('/transactions', async (req, res) => {
         if (!initialStocks[row.lot_id]) initialStocks[row.lot_id] = 0;
         initialStocks[row.lot_id] += parseFloat(row.total_adjust || 0);
       });
+
+      // [NEW] 6. 이전 매입반환 합계 (Lot별) - 재고에서 차감
+      let prevVendorReturnQuery = `
+        SELECT pi.id as lot_id, SUM(ABS(td.quantity)) as total_return
+        FROM trade_details td
+        JOIN trade_masters tm ON td.trade_master_id = tm.id
+        JOIN purchase_inventory pi ON td.parent_detail_id = pi.trade_detail_id
+        WHERE tm.trade_type = 'PURCHASE' AND tm.trade_date < ?
+      `;
+      const prevVendorReturnParams = [start_date];
+      if (product_id) {
+        prevVendorReturnQuery += ' AND td.product_id = ?';
+        prevVendorReturnParams.push(product_id);
+      }
+      if (warehouse_id) {
+        prevVendorReturnQuery += ' AND pi.warehouse_id = ?';
+        prevVendorReturnParams.push(warehouse_id);
+      }
+      prevVendorReturnQuery += ' GROUP BY pi.id';
+      const [prevVendorReturnRows] = await db.query(prevVendorReturnQuery, prevVendorReturnParams);
+
+      prevVendorReturnRows.forEach(row => {
+        if (!initialStocks[row.lot_id]) initialStocks[row.lot_id] = 0;
+        initialStocks[row.lot_id] -= parseFloat(row.total_return || 0);
+      });
     }
 
     let params = [];
@@ -643,6 +668,66 @@ router.get('/transactions', async (req, res) => {
 
     const [adjRows] = await db.query(adjQuery, adjParams);
 
+    // [NEW] 매입반환 내역 (Vendor Return)
+    let returnParams = [];
+    let returnProductFilter = '';
+    let returnDateFilter = '';
+    if (product_id) {
+      returnProductFilter = ' AND td.product_id = ?';
+      returnParams.push(product_id);
+    }
+    if (start_date) {
+      returnDateFilter += ' AND tm.trade_date >= ?';
+      returnParams.push(start_date);
+    }
+    if (end_date) {
+      returnDateFilter += ' AND tm.trade_date <= ?';
+      returnParams.push(end_date);
+    }
+    if (warehouse_id) {
+      returnDateFilter += ' AND pi.warehouse_id = ?';
+      returnParams.push(warehouse_id);
+    }
+
+    const returnQuery = `
+      SELECT 
+        'VENDOR_RETURN' as transaction_type,
+        DATE(tm.trade_date) as transaction_date,
+        td.id as reference_id,
+        td.id as trade_detail_id,
+        pi.id as lot_id,
+        pi.product_id,
+        p.product_name,
+        p.weight as product_weight,
+        p.weight_unit as product_weight_unit,
+        p.grade,
+        ABS(td.quantity) as quantity,
+        td.unit_price,
+        tm.company_id,
+        c.company_name,
+        td.shipper_location,
+        td.sender,
+        tm.trade_number,
+        tm.id as trade_master_id,
+        NULL as production_id,
+        CONCAT('(반출) ', tm.notes) as notes,
+        tm_source.id as source_trade_id,
+        tm_source.trade_number as source_trade_number,
+        pi.trade_detail_id as source_trade_detail_id,
+        td.created_at as detail_date,
+        w.name as warehouse_name
+      FROM trade_details td
+      JOIN trade_masters tm ON td.trade_master_id = tm.id
+      JOIN purchase_inventory pi ON td.parent_detail_id = pi.trade_detail_id
+      JOIN products p ON pi.product_id = p.id
+      JOIN companies c ON tm.company_id = c.id
+      LEFT JOIN trade_details td_source ON pi.trade_detail_id = td_source.id
+      LEFT JOIN trade_masters tm_source ON td_source.trade_master_id = tm_source.id
+      LEFT JOIN warehouses w ON pi.warehouse_id = w.id
+      WHERE tm.trade_type = 'PURCHASE' AND td.parent_detail_id IS NOT NULL ${returnProductFilter} ${returnDateFilter}
+    `;
+    const [returnRows] = await db.query(returnQuery, returnParams);
+
 
 
     // [FIX] Adjust Purchase Quantity to exclude Merged/Transferred-In amounts
@@ -659,7 +744,7 @@ router.get('/transactions', async (req, res) => {
       transferInSumByLot[key] = (transferInSumByLot[key] || 0) + parseFloat(r.quantity);
     });
 
-    let allRows = [...inRows, ...outRows, ...prodRows, ...transOutRows, ...transInRows, ...adjRows];
+    let allRows = [...inRows, ...outRows, ...prodRows, ...transOutRows, ...transInRows, ...adjRows, ...returnRows];
 
     // Adjust Genesis events
     allRows = allRows.map(row => {
@@ -730,7 +815,7 @@ router.get('/transactions', async (req, res) => {
       if (transaction_type === 'IN') {
         filteredRows = allRows.filter(r => ['IN', 'PURCHASE', 'PRODUCTION_IN'].includes(r.transaction_type));
       } else if (transaction_type === 'OUT') {
-        filteredRows = allRows.filter(r => ['OUT', 'SALE', 'PRODUCTION_OUT', 'TRANSFER_OUT'].includes(r.transaction_type));
+        filteredRows = allRows.filter(r => ['OUT', 'SALE', 'PRODUCTION_OUT', 'TRANSFER_OUT', 'VENDOR_RETURN'].includes(r.transaction_type));
       } else {
         filteredRows = allRows.filter(r => r.transaction_type === transaction_type);
       }
@@ -750,7 +835,7 @@ router.get('/transactions', async (req, res) => {
       } else if (row.transaction_type === 'ADJUST') {
         stockByLot[key] += qty; // ADJUST is quantity_change, can be positive or negative
       } else {
-        // SALE, PRODUCTION_OUT, TRANSFER_OUT
+        // SALE, PRODUCTION_OUT, TRANSFER_OUT, VENDOR_RETURN
         stockByLot[key] -= qty;
       }
 

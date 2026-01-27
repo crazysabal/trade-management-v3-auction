@@ -184,6 +184,12 @@ router.get('/:id', async (req, res) => {
           WHERE spm.sale_detail_id = td.id 
           LIMIT 1
         ) as inventory_remaining,
+        (
+          SELECT pi.remaining_quantity 
+          FROM purchase_inventory pi 
+          WHERE pi.trade_detail_id = td.id 
+          LIMIT 1
+        ) as remaining_quantity,
         COALESCE(td.purchase_price, (
           SELECT pi.unit_price 
           FROM purchase_inventory pi 

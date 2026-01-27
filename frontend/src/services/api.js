@@ -261,6 +261,7 @@ export const inventoryAuditAPI = {
   revert: (id) => api.post(`/inventory-audit/${id}/revert`),
   cancel: (id) => api.post(`/inventory-audit/${id}/cancel`),
   delete: (id) => api.delete(`/inventory-audit/${id}`),
+  syncItem: (auditId, itemId) => api.put(`/inventory-audit/${auditId}/items/${itemId}/sync`),
 };
 
 // 시스템 관리 API (백업 등)

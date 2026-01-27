@@ -1,0 +1,251 @@
+/* TradeList.css */
+
+.trade-list-page {
+    display: flex;
+    flex-direction: column;
+    height: calc(100vh - 60px);
+    background-color: #f5f6fa;
+    width: 100%;
+    overflow: hidden;
+}
+
+/* 메인 분할 컨테이너 */
+.trade-list-main-container {
+    flex: 1;
+    display: flex;
+    padding: 0.5rem;
+    overflow: hidden;
+    min-height: 0;
+    gap: 0;
+}
+
+/* 패널 공통 스타일 */
+.trade-panel-wrapper {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    width: 100%;
+    background-color: #fff;
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.trade-panel-header {
+    padding: 0.5rem 0.75rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-shrink: 0;
+}
+
+.trade-panel-header h2 {
+    margin: 0;
+    font-size: 0.95rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.badge-count {
+    font-size: 0.75rem;
+    color: white;
+    padding: 2px 8px;
+    border-radius: 10px;
+}
+
+.btn-add-trade {
+    padding: 0.25rem 0.5rem;
+    color: white;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    text-decoration: none;
+    font-weight: 500;
+}
+
+/* 필터 영역 */
+.trade-filter-container {
+    padding: 0.5rem 0.5rem;
+    border-bottom: 1px solid #eee;
+    flex-shrink: 0;
+}
+
+.trade-filter-input {
+    width: 100%;
+    padding: 0.35rem 0.5rem;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 0.8rem;
+    box-sizing: border-box;
+}
+
+/* 스크롤 가능한 목록 영역 */
+.trade-list-scroll-area {
+    flex: 1;
+    overflow-y: auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.trade-table-container {
+    width: 100%;
+    flex: 1;
+}
+
+.trade-table {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+}
+
+.trade-table thead {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+.trade-table th {
+    font-weight: 600;
+    padding: 0.5rem 0.5rem;
+    font-size: 0.9rem;
+    white-space: nowrap;
+}
+
+.trade-table td {
+    padding: 0.5rem 0.5rem;
+    font-size: 0.9rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.trade-table tbody tr {
+    border-bottom: 1px solid #eee;
+    transition: background-color 0.1s;
+}
+
+.trade-table tbody tr:hover {
+    background-color: #f8f9fa;
+}
+
+/* 리사이즈 핸들 */
+.resize-handle {
+    width: 8px;
+    cursor: col-resize;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    border-radius: 4px;
+    margin: 0 2px;
+    background-color: #e0e0e0;
+    transition: background-color 0.2s;
+}
+
+.resize-handle:hover,
+.resize-handle.dragging {
+    background-color: #9b59b6;
+}
+
+.resize-dot-container {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.resize-dot {
+    width: 3px;
+    height: 3px;
+    background-color: #999;
+    border-radius: 50%;
+}
+
+.resize-handle.dragging .resize-dot {
+    background-color: white;
+}
+
+/* 합계 영역 - 하단 고정 */
+.trade-panel-footer {
+    padding: 0.5rem 0.75rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-shrink: 0;
+    position: sticky;
+    bottom: 0;
+    z-index: 5;
+    box-shadow: 0 -1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.total-label {
+    font-weight: 500;
+    font-size: 0.85rem;
+}
+
+.total-value {
+    font-weight: 700;
+    font-size: 1rem;
+}
+
+/* 매입 전표 특화 */
+.panel-purchase .trade-panel-header,
+.panel-purchase .trade-panel-footer {
+    background-color: #fdf2f2;
+    border-bottom: 2px solid #c0392b;
+}
+
+.panel-purchase .trade-panel-footer {
+    border-top: 2px solid #c0392b;
+}
+
+.panel-purchase h2,
+.panel-purchase .total-label,
+.panel-purchase .total-value {
+    color: #c0392b;
+}
+
+.panel-purchase .badge-count,
+.panel-purchase .btn-add-trade {
+    background-color: #c0392b;
+}
+
+.panel-purchase thead tr {
+    background-color: #fdf2f2;
+    border-bottom: 2px solid #c0392b;
+}
+
+.panel-purchase thead th {
+    color: #c0392b;
+}
+
+/* 매출 전표 특화 */
+.panel-sale .trade-panel-header,
+.panel-sale .trade-panel-footer {
+    background-color: #f0f7ff;
+    border-bottom: 2px solid #2980b9;
+}
+
+.panel-sale .trade-panel-footer {
+    border-top: 2px solid #2980b9;
+}
+
+.panel-sale h2,
+.panel-sale .total-label,
+.panel-sale .total-value {
+    color: #2980b9;
+}
+
+.panel-sale .badge-count,
+.panel-sale .btn-add-trade {
+    background-color: #2980b9;
+}
+
+.panel-sale thead tr {
+    background-color: #f0f7ff;
+    border-bottom: 2px solid #2980b9;
+}
+
+.panel-sale thead th {
+    color: #2980b9;
+}

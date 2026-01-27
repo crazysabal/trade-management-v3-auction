@@ -64,6 +64,24 @@ router.post('/', async (req, res) => {
             [changeQty, weightChange, inventory.product_id]
         );
 
+        // [V1.0.32 ADD] Insert into inventory_transactions
+        await connection.query(
+            `INSERT INTO inventory_transactions 
+             (transaction_date, transaction_type, product_id, quantity, weight,
+              before_quantity, after_quantity, notes, created_by, reference_number)
+             VALUES (NOW(), 'ADJUST', ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [
+                inventory.product_id,
+                changeQty,
+                weightChange,
+                currentQty,
+                newQty,
+                reason,
+                'system',
+                `Adj: ${adjustment_type} (InvID: ${purchase_inventory_id})`
+            ]
+        );
+
         await connection.commit();
 
         res.json({
@@ -160,6 +178,24 @@ router.delete('/:id', async (req, res) => {
         await connection.query(
             'DELETE FROM inventory_adjustments WHERE id = ?',
             [adjustmentId]
+        );
+
+        // [V1.0.32 ADD] Insert into inventory_transactions (REVERSE)
+        await connection.query(
+            `INSERT INTO inventory_transactions 
+             (transaction_date, transaction_type, product_id, quantity, weight,
+              before_quantity, after_quantity, notes, created_by, reference_number)
+             VALUES (NOW(), 'ADJUST', ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [
+                inventory.product_id,
+                revertQty,
+                weightRevert,
+                currentQty,
+                newQty,
+                'REVERSE: ' + (adjustment.reason || ''),
+                'system',
+                `Cancel Adj ID: ${adjustmentId} (InvID: ${purchase_inventory_id})`
+            ]
         );
 
         await connection.commit();
