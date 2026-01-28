@@ -563,6 +563,7 @@ const InventoryQuickView = ({ inventoryAdjustments = {}, refreshKey, onInventory
                         placeholder="🔍 품목, 매입처, 출하주, 창고 검색 (띄어쓰기로 다중 검색)"
                         value={searchTerm}
                         onChange={handleSearch}
+                        onFocus={(e) => e.target.select()}
                         onKeyDown={(e) => {
                             if (e.key === 'ArrowDown') {
                                 e.preventDefault();

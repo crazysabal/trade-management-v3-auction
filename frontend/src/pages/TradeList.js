@@ -75,6 +75,9 @@ function TradeList({ isWindow, refreshKey, onOpenTradeEdit }) {
   const [purchaseFilter, setPurchaseFilter] = useState('');
   const [saleFilter, setSaleFilter] = useState('');
 
+  // 활성 퀵 필터 상태
+  const [activeQuickFilter, setActiveQuickFilter] = useState(null);
+
   // 좌우 위치 설정 (localStorage에 저장)
   const [layoutOrder, setLayoutOrder] = useState({ left: 'PURCHASE', right: 'SALE' });
 
@@ -232,10 +235,44 @@ function TradeList({ isWindow, refreshKey, onOpenTradeEdit }) {
   const handleDateChange = (field, value) => {
     const newDateRange = { ...dateRange, [field]: value };
     setDateRange(newDateRange);
+    setActiveQuickFilter(null);
   };
 
   const handleSearch = () => {
+    setActiveQuickFilter(null);
     loadTrades(dateRange.start_date, dateRange.end_date);
+  };
+
+  const handleQuickDate = (type) => {
+    const today = new Date();
+    let startDate;
+    const endDate = formatDate(today);
+
+    switch (type) {
+      case 'TODAY':
+        startDate = endDate;
+        break;
+      case 'WEEK': {
+        const day = today.getDay(); // 0(일) ~ 6(토)
+        const diff = today.getDate() - day + (day === 0 ? -6 : 1); // 월요일 계산
+        const monday = new Date(today.setDate(diff));
+        startDate = formatDate(monday);
+        break;
+      }
+      case 'MONTH':
+        startDate = formatDate(new Date(today.getFullYear(), today.getMonth(), 1));
+        break;
+      case 'YEAR':
+        startDate = formatDate(new Date(today.getFullYear(), 0, 1));
+        break;
+      default:
+        return;
+    }
+
+    const newRange = { start_date: startDate, end_date: endDate };
+    setDateRange(newRange);
+    setActiveQuickFilter(type);
+    loadTrades(startDate, endDate);
   };
 
   const handleDelete = (id, tradeNumber) => {
@@ -502,26 +539,27 @@ function TradeList({ isWindow, refreshKey, onOpenTradeEdit }) {
           />
         </div>
 
-        {/* 테이블 + 합계 영역 (스크롤) */}
+        {/* 테이블 영역 (스크롤) */}
         <div style={{ flex: 1, overflow: 'auto', minHeight: 0 }}>
           <TradeTable trades={trades} type={type} />
+        </div>
 
-          {/* 합계 - 테이블 바로 밑에 붙음 */}
-          <div style={{
-            padding: '0.5rem 0.75rem',
-            backgroundColor: bgColor,
-            borderTop: `2px solid ${color}`,
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center'
-          }}>
-            <span style={{ fontWeight: '500', color: color, fontSize: '0.85rem' }}>
-              합계 {filter && `(필터)`}
-            </span>
-            <span style={{ fontWeight: '700', fontSize: '1rem', color: color }}>
-              {formatCurrency(total)}원
-            </span>
-          </div>
+        {/* 합계 - 하단 고정 */}
+        <div style={{
+          padding: '0.5rem 0.75rem',
+          backgroundColor: bgColor,
+          borderTop: `2px solid ${color}`,
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          flexShrink: 0
+        }}>
+          <span style={{ fontWeight: '500', color: color, fontSize: '0.85rem' }}>
+            합계 {filter && `(필터)`}
+          </span>
+          <span style={{ fontWeight: '700', fontSize: '1rem', color: color }}>
+            {formatCurrency(total)}원
+          </span>
         </div>
       </div>
     );
@@ -531,7 +569,7 @@ function TradeList({ isWindow, refreshKey, onOpenTradeEdit }) {
     <div style={{
       display: 'flex',
       flexDirection: 'column',
-      height: 'calc(100vh - 60px)',
+      height: isWindow ? '100%' : 'calc(100vh - 60px)',
       backgroundColor: '#f5f6fa',
       maxWidth: isWindow ? '100%' : '1400px',
       margin: isWindow ? '0' : '0 auto',
@@ -577,6 +615,48 @@ function TradeList({ isWindow, refreshKey, onOpenTradeEdit }) {
                 backgroundColor: '#fff'
               }}
             />
+
+            {/* 빠른 기간 필터 버튼 */}
+            <div style={{ display: 'flex', gap: '4px', marginLeft: '0.5rem' }}>
+              {[
+                { label: '오늘', type: 'TODAY' },
+                { label: '이번주', type: 'WEEK' },
+                { label: '이번달', type: 'MONTH' },
+                { label: '올해', type: 'YEAR' }
+              ].map(btn => (
+                <button
+                  key={btn.type}
+                  onClick={() => handleQuickDate(btn.type)}
+                  style={{
+                    padding: '0.35rem 0.6rem',
+                    backgroundColor: activeQuickFilter === btn.type ? '#2980b9' : '#fff',
+                    border: '1px solid',
+                    borderColor: activeQuickFilter === btn.type ? '#2980b9' : '#ddd',
+                    borderRadius: '5px',
+                    fontSize: '0.8rem',
+                    color: activeQuickFilter === btn.type ? 'white' : '#555',
+                    cursor: 'pointer',
+                    fontWeight: '600',
+                    transition: 'all 0.1s'
+                  }}
+                  onMouseEnter={(e) => {
+                    if (activeQuickFilter !== btn.type) {
+                      e.target.style.backgroundColor = '#f8f9fa';
+                      e.target.style.borderColor = '#bbb';
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (activeQuickFilter !== btn.type) {
+                      e.target.style.backgroundColor = '#fff';
+                      e.target.style.borderColor = '#ddd';
+                    }
+                  }}
+                >
+                  {btn.label}
+                </button>
+              ))}
+            </div>
+
             <button
               onClick={handleSearch}
               style={{

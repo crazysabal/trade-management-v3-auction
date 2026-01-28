@@ -497,16 +497,16 @@ const InventoryPrintModal = ({ isOpen, onClose, inventory, warehouses }) => {
                                             // 1. Same Name?
                                             if (String(item.product_name) === String(prevItemData.product_name)) {
                                                 hideName = true;
-                                                // 2. Same Name AND Same Weight?
-                                                const currWeight = Number(item.product_weight) || 0;
-                                                const prevWeight = Number(prevItemData.product_weight) || 0;
-                                                if (currWeight === prevWeight) {
-                                                    hideWeight = true;
-                                                    // 3. Same Name AND Same Weight AND Same Sender?
-                                                    const currSender = String(item.sender || '-');
-                                                    const prevSender = String(prevItemData.sender || '-');
-                                                    if (currSender === prevSender) {
-                                                        hideSender = true;
+                                                // 2. Same Name AND Same Sender?
+                                                const currSender = String(item.sender || '-');
+                                                const prevSender = String(prevItemData.sender || '-');
+                                                if (currSender === prevSender) {
+                                                    hideSender = true;
+                                                    // 3. Same Name AND Same Sender AND Same Weight?
+                                                    const currWeight = Number(item.product_weight) || 0;
+                                                    const prevWeight = Number(prevItemData.product_weight) || 0;
+                                                    if (currWeight === prevWeight) {
+                                                        hideWeight = true;
                                                     }
                                                 }
                                             }
@@ -556,8 +556,8 @@ const InventoryPrintModal = ({ isOpen, onClose, inventory, warehouses }) => {
                                                     const dateStr = d.created_at ? new Date(d.created_at).toLocaleDateString('ko-KR', { month: '2-digit', day: '2-digit' }).replace(/\./g, '-').replace(/\s/g, '').slice(0, -1) : '-';
                                                     maxLens.date = Math.max(maxLens.date, getWeight(dateStr));
                                                 }
-                                                maxLens.weight = Math.max(maxLens.weight, getWeight(d.product_weight) + (d.weight_unit || d.product_weight_unit || 'kg').length);
                                                 maxLens.sender = Math.max(maxLens.sender, getWeight(d.sender));
+                                                maxLens.weight = Math.max(maxLens.weight, getWeight(d.product_weight) + (d.weight_unit || d.product_weight_unit || 'kg').length);
                                                 maxLens.grade = Math.max(maxLens.grade, getWeight(d.grade));
                                                 maxLens.qty = Math.max(maxLens.qty, getWeight(d.remaining_quantity)); // commas?
                                                 maxLens.price = Math.max(maxLens.price, getWeight(d.unit_price)); // commas?
@@ -586,8 +586,8 @@ const InventoryPrintModal = ({ isOpen, onClose, inventory, warehouses }) => {
                                         smartWidths = {
                                             name: (maxLens.name / totalWeight) * availPct,
                                             date: (!isDouble && showDate) ? (maxLens.date / totalWeight) * availPct : 0,
-                                            weight: (maxLens.weight / totalWeight) * availPct,
                                             sender: (maxLens.sender / totalWeight) * availPct,
+                                            weight: (maxLens.weight / totalWeight) * availPct,
                                             grade: (maxLens.grade / totalWeight) * availPct,
                                             qty: (maxLens.qty / totalWeight) * availPct,
                                             price: (maxLens.price / totalWeight) * availPct,
@@ -604,8 +604,8 @@ const InventoryPrintModal = ({ isOpen, onClose, inventory, warehouses }) => {
                                         const Cols = [];
                                         Cols.push(<col key="n" style={{ width: `${sw.name}%` }} />);
                                         if (!isDouble && showDate) Cols.push(<col key="d" style={{ width: `${sw.date}%` }} />);
-                                        Cols.push(<col key="w" style={{ width: `${sw.weight}%` }} />);
                                         Cols.push(<col key="s" style={{ width: `${sw.sender}%` }} />);
+                                        Cols.push(<col key="w" style={{ width: `${sw.weight}%` }} />);
                                         Cols.push(<col key="g" style={{ width: `${sw.grade}%` }} />);
                                         Cols.push(<col key="q" style={{ width: `${sw.qty}%` }} />);
                                         Cols.push(<col key="p" style={{ width: `${sw.price}%` }} />);
@@ -729,11 +729,11 @@ const InventoryPrintModal = ({ isOpen, onClose, inventory, warehouses }) => {
                                                                         {dateStr}
                                                                     </td>
                                                                 )}
-                                                                <td style={{ textAlign: 'center', padding: '0', border: 'none' }}>
-                                                                    {row.hideWeight ? '' : (Number(item.product_weight) > 0 ? `${Number(item.product_weight)}${(item.product_weight_unit || item.weight_unit || 'kg')}` : '-')}
-                                                                </td>
                                                                 <td style={{ textAlign: 'center', padding: '0', border: 'none', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                                                     {row.hideSender ? '' : (item.sender || '-')}
+                                                                </td>
+                                                                <td style={{ textAlign: 'center', padding: '0', border: 'none' }}>
+                                                                    {row.hideWeight ? '' : (Number(item.product_weight) > 0 ? `${Number(item.product_weight)}${(item.product_weight_unit || item.weight_unit || 'kg')}` : '-')}
                                                                 </td>
                                                                 <td style={{ textAlign: 'center', padding: '0', border: 'none' }}>{item.grade || '-'}</td>
                                                                 <td className="text-right" style={{ textAlign: 'right', padding: '0 5px', border: 'none' }}>
