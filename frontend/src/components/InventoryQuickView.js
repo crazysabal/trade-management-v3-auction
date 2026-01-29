@@ -7,6 +7,19 @@ import SearchableSelect from './SearchableSelect';
 import ProductionDetailModal from './ProductionDetailModal';
 import { useModalDraggable } from '../hooks/useModalDraggable';
 
+// [Standard 23-G] 재고 목록 통합 정렬 헬퍼 (표시 순번 > ID)
+const sortInventoryData = (data) => {
+    return [...data].sort((a, b) => {
+        // 1. 표시 순번 (display_order) - 사용자가 지정한 순서
+        const orderA = a.display_order !== null ? a.display_order : 2147483647;
+        const orderB = b.display_order !== null ? b.display_order : 2147483647;
+        if (orderA !== orderB) return orderA - orderB;
+
+        // 2. ID (등록 순서) - 순번이 같을 경우
+        return a.id - b.id;
+    });
+};
+
 const InventoryQuickView = ({ inventoryAdjustments = {}, refreshKey, onInventoryLoaded }) => {
     const [inventory, setInventory] = useState([]);
     const [filteredInventory, setFilteredInventory] = useState([]);
@@ -168,31 +181,9 @@ const InventoryQuickView = ({ inventoryAdjustments = {}, refreshKey, onInventory
                         const existingIds = new Set(prev.map(p => String(p.id)));
                         const uniqueNewItems = newItems.filter(item => !existingIds.has(String(item.id)));
 
-                        // 합치고 정렬 (품목명 > 출하주 > 등급(순번) > 매입일자 순)
+                        // 합치고 정렬 (Standard 23-G 통합 정렬 적용)
                         const merged = [...prev, ...uniqueNewItems];
-                        return merged.sort((a, b) => {
-                            // 1. 품목명
-                            const nameA = a.product_name || '';
-                            const nameB = b.product_name || '';
-                            const nameDiff = nameA.localeCompare(nameB, 'ko');
-                            if (nameDiff !== 0) return nameDiff;
-
-                            // 2. 출하주
-                            const senderA = a.sender || '';
-                            const senderB = b.sender || '';
-                            const senderDiff = senderA.localeCompare(senderB, 'ko');
-                            if (senderDiff !== 0) return senderDiff;
-
-                            // 3. 등급 순번 (sort_order)
-                            const orderA = a.sort_order || 9999;
-                            const orderB = b.sort_order || 9999;
-                            if (orderA !== orderB) return orderA - orderB;
-
-                            // 4. 매입일자
-                            const dateA = new Date(a.purchase_date || 0);
-                            const dateB = new Date(b.purchase_date || 0);
-                            return dateA - dateB;
-                        });
+                        return sortInventoryData(merged);
                     });
                 }
             } catch (err) {
@@ -216,8 +207,11 @@ const InventoryQuickView = ({ inventoryAdjustments = {}, refreshKey, onInventory
             const prodData = prodResponse.data?.data || prodResponse.data || [];
 
             setAllProducts(prodData);
-            setInventory(validInvData);
-            setFilteredInventory(validInvData); // validInvData 활용 (아래 useEffect에서 처리됨)
+
+            // [Standard 23-G] 초기 로드 시에도 동일한 정렬 기준 적용
+            const sortedInv = sortInventoryData(validInvData);
+            setInventory(sortedInv);
+            setFilteredInventory(sortedInv);
 
             // 퀵스플릿 모달 내 품목 리스트도 미리 캐싱 업데이트
             setQuickSplitModal(prev => ({ ...prev, products: prodData }));

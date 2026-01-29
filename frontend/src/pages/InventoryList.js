@@ -360,11 +360,18 @@ function InventoryList() {
                     <td style={{ padding: '0.4rem 0.5rem', fontSize: '0.8rem' }}>{formatDate(item.purchase_date)}</td>
                     <td style={{ padding: '0.4rem 0.5rem', fontSize: '0.8rem', fontWeight: '500' }}>
                       {item.product_name}
-                      {originalWeight > 0 && (
-                        <span style={{ fontSize: '0.75rem', color: '#666', marginLeft: '4px' }}>
-                          {formatNumber(originalWeight)}{item.weight_unit || item.product_weight_unit || 'kg'}
-                        </span>
-                      )}
+                      {(() => {
+                        const w = parseFloat(item.product_weight || item.weight || item.total_weight || 0);
+                        if (w > 0) {
+                          const unit = item.weight_unit || item.product_weight_unit || 'kg';
+                          return (
+                            <span style={{ fontSize: '0.75rem', color: '#666', marginLeft: '4px' }}>
+                              {parseFloat(w.toFixed(2))}{unit}
+                            </span>
+                          );
+                        }
+                        return null;
+                      })()}
                       {item.production_id && (
                         <button
                           onClick={(e) => {

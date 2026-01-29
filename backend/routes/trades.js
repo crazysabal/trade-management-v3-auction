@@ -572,38 +572,13 @@ router.post('/sale-from-inventory', async (req, res) => {
 
     // 동일 거래처 + 동일 날짜 중복 검사
     const [existingTrade] = await connection.query(
-      `SELECT id, trade_number FROM trade_masters 
+      `SELECT id, trade_number, total_amount, total_price, notes FROM trade_masters 
        WHERE company_id = ? AND trade_date = ? AND trade_type = 'SALE' AND status != 'CANCELLED'`,
       [master.company_id, master.trade_date]
     );
 
-    if (existingTrade.length > 0) {
-      await connection.rollback();
-      return res.status(400).json({
-        success: false,
-        message: `해당 거래처에 동일 날짜의 매출 전표가 이미 존재합니다.\n\n기존 전표번호: ${existingTrade[0].trade_number}\n\n기존 전표를 수정하거나 다른 날짜를 선택해주세요.`,
-        existingTradeId: existingTrade[0].id,
-        existingTradeNumber: existingTrade[0].trade_number
-      });
-    }
-
-    // 전표번호 생성 (형식: SAL-YYYYMMDD-001 - 일반 전표와 동일)
-    const today = master.trade_date.replace(/-/g, '');
-
-    const [lastNumber] = await connection.query(
-      `SELECT trade_number FROM trade_masters 
-       WHERE trade_number LIKE ?
-      ORDER BY trade_number DESC LIMIT 1`,
-      [`SAL - ${today} -% `]
-    );
-
-    let seqNo = 1;
-    if (lastNumber.length > 0) {
-      const lastSeq = parseInt(lastNumber[0].trade_number.split('-')[2]);
-      seqNo = lastSeq + 1;
-    }
-
-    const trade_number = `SAL - ${today} - ${String(seqNo).padStart(3, '0')}`;
+    let trade_master_id;
+    let trade_number;
 
     // 합계 계산
     let total_amount = 0;
@@ -611,16 +586,68 @@ router.post('/sale-from-inventory', async (req, res) => {
       total_amount += parseFloat(detail.supply_amount) || 0;
     }
 
-    // trade_masters 등록
-    const [masterResult] = await connection.query(
-      `INSERT INTO trade_masters(
-        trade_number, trade_date, company_id, trade_type,
-        total_amount, tax_amount, total_price, notes, status
-      ) VALUES(?, ?, ?, 'SALE', ?, 0, ?, ?, 'CONFIRMED')`,
-      [trade_number, master.trade_date, master.company_id, total_amount, total_amount, master.notes || '']
-    );
+    if (existingTrade.length > 0) {
+      trade_master_id = existingTrade[0].id;
+      trade_number = existingTrade[0].trade_number;
 
-    const trade_master_id = masterResult.insertId;
+      const newTotalAmount = parseFloat(existingTrade[0].total_amount || 0) + total_amount;
+
+      // 비고 병합
+      let mergedNotes = existingTrade[0].notes || '';
+      if (master.notes && master.notes.trim()) {
+        if (mergedNotes && !mergedNotes.includes(master.notes)) {
+          mergedNotes += `\n[추가] ${master.notes}`;
+        } else if (!mergedNotes) {
+          mergedNotes = master.notes;
+        }
+      }
+
+      await connection.query(
+        `UPDATE trade_masters SET 
+         total_amount = ?, tax_amount = 0, total_price = ?, notes = ?, updated_at = NOW()
+         WHERE id = ?`,
+        [newTotalAmount, newTotalAmount, mergedNotes, trade_master_id]
+      );
+    } else {
+      // 전표번호 생성 (형식: SAL-YYYYMMDD-001)
+      const today = master.trade_date.replace(/-/g, '');
+
+      const [lastNumber] = await connection.query(
+        `SELECT trade_number FROM trade_masters 
+         WHERE trade_number LIKE ?
+         ORDER BY trade_number DESC LIMIT 1`,
+        [`SAL-${today}-%`]
+      );
+
+      let seqNo = 1;
+      if (lastNumber.length > 0) {
+        const lastSeq = parseInt(lastNumber[0].trade_number.split('-')[2]);
+        seqNo = lastSeq + 1;
+      }
+
+      trade_number = `SAL-${today}-${String(seqNo).padStart(3, '0')}`;
+
+      // trade_masters 신규 등록
+      const [masterResult] = await connection.query(
+        `INSERT INTO trade_masters(
+          trade_number, trade_date, company_id, trade_type,
+          total_amount, tax_amount, total_price, notes, status
+        ) VALUES(?, ?, ?, 'SALE', ?, 0, ?, ?, 'CONFIRMED')`,
+        [trade_number, master.trade_date, master.company_id, total_amount, total_amount, master.notes || '']
+      );
+
+      trade_master_id = masterResult.insertId;
+    }
+
+    // 기존 상세 항목의 마지막 순번 확인 (병합 시 대비)
+    let startSeqNo = 1;
+    if (existingTrade.length > 0) {
+      const [lastSeq] = await connection.query(
+        `SELECT MAX(seq_no) as max_seq FROM trade_details WHERE trade_master_id = ?`,
+        [trade_master_id]
+      );
+      startSeqNo = (lastSeq[0].max_seq || 0) + 1;
+    }
 
     // trade_details 등록 및 매칭 처리
     for (let i = 0; i < details.length; i++) {
@@ -635,7 +662,7 @@ router.post('/sale-from-inventory', async (req, res) => {
       ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?)`,
         [
           trade_master_id,
-          i + 1,
+          startSeqNo + i,
           detail.product_id,
           detail.quantity,
           0,  // total_weight

@@ -140,6 +140,11 @@ const DesktopManager = () => {
         if (activeWindowId === id) {
             setActiveWindowId(null);
         }
+        // [NEW] 윈도우 닫을 때 해당 세션의 재고 조정 내역도 삭제
+        setWindowInventoryAdjustments(prev => {
+            const { [`win-${id}`]: _, ...rest } = prev;
+            return rest;
+        });
     };
 
     const bringToFront = (id) => {
@@ -188,6 +193,8 @@ const DesktopManager = () => {
     const closeAll = () => {
         setWindows([]);
         setActiveWindowId(null);
+        // [NEW] 모든 재고 조정 내역도 초기화
+        setWindowInventoryAdjustments({});
     };
 
     const resetWindowPosition = (id) => {
@@ -325,37 +332,48 @@ const DesktopManager = () => {
         setWindows(prev => isMobile ? [newWindow] : [...prev, newWindow]);
     }, [windows, maxZIndex, isMobile, windowMode, bringToFront, hasPermission, openModal, getScopedKey, closeAll]);
 
-    // 재고 조정 상태 (Floating Windows 간 동기화)
-    const [inventoryAdjustments, setInventoryAdjustments] = useState({});
+    // [NEW] 세션(윈도우)별 재고 조정 상태 관리
+    // { windowId: { inventoryId: delta } }
+    const [windowInventoryAdjustments, setWindowInventoryAdjustments] = useState({});
 
     // 전표 목록 및 재고 목록 새로고침 키
     const [inventoryRefreshKey, setInventoryRefreshKey] = useState(0);
     const [tradeRefreshKey, setTradeRefreshKey] = useState(0);
 
-
-    const handleInventoryUpdate = useCallback((inventoryId, delta) => {
-        setInventoryAdjustments(prev => {
-            const current = prev[inventoryId] || 0;
-            const next = current + delta;
-            // 0이면 제거 (메모리 최적화)
-            if (next === 0) {
-                const { [inventoryId]: _, ...rest } = prev;
-                return rest;
-            }
-            return { ...prev, [inventoryId]: next };
+    // [NEW] 모든 윈도우의 조정 내역을 합쳐서 하나의 맵으로 변환 (InventoryQuickView에 전달용)
+    const mergedInventoryAdjustments = React.useMemo(() => {
+        const merged = {};
+        Object.values(windowInventoryAdjustments).forEach(adjustments => {
+            Object.entries(adjustments).forEach(([id, delta]) => {
+                merged[id] = (merged[id] || 0) + delta;
+            });
         });
+        return merged;
+    }, [windowInventoryAdjustments]);
+
+    // [Refactored] 윈도우별 재고 조정 내역 수신 (Declarative Sync)
+    const handleInventoryUpdate = useCallback((windowId, adjustmentsMap) => {
+        setWindowInventoryAdjustments(prev => ({
+            ...prev,
+            [windowId]: adjustmentsMap
+        }));
     }, []);
 
     // 전표 변경(저장/삭제) 핸들러
-    const handleTradeChange = useCallback(() => {
+    const handleTradeChange = useCallback((panelId = null) => {
         // 1. 재고 목록 새로고침 트리거
         setInventoryRefreshKey(prev => prev + 1);
 
         // 2. 전표 목록 새로고침 트리거 (MDI 연동)
         setTradeRefreshKey(prev => prev + 1);
 
-        // 3. 임시 차감된 재고 조정값 초기화
-        setInventoryAdjustments({});
+        // [FIX] 특정 패널(전표) 저장 성공 시, 해당 패널의 세션 조정 내역을 즉시 비움 (Double Deduction 방지)
+        if (panelId) {
+            setWindowInventoryAdjustments(prev => {
+                const { [panelId]: _, ...rest } = prev;
+                return rest;
+            });
+        }
     }, []);
 
     // 윈도우 Dirty 상태 변경 핸들러
@@ -374,6 +392,26 @@ const DesktopManager = () => {
         } : w) : prev);
     }, []);
 
+    // [NEW] 데이터 복구 성공 시 처리 (Soft Refresh)
+    const handleRestoreSuccess = useCallback(() => {
+        // 1. 모든 창 닫기 (데이터 정합성 보장)
+        closeAll();
+
+        // 2. 전역 상태 및 새로고침 키 초기화
+        setInventoryRefreshKey(prev => prev + 1);
+        setTradeRefreshKey(prev => prev + 1);
+        setWindowInventoryAdjustments({});
+
+        // 3. 성공 알림 표시
+        openModal({
+            type: 'success',
+            title: '데이터 복구 성공',
+            message: '데이터가 성공적으로 복구되었습니다.\n이제 새 창을 열어 복구된 데이터를 확인하실 수 있습니다.',
+            confirmText: '확인',
+            showCancel: false
+        });
+    }, [closeAll, openModal]);
+
     // 앱 렌더링 헬퍼
     const renderAppContent = (win) => {
         const { type, componentProps } = win;
@@ -384,7 +422,7 @@ const DesktopManager = () => {
             case 'TRADE_LIST': return <TradeList isWindow={true} refreshKey={tradeRefreshKey} onOpenTradeEdit={(type, tradeId, viewMode = false) => launchApp(type, { initialTradeId: tradeId, initialViewMode: viewMode })} {...componentProps} />;
             case 'COMPANY_LIST': return <CompanyList isWindow={true} {...componentProps} />;
             case 'PRODUCT_LIST': return <IntegratedProductManagement isWindow={true} {...componentProps} />;
-            case 'INVENTORY_QUICK': return <InventoryQuickView isWindow={true} inventoryAdjustments={inventoryAdjustments} refreshKey={inventoryRefreshKey} onInventoryLoaded={(items) => {
+            case 'INVENTORY_QUICK': return <InventoryQuickView isWindow={true} inventoryAdjustments={mergedInventoryAdjustments} refreshKey={inventoryRefreshKey} onInventoryLoaded={(items) => {
                 // 필요시 로드된 재고 정보를 상위로 전달
             }} {...componentProps} />;
             case 'INVENTORY_LIST': return <InventoryList isWindow={true} {...componentProps} />;
@@ -393,7 +431,7 @@ const DesktopManager = () => {
             case 'INVENTORY_HISTORY': return <InventoryHistory isWindow={true} {...componentProps} />;
             case 'INVENTORY_AUDIT': return <InventoryAuditPage isWindow={true} {...componentProps} />;
 
-            case 'MATCHING': return <MatchingPage isWindow={true} refreshKey={tradeRefreshKey} onTradeChange={handleTradeChange} {...componentProps} />;
+            case 'MATCHING': return <MatchingPage isWindow={true} refreshKey={tradeRefreshKey} onTradeChange={handleTradeChange} onLaunchApp={launchApp} {...componentProps} />;
             case 'AUCTION_IMPORT': return <AuctionImportV2 isWindow={true} onTradeChange={handleTradeChange} onClose={() => closeWindow(win.id)} {...componentProps} />;
             case 'AUCTION_STATEMENT': return <AuctionStatement isWindow={true} {...componentProps} />;
             case 'AUCTION_ACCOUNTS': return <AuctionAccounts isWindow={true} {...componentProps} />;
@@ -403,7 +441,7 @@ const DesktopManager = () => {
             case 'SETTLEMENT_HISTORY': return <SettlementHistory isWindow={true} onOpenDetail={(item) => launchApp('SETTLEMENT', { initialHistory: item })} {...componentProps} />;
             case 'STATISTICS': return <Statistics isWindow={true} {...componentProps} />;
             case 'SETTINGS': return <Settings isWindow={true} windowMode={windowMode} setWindowMode={handleSetWindowMode} {...componentProps} />;
-            case 'BACKUP_SYSTEM': return <BackupSystem isWindow={true} {...componentProps} />;
+            case 'BACKUP_SYSTEM': return <BackupSystem isWindow={true} onRestoreSuccess={handleRestoreSuccess} {...componentProps} />;
             case 'WAREHOUSES': return <WarehouseManagement isWindow={true} {...componentProps} />;
             case 'EXPENSE_CATEGORIES': return <ExpenseCategoryManagement isWindow={true} {...componentProps} />;
             case 'COMPANY_INFO': return <CompanyInfo isWindow={true} {...componentProps} />;

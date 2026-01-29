@@ -5,8 +5,9 @@ import { Link } from 'react-router-dom';
 import ConfirmModal from '../components/ConfirmModal';
 import MatchingHistoryModal from '../components/MatchingHistoryModal';
 import MatchingQuantityInputModal from '../components/MatchingQuantityInputModal';
+import QuickPurchaseModal from '../components/QuickPurchaseModal';
 
-function MatchingPage({ isWindow, refreshKey, onTradeChange }) {
+function MatchingPage({ isWindow, refreshKey, onTradeChange, onLaunchApp }) {
   // 조회 조건
   const [dateRange, setDateRange] = useState({
     start_date: getDateString(-14),
@@ -61,6 +62,12 @@ function MatchingPage({ isWindow, refreshKey, onTradeChange }) {
   // 선택된 매출 품목 (재고 추천용)
   const [selectedSaleItem, setSelectedSaleItem] = useState(null);
 
+  // 간편 매입 등록 모달 상태
+  const [quickPurchaseModal, setQuickPurchaseModal] = useState({
+    isOpen: false,
+    product: null
+  });
+
   // 매칭 모달 닫기
   const closeMatchingModal = () => {
     setMatchingModal({ isOpen: false, trade: null, items: [], inventory: [], selections: {} });
@@ -74,8 +81,8 @@ function MatchingPage({ isWindow, refreshKey, onTradeChange }) {
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (e.key === 'Escape') {
-        // 확인 모달이 열려있으면 동작하지 않음 (확인 모달에서 처리)
-        if (modal.isOpen) return;
+        // 확인 모달이나 간편 매입 모달이 열려있으면 동작하지 않음 (해당 모달에서 처리)
+        if (modal.isOpen || quickPurchaseModal.isOpen) return;
 
         e.preventDefault();
         e.stopPropagation();
@@ -91,7 +98,7 @@ function MatchingPage({ isWindow, refreshKey, onTradeChange }) {
       }
     };
 
-    if (matchingModal.isOpen || qtyInputModal.isOpen || matchingHistoryModal.isOpen) {
+    if (matchingModal.isOpen || qtyInputModal.isOpen || matchingHistoryModal.isOpen || quickPurchaseModal.isOpen) {
       document.body.style.overflow = 'hidden';
       document.addEventListener('keydown', handleKeyDown);
     } else {
@@ -102,7 +109,7 @@ function MatchingPage({ isWindow, refreshKey, onTradeChange }) {
       document.body.style.overflow = 'unset';
       document.removeEventListener('keydown', handleKeyDown);
     };
-  }, [matchingModal.isOpen, qtyInputModal.isOpen, matchingHistoryModal.isOpen, modal.isOpen]);
+  }, [matchingModal.isOpen, qtyInputModal.isOpen, matchingHistoryModal.isOpen, quickPurchaseModal.isOpen, modal.isOpen]);
 
   // 로컬 시간대 기준 YYYY-MM-DD 형식 반환 (UTC 문제 해결)
   function getDateString(daysOffset) {
@@ -225,6 +232,24 @@ function MatchingPage({ isWindow, refreshKey, onTradeChange }) {
     setSalesData(dateData.trades);
   };
 
+  // 매칭용 재고 로드 함수 (분리)
+  const loadMatchingInventory = async (tradeMasterId) => {
+    try {
+      const response = await matchingAPI.getTradeInventory(tradeMasterId);
+      const { items, inventory } = response.data.data || { items: [], inventory: [] };
+
+      setMatchingModal(prev => ({
+        ...prev,
+        items,
+        inventory
+      }));
+      return { items, inventory };
+    } catch (error) {
+      console.error('재고 조회 오류:', error);
+      throw error;
+    }
+  };
+
   // 전표 더블클릭 시 매칭 모달 열기
   const handleTradeDoubleClick = async (trade) => {
     try {
@@ -254,6 +279,35 @@ function MatchingPage({ isWindow, refreshKey, onTradeChange }) {
     }
   };
 
+  // [NEW] 전역 새로고침 키 변경 시 모달 데이터 자동 최신화
+  useEffect(() => {
+    if (matchingModal.isOpen && matchingModal.trade?.trade_master_id) {
+      loadMatchingInventory(matchingModal.trade.trade_master_id);
+    }
+  }, [refreshKey]);
+
+  // [NEW] 매입 등록 퀵 브릿지
+  const handleQuickPurchase = () => {
+    if (!selectedSaleItem) {
+      setModal({
+        isOpen: true, type: 'warning', title: '품목 선택 필요',
+        message: '매입을 등록할 매출 품목을 먼저 선택해주세요.',
+        confirmText: '확인', showCancel: false, onConfirm: () => { }
+      });
+      return;
+    }
+
+    setQuickPurchaseModal({
+      isOpen: true,
+      product: {
+        id: selectedSaleItem.product_id,
+        name: selectedSaleItem.product_name,
+        weight: selectedSaleItem.product_weight,
+        weight_unit: selectedSaleItem.product_weight_unit || selectedSaleItem.weight_unit
+      }
+    });
+  };
+
   const formatCurrency = (value) => new Intl.NumberFormat('ko-KR').format(value || 0);
 
   const formatNumber = (value) => new Intl.NumberFormat('ko-KR', {
@@ -273,7 +327,8 @@ function MatchingPage({ isWindow, refreshKey, onTradeChange }) {
     if (!item) return '-';
     const name = item.product_name || '';
     const unit = item.product_weight_unit || item.weight_unit || item.unit || 'kg';
-    const weight = item.product_weight ? `${parseFloat(item.product_weight)}${unit}` : '';
+    const weightVal = parseFloat(item.product_weight || 0);
+    const weight = weightVal > 0 ? `${weightVal}${unit}` : '';
     const grade = item.grade ? `(${item.grade})` : '';
     return `${name}${weight ? ` ${weight}` : ''}${grade ? ` ${grade}` : ''}`.trim();
   };
@@ -1046,7 +1101,14 @@ function MatchingPage({ isWindow, refreshKey, onTradeChange }) {
                     </span>
                   </div>
                 </div>
-                <div className="matching-modal-header-buttons">
+                <div className="matching-modal-header-buttons" style={{ display: 'flex', gap: '0.5rem' }}>
+                  <button
+                    className="btn btn-primary"
+                    onClick={handleQuickPurchase}
+                    style={{ backgroundColor: '#34495e', borderColor: '#2c3e50', whiteSpace: 'nowrap' }}
+                  >
+                    📦 매입 등록
+                  </button>
                   <button className="btn btn-secondary" onClick={closeMatchingModal}>
                     닫기
                   </button>
@@ -1345,6 +1407,17 @@ function MatchingPage({ isWindow, refreshKey, onTradeChange }) {
         formatNumber={formatNumber}
         formatCurrency={formatCurrency}
         formatDateShort={formatDateShort}
+      />
+
+      {/* 간편 매입 등록 모달 */}
+      <QuickPurchaseModal
+        isOpen={quickPurchaseModal.isOpen}
+        onClose={() => setQuickPurchaseModal({ isOpen: false, product: null })}
+        product={quickPurchaseModal.product}
+        onSaveSuccess={() => {
+          if (onTradeChange) onTradeChange();
+          // 매칭 모달 내 데이터는 refreshKey useEffect에 의해 자동 갱신됨
+        }}
       />
     </div >
   );

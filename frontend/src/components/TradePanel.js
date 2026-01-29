@@ -23,6 +23,7 @@ function TradePanel({
   onClose,
   updateProps, // [NEW] Props 동기화 콜백
   onLaunchApp, // [NEW] 앱 실행 콜백
+  initialProduct = null, // [NEW] 초기 제품 정보 (매칭 연동용)
   inventoryMap = {},
   cardColor = '#ffffff',
   timestamp // 리로드 트리거용
@@ -48,6 +49,7 @@ function TradePanel({
   // 현재 전표 상태
   const [currentTradeId, setCurrentTradeId] = useState(null);
   const [isEdit, setIsEdit] = useState(false);
+  const [initialData, setInitialData] = useState(null); // [MOVE] moved up to avoid TDZ
   const [isViewMode, setIsViewMode] = useState(initialViewMode);
 
   // 선택된 행
@@ -219,6 +221,63 @@ function TradePanel({
       window.removeEventListener('inventory-quick-add', handleQuickAdd);
     };
   }, [panelId, markPanelActive, isPurchase, isViewMode, master.company_id]);
+
+  // [NEW] 재고 사용량 자동 집계 및 DesktopManager 보고 (Declarative Sync)
+  useEffect(() => {
+    if (isPurchase || isViewMode || !onInventoryUpdate) return;
+
+    // 현재 전표 상세 목록에서 재고 연결된 품목들의 합계 계산
+    const usageMap = {};
+
+    // [v1.1.2] 수정 모드 실시간 복구 예측 로직:
+    // 1. 기본적으로 신규/수정된 항목의 차감량을 계산
+    // 2. 만약 DB에 있던 항목(initialData)이 삭제되거나 수량이 줄어들면, 
+    //    DB 잔량 대비 '+' 조정을 보고하여 현황판에 즉시 복구되게 함.
+
+    // A. 현재 화면상의 모든 항목 집계
+    details.forEach(detail => {
+      if (detail.inventory_id && detail.quantity) {
+        const qty = parseFloat(detail.quantity) || 0;
+        if (qty !== 0) {
+          // 일단 모든 사용량을 음수(-)로 누적
+          usageMap[detail.inventory_id] = (usageMap[detail.inventory_id] || 0) - qty;
+        }
+      }
+    });
+
+    // B. 수정 모드인 경우, 원본 데이터(DB 반영분)를 상쇄하여 '순수 세션 변경분'만 도출
+    // 공식: 세션조정값 = (DB에 이미 반영된 양) - (현재 화면에 있는 양)
+    if (initialData && initialData.details) {
+      initialData.details.forEach(initDetail => {
+        if (initDetail.inventory_id && initDetail.quantity) {
+          const initQty = parseFloat(initDetail.quantity) || 0;
+          // DB에 이미 반영된 수량만큼 '+'로 상쇄
+          usageMap[initDetail.inventory_id] = (usageMap[initDetail.inventory_id] || 0) + initQty;
+        }
+      });
+    } else {
+      // 신규 등록 모드라면, 이미 DB에 저장된(ID가 있는) 행들은 상쇄 처리 (v1.1.1 로직 하위 호환)
+      details.forEach(detail => {
+        if (detail.id && detail.inventory_id && detail.quantity) {
+          const qty = parseFloat(detail.quantity) || 0;
+          usageMap[detail.inventory_id] = (usageMap[detail.inventory_id] || 0) + qty;
+        }
+      });
+    }
+
+    // 결과값이 0인 항목은 가독성을 위해 제거 (부동소수점 오차 고려)
+    Object.keys(usageMap).forEach(key => {
+      if (Math.abs(usageMap[key]) < 0.0001) {
+        delete usageMap[key];
+      }
+    });
+
+    // DesktopManager에 해당 세션(panelId)의 전체 재고 사용량 보고
+    onInventoryUpdate(panelId, usageMap);
+
+    // 언마운트 시 해당 세션 비우기는 DesktopManager의 closeWindow에서 처리됨
+  }, [details, panelId, isPurchase, isViewMode, onInventoryUpdate, initialData]);
+
   const [addPaymentModal, setAddPaymentModal] = useState({
     isOpen: false,
     amount: '',
@@ -263,8 +322,6 @@ function TradePanel({
   const [isSalesLookupOpen, setIsSalesLookupOpen] = useState(false);
   const [isPurchaseLookupOpen, setIsPurchaseLookupOpen] = useState(false);
 
-  // 변경 감지
-  const [initialData, setInitialData] = useState(null);
 
   // 반출 처리: 선택한 매입 내역을 마이너스 수량으로 로드 (Sale Return과 동일 로직)
   const handlePurchaseLink = async (selectedPurchase) => {
@@ -546,6 +603,20 @@ function TradePanel({
     } finally {
       if (!initialTradeId) {
         setLoading(false);
+
+        // [NEW] 매칭 브릿지를 통해 넘어온 경우 초기 행 추가
+        if (initialProduct && initialProduct.id) {
+          setDetails([{
+            product_id: initialProduct.id,
+            product_name: initialProduct.name,
+            product_weight: initialProduct.weight,
+            product_weight_unit: initialProduct.weight_unit,
+            quantity: '',
+            unit_price: '',
+            supply_amount: 0,
+            notes: ''
+          }]);
+        }
       }
     }
   };
@@ -1144,7 +1215,7 @@ function TradePanel({
 
     // 재고 수량 임시 차감 알림
     if (onInventoryUpdate && item.id) {
-      onInventoryUpdate(item.id, -qty);
+      // [CLEANUP] 이전의 개별 delta 방식 제거. useEffect에서 통합 처리함.
     }
   };
 
@@ -1154,12 +1225,9 @@ function TradePanel({
     // 품목 변경 시 재고 연결 해제 (데이터 불일치 방지)
     if (field === 'product_id' && newDetails[index].inventory_id) {
       const currentDetail = newDetails[index];
-      // 이미 점유된 재고 수량이 있다면 반환
+      // 이미 점유된 재고 수량이 있다면 반환 (자동 갱신되므로 여기서는 수동 호출 제거)
       if (onInventoryUpdate && currentDetail.quantity) {
-        const qtyToRestore = parseFloat(currentDetail.quantity) || 0;
-        if (qtyToRestore > 0) {
-          onInventoryUpdate(currentDetail.inventory_id, qtyToRestore);
-        }
+        // [CLEANUP] useEffect에서 통합 처리하므로 수동 delta 호출 제거
       }
       // 재고 관련 필드 초기화 (일반 입력 모드로 전환)
       delete newDetails[index].inventory_id;
@@ -1270,10 +1338,7 @@ function TradePanel({
         // diff = 15 - 1 = 14.
         // onInventoryUpdate(-14) 호출.
         if (!isNaN(originalVal) && originalVal !== oldQty) {
-          const revertDiff = originalVal - oldQty;
-          if (revertDiff !== 0) {
-            onInventoryUpdate(newDetails[index].inventory_id, -revertDiff);
-          }
+          // [CLEANUP] useEffect에서 통합 처리하므로 수동 delta 호출 제거
         }
 
         newDetails[index].quantity = originalVal;
@@ -1294,10 +1359,7 @@ function TradePanel({
           const originalVal = focusValueRef.current[index] !== undefined ? parseFloat(focusValueRef.current[index]) : oldQty;
 
           if (!isNaN(originalVal) && originalVal !== oldQty) {
-            const revertDiff = originalVal - oldQty;
-            if (revertDiff !== 0) {
-              onInventoryUpdate(newDetails[index].inventory_id, -revertDiff);
-            }
+            // [CLEANUP] useEffect에서 통합 처리하므로 수동 delta 호출 제거
           }
 
           newDetails[index].quantity = originalVal;
@@ -1306,13 +1368,7 @@ function TradePanel({
         }
       }
 
-      // 숫자로 변환 가능한 경우에만 차액 계산
-      if (!isNaN(newQty)) {
-        const diff = newQty - oldQty;
-        if (diff !== 0) {
-          onInventoryUpdate(newDetails[index].inventory_id, -diff);
-        }
-      }
+      // [CLEANUP] useEffect에서 통합 처리하므로 수동 delta 호출 제거 (diff/onInventoryUpdate 제거됨)
     }
 
     newDetails[index][field] = value;
@@ -1347,10 +1403,9 @@ function TradePanel({
 
     const newDetails = details.filter((_, i) => i !== index);
 
-    // 삭제된 행에 재고 ID가 있으면 수량 복원 알림
-    const deletedRow = details[index];
-    if (onInventoryUpdate && deletedRow.inventory_id && deletedRow.quantity) {
-      onInventoryUpdate(deletedRow.inventory_id, parseFloat(deletedRow.quantity));
+    // 삭제된 행에 재고 ID가 있으면 수량 복합 (자동 갱신되므로 여기서는 수동 호출 제거)
+    if (onInventoryUpdate && details[index].inventory_id && details[index].quantity) {
+      // [CLEANUP] useEffect에서 통합 처리하므로 수동 delta 호출 제거
     }
 
     setDetails(newDetails);
@@ -1550,7 +1605,11 @@ function TradePanel({
 
       // 2. 변경을 시도했으나(또는 새 전표이나) 결과적으로 필수 데이터가 없는 경우
       if (validDetails.length === 0 && !hasPendingPayments && !hasModifiedPayments && !hasDeletedPayments) {
-        showModal('warning', '입력 오류', '최소 1개의 품목을 입력하거나 입출금을 추가하세요.');
+        if (isEdit) {
+          showModal('warning', '품목 없음', '전표의 모든 품목을 삭제하셨습니다. 재고를 완전히 복구하려면 목록에서 전표 자체를 [삭제] 버튼으로 삭제해 주세요.\n\n취소하려면 [닫기] 버튼을 누르세요.');
+        } else {
+          showModal('warning', '입력 오류', '최소 1개의 품목을 입력하거나 입출금을 추가하세요.');
+        }
         return;
       }
 
@@ -1661,7 +1720,7 @@ function TradePanel({
 
         // 전표 변경 알림 (재고 목록 리프레시 등)
         if (onTradeChange) {
-          onTradeChange();
+          onTradeChange(panelId);
         }
 
         if (onSaveSuccess) {

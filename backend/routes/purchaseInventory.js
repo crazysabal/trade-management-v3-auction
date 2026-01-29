@@ -37,6 +37,7 @@ router.get('/', async (req, res) => {
         c.business_name,
         tm.trade_number,
         tm.id as trade_master_id,
+        pi.display_order,
         ip.id as production_id
       FROM purchase_inventory pi
       LEFT JOIN products p ON pi.product_id = p.id
@@ -944,12 +945,14 @@ router.get('/:id', async (req, res) => {
         c.company_name,
         tm.trade_number,
         tm.trade_date,
-        tm.id as trade_master_id
+        tm.id as trade_master_id,
+        w.name as warehouse_name
       FROM purchase_inventory pi
       JOIN products p ON pi.product_id = p.id
       JOIN companies c ON pi.company_id = c.id
       JOIN trade_details td ON pi.trade_detail_id = td.id
       JOIN trade_masters tm ON td.trade_master_id = tm.id
+      LEFT JOIN warehouses w ON pi.warehouse_id = w.id
       WHERE pi.id = ?
     `, [req.params.id]);
 

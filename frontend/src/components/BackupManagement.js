@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { systemAPI } from '../services/api';
 
-const BackupManagement = () => {
+const BackupManagement = ({ onRestoreSuccess }) => {
     const [backups, setBackups] = useState([]);
     const [remoteBackups, setRemoteBackups] = useState([]);
     const [driveFolderUrl, setDriveFolderUrl] = useState(''); // [NEW] 구글 드라이브 폴더 URL
@@ -189,8 +189,12 @@ const BackupManagement = () => {
 
             const response = await systemAPI.restoreBackup(formData);
             if (response.data.success) {
-                alert('데이터 복구가 성공적으로 완료되었습니다.\n정확한 데이터 반영을 위해 페이지를 새로고침합니다.');
-                window.location.reload();
+                if (onRestoreSuccess) {
+                    onRestoreSuccess();
+                } else {
+                    alert('데이터 복구가 성공적으로 완료되었습니다.\n정확한 데이터 반영을 위해 페이지를 새로고침합니다.');
+                    window.location.reload();
+                }
             }
         } catch (error) {
             console.error('Restore failed:', error);

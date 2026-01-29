@@ -829,7 +829,7 @@ function ProductManager({ selectedCategoryId }) {
                                 >
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                                         <span style={{ color: '#475569' }}>
-                                            {product.weight ? `${parseFloat(product.weight)}${product.weight_unit || 'kg'}` : '-'}
+                                            {(product.weight && parseFloat(product.weight) > 0) ? `${parseFloat(product.weight)}${product.weight_unit || 'kg'}` : '-'}
                                         </span>
                                         <span style={{
                                             backgroundColor: '#e2e8f0',

@@ -82,18 +82,16 @@ const CompanyRow = memo(function CompanyRow({
       </td>
 
       <td className={`ellipsis ${company.company_name ? '' : 'text-muted'}`} style={snapshot?.isDragging ? { width: columnWidths[3] } : {}} title={company.company_name}>{company.company_name || '-'}</td>
-      <td className="ellipsis" style={snapshot?.isDragging ? { width: columnWidths[4] } : {}} title={company.business_name}>{company.business_name || '-'}</td>
-      <td style={snapshot?.isDragging ? { width: columnWidths[5] } : {}}>{company.business_number}</td>
-      <td className="ellipsis" style={snapshot?.isDragging ? { width: columnWidths[6] } : {}} title={company.ceo_name}>{company.ceo_name}</td>
+      <td className="ellipsis" style={snapshot?.isDragging ? { width: columnWidths[4] } : {}} title={company.ceo_name}>{company.ceo_name}</td>
       <td
         className="text-center clickable"
         onClick={onToggleCompanyType}
         title="클릭하여 구분 변경 (매출처 → 매입처 → 매입/매출)"
-        style={snapshot?.isDragging ? { width: columnWidths[7] } : {}}
+        style={snapshot?.isDragging ? { width: columnWidths[5] } : {}}
       >
         {getTypeBadge(company.company_type_flag)}
       </td>
-      <td className="text-center" style={snapshot?.isDragging ? { width: columnWidths[8] } : {}}>
+      <td className="text-center" style={snapshot?.isDragging ? { width: columnWidths[6] } : {}}>
         <label className="toggle-switch" title="클릭하여 전자계산서 발행 설정">
           <input
             type="checkbox"
@@ -105,7 +103,7 @@ const CompanyRow = memo(function CompanyRow({
           </span>
         </label>
       </td>
-      <td className="text-center" style={snapshot?.isDragging ? { width: columnWidths[9] } : {}}>
+      <td className="text-center" style={snapshot?.isDragging ? { width: columnWidths[7] } : {}}>
         <span
           className={`badge clickable ${company.is_active ? 'badge-success' : 'badge-secondary'}`}
           onClick={onToggleActive}
@@ -115,7 +113,7 @@ const CompanyRow = memo(function CompanyRow({
         </span>
       </td>
       {!isSelectMode && (
-        <td className="text-center" style={{ whiteSpace: 'nowrap', ...(snapshot?.isDragging ? { width: columnWidths[10] } : {}) }}>
+        <td className="text-center" style={{ whiteSpace: 'nowrap', ...(snapshot?.isDragging ? { width: columnWidths[8] } : {}) }}>
           <button
             onClick={() => onEdit(company)}
             className="btn btn-sm btn-primary"
@@ -1130,8 +1128,6 @@ function CompanyList({ isWindow }) {
                     <th style={{ width: '40px' }}></th>
                     <th style={{ width: '50px', textAlign: 'center' }}>순서</th>
                     <th>거래처 명</th>
-                    <th>사업자 명</th>
-                    <th>사업자번호</th>
                     <th>대표자</th>
                     <th>구분</th>
                     <th className="text-center">전자계산서</th>

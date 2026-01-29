@@ -141,7 +141,7 @@ function TradeDetailModal({ isOpen, onClose, tradeId, highlightId }) {
 
   const formatProductName = (detail) => {
     const parts = [detail.product_name];
-    if (detail.product_weight) {
+    if (detail.product_weight && parseFloat(detail.product_weight) > 0) {
       parts.push(`${formatWeight(detail.product_weight)}${detail.product_weight_unit || detail.weight_unit || 'kg'}`);
     }
     if (detail.grade) {

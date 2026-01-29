@@ -82,22 +82,69 @@ const TradeController = {
             await TradeController.validateReturnLimits(connection, details);
 
             // 1. 중복 검사
-
             const [existingTrade] = await connection.query(
-                `SELECT id, trade_number FROM trade_masters 
+                `SELECT id, trade_number, total_amount, tax_amount, total_price, notes FROM trade_masters 
                  WHERE company_id = ? AND trade_date = ? AND trade_type = ? AND status != 'CANCELLED'`,
                 [master.company_id, master.trade_date, master.trade_type]
             );
 
             if (existingTrade.length > 0) {
-                await connection.rollback();
-                const tradeTypeName = master.trade_type === 'PURCHASE' ? '매입' : (master.trade_type === 'PRODUCTION' ? '생산' : '매출');
-                throw {
-                    status: 400,
-                    message: `해당 거래처에 동일 날짜의 ${tradeTypeName} 전표가 이미 존재합니다.\n\n기존 전표번호: ${existingTrade[0].trade_number}\n\n기존 전표를 수정하거나 다른 날짜를 선택해주세요.`,
+                // [MERGE LOGIC] 기존 전표가 있으면 해당 전표에 항목 추가
+                const masterId = existingTrade[0].id;
+                const existingMaster = existingTrade[0];
+
+                // 합계 재계산
+                const newTotalAmount = parseFloat(existingMaster.total_amount || 0) + parseFloat(master.total_amount || 0);
+                const newTaxAmount = parseFloat(existingMaster.tax_amount || 0) + parseFloat(master.tax_amount || 0);
+                const newTotalPrice = parseFloat(existingMaster.total_price || 0) + parseFloat(master.total_price || 0);
+
+                // 비고 병합
+                let mergedNotes = existingMaster.notes || '';
+                if (master.notes && master.notes.trim()) {
+                    if (mergedNotes && !mergedNotes.includes(master.notes)) {
+                        mergedNotes += `\n[추가] ${master.notes}`;
+                    } else if (!mergedNotes) {
+                        mergedNotes = master.notes;
+                    }
+                }
+
+                // 마스터 업데이트
+                await connection.query(
+                    `UPDATE trade_masters SET 
+                     total_amount = ?, tax_amount = ?, total_price = ?, notes = ?, updated_at = NOW()
+                     WHERE id = ?`,
+                    [newTotalAmount, newTaxAmount, newTotalPrice, mergedNotes, masterId]
+                );
+
+                // 상세 항목 등록
+                if (details && details.length > 0) {
+                    for (const detail of details) {
+                        await connection.query(
+                            `INSERT INTO trade_details (
+                              trade_master_id, product_id, quantity, unit_price,
+                              supply_amount, tax_amount, total_price, notes,
+                              parent_detail_id, inventory_id, shipper_id, location_id, is_agricultural
+                            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                            [
+                                masterId, detail.product_id, detail.quantity, detail.unit_price,
+                                detail.supply_amount || 0, detail.tax_amount || 0, detail.total_price || 0, detail.notes,
+                                detail.parent_detail_id || null, detail.inventory_id || null,
+                                detail.shipper_id || null, detail.location_id || null, detail.is_agricultural || 0
+                            ]
+                        );
+                    }
+                }
+
+                await connection.commit();
+                connection.release();
+
+                return {
+                    success: true,
+                    message: '기존 전표에 항목이 추가되었습니다.',
                     data: {
-                        existingTradeId: existingTrade[0].id,
-                        existingTradeNumber: existingTrade[0].trade_number
+                        tradeId: masterId,
+                        tradeNumber: existingMaster.trade_number,
+                        isMerged: true
                     }
                 };
             }
@@ -271,7 +318,6 @@ const TradeController = {
             await TradeController.validateReturnLimits(connection, details, existingDetailIds);
 
             // 3. 중복 검사
-
             const newCompanyId = master.company_id;
             const newTradeDate = master.trade_date;
 
@@ -759,7 +805,10 @@ const TradeController = {
 
         for (let i = 0; i < matchingIds.length; i++) {
             await connection.query(
-                `UPDATE purchase_inventory SET remaining_quantity = remaining_quantity + ? WHERE id = ?`,
+                `UPDATE purchase_inventory 
+                 SET remaining_quantity = remaining_quantity + ?,
+                     status = 'AVAILABLE'
+                 WHERE id = ?`,
                 [parseFloat(matchedQtys[i]), parseInt(inventoryIds[i])]
             );
             await connection.query(`DELETE FROM sale_purchase_matching WHERE id = ?`, [parseInt(matchingIds[i])]);

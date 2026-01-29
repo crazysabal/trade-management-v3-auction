@@ -1,7 +1,7 @@
 import React from 'react';
 import BackupManagement from '../components/BackupManagement';
 
-const BackupSystem = ({ isWindow }) => {
+const BackupSystem = ({ isWindow, onRestoreSuccess }) => {
     return (
         <div className="backup-system-page" style={{
             height: '100%',
@@ -12,7 +12,7 @@ const BackupSystem = ({ isWindow }) => {
             boxSizing: 'border-box',
             overflow: 'hidden' // [MOD] 부모는 숨기고 자식(Card)에서 스크롤
         }}>
-            <BackupManagement />
+            <BackupManagement onRestoreSuccess={onRestoreSuccess} />
         </div>
     );
 };

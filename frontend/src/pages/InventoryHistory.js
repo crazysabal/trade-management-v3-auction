@@ -460,7 +460,7 @@ const InventoryHistory = ({ onOpenTrade }) => {
                                             {item.warehouse_name || '-'}
                                         </td>
                                         <td>
-                                            {item.product_name}{item.product_weight ? ` ${Number(item.product_weight)}${item.product_weight_unit || item.weight_unit || 'kg'}` : ''}
+                                            {item.product_name}{(item.product_weight && parseFloat(item.product_weight) > 0) ? ` ${parseFloat(item.product_weight)}${item.product_weight_unit || item.weight_unit || 'kg'}` : ''}
                                         </td>
                                         <td>
                                             {item.sender || '-'}
