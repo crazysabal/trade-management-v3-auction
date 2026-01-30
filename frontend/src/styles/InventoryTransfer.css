@@ -98,7 +98,7 @@
     border: 1px solid #e9ecef;
     display: flex;
     flex-direction: column;
-    transition: all 0.2s;
+    transition: transform 0.2s ease, background-color 0.2s ease, border-color 0.2s ease;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
     overflow: hidden;
 }
@@ -189,6 +189,127 @@
     min-height: 50px;
 }
 
+/* 1열 레이아웃 - 모든 카드 내용을 한 줄로 압축 */
+.inventory-list.layout-1row .inventory-card {
+    padding: 0.4rem 0.6rem;
+}
+
+.inventory-list.layout-1row .inventory-card .card-content {
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    gap: 12px !important;
+    flex-wrap: nowrap !important;
+}
+
+.inventory-list.layout-1row .inventory-card .card-main-info {
+    display: flex !important;
+    align-items: center !important;
+    gap: 6px !important;
+    flex: 1;
+    flex-wrap: nowrap !important;
+    min-width: 0;
+}
+
+.inventory-list.layout-1row .inventory-card .card-sub-info {
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    margin-top: 0 !important;
+    border-top: none !important;
+    padding-top: 0 !important;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+.inventory-list.layout-1row .inventory-card .card-sub-info>div:first-child {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+}
+
+/* 1열 모드 컬럼 정렬 - 고정 너비 */
+.inventory-list.layout-1row .info-qty {
+    min-width: 45px;
+    text-align: right;
+}
+
+.inventory-list.layout-1row .info-price {
+    min-width: 80px;
+    text-align: right;
+}
+
+.inventory-list.layout-1row .info-company {
+    min-width: 90px;
+    max-width: 90px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.inventory-list.layout-1row .info-date {
+    min-width: 40px;
+}
+
+.inventory-list.layout-1row .sub-info-buttons {
+    display: none !important;
+}
+
+/* 2열 레이아웃 - 기본 (카드 내용 두 줄) */
+/* 기본 스타일이므로 별도 정의 필요 없음 */
+
+/* 레이아웃 토글 버튼 */
+.layout-toggle {
+    display: flex;
+    gap: 4px;
+    background-color: #f1f5f9;
+    padding: 4px;
+    border-radius: 6px;
+}
+
+.layout-btn {
+    width: 32px;
+    height: 28px;
+    padding: 4px;
+    border: none;
+    background-color: transparent;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.layout-btn:hover {
+    background-color: #e2e8f0;
+}
+
+.layout-btn.active {
+    background-color: white;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+/* 시각적 막대 아이콘 */
+.layout-btn .line-icon {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    width: 16px;
+}
+
+.layout-btn .line-icon span {
+    height: 3px;
+    background-color: #94a3b8;
+    border-radius: 1px;
+    transition: background-color 0.2s;
+}
+
+.layout-btn.active .line-icon span {
+    background-color: #3b82f6;
+}
+
 .inventory-empty {
     text-align: center;
     color: #adb5bd;
@@ -206,7 +327,52 @@
     border: 1px solid #eee;
     opacity: 1;
     user-select: none;
-    transition: transform 0.2s, box-shadow 0.2s;
+    transition: margin-top 0.25s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.2s ease, transform 0.2s ease;
+    will-change: margin-top;
+}
+
+.inventory-card.drag-over-gap {
+    margin-top: 56px;
+    /* 충분한 공간 확보 */
+    position: relative;
+}
+
+.inventory-card.drag-over-gap::before {
+    content: '여기에 드롭';
+    position: absolute;
+    top: -50px;
+    left: 0;
+    right: 0;
+    height: 42px;
+    background-color: rgba(59, 130, 246, 0.1);
+    border: 2px dashed #3b82f6;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #3b82f6;
+    font-size: 0.8rem;
+    font-weight: 700;
+    pointer-events: none;
+    z-index: 5;
+    animation: fade-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes fade-pulse {
+    0% {
+        opacity: 0.4;
+        transform: scale(0.98);
+    }
+
+    50% {
+        opacity: 1;
+        transform: scale(1);
+    }
+
+    100% {
+        opacity: 0.4;
+        transform: scale(0.98);
+    }
 }
 
 .inventory-card:hover {
@@ -226,10 +392,15 @@
 }
 
 .inventory-card.dragging {
-    opacity: 0.5;
-    background-color: #f8f9fa;
-    border: 1px dashed #cbd5e0;
+    opacity: 0.15 !important;
+    /* 원본 카드는 거의 안 보이게 하여 Gap이 명확히 보이도록 함 */
+    background-color: #f1f5f9;
+    border: 1px dashed #cbd5e1;
+    transform: scale(0.95);
+    box-shadow: none !important;
 }
+
+/* 중복 정의 제거됨 - margin 기반의 .inventory-card.drag-over-gap은 213-217 라인에서 정의됨 */
 
 .card-content {
     display: flex;
@@ -499,4 +670,21 @@
 
 .stats-divider.filtered {
     background-color: #bfdbfe;
+}
+
+/* Scroll Highlight - 이동 후 해당 아이템 하이라이트 */
+.inventory-card.scroll-highlight {
+    animation: scroll-highlight-pulse 3s ease-out;
+}
+
+@keyframes scroll-highlight-pulse {
+    0% {
+        box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.6);
+        background-color: #dbeafe;
+    }
+
+    100% {
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        background-color: white;
+    }
 }

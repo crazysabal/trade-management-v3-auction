@@ -4,7 +4,7 @@ import { warehousesAPI, inventoryTransferAPI } from '../services/api';
 import SearchableSelect from './SearchableSelect';
 import { useModalDraggable } from '../hooks/useModalDraggable';
 
-const StockTransferModal = ({ isOpen, onClose, inventory, inventoryList = [], onSuccess, defaultToWarehouseId }) => {
+const StockTransferModal = ({ isOpen, onClose, inventory, inventoryList = [], onSuccess, defaultToWarehouseId, targetDisplayOrder }) => {
     const [warehouses, setWarehouses] = useState([]);
     const [toWarehouseId, setToWarehouseId] = useState('');
     const [quantity, setQuantity] = useState('');
@@ -102,6 +102,8 @@ const StockTransferModal = ({ isOpen, onClose, inventory, inventoryList = [], on
 
         setLoading(true);
         try {
+            let resultItemId = null;
+
             if (isBulk) {
                 // 일괄 이동 (전체 수량)
                 // 이미 해당 창고에 있는 아이템은 제외하고 이동
@@ -115,33 +117,36 @@ const StockTransferModal = ({ isOpen, onClose, inventory, inventoryList = [], on
 
                 // 순서는 선택된 순서(targetItems)대로 들어가야 함.
                 // targetItems: [A, B, C] (A가 먼저 선택됨)
-                // 목표: A가 제일 위, B가 그 다음, C가 그 다음.
-                // 로직: item이 추가될 때마다 최상단(min - 1)으로 들어감.
-                // 따라서 C를 먼저 넣으면 C가 맨 위. 그 다음 B를 넣으면 B가 B, C보다 위(B, C). A 넣으면 A, B, C.
-                // 즉, 선택된 순서의 역순으로 넣어야 A가 가장 마지막에 최상단으로 가서 1등이 됨.
-                // -> 역순으로 순회 (C -> B -> A)
-
+                // 목표: A가 지정된 위치(targetDisplayOrder), B가 그 다음, C가 그 다음.
+                // 로직: item이 추가될 때마다 최상단(targetDisplayOrder 또는 min-1)으로 들어감.
+                // 따라서 선택된 순서의 역순(C -> B -> A)으로 넣어야 A가 최종적으로 targetDisplayOrder 위치에 남게 됨.
                 const itemsToProcess = [...itemsToMove].reverse();
 
                 for (const item of itemsToProcess) {
-                    await inventoryTransferAPI.transfer({
+                    const response = await inventoryTransferAPI.transfer({
                         purchase_inventory_id: item.id,
                         to_warehouse_id: toWarehouseId,
                         quantity: parseFloat(item.remaining_quantity), // 전체 수량
-                        notes: notes
+                        notes: notes,
+                        target_display_order: targetDisplayOrder
                     });
+                    // 마지막 이동 결과의 ID 저장 (첫 번째 선택한 아이템의 새 ID)
+                    resultItemId = response.data.newInventoryId || item.id;
                 }
             } else {
                 // 단일 이동
-                await inventoryTransferAPI.transfer({
+                const response = await inventoryTransferAPI.transfer({
                     purchase_inventory_id: inventory.id,
                     to_warehouse_id: toWarehouseId,
                     quantity: parseFloat(quantity.replace(/,/g, '')),
-                    notes: notes
+                    notes: notes,
+                    target_display_order: targetDisplayOrder
                 });
+                resultItemId = response.data.newInventoryId || inventory.id;
             }
 
-            onSuccess();
+            // 이동된 아이템의 새 ID 전달 (스크롤 타겟)
+            onSuccess(resultItemId);
             onClose();
         } catch (err) {
             console.error('재고 이동 실패:', err);

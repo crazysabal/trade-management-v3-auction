@@ -16,11 +16,16 @@ const InventoryTransferManagement = () => {
         const saved = localStorage.getItem('inventory_transfer_column_width');
         return saved ? Number(saved) : 350;
     });
+    const [cardLayout, setCardLayout] = useState(() => {
+        const saved = localStorage.getItem('inventory_transfer_card_layout');
+        return saved ? Number(saved) : 1; // 1: 1열, 2: 2열
+    });
 
     // Drag & Drop State
     const [draggedItem, setDraggedItem] = useState(null); // 드래그 중인 재고
     const [draggedWarehouse, setDraggedWarehouse] = useState(null); // 드래그 중인 창고 (순서변경)
     const [dragOverWarehouseId, setDragOverWarehouseId] = useState(null); // 드래그 오버 중인 창고 ID (Highlight용)
+    const [dragOverItemId, setDragOverItemId] = useState(null); // 드래그 오버 중인 아이템 ID 추가
     const [isHandlePressed, setIsHandlePressed] = useState(false); // 창고 드래그 핸들 눌림 여부
 
     // Modal State
@@ -42,14 +47,69 @@ const InventoryTransferManagement = () => {
     // 필터
     const [searchKeyword, setSearchKeyword] = useState('');
 
+    // 스크롤 타겟 (이동 후 해당 아이템으로 스크롤)
+    const [scrollToItemId, setScrollToItemId] = useState(null);
+
+    // 모든 창고 컸럼의 스크롤 위치 저장
+    const [savedScrollPositions, setSavedScrollPositions] = useState({});
+
     useEffect(() => {
         loadData();
     }, []);
+
+    // 스크롤 타겟이 설정되면 해당 아이템으로 스크롤
+    useEffect(() => {
+        if (scrollToItemId && !loading) {
+            // 약간의 딜레이 후 스크롤 (렌더링 완료 대기)
+            const timer = setTimeout(() => {
+                const targetElement = document.querySelector(`[data-inventory-id="${scrollToItemId}"]`);
+
+                // 목적 창고의 스크롤 컨테이너 찾기
+                let targetScrollContainer = null;
+                if (targetElement) {
+                    // 부모 스크롤 컨테이너(.inventory-list) 찾기
+                    const scrollContainer = targetElement.closest('.inventory-list');
+                    targetScrollContainer = scrollContainer;
+                    if (scrollContainer) {
+                        // 컨테이너 내에서 해당 요소 위치로 스크롤
+                        const containerRect = scrollContainer.getBoundingClientRect();
+                        const targetRect = targetElement.getBoundingClientRect();
+                        const scrollTop = scrollContainer.scrollTop + (targetRect.top - containerRect.top) - (containerRect.height / 2) + (targetRect.height / 2);
+                        scrollContainer.scrollTo({ top: scrollTop, behavior: 'smooth' });
+                    }
+                    // 잠시 하이라이트 효과
+                    targetElement.classList.add('scroll-highlight');
+                    setTimeout(() => targetElement.classList.remove('scroll-highlight'), 3000);
+                }
+
+                // 다른 창고들의 스크롤 위치 복원 (목적 창고 제외)
+                if (Object.keys(savedScrollPositions).length > 0) {
+                    document.querySelectorAll('.inventory-list').forEach((container, index) => {
+                        // 목적 창고 컨테이너는 스킵
+                        if (container === targetScrollContainer) return;
+
+                        if (savedScrollPositions[index] !== undefined) {
+                            container.scrollTo({ top: savedScrollPositions[index], behavior: 'instant' });
+                        }
+                    });
+                    setSavedScrollPositions({});
+                }
+
+                setScrollToItemId(null);
+            }, 300);
+            return () => clearTimeout(timer);
+        }
+    }, [scrollToItemId, loading, savedScrollPositions]);
 
     // 컬럼 너비 설정 저장
     useEffect(() => {
         localStorage.setItem('inventory_transfer_column_width', columnWidth);
     }, [columnWidth]);
+
+    // 카드 레이아웃 설정 저장
+    useEffect(() => {
+        localStorage.setItem('inventory_transfer_card_layout', cardLayout);
+    }, [cardLayout]);
 
     const loadData = async () => {
         setLoading(true);
@@ -107,61 +167,118 @@ const InventoryTransferManagement = () => {
     };
 
 
-    // Card DragOver (for reordering within column)
+    // Card DragOver (for reordering within column or cross-warehouse drops)
     const handleCardDragOver = (e, targetItem) => {
         e.preventDefault();
-        if (reorderMode || !draggedItem || String(draggedItem.warehouse_id) !== String(targetItem.warehouse_id)) return;
+        if (reorderMode || !draggedItem) return;
 
-        // 다중 선택 여부 확인
-        const isMultiSelect = selectedItems.has(draggedItem.id);
-        const movingIds = isMultiSelect ? selectedItems : new Set([draggedItem.id]);
+        // 자기 자신 위로 드래그하는 경우 무시
+        if (draggedItem.id === targetItem.id) {
+            if (dragOverItemId !== null) setDragOverItemId(null);
+            return;
+        }
 
-        // 타겟이 이동 그룹에 포함되어 있으면 무시
-        if (movingIds.has(targetItem.id)) return;
+        // 같은 창고든 다른 창고든 동일한 UX 제공: 호버한 카드 위에 드롭 영역 표시
+        if (String(draggedItem.warehouse_id) === String(targetItem.warehouse_id)) {
+            // 같은 창고 내 순서 변경
+            setDragOverWarehouseId(null);
 
-        // 1. 현재 인벤토리에서 이동할 아이템들과 나머지 아이템들 분리
-        const currentInventory = [...inventory];
+            // [UX 개선] 드래그한 카드 바로 아래 카드 위에 드롭해도 순서가 변하지 않으므로 드롭 영역 표시 안함
+            const warehouseItems = getInventoryForWarehouse(draggedItem.warehouse_id);
+            const draggedIndex = warehouseItems.findIndex(item => item.id === draggedItem.id);
+            const targetIndex = warehouseItems.findIndex(item => item.id === targetItem.id);
 
-        // 이동할 아이템들 (현재 순서 유지)
-        const movingItems = currentInventory.filter(i => movingIds.has(i.id));
-        // 나머지 아이템들
-        const remainingItems = currentInventory.filter(i => !movingIds.has(i.id));
+            // targetItem이 draggedItem 바로 다음 위치에 있으면 드롭해도 순서 변화 없음
+            if (targetIndex === draggedIndex + 1) {
+                if (dragOverItemId !== null) setDragOverItemId(null);
+                return;
+            }
 
-        // 2. 타겟 위치 찾기 (나머지 아이템들 기준)
-        const targetIndex = remainingItems.findIndex(i => i.id === targetItem.id);
-        if (targetIndex < 0) return;
+            // 그 외의 경우 드롭 영역 표시
+            if (dragOverItemId !== targetItem.id) {
+                setDragOverItemId(targetItem.id);
+            }
+        } else {
+            // 다른 창고로 이동
+            if (dragOverWarehouseId !== targetItem.warehouse_id) {
+                setDragOverWarehouseId(targetItem.warehouse_id);
+            }
 
-        // 3. 타겟 위치에 이동 그룹 삽입 (Insert Before)
-        // 마우스 위치에 따라 After/Before 구분하면 더 좋지만, 간단히 Insert Before로 구현
-        const newInventory = [
-            ...remainingItems.slice(0, targetIndex),
-            ...movingItems,
-            ...remainingItems.slice(targetIndex)
-        ];
-
-        setInventory(newInventory); // 화면상 즉시 반영
+            // 드롭 영역 표시
+            if (dragOverItemId !== targetItem.id) {
+                setDragOverItemId(targetItem.id);
+            }
+        }
     };
 
 
-    const handleDrop = async (e, targetWarehouseId) => {
+    const handleDrop = async (e, targetWarehouseId, targetItem = null) => {
         e.preventDefault();
+        e.stopPropagation(); // 이벤트 버블링 방지 (카드 드롭이 컬럼으로 전파되지 않도록 함)
         setDragOverWarehouseId(null);
+        setDragOverItemId(null); // 타겟 아이템 ID 초기화
 
         if (reorderMode) return;
         if (!draggedItem) return;
 
-        // 같은 창고로 드롭하면 -> 순서 저장
+        // 목표 순번 계산 (targetItem 또는 dragOverItemId 기반)
+        let targetDisplayOrder = null;
+        const effectiveTargetItemId = targetItem?.id || dragOverItemId;
+
+        if (effectiveTargetItemId) {
+            // 목표 아이템의 display_order 찾기
+            const targetInventoryItem = inventory.find(item => item.id === effectiveTargetItemId);
+            if (targetInventoryItem) {
+                targetDisplayOrder = targetInventoryItem.display_order;
+            }
+        }
+
+        // 같은 창고로 드롭하면 -> 순서 재배열 후 저장
         if (String(draggedItem.warehouse_id) === String(targetWarehouseId)) {
-            // 이미 handleCardDragOver에서 state는 업데이트됨
-            // 서버에 현재 순서 저장
-            const warehouseItems = getInventoryForWarehouse(targetWarehouseId);
+            // 현재 창고의 아이템 목록 가져오기
+            const warehouseItems = [...getInventoryForWarehouse(targetWarehouseId)];
+
+            // 드래그한 아이템의 현재 인덱스 찾기
+            const draggedIndex = warehouseItems.findIndex(item => item.id === draggedItem.id);
+            if (draggedIndex === -1) {
+                setDraggedItem(null);
+                return;
+            }
+
+            // 드래그한 아이템을 배열에서 제거
+            const [removed] = warehouseItems.splice(draggedIndex, 1);
+
+            // 목표 위치 계산
+            let targetIndex;
+            // targetItem이 없으면 dragOverItemId를 활용하여 목표 위치 찾기
+            const effectiveTargetId = targetItem?.id || dragOverItemId;
+
+            if (effectiveTargetId) {
+                // 목표 아이템 위치 찾기 (드래그한 아이템 제거 후의 배열에서)
+                targetIndex = warehouseItems.findIndex(item => item.id === effectiveTargetId);
+                if (targetIndex === -1) {
+                    // 목표 아이템을 찾을 수 없으면 맨 앞에 삽입
+                    targetIndex = 0;
+                }
+                // 목표 아이템 위에 드롭하므로 해당 위치에 삽입
+            } else {
+                // 목표 아이템이 없으면 맨 앞에 삽입
+                targetIndex = 0;
+            }
+
+            // 새 위치에 삽입
+            warehouseItems.splice(targetIndex, 0, removed);
+
+            // 순서 저장을 위한 ID 배열 생성
             const orderedIds = warehouseItems.map(item => item.id);
 
+            // UI 즉시 업데이트 (낙관적 업데이트)
+            setInventory(prev => {
+                const otherItems = prev.filter(item => String(item.warehouse_id) !== String(targetWarehouseId));
+                return [...otherItems, ...warehouseItems];
+            });
+
             try {
-                // API 호출 (purchaseInventoryAPI.reorder 구현 필요 - api.js에 추가해야함)
-                // 지금은 services/api.js에 추가되지 않았으므로 여기서는 직접 호출하거나 추가해야함
-                // 하지만 일단 api.js에 추가되지 않았으므로 axios 직접 호출 대신, api.js에 추가하는 것이 맞음.
-                // 임시로 직접 호출 로직을 넣을 순 없으니, api.js에 reorder가 있다고 가정.
                 await purchaseInventoryAPI.reorder(orderedIds);
             } catch (err) {
                 console.error('순서 저장 실패', err);
@@ -193,7 +310,8 @@ const InventoryTransferManagement = () => {
             isOpen: true,
             inventory: inventoryList.length === 1 ? inventoryList[0] : null,
             inventoryList: inventoryList,
-            toWarehouseId: targetWarehouseId
+            toWarehouseId: targetWarehouseId,
+            targetDisplayOrder: targetDisplayOrder
         });
         setDraggedItem(null);
     };
@@ -375,6 +493,24 @@ const InventoryTransferManagement = () => {
                         🖨 목록 출력
                     </button>
 
+                    {/* 1열/2열 레이아웃 토글 */}
+                    <div className="layout-toggle">
+                        <button
+                            className={`layout-btn layout-1row-icon ${cardLayout === 1 ? 'active' : ''}`}
+                            onClick={() => setCardLayout(1)}
+                            title="1줄 보기"
+                        >
+                            <span className="line-icon"><span></span></span>
+                        </button>
+                        <button
+                            className={`layout-btn layout-2row-icon ${cardLayout === 2 ? 'active' : ''}`}
+                            onClick={() => setCardLayout(2)}
+                            title="2줄 보기"
+                        >
+                            <span className="line-icon"><span></span><span></span></span>
+                        </button>
+                    </div>
+
                     {/* 전체 재고 통계 (우측 정렬) */}
                     <div className={`stats-summary-container ${searchKeyword ? 'filtered' : ''}`}>
                         <span className={`stats-label ${searchKeyword ? 'filtered' : ''}`}>
@@ -463,33 +599,46 @@ const InventoryTransferManagement = () => {
                                     </div>
 
                                     {/* Inventory List */}
-                                    <div className="inventory-list">
+                                    <div className={`inventory-list ${cardLayout === 1 ? 'layout-1row' : ''}`}>
                                         {whData.map(item => (
                                             <div
                                                 key={item.id}
+                                                data-inventory-id={item.id}
                                                 draggable={true}
                                                 onDragStart={(e) => handleDragStart(e, item)}
                                                 onDragOver={(e) => handleCardDragOver(e, item)}
+                                                onDrop={(e) => handleDrop(e, wh.id, item)}
                                                 onClick={(e) => toggleSelection(e, item.id)}
                                                 data-order={[...selectedItems].indexOf(item.id) + 1}
-                                                className={`inventory-card ${draggedItem?.id === item.id ? 'dragging' : ''} ${selectedItems.has(item.id) ? 'selected' : ''}`}
+                                                className={`inventory-card ${draggedItem?.id === item.id ? 'dragging' : ''} ${selectedItems.has(item.id) ? 'selected' : ''} ${dragOverItemId === item.id ? 'drag-over-gap' : ''}`}
                                                 style={{ cursor: 'pointer' }}
                                             >
                                                 <div className="card-content">
-                                                    <div className="card-main-info" style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-                                                        <span style={{ color: '#1e293b' }}>
+                                                    <div className="card-main-info" style={cardLayout === 2 ? { display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' } : undefined}>
+                                                        <span className="info-product" style={{ color: '#1e293b' }}>
                                                             {item.product_name}
-                                                            {Number(item.product_weight) > 0 && ` ${Number(item.product_weight)}${item.product_weight_unit || item.weight_unit || 'kg'}`}
                                                         </span>
-                                                        <span style={{ color: '#cbd5e1' }}>/</span>
-                                                        <span style={{ fontWeight: '600', color: '#1e293b' }}>{item.sender}</span>
-                                                        <span style={{ color: '#cbd5e1' }}>/</span>
-                                                        {item.grade ? (
-                                                            <span className="grade-badge">
-                                                                {item.grade}
-                                                            </span>
-                                                        ) : (
-                                                            <span style={{ color: '#1e293b' }}>-</span>
+                                                        {item.sender && (
+                                                            <>
+                                                                <span style={{ color: '#cbd5e1' }}>/</span>
+                                                                <span className="info-sender" style={{ fontWeight: '600', color: '#1e293b' }}>{item.sender}</span>
+                                                            </>
+                                                        )}
+                                                        {Number(item.product_weight) > 0 && (
+                                                            <>
+                                                                <span style={{ color: '#cbd5e1' }}>/</span>
+                                                                <span className="info-weight" style={{ color: '#1e293b' }}>
+                                                                    {Number(item.product_weight)}{item.product_weight_unit || item.weight_unit || 'kg'}
+                                                                </span>
+                                                            </>
+                                                        )}
+                                                        {item.grade && (
+                                                            <>
+                                                                <span style={{ color: '#cbd5e1' }}>/</span>
+                                                                <span className="grade-badge">
+                                                                    {item.grade}
+                                                                </span>
+                                                            </>
                                                         )}
 
                                                         <span style={{ flex: 1 }}></span> {/* Spacer */}
@@ -502,14 +651,14 @@ const InventoryTransferManagement = () => {
                                                         </span>
                                                     </div>
 
-                                                    <div className="card-sub-info" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '4px', borderTop: '1px solid #f0f0f0', paddingTop: '4px' }}>
-                                                        <div style={{ display: 'flex', gap: '8px', fontSize: '0.8rem', color: '#7f8c8d', alignItems: 'center', lineHeight: '1' }}>
-                                                            <span title={item.business_name}>{item.company_name || '-'}</span>
+                                                    <div className="card-sub-info" style={cardLayout === 2 ? { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '4px', borderTop: '1px solid #f0f0f0', paddingTop: '4px' } : undefined}>
+                                                        <div className="sub-info-left" style={{ display: 'flex', gap: '8px', fontSize: '0.8rem', color: '#7f8c8d', alignItems: 'center', lineHeight: '1' }}>
+                                                            <span className="info-company" title={item.business_name}>{item.company_name || '-'}</span>
                                                             <span style={{ fontSize: '0.7rem', color: '#bdc3c7' }}>|</span>
-                                                            <span>{formatDateShort(item.purchase_date)}</span>
+                                                            <span className="info-date">{formatDateShort(item.purchase_date)}</span>
                                                         </div>
 
-                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginLeft: 'auto' }}>
+                                                        <div className="sub-info-buttons" style={{ display: 'flex', alignItems: 'center', gap: '4px', marginLeft: 'auto' }}>
                                                             <button
                                                                 onClick={(e) => {
                                                                     e.stopPropagation();
@@ -554,8 +703,23 @@ const InventoryTransferManagement = () => {
                 inventory={transferModal.inventory}
                 inventoryList={transferModal.inventoryList}
                 defaultToWarehouseId={transferModal.toWarehouseId}
-                onClose={() => setTransferModal({ isOpen: false, inventory: null, inventoryList: [], toWarehouseId: '' })}
-                onSuccess={() => {
+                targetDisplayOrder={transferModal.targetDisplayOrder}
+                onClose={() => setTransferModal({ isOpen: false, inventory: null, inventoryList: [], toWarehouseId: '', targetDisplayOrder: null })}
+                onSuccess={(transferredItemId) => {
+                    // 모든 창고 컬럼의 스크롤 위치 저장
+                    const scrollPositions = {};
+                    document.querySelectorAll('.inventory-list').forEach((container, index) => {
+                        scrollPositions[index] = container.scrollTop;
+                    });
+
+                    // 이동된 아이템 ID 저장 (스크롤 타겟)
+                    if (transferredItemId) {
+                        setScrollToItemId(transferredItemId);
+                    }
+
+                    // savedScrollPositions에 저장 (loadData 후 복원용)
+                    setSavedScrollPositions(scrollPositions);
+
                     loadData();
                     setSelectedItems(new Set()); // Clear selection after successful transfer
                 }}

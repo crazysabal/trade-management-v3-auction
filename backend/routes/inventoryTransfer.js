@@ -8,7 +8,7 @@ router.post('/', async (req, res) => {
   try {
     await connection.beginTransaction();
 
-    const { purchase_inventory_id, to_warehouse_id, quantity, notes } = req.body;
+    const { purchase_inventory_id, to_warehouse_id, quantity, notes, target_display_order } = req.body;
     const moveQty = parseFloat(quantity);
 
     // 1. 원본 재고 조회 (Lock for update)
@@ -38,11 +38,24 @@ router.post('/', async (req, res) => {
     `, [moveQty, purchase_inventory_id]);
 
     // 3. 대상 창고에 재고 생성 또는 병합 (Auto-Merge Logic)
-    // 순서 결정을 위해 대상 창고의 최소 display_order 조회
-    const [minOrderRows] = await connection.query(`
-      SELECT MIN(display_order) as min_order FROM purchase_inventory WHERE warehouse_id = ?
-    `, [to_warehouse_id]);
-    const nextDisplayOrder = (minOrderRows[0]?.min_order || 0) - 1;
+    let nextDisplayOrder;
+
+    if (target_display_order !== undefined && target_display_order !== null) {
+      // 지정된 위치에 삽입: 기존 항목들 순번 밀어내기
+      // NULL 값은 COALESCE를 통해 매우 큰 값으로 취급하여 밀어내기 대상에서 관리
+      await connection.query(`
+        UPDATE purchase_inventory 
+        SET display_order = COALESCE(display_order, 2147483647) + 1 
+        WHERE warehouse_id = ? AND (display_order >= ? OR display_order IS NULL)
+      `, [to_warehouse_id, target_display_order]);
+      nextDisplayOrder = target_display_order;
+    } else {
+      // 기본 로직: 최상단 배치
+      const [minOrderRows] = await connection.query(`
+        SELECT MIN(display_order) as min_order FROM purchase_inventory WHERE warehouse_id = ?
+      `, [to_warehouse_id]);
+      nextDisplayOrder = (minOrderRows[0]?.min_order || 0) - 1;
+    }
 
     // 동일한 trade_detail_id와 단가를 가진 재고가 대상 창고에 있는지 확인
     const [existingRows] = await connection.query(`
@@ -119,7 +132,7 @@ router.post('/', async (req, res) => {
     // DEPLETED 상태는 자동으로 처리되지 않으므로 그대로 둠 (잔여 0)
 
     await connection.commit();
-    res.json({ success: true, message: '재고 이동이 완료되었습니다.' });
+    res.json({ success: true, message: '재고 이동이 완료되었습니다.', newInventoryId });
 
   } catch (error) {
     await connection.rollback();

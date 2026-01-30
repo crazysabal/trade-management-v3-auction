@@ -780,24 +780,36 @@ const InventoryQuickView = ({ inventoryAdjustments = {}, refreshKey, onInventory
                                         </td>
                                         <td style={{ padding: '0.5rem', whiteSpace: 'nowrap' }}>
                                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                <span style={{ color: '#1e293b' }}>{formatProductName(item)}</span>
-                                                <span style={{ color: '#cbd5e1' }}>/</span>
-                                                <span style={{ fontWeight: '600', color: '#1e293b' }}>{item.sender || '-'}</span>
-                                                <span style={{ color: '#cbd5e1' }}>/</span>
-                                                {item.grade ? (
-                                                    <span style={{
-                                                        color: '#3b82f6',
-                                                        backgroundColor: '#eff6ff',
-                                                        padding: '1px 6px',
-                                                        borderRadius: '4px',
-                                                        fontSize: '0.75rem',
-                                                        fontWeight: 'bold',
-                                                        border: '1px solid #dbeafe'
-                                                    }}>
-                                                        {item.grade}
-                                                    </span>
-                                                ) : (
-                                                    <span style={{ color: '#1e293b' }}>-</span>
+                                                <span style={{ color: '#1e293b' }}>{item.product_name || ''}</span>
+                                                {item.sender && (
+                                                    <>
+                                                        <span style={{ color: '#cbd5e1' }}>/</span>
+                                                        <span style={{ fontWeight: '600', color: '#1e293b' }}>{item.sender}</span>
+                                                    </>
+                                                )}
+                                                {(item.product_weight || item.weight) && parseFloat(item.product_weight || item.weight) > 0 && (
+                                                    <>
+                                                        <span style={{ color: '#cbd5e1' }}>/</span>
+                                                        <span style={{ color: '#1e293b' }}>
+                                                            {formatNumber(item.product_weight || item.weight)}{item.product_weight ? (item.product_weight_unit || item.weight_unit || 'kg') : (item.weight_unit || 'kg')}
+                                                        </span>
+                                                    </>
+                                                )}
+                                                {item.grade && (
+                                                    <>
+                                                        <span style={{ color: '#cbd5e1' }}>/</span>
+                                                        <span style={{
+                                                            color: '#3b82f6',
+                                                            backgroundColor: '#eff6ff',
+                                                            padding: '1px 6px',
+                                                            borderRadius: '4px',
+                                                            fontSize: '0.75rem',
+                                                            fontWeight: 'bold',
+                                                            border: '1px solid #dbeafe'
+                                                        }}>
+                                                            {item.grade}
+                                                        </span>
+                                                    </>
                                                 )}
                                             </div>
                                         </td>
