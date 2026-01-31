@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams, Link } from 'react-router-dom';
 import { tradeAPI } from '../services/api';
+import { formatCurrency } from '../utils/formatUtils'; // [Refactor] 공통 유틸리티 사용
 import ConfirmModal from '../components/ConfirmModal';
 
 function TradeView() {
@@ -31,9 +32,7 @@ function TradeView() {
     window.print();
   };
 
-  const formatCurrency = (value) => {
-    return new Intl.NumberFormat('ko-KR').format(value);
-  };
+  // formatCurrency imported from formatUtils.js
 
   const getTradeTypeName = (type) => {
     return type === 'PURCHASE' ? '매입' : '매출';

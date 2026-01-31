@@ -563,6 +563,35 @@ router.delete('/:id', async (req, res) => {
       });
     }
 
+    // 재고가 있는지 체크 (수량이 0보다 큰 경우만)
+    const [inventory] = await db.query(
+      'SELECT id FROM inventory WHERE product_id = ? AND quantity > 0 LIMIT 1',
+      [req.params.id]
+    );
+
+    if (inventory.length > 0) {
+      return res.status(400).json({
+        success: false,
+        message: '재고가 존재하는 품목은 삭제할 수 없습니다.'
+      });
+    }
+
+    // [FIX] 거래내역이 없으므로 관련 데이터 모두 정리
+    // 1. 수량 0인 빈 재고 레코드 삭제
+    await db.query('DELETE FROM inventory WHERE product_id = ?', [req.params.id]);
+
+    // 2. 재고 이력 삭제 (거래내역 없으면 삭제 가능)
+    await db.query('DELETE FROM inventory_transactions WHERE product_id = ?', [req.params.id]);
+
+    // 3. 창고 이동 이력 삭제
+    await db.query('DELETE FROM warehouse_transfers WHERE product_id = ?', [req.params.id]);
+
+    // 4. 재고 감사 항목 삭제
+    await db.query('DELETE FROM inventory_audit_items WHERE product_id = ?', [req.params.id]);
+
+    // 5. 품목 매핑 정보 삭제
+    await db.query('DELETE FROM product_mapping WHERE system_product_id = ?', [req.params.id]);
+
     const [result] = await db.query('DELETE FROM products WHERE id = ?', [req.params.id]);
 
     if (result.affectedRows === 0) {

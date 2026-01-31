@@ -1,14 +1,21 @@
-import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import React, { useEffect, useCallback, useMemo, useRef, memo } from 'react';
 import { createPortal } from 'react-dom';
 import { tradeAPI, companyAPI, productAPI, paymentAPI, settingsAPI, warehousesAPI, companyInfoAPI, purchaseInventoryAPI, matchingAPI } from '../services/api';
+import { formatLocalDate, formatNumber, formatCurrency, fs } from '../utils/tradePanelUtils';
+import { useTradePanelContextOptional } from '../context/TradePanelContext';
+import { useTradePanelDragHandlers, useTradePanelKeyboardHandlers } from '../hooks/useTradePanelHandlers';
+import { useTradePanelPayments } from '../hooks/useTradePanelPayments';
+import { useTradePanelReturns } from '../hooks/useTradePanelReturns';
+import { useTradePanelState } from '../hooks/useTradePanelState';
 import ConfirmModal from './ConfirmModal';
 import TradePrintModal from './TradePrintModal';
 import './TradePanel.css';
 import TradeDeleteConfirmModal from './TradeDeleteConfirmModal';
 import SearchableSelect from './SearchableSelect';
-import SalesLookupModal from './SalesLookupModal'; // Import SalesLookupModal
+import SalesLookupModal from './SalesLookupModal';
 import PurchaseLookupModal from './PurchaseLookupModal';
 import { useModalDraggable } from '../hooks/useModalDraggable';
+
 
 function TradePanel({
   tradeType = 'SALE',
@@ -30,83 +37,80 @@ function TradePanel({
 }) {
   const isPurchase = tradeType === 'PURCHASE';
 
-  // Draggable hooks for inline modals (initialized later after state definitions)
-  const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
+  // ========================================
+  // [Phase 6] useTradePanelState Hook에서 모든 상태 가져오기
+  // ========================================
+  const {
+    // 기본 UI 상태
+    isMobile, setIsMobile,
+    loading, setLoading,
+    // 로컬 데이터 (Context fallback용)
+    localCompanies, setLocalCompanies,
+    localWarehouses, setLocalWarehouses,
+    localProducts, setLocalProducts,
+    localPaymentMethods, setLocalPaymentMethods,
+    // 전표 상태
+    currentTradeId, setCurrentTradeId,
+    isEdit, setIsEdit,
+    initialData, setInitialData,
+    isViewMode, setIsViewMode,
+    // 마스터/상세 데이터
+    master, setMaster,
+    details, setDetails,
+    // 거래처/결제
+    companySummary, setCompanySummary,
+    linkedPayments, setLinkedPayments,
+    pendingPayments, setPendingPayments,
+    deletedPaymentIds, setDeletedPaymentIds,
+    modifiedPayments, setModifiedPayments,
+    editingPayment, setEditingPayment,
+    editingPendingPayment, setEditingPendingPayment,
+    // 행 선택/드래그
+    selectedRowIndex, setSelectedRowIndex,
+    draggedIndex, setDraggedIndex,
+    dragOverIndex, setDragOverIndex,
+    // 모달
+    modal, setModal,
+    addPaymentModal, setAddPaymentModal,
+    inventoryInputModal, setInventoryInputModal,
+    matchingInfoModal, setMatchingInfoModal,
+    matchingHistoryModal, setMatchingHistoryModal,
+    deleteConfirmModal, setDeleteConfirmModal,
+    isSalesLookupOpen, setIsSalesLookupOpen,
+    isPurchaseLookupOpen, setIsPurchaseLookupOpen,
+    // Refs
+    isSaving,
+    lastReportedDirty,
+    dragHandleRef,
+    focusValueRef,
+    tableContainerRef,
+    companyRef,
+    productRefs,
+    quantityRefs,
+    unitPriceRefs,
+    senderRefs,
+    shipperLocationRefs,
+    notesRefs
+  } = useTradePanelState({ tradeType, initialViewMode });
 
+  // 모바일 감지
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth <= 768);
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
-  }, []);
+  }, [setIsMobile]);
 
-  // 기본 데이터
-  const [companies, setCompanies] = useState([]);
-  const [warehouses, setWarehouses] = useState([]);
-  const [products, setProducts] = useState([]);
-  const [paymentMethods, setPaymentMethods] = useState([]); // 결제 방법 목록
-  const [loading, setLoading] = useState(true);
+  // Context에서 기초 데이터 가져오기 (fallback: 로컬 상태)
+  const tradePanelContext = useTradePanelContextOptional();
 
-  // 현재 전표 상태
-  const [currentTradeId, setCurrentTradeId] = useState(null);
-  const [isEdit, setIsEdit] = useState(false);
-  const [initialData, setInitialData] = useState(null); // [MOVE] moved up to avoid TDZ
-  const [isViewMode, setIsViewMode] = useState(initialViewMode);
+  // Context 또는 로컬 상태에서 데이터 선택
+  const companies = tradePanelContext ? tradePanelContext.getCompanies(isPurchase) : localCompanies;
+  const warehouses = tradePanelContext ? tradePanelContext.warehouses : localWarehouses;
+  const products = tradePanelContext ? tradePanelContext.products : localProducts;
+  const paymentMethods = tradePanelContext ? tradePanelContext.paymentMethods : localPaymentMethods;
+  const baseDataLoaded = tradePanelContext ? tradePanelContext.baseDataLoaded : false;
 
-  // 선택된 행
-  const [selectedRowIndex, setSelectedRowIndex] = useState(null);
 
-  // 드래그앤드롭 상태
-  const [draggedIndex, setDraggedIndex] = useState(null);
-  const [dragOverIndex, setDragOverIndex] = useState(null);
-
-  // 로컬 시간대 기준 YYYY-MM-DD 형식 반환
-  const formatLocalDate = (date) => {
-    const d = date || new Date();
-    const year = d.getFullYear();
-    const month = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
-  };
-
-  // 숫자 포맷팅 (콤마)
-  const formatNumber = (num) => {
-    if (num === null || num === undefined || num === '') return '';
-    return num.toLocaleString();
-  };
-
-  // 통화 포맷팅 (원화, 소수점 버림)
-  const formatCurrency = (amount) => {
-    // 숫자가 아니면 그대로 반환 (마이너스 부호 입력 등 대응)
-    if (amount === '-') return amount;
-    if (amount === null || amount === undefined || amount === '' || isNaN(amount)) return '';
-    return Math.trunc(amount).toLocaleString(); // Math.trunc: 음수 반올림 방향 유지
-  };
-
-  const [master, setMaster] = useState({
-    trade_type: tradeType,
-    trade_date: formatLocalDate(new Date()),
-    company_id: '',
-    warehouse_id: '',
-    notes: '',
-    status: 'CONFIRMED',
-    total_amount: 0
-  });
-
-  const [details, setDetails] = useState([]);
-
-  // 거래처 잔고 정보
-  const [companySummary, setCompanySummary] = useState(null);
-
-  // 입금/출금 관련
-  const [linkedPayments, setLinkedPayments] = useState([]);
-  const [pendingPayments, setPendingPayments] = useState([]);
-  const [deletedPaymentIds, setDeletedPaymentIds] = useState([]); // 삭제 대기 중인 입출금 ID
-  const [modifiedPayments, setModifiedPayments] = useState({}); // 수정 대기 중인 입출금 {id: {amount, payment_method, notes}}
-  const [editingPayment, setEditingPayment] = useState(null); // 수정 중인 입출금 (저장된 것)
-  const [editingPendingPayment, setEditingPendingPayment] = useState(null); // 수정 중인 대기 입출금
-  // 매칭 정보 모달
-  const [matchingInfoModal, setMatchingInfoModal] = useState({ isOpen: false, data: null });
-  const [deleteConfirmModal, setDeleteConfirmModal] = useState({ isOpen: false }); // 삭제 확인 모달
 
   // [NEW] 전역적으로 마지막 활성화된 전표를 추적하기 위한 ID
   // (여러 창이 뜰 수 있는 MDI 환경에서 퀵 추가 버튼의 대상을 찾기 위함)
@@ -278,204 +282,34 @@ function TradePanel({
     // 언마운트 시 해당 세션 비우기는 DesktopManager의 closeWindow에서 처리됨
   }, [details, panelId, isPurchase, isViewMode, onInventoryUpdate, initialData]);
 
-  const [addPaymentModal, setAddPaymentModal] = useState({
-    isOpen: false,
-    amount: '',
-    displayAmount: '',
-    payment_method: '계좌이체',
-    notes: ''
-  });
-
-  // [재고 드롭 모달] 상태
-  const [inventoryInputModal, setInventoryInputModal] = useState({
-    isOpen: false,
-    inventory: null, // 드롭된 재고 아이템 원본
-    quantity: '',
-    unitPrice: '',
-    maxQuantity: 0,
-    dropIndex: null // 드롭된 위치
-  });
-
   // Draggable hooks for inline modals
-  const { handleMouseDown: handlePaymentDrag, draggableStyle: paymentDragStyle } = useModalDraggable(!!addPaymentModal.isOpen || !!editingPayment || !!editingPendingPayment);
+  const { handleMouseDown: handlePaymentDrag, draggableStyle: paymentDragStyle } = useModalDraggable(!!addPaymentModal.isOpen || !!editingPayment || !!editingPendingPayment, { isCentered: true });
   const { handleMouseDown: handleMatchingDrag, draggableStyle: matchingDragStyle } = useModalDraggable(!!matchingInfoModal.isOpen, { isCentered: true });
-  // 재고 드롭 모달 중앙 정렬을 위해 isCentered: true 옵션 추가
   const { handleMouseDown: handleInventoryDrag, draggableStyle: inventoryDragStyle } = useModalDraggable(!!inventoryInputModal.isOpen, { isCentered: true });
 
-  // 모달
-  const [modal, setModal] = useState({
-    isOpen: false,
-    type: 'info',
-    title: '',
-    message: '',
-    onConfirm: () => { },
-    confirmText: '확인',
-    showCancel: false
+  // [Step 4] 반품/반출 핸들러 - Hook에서 가져옴
+  const {
+    handlePurchaseLink,
+    handleSalesLink
+  } = useTradePanelReturns({
+    setDetails,
+    setModal,
+    setIsPurchaseLookupOpen,
+    setIsSalesLookupOpen
   });
 
-  const [matchingHistoryModal, setMatchingHistoryModal] = useState({
-    isOpen: false,
-    detail: null
-  });
-
-  // Sales Lookup Modal State
-  const [isSalesLookupOpen, setIsSalesLookupOpen] = useState(false);
-  const [isPurchaseLookupOpen, setIsPurchaseLookupOpen] = useState(false);
-
-
-  // 반출 처리: 선택한 매입 내역을 마이너스 수량으로 로드 (Sale Return과 동일 로직)
-  const handlePurchaseLink = async (selectedPurchase) => {
-    try {
-      const fullTrade = await tradeAPI.getById(selectedPurchase.id);
-      if (!fullTrade) throw new Error('전표 정보를 가져올 수 없습니다.');
-
-      const tradeData = fullTrade.data.data;
-      let targetDetails = tradeData.details;
-      if (selectedPurchase.selectedItemId) {
-        targetDetails = tradeData.details.filter(d => d.id === selectedPurchase.selectedItemId);
-      }
-
-      const newDetails = targetDetails.map(d => ({
-        product_id: d.product_id,
-        product_name: d.product_name,
-        quantity: -Math.abs(
-          (d.id === selectedPurchase.selectedItemId && selectedPurchase.remaining_quantity)
-            ? parseFloat(selectedPurchase.remaining_quantity)
-            : d.quantity
-        ), // 수량 음수 변환 (잔여 수량 우선 적용)
-        unit_price: d.unit_price,
-        supply_amount: -Math.abs(d.supply_amount || d.total_amount || 0),
-        notes: '(반출)',
-        parent_detail_id: d.id,
-        inventory_id: d.matched_inventory_id || d.inventory_id,
-        origin_quantity: Math.abs(d.quantity),
-        available_stock: (d.id === selectedPurchase.selectedItemId && selectedPurchase.remaining_quantity)
-          ? parseFloat(selectedPurchase.remaining_quantity)
-          : null,
-        total_returned_quantity: parseFloat(d.item_returned_quantity) || 0,
-        shipper_id: d.shipper_id,
-        location_id: d.location_id,
-        is_agricultural: d.is_agricultural
-      }));
-
-      setDetails(prev => {
-        const existingValid = prev.filter(d => d.product_id);
-        return [...existingValid, ...newDetails];
-      });
-      setIsPurchaseLookupOpen(false);
-
-      setModal({
-        isOpen: true,
-        type: 'info',
-        title: '반출 항목 추가됨',
-        message: '선택한 매입 내역이 반출(마이너스) 품목으로 추가되었습니다.\n기존 목록 아래에서 확인하실 수 있습니다.',
-        confirmText: '확인',
-        showCancel: false,
-        onConfirm: () => setModal(prev => ({ ...prev, isOpen: false }))
-      });
-    } catch (error) {
-      console.error('반출 처리 중 오류:', error);
-      setModal({
-        isOpen: true,
-        type: 'error',
-        title: '반출 처리 실패',
-        message: '반출 품목을 생성하는 중 오류가 발생했습니다.',
-        confirmText: '확인',
-        showCancel: false,
-        onConfirm: () => setModal(prev => ({ ...prev, isOpen: false }))
-      });
-    }
-  };
-
-  // 반품 처리: 선택한 매출 내역을 마이너스 수량으로 로드
-  const handleSalesLink = async (selectedSale) => {
-    try {
-      // 1. 선택된 전표의 상세 정보를 가져옴
-      const fullTrade = await tradeAPI.getById(selectedSale.id);
-      if (!fullTrade) throw new Error('전표 정보를 가져올 수 없습니다.');
-
-      // 2. 현재 폼을 초기화하되, 반품 모드로 설정
-      // 기존 resetForm과 유사하지만, details를 반품 데이터로 채움
-
-      const tradeData = fullTrade.data.data;
-
-      // 2. [IMPROVED] 선택한 품목 하나만 반품하거나, 전체를 반품함
-      let targetDetails = tradeData.details;
-      if (selectedSale.selectedItemId) {
-        targetDetails = tradeData.details.filter(d => d.id === selectedSale.selectedItemId);
-      }
-
-      const newDetails = targetDetails.map(d => ({
-        product_id: d.product_id,
-        product_name: d.product_name,
-        quantity: -Math.abs(d.quantity), // 수량 음수 변환
-        unit_price: d.unit_price, // 단가는 그대로 (양수)
-        supply_amount: -Math.abs(d.supply_amount || d.total_amount || 0), // 금액 음수 변환 (supply_amount 사용)
-        notes: '(반품)',
-
-        // 중요: 원본 품목 ID를 parent_detail_id로 저장하여 누적 반품 한도 추적
-        parent_detail_id: d.id,
-        inventory_id: d.matched_inventory_id || d.inventory_id,
-        origin_quantity: Math.abs(d.quantity), // 원본 매출 수량
-        total_returned_quantity: parseFloat(d.item_returned_quantity) || 0, // 이미 반품된 합계
-
-        // 기타 필드
-        shipper_id: d.shipper_id,
-        location_id: d.location_id,
-        is_agricultural: d.is_agricultural
-      }));
-
-
-      // 3. [IMPROVED] 상태 업데이트: 기존 목록을 지우지 않고 아래에 추가함
-      setDetails(prev => {
-        const existingValid = prev.filter(d => d.product_id); // 비어있지 않은 행만 유지
-        return [...existingValid, ...newDetails];
-      });
-      setIsSalesLookupOpen(false);
-
-      // 4. 알림
-      setModal({
-        isOpen: true,
-        type: 'info',
-        title: '반품 항목 추가됨',
-        message: '선택한 매출 내역이 반품(마이너스) 품목으로 추가되었습니다.\n기존 목록 아래에서 확인하실 수 있습니다.',
-        confirmText: '확인',
-        showCancel: false,
-        onConfirm: () => setModal(prev => ({ ...prev, isOpen: false }))
-      });
-
-    } catch (error) {
-      console.error('반품 처리 중 오류:', error);
-      setModal({
-        isOpen: true,
-        type: 'error',
-        title: '반품 처리 실패',
-        message: '반품 전표를 생성하는 중 오류가 발생했습니다.',
-        confirmText: '확인',
-        showCancel: false,
-        onConfirm: () => setModal(prev => ({ ...prev, isOpen: false }))
-      });
-    }
-  };
-
-  // refs
-  const companyRef = useRef(null);
-  const productRefs = useRef([]);
-  const quantityRefs = useRef([]);
-  const unitPriceRefs = useRef([]);
-  const shipperLocationRefs = useRef([]);
-  const focusValueRef = useRef({}); // 입력 포커스 시 값 저장용
-  const dragHandleRef = useRef(false); // 드래그 핸들 클릭 상태 추적
-  const lastReportedDirty = useRef(null); // 마지막으로 보고된 수정 상태 (무한 루프 방지)
-  const senderRefs = useRef([]);
-  const notesRefs = useRef([]);
-  const modalConfirmRef = useRef(null);
-  const isSaving = useRef(false); // 저장 중 중복 클릭 방지
-  const tableContainerRef = useRef(null); // [NEW] 상세 행 추가 시 스크롤 제어용
+  // detailsRef (details 동기화 용도)
   const detailsRef = useRef(details);
   useEffect(() => {
     detailsRef.current = details;
   }, [details]);
+
+  // modalConfirmRef (모달 확인 버튼 참조)
+  const modalConfirmRef = useRef(null);
+
+
+
+
 
 
 
@@ -552,6 +386,13 @@ function TradePanel({
   // --- 기초 데이터 및 전표 로드 함수 ---
 
   const fetchBaseData = useCallback(async () => {
+    // Context가 있으면 데이터 로딩 불필요 (Context에서 제공)
+    if (tradePanelContext && tradePanelContext.baseDataLoaded) {
+      const defaultWh = tradePanelContext.getDefaultWarehouse();
+      return { warehouses: tradePanelContext.warehouses, defaultWarehouse: defaultWh };
+    }
+
+    // Context 없으면 로컬에서 직접 로드 (fallback)
     try {
       const typeFilter = isPurchase ? 'SUPPLIER' : 'CUSTOMER';
       const [companiesRes, productsRes, warehousesRes] = await Promise.all([
@@ -559,15 +400,15 @@ function TradePanel({
         productAPI.getAll({ is_active: 'true' }),
         warehousesAPI.getAll()
       ]);
-      setCompanies(companiesRes.data.data);
-      setProducts(productsRes.data.data);
-      setWarehouses(warehousesRes.data.data || []);
+      setLocalCompanies(companiesRes.data.data);
+      setLocalProducts(productsRes.data.data);
+      setLocalWarehouses(warehousesRes.data.data || []);
 
       // 결제 방법 로드
       try {
         const methodsRes = await settingsAPI.getPaymentMethods({ is_active: true });
         if (methodsRes.data.success) {
-          setPaymentMethods(methodsRes.data.data);
+          setLocalPaymentMethods(methodsRes.data.data);
         }
       } catch (err) {
         console.error('결제 방법 로딩 오류:', err);
@@ -579,7 +420,7 @@ function TradePanel({
       console.error('기초 데이터 로딩 오류:', error);
       return { warehouses: [] };
     }
-  }, [isPurchase]);
+  }, [isPurchase, tradePanelContext]);
 
   const loadInitialData = async () => {
     try {
@@ -701,7 +542,13 @@ function TradePanel({
 
       if (error.response && error.response.status === 404) {
         showModal('warning', '전표 없음', '해당 전표가 존재하지 않거나 삭제되었습니다.', () => {
-          if (onClose) onClose();
+          if (onClose) {
+            // panelId가 'win-123' 형식이면 숫자 ID만 전달, 아니면 통째로 전달
+            const id = panelId && typeof panelId === 'string' && panelId.startsWith('win-')
+              ? parseInt(panelId.replace('win-', ''))
+              : panelId;
+            onClose(id);
+          }
         });
       } else {
         showModal('warning', '로딩 실패', '전표를 불러오는데 실패했습니다.');
@@ -720,7 +567,7 @@ function TradePanel({
     if (lastReportedDirty.current !== isDirty) {
       lastReportedDirty.current = isDirty;
       if (onDirtyChange) {
-        onDirtyChange(isDirty);
+        onDirtyChange(panelId, isDirty);
       }
     }
   }, [checkDirty, onDirtyChange]);
@@ -960,7 +807,7 @@ function TradePanel({
 
     // [NEW] Persisted initialTradeId 제거 (데스크탑 새로고침 시 로딩 방지)
     if (updateProps && initialTradeId) {
-      updateProps({ initialTradeId: null, initialViewMode: false });
+      updateProps(panelId, { initialTradeId: null, initialViewMode: false });
     }
   };
 
@@ -1003,51 +850,26 @@ function TradePanel({
     }, 100);
   };
 
-  // 드래그앤드롭 핸들러
-  const handleDragStart = (e, index) => {
-    setDraggedIndex(index);
-    e.dataTransfer.effectAllowed = 'move';
-    e.dataTransfer.setData('text/plain', index.toString());
-    // 드래그 시 행 스타일 변경을 위해 약간의 딜레이
-    setTimeout(() => {
-      e.target.closest('tr').style.opacity = '0.5';
-    }, 0);
-  };
-
-  const handleDragEnd = (e) => {
-    setDraggedIndex(null);
-    setDragOverIndex(null);
-    e.target.closest('tr').style.opacity = '1';
-  };
-
-  const handleDragOver = (e, index) => {
-    e.preventDefault();
-
-    // 내부 드래그인 경우
-    if (draggedIndex !== null) {
-      e.dataTransfer.dropEffect = 'move';
-      if (index !== draggedIndex) {
-        setDragOverIndex(index);
-      }
-    } else {
-      // 외부 드래그(재고 목록 등)인 경우
-      const inventoryJson = e.dataTransfer.getData('application/json'); // Note: getData not always available in dragover security model, but dropEffect works
-      // 외부 드래그 감지는 inventoryJson이 있거나(일부 브라우저), 내부가 아니면 외부로 간주
-
-      if (isPurchase) {
-        e.dataTransfer.dropEffect = 'none';
-        setDragOverIndex(null);
-        return;
-      }
-
-      e.dataTransfer.dropEffect = 'copy';
-      setDragOverIndex(index); // 드롭 위치 표시
-    }
-  };
-
-  const handleDragLeave = () => {
-    setDragOverIndex(null);
-  };
+  // [Step 2] 드래그앤드롭 핸들러 - Hook에서 가져옴
+  const {
+    handleDragStart,
+    handleDragEnd,
+    handleDragOver,
+    handleDragLeave,
+    handleDrop
+  } = useTradePanelDragHandlers({
+    draggedIndex,
+    setDraggedIndex,
+    setDragOverIndex,
+    isPurchase,
+    isViewMode,
+    master,
+    details,
+    setDetails,
+    setSelectedRowIndex,
+    setInventoryInputModal,
+    showModal
+  });
 
   // 재고 입력 모달 ESC 키 핸들러 (규칙 준수)
   useEffect(() => {
@@ -1068,73 +890,7 @@ function TradePanel({
     };
   }, [inventoryInputModal.isOpen]);
 
-  const handleDrop = (e, dropIndex) => {
-    e.preventDefault();
-
-    // 보기 모드에서는 드롭 차단
-    if (isViewMode) {
-      showModal('warning', '작업 불가', '수정 모드로 전환 후 이용해주세요.');
-      return;
-    }
-
-    const inventoryJson = e.dataTransfer.getData('application/json');
-
-    // 1. 외부 재고 아이템 드래그 앤 드롭
-    if (inventoryJson) {
-      // 매입 전표인 경우 차단
-      if (isPurchase) {
-        showModal('warning', '작업 불가', '매입 전표에는 재고를 추가할 수 없습니다.\n재고는 매출 전표에서만 사용할 수 있습니다.');
-        setDragOverIndex(null);
-        return;
-      }
-
-      // 거래처 선택 확인
-      if (!master.company_id) {
-        showModal('warning', '거래처 미선택', '먼저 거래처를 선택해주세요.');
-        setDragOverIndex(null);
-        return;
-      }
-
-      try {
-        const item = JSON.parse(inventoryJson);
-        const availableQty = parseFloat(item.remaining_quantity) || 0;
-
-        // 모달 열기
-        setInventoryInputModal({
-          isOpen: true,
-          inventory: item,
-          quantity: availableQty.toString(),
-          unitPrice: item.unit_price ? Math.floor(item.unit_price).toString() : '',
-          maxQuantity: availableQty,
-          dropIndex: dropIndex
-        });
-
-        setDragOverIndex(null);
-        return;
-      } catch (err) {
-        console.error('재고 드롭 처리 오류:', err);
-      }
-    }
-
-    // 2. 내부 행 순서 변경
-    const dragIndex = draggedIndex;
-
-    if (dragIndex === null || dragIndex === dropIndex) {
-      setDraggedIndex(null);
-      setDragOverIndex(null);
-      return;
-    }
-
-    // 배열 순서 변경
-    const newDetails = [...details];
-    const [draggedItem] = newDetails.splice(dragIndex, 1);
-    newDetails.splice(dropIndex, 0, draggedItem);
-
-    setDetails(newDetails);
-    setDraggedIndex(null);
-    setDragOverIndex(null);
-    setSelectedRowIndex(dropIndex);
-  };
+  // handleDrop은 useTradePanelDragHandlers Hook에서 가져옴
 
   // 재고 입력 모달 확인 핸들러
   const handleInventoryInputConfirm = () => {
@@ -1426,91 +1182,42 @@ function TradePanel({
     handleDeleteRow(selectedRowIndex);
   };
 
-  // 키보드 네비게이션
-  const handleQuantityKeyDown = (e, index) => {
-    if (e.key === 'Enter' || e.key === 'Tab') {
-      // [FIX] Shift+Tab (역방향)으로 나갈 때는 유효성 검사 제외
-      if (e.shiftKey) return;
+  // [Step 2] 키보드 네비게이션 핸들러 - Hook에서 가져옴
+  const {
+    handleQuantityKeyDown,
+    handleUnitPriceKeyDown,
+    handleSenderKeyDown,
+    handleShipperLocationKeyDown,
+    handleNotesKeyDown
+  } = useTradePanelKeyboardHandlers({
+    details,
+    isPurchase,
+    refs: {
+      productRefs,
+      quantityRefs,
+      unitPriceRefs,
+      senderRefs,
+      shipperLocationRefs,
+      notesRefs
+    },
+    addDetailRow
+  });
 
-      const val = details[index].quantity;
-      if (val === '' || val === null || parseFloat(val) === 0) {
-        e.preventDefault();
-        return; // 수량이 없으면 단가로 넘어가지 않음
-      }
-
-      e.preventDefault();
-      if (unitPriceRefs.current[index]) {
-        unitPriceRefs.current[index].focus();
-      }
-    }
-  };
-
-  const handleUnitPriceKeyDown = (e, index) => {
-    if (e.key === 'Enter' || e.key === 'Tab') {
-      // [FIX] Shift+Tab (역방향)으로 나갈 때는 유효성 검사 제외
-      if (e.shiftKey) return;
-
-      const val = details[index].unit_price;
-      if (val === '' || val === null || parseFloat(val) === 0) {
-        e.preventDefault();
-        return; // 단가가 없으면 비고/출하주로 넘어가지 않음
-      }
-
-      e.preventDefault();
-      if (isPurchase) {
-        // Purchase: Unit Price -> Owner (Sender)
-        if (senderRefs.current[index]) {
-          senderRefs.current[index].focus();
-        }
-      } else {
-        // Sale: Unit Price -> Notes
-        if (notesRefs.current[index]) {
-          notesRefs.current[index].focus();
-        }
-      }
-    }
-  };
-
-  const handleSenderKeyDown = (e, index) => {
-    // Owner (Sender) -> Location
-    if (e.key === 'Enter' || e.key === 'Tab') {
-      e.preventDefault();
-      if (shipperLocationRefs.current[index]) {
-        shipperLocationRefs.current[index].focus();
-      }
-    }
-  };
-
-  const handleShipperLocationKeyDown = (e, index) => {
-    // Location -> Notes
-    if (e.key === 'Enter' || e.key === 'Tab') {
-      e.preventDefault();
-      if (notesRefs.current[index]) {
-        notesRefs.current[index].focus();
-      }
-    }
-  };
-
-  const handleNotesKeyDown = (e, index) => {
-    if (e.key === 'Enter') {
-      // 현재 행의 필수 값 체크 (품목, 수량, 단가)
-      const row = details[index];
-      const isInvalid = !row.product_id || !row.quantity || parseFloat(row.quantity) === 0 || !row.unit_price || parseFloat(row.unit_price) === 0;
-
-      if (isInvalid) {
-        e.preventDefault();
-        return; // 필수 값이 없으면 다음 행으로 갈 수 없음
-      }
-
-      e.preventDefault();
-      // 다음 행의 품목으로 이동하거나 새 행 추가
-      if (index === details.length - 1) {
-        addDetailRow();
-      } else if (productRefs.current[index + 1]) {
-        productRefs.current[index + 1].focus();
-      }
-    }
-  };
+  // [Step 3] 결제 핸들러 - Hook에서 가져옴
+  const {
+    handleOpenAddPayment,
+    handleSaveNewPayment,
+    handleRemovePendingPayment
+  } = useTradePanelPayments({
+    master,
+    isPurchase,
+    addPaymentModal,
+    setAddPaymentModal,
+    pendingPayments,
+    setPendingPayments,
+    paymentMethods,
+    showModal
+  });
 
   // 합계 계산
   const totalAmount = useMemo(() => {
@@ -1773,7 +1480,7 @@ function TradePanel({
 
       // [NEW] Persisted initialTradeId 제거
       if (updateProps && initialTradeId) {
-        updateProps({ initialTradeId: null, initialViewMode: false });
+        updateProps(panelId, { initialTradeId: null, initialViewMode: false });
       }
     } catch (error) {
       console.error('삭제 오류:', error);
@@ -1792,53 +1499,7 @@ function TradePanel({
     }
   };
 
-  // 입금 추가
-  const handleOpenAddPayment = () => {
-    if (!master.company_id) {
-      showModal('warning', '입력 오류', '먼저 거래처를 선택하세요.');
-      return;
-    }
-    setAddPaymentModal({
-      isOpen: true,
-      amount: '',
-      displayAmount: '',
-      payment_method: paymentMethods.length > 0 ? paymentMethods[0].name : '계좌이체',
-      notes: ''
-    });
-  };
-
-  const handleSaveNewPayment = () => {
-    const amount = parseFloat(addPaymentModal.amount) || 0;
-    if (amount === 0) {
-      showModal('warning', '입력 오류', `0원은 ${isPurchase ? '출금' : '입금'}할 수 없습니다.\n금액을 입력해주세요.`, () => {
-        // 모달 닫힌 후 금액 입력 필드에 포커스
-        setTimeout(() => {
-          const amountInput = document.querySelector('.payment-amount-input');
-          if (amountInput) {
-            amountInput.focus();
-            amountInput.select();
-          }
-        }, 100);
-      });
-      return;
-    }
-
-    // pendingPayments에 추가 (전표 저장 시 함께 저장됨)
-    const newPayment = {
-      tempId: Date.now(),
-      amount: amount,
-      payment_method: addPaymentModal.payment_method,
-      notes: addPaymentModal.notes,
-      isPending: true
-    };
-
-    setPendingPayments(prev => [...prev, newPayment]);
-    setAddPaymentModal({ isOpen: false, amount: '', displayAmount: '', payment_method: '계좌이체', notes: '' });
-  };
-
-  const handleRemovePendingPayment = (tempId) => {
-    setPendingPayments(pendingPayments.filter(p => p.tempId !== tempId));
-  };
+  // 결제 함수들(handleOpenAddPayment, handleSaveNewPayment, handleRemovePendingPayment)은 useTradePanelPayments Hook에서 가져옴
 
   // 거래처 옵션
   const companyOptions = useMemo(() => {
@@ -1901,9 +1562,7 @@ function TradePanel({
     return <div className="loading" style={{ padding: '2rem', textAlign: 'center' }}>로딩 중...</div>;
   }
 
-  // 폰트 스케일에 따른 크기 계산 헬퍼
-  // 고정 폰트 크기 (전표 목록과 동일하게 0.8rem 기준)
-  const fs = (size) => `${(size * 0.85).toFixed(2)}rem`;
+  // fs 함수는 ../utils/tradePanelUtils.js로 분리됨
 
   return (
     <div
@@ -2579,20 +2238,82 @@ function TradePanel({
             <div
               className="modal-container"
               tabIndex={-1}
-              onMouseDown={handlePaymentDrag}
               style={{
                 ...paymentDragStyle,
+                position: 'fixed',
+                top: '50%',
+                left: '50%',
                 padding: '1.5rem',
                 backgroundColor: '#fff',
                 borderRadius: '12px',
                 boxShadow: '0 10px 40px rgba(0,0,0,0.2)',
-                outline: 'none',
-                cursor: 'grab'
+                outline: 'none'
               }}
             >
-              <h3 style={{ margin: '0 0 1rem 0', color: '#2c3e50', pointerEvents: 'none' }}>
-                {isPurchase ? '💸 출금' : '💰 입금'} 추가
-              </h3>
+              {/* 드래그 핸들 영역 */}
+              <div
+                onMouseDown={handlePaymentDrag}
+                style={{
+                  cursor: 'grab',
+                  marginBottom: '1rem'
+                }}
+              >
+                <h3 style={{ margin: 0, color: '#2c3e50', pointerEvents: 'none' }}>
+                  {isPurchase ? '💸 출금' : '💰 입금'} 추가
+                </h3>
+              </div>
+
+              {/* 잔고 정보 및 전액 버튼 */}
+              {companySummary && (
+                <div className="form-group" style={{ marginBottom: '1rem' }}>
+                  <label style={{ display: 'block', marginBottom: '0.25rem', fontWeight: '500' }}>현재 잔고</label>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <div style={{
+                      flex: 1,
+                      padding: '0.5rem 0.75rem',
+                      backgroundColor: '#f8fafc',
+                      borderRadius: '6px',
+                      border: '1px solid #e2e8f0',
+                      fontWeight: '700',
+                      fontSize: '1.1rem',
+                      color: displayBalance > 0 ? '#dc2626' : '#16a34a',
+                      textAlign: 'right'
+                    }}>
+                      {formatCurrency(Math.abs(displayBalance))}
+                    </div>
+                    {displayBalance > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const balance = Math.abs(displayBalance);
+                          setAddPaymentModal(prev => ({
+                            ...prev,
+                            amount: balance,
+                            displayAmount: new Intl.NumberFormat('ko-KR').format(balance)
+                          }));
+                          // 금액 입력창으로 포커스 이동
+                          setTimeout(() => {
+                            const amountInput = document.querySelector('.payment-amount-input');
+                            if (amountInput) { amountInput.focus(); amountInput.select(); }
+                          }, 50);
+                        }}
+                        style={{
+                          padding: '0.5rem 0.75rem',
+                          backgroundColor: '#3b82f6',
+                          color: 'white',
+                          border: 'none',
+                          borderRadius: '6px',
+                          fontSize: '0.85rem',
+                          fontWeight: '600',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        전액
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
 
               <div className="form-group" style={{ marginBottom: '1rem' }}>
                 <label style={{ display: 'block', marginBottom: '0.25rem', fontWeight: '500' }}>금액 *</label>
@@ -2681,7 +2402,12 @@ function TradePanel({
                   type="button"
                   className="btn btn-primary"
                   onClick={handleSaveNewPayment}
-                  style={{ padding: '0.5rem 1rem' }}
+                  disabled={!addPaymentModal.amount || parseFloat(addPaymentModal.amount) === 0}
+                  style={{
+                    padding: '0.5rem 1rem',
+                    opacity: (!addPaymentModal.amount || parseFloat(addPaymentModal.amount) === 0) ? 0.5 : 1,
+                    cursor: (!addPaymentModal.amount || parseFloat(addPaymentModal.amount) === 0) ? 'not-allowed' : 'pointer'
+                  }}
                 >
                   추가
                 </button>
@@ -3290,6 +3016,7 @@ function TradePanel({
                 <div style={{ flex: 1 }}>
                   <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.5rem', fontWeight: '600' }}>수량</label>
                   <input
+                    id="modal-quantity-input"
                     type="text"
                     value={inventoryInputModal.quantity ? formatCurrency(parseFloat(inventoryInputModal.quantity)) : ''}
                     onChange={(e) => {
@@ -3318,12 +3045,28 @@ function TradePanel({
                         const limit = inventoryInputModal.maxQuantity ?? 0;
 
                         if (qty <= 0) {
-                          showModal('warning', '입력 오류', '수량을 입력하세요.');
+                          e.stopPropagation(); // [FIX] 이벤트 버블링 방지
+                          showModal('warning', '입력 오류', '수량을 입력하세요.', () => {
+                            // 모달 닫힌 후 수량 입력창으로 포커스 복귀
+                            setTimeout(() => {
+                              const qtyInput = document.getElementById('modal-quantity-input');
+                              if (qtyInput) { qtyInput.focus(); qtyInput.select(); }
+                            }, 50);
+                          });
                           return;
                         }
 
                         if (qty > limit) {
-                          showModal('warning', '수량 초과', `재고 잔량을 초과할 수 없습니다.\n(최대: ${limit})`);
+                          e.stopPropagation(); // [FIX] 이벤트 버블링 방지 - document keydown 리스너가 모달을 닫지 않도록
+                          showModal('warning', '수량 초과', `재고 잔량을 초과할 수 없습니다.\n(최대: ${limit})`, () => {
+                            // 수량을 최대 잔량으로 복귀
+                            setInventoryInputModal(prev => ({ ...prev, quantity: String(prev.maxQuantity) }));
+                            // 모달 닫힌 후 수량 입력창으로 포커스 복귀
+                            setTimeout(() => {
+                              const qtyInput = document.getElementById('modal-quantity-input');
+                              if (qtyInput) { qtyInput.focus(); qtyInput.select(); }
+                            }, 50);
+                          });
                           return;
                         }
 
@@ -3413,4 +3156,4 @@ function TradePanel({
   );
 }
 
-export default TradePanel;
+export default memo(TradePanel);

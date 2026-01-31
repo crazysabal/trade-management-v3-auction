@@ -3,6 +3,7 @@ import { paymentAPI, tradeAPI } from '../services/api';
 import ConfirmModal from '../components/ConfirmModal';
 import useDraggable from '../hooks/useDraggable';
 import UnsettledPrintModal from '../components/UnsettledPrintModal';
+import { formatCurrency } from '../utils/formatUtils';
 
 function CompanyBalances() {
   const [receivables, setReceivables] = useState([]);
@@ -140,9 +141,7 @@ function CompanyBalances() {
     }
   };
 
-  const formatCurrency = (value) => {
-    return new Intl.NumberFormat('ko-KR').format(value || 0);
-  };
+  // formatCurrency - imported from formatUtils
 
   const getFilteredReceivables = () => {
     return receivables.filter(item => {

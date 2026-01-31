@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, memo } from 'react';
 import { purchaseInventoryAPI, warehousesAPI, inventoryAdjustmentAPI, inventoryTransferAPI, inventoryProductionAPI } from '../services/api';
 import { formatLocalDate } from '../utils/dateUtils'; // [FIX] Import date utility
+import { formatNumber } from '../utils/formatUtils'; // [Refactor] 공통 유틸리티 사용
 import ConfirmModal from '../components/ConfirmModal';
 import TradeDetailModal from '../components/TradeDetailModal';
 import ProductionDetailModal from '../components/ProductionDetailModal';
@@ -167,11 +168,7 @@ const InventoryHistory = ({ onOpenTrade }) => {
 
     const displayedHistory = getFilteredHistory();
 
-
-
-    const formatNumber = (num) => {
-        return num ? Number(num).toLocaleString() : '0';
-    };
+    // formatNumber imported from formatUtils.js
 
     const handleRowClick = (item) => {
         if (!item.trade_master_id) return;
@@ -638,4 +635,4 @@ const InventoryHistory = ({ onOpenTrade }) => {
     );
 };
 
-export default InventoryHistory;
+export default memo(InventoryHistory);

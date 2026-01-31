@@ -178,7 +178,7 @@ function AuctionAccounts({ isWindow }) {
       )}
 
       {showForm && (
-        <div className="modal-overlay" onClick={handleCancel} style={{ zIndex: 1100 }}> {/* Ensure it's above other things */}
+        <div className="modal-overlay" onClick={handleCancel} style={{ zIndex: 10500 }}> {/* Ensure it's above other things */}
           <div
             className="modal-container"
             onClick={e => e.stopPropagation()}

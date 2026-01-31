@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, memo } from 'react';
 import { purchaseInventoryAPI, inventoryProductionAPI, productAPI } from '../services/api';
-import { formatLocalDate } from '../utils/dateUtils'; // [FIX] Import date utility
+import { formatLocalDate } from '../utils/dateUtils';
+import { formatNumber, formatCurrency, formatDateShort } from '../utils/formatUtils';
 import { useConfirmModal } from './ConfirmModal';
 import { createPortal } from 'react-dom';
 import SearchableSelect from './SearchableSelect';
@@ -152,14 +153,25 @@ const InventoryQuickView = ({ inventoryAdjustments = {}, refreshKey, onInventory
         return () => clearInterval(intervalId);
     }, []);
 
+    // [Performance] 무한 루프 방지를 위해 최신 inventory를 ref로 관리
+    const inventoryRef = React.useRef(inventory);
+    useEffect(() => {
+        inventoryRef.current = inventory;
+    }, [inventory]);
+
     // 조정 내역(inventoryAdjustments)에 있지만 목록에 없는(소진된) 재고 불러오기
     useEffect(() => {
         const fetchMissingItems = async () => {
-            const currentIds = new Set(inventory.map(item => String(item.id)));
+            const currentIds = new Set(inventoryRef.current.map(item => String(item.id)));
             const adjustedIds = Object.keys(inventoryAdjustments);
             const missingIds = adjustedIds.filter(id => !currentIds.has(String(id)));
 
             if (missingIds.length === 0) return;
+
+            // [Safety] 이미 요청 중인 ID들 중복 요청 방지
+            const requestKey = missingIds.join(',');
+            if (window._pendingMissingFetch === requestKey) return;
+            window._pendingMissingFetch = requestKey;
 
             try {
                 const promises = missingIds.map(id => purchaseInventoryAPI.getById(id));
@@ -167,32 +179,30 @@ const InventoryQuickView = ({ inventoryAdjustments = {}, refreshKey, onInventory
                 const newItems = responses
                     .map(res => {
                         const data = res.data?.data || res.data;
-                        // getById는 { inventory: {...}, matchings: [...] } 형태를 반환함
-                        if (data && data.inventory) {
-                            return data.inventory;
-                        }
+                        if (data && data.inventory) return data.inventory;
                         return data;
                     })
                     .filter(item => item && item.id);
 
                 if (newItems.length > 0) {
                     setInventory(prev => {
-                        // 중복 방지 (비동기 처리 중 이미 추가되었을 수 있음)
                         const existingIds = new Set(prev.map(p => String(p.id)));
                         const uniqueNewItems = newItems.filter(item => !existingIds.has(String(item.id)));
+                        if (uniqueNewItems.length === 0) return prev;
 
-                        // 합치고 정렬 (Standard 23-G 통합 정렬 적용)
                         const merged = [...prev, ...uniqueNewItems];
                         return sortInventoryData(merged);
                     });
                 }
             } catch (err) {
                 console.error("누락된 재고 정보 조회 실패:", err);
+            } finally {
+                window._pendingMissingFetch = null;
             }
         };
 
         fetchMissingItems();
-    }, [inventoryAdjustments, inventory]);
+    }, [inventoryAdjustments]); // inventory 의존성 제거하여 무한 루프 차단
 
     const loadInventory = async (idToSelect = null) => {
         setLoading(true);
@@ -327,20 +337,11 @@ const InventoryQuickView = ({ inventoryAdjustments = {}, refreshKey, onInventory
     }, [quickSplitModal.isOpen]);
 
 
-    // 헬퍼 함수들 (SaleFromInventory.js와 동일)
-    // [Standard 57] 소수점이 있는 경우에만 최대 2자리까지 표시 (중량/수치용)
-    const formatNumber = (value) => {
-        const num = parseFloat(value || 0);
-        return num.toLocaleString('ko-KR', { maximumFractionDigits: 2 });
-    };
-    // [NEW] 수량(개수) 전용 포맷터: 소수점 이하 표시 안함
+    // [Phase 6] formatUtils.js로 통합됨
+    // formatQuantity는 로컬에만 존재 (수량 전용)
     const formatQuantity = (value) => {
         const num = Math.floor(parseFloat(value || 0));
         return new Intl.NumberFormat('ko-KR').format(num);
-    };
-    const formatCurrency = (amount) => {
-        if (!amount && amount !== 0) return '-';
-        return new Intl.NumberFormat('ko-KR').format(Math.floor(amount)) + '원';
     };
 
     // 퀵 추가 로직 보완: 매출 전표 상태 사전 체크
@@ -496,14 +497,7 @@ const InventoryQuickView = ({ inventoryAdjustments = {}, refreshKey, onInventory
             productionId: productionId
         });
     };
-    // 날짜 포맷 (MM-DD)
-    const formatDateShort = (dateString) => {
-        if (!dateString) return '-';
-        const date = new Date(dateString);
-        const month = String(date.getMonth() + 1).padStart(2, '0');
-        const day = String(date.getDate()).padStart(2, '0');
-        return `${month}-${day}`;
-    };
+    // [Phase 6] formatDateShort는 formatUtils.js에서 import
 
     const formatProductName = (item) => {
         if (!item) return '';
@@ -1129,4 +1123,4 @@ const InventoryQuickView = ({ inventoryAdjustments = {}, refreshKey, onInventory
     );
 };
 
-export default InventoryQuickView;
+export default memo(InventoryQuickView);

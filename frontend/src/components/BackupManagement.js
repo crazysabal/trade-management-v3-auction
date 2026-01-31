@@ -19,7 +19,6 @@ const BackupManagement = ({ onRestoreSuccess }) => {
         // [NEW] 구글 인증 성공 이벤트 리스너 추가 (팝업창에서 postMessage 전송 시 실행)
         const handleAuthMessage = (event) => {
             if (event.data === 'google-auth-success') {
-                console.log('Google Auth Success detected via message event');
                 fetchCredentials();
                 fetchRemoteBackups();
                 setMessage({ text: '구글 계정이 성공적으로 연결되었습니다.', type: 'success' });

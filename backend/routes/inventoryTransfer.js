@@ -80,11 +80,10 @@ router.post('/', async (req, res) => {
       await connection.query(`
                 UPDATE purchase_inventory 
                 SET remaining_quantity = remaining_quantity + ?,
-                    original_quantity = original_quantity + ?,
                     total_weight = total_weight + ?,
                     display_order = ?
                 WHERE id = ?
-            `, [moveQty, moveQty, addedWeight, nextDisplayOrder, targetItem.id]);
+            `, [moveQty, addedWeight, nextDisplayOrder, targetItem.id]);
 
     } else {
       // 신규 생성 (New Lot)

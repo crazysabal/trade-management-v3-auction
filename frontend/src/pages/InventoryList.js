@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback, memo } from 'react';
 import { createPortal } from 'react-dom';
 import { purchaseInventoryAPI, inventoryAPI } from '../services/api';
 import { Link } from 'react-router-dom';
@@ -7,27 +7,9 @@ import TradeDetailModal from '../components/TradeDetailModal';
 import InventoryDetailModal from '../components/InventoryDetailModal';
 import ProductionDetailModal from '../components/ProductionDetailModal';
 import { useAuth } from '../context/AuthContext';
+import { formatCurrency, formatNumber, formatDate } from '../utils/formatUtils';
 
-// 금액 포맷 함수 (컴포넌트 외부)
-const formatCurrency = (value) => {
-  return new Intl.NumberFormat('ko-KR').format(value || 0);
-};
-
-const formatNumber = (value) => {
-  return new Intl.NumberFormat('ko-KR', {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 2
-  }).format(value || 0);
-};
-
-const formatDate = (dateString) => {
-  if (!dateString) return '-';
-  const date = new Date(dateString);
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-};
+// 금액 포맷 함수 - imported from formatUtils
 
 // 다중 필터링 함수 (AND 조건, 금액은 쉼표 유무 모두 지원)
 const filterInventory = (items, filterText) => {
@@ -728,4 +710,4 @@ function InventoryList() {
   );
 }
 
-export default InventoryList;
+export default memo(InventoryList);

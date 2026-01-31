@@ -291,12 +291,11 @@ function QuickPurchaseModal({
                             value={form.company_id}
                             onChange={(opt) => {
                                 setForm({ ...form, company_id: opt ? opt.value : '' });
-                                // SearchableSelect often manages its own Enter or we can focus next manually if it supports it
-                                if (opt) {
-                                    setTimeout(() => warehouseRef.current?.focus(), 50);
-                                }
                             }}
-                            onKeyDown={(e) => handleKeyDown(e, warehouseRef)}
+                            onEnterSelect={() => {
+                                // 엔터로 항목 선택 시 다음 필드로 이동
+                                setTimeout(() => warehouseRef.current?.focus(), 50);
+                            }}
                             placeholder="매입처 선택..."
                         />
                     </div>
@@ -324,7 +323,14 @@ function QuickPurchaseModal({
                             type="text"
                             value={formatWithCommas(form.quantity)}
                             onChange={(e) => setForm({ ...form, quantity: removeCommas(e.target.value) })}
-                            onKeyDown={(e) => handleKeyDown(e, priceInputRef)}
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                    e.preventDefault();
+                                    const qty = parseFloat(removeCommas(form.quantity)) || 0;
+                                    if (qty <= 0) return; // 0 또는 빈 값이면 다음으로 이동 안 함
+                                    priceInputRef.current?.focus();
+                                }
+                            }}
                             className="form-control text-right"
                             placeholder="0"
                         />

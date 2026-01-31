@@ -543,7 +543,7 @@ const ProductInputModal = ({ isOpen, onClose, onSuccess, initialData = null, isE
     if (!isOpen) return null;
 
     return (
-        <div className="modal-overlay" style={{ zIndex: 1100 }}>
+        <div className="modal-overlay" style={{ zIndex: 10500 }}>
             <div
                 className="styled-modal"
                 style={{

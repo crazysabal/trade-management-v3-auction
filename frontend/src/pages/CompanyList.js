@@ -700,7 +700,6 @@ function CompanyList({ isWindow }) {
           const successCount = response.data.data.success.length;
 
           if (failedCount > 0) {
-            console.log('실패 목록:', response.data.data.failed);
             setTimeout(() => {
               setModal({
                 isOpen: true,
@@ -1455,4 +1454,4 @@ function CompanyList({ isWindow }) {
   );
 }
 
-export default CompanyList;
+export default memo(CompanyList);

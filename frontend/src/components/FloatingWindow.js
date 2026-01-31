@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, memo } from 'react';
 import ReactDOM from 'react-dom';
 import html2canvas from 'html2canvas';
 import ConfirmModal from './ConfirmModal';
@@ -647,4 +647,4 @@ const FloatingWindow = ({ title, icon, onClose, initialPosition = { x: 100, y: 1
     );
 };
 
-export default FloatingWindow;
+export default memo(FloatingWindow);

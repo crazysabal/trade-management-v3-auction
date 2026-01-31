@@ -3,6 +3,7 @@ import { tradeAPI } from '../services/api';
 import ConfirmModal from '../components/ConfirmModal';
 import { useAuth } from '../context/AuthContext';
 import { formatLocalDate } from '../utils/dateUtils'; // [FIX] Import date utility
+import { formatCurrency } from '../utils/formatUtils';
 
 function Statistics() {
   const [purchaseStats, setPurchaseStats] = useState([]);
@@ -164,9 +165,7 @@ function Statistics() {
     loadStatistics();
   };
 
-  const formatCurrency = (value) => {
-    return new Intl.NumberFormat('ko-KR').format(value || 0);
-  };
+  // formatCurrency - imported from formatUtils
 
   const getTotalAmount = (stats) => {
     return stats.reduce((sum, stat) => sum + parseFloat(stat.total_price || 0), 0);

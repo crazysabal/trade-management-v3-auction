@@ -159,7 +159,7 @@ const StockTransferModal = ({ isOpen, onClose, inventory, inventoryList = [], on
     if (!isOpen || (!inventory && !isBulk)) return null;
 
     return createPortal(
-        <div className="modal-overlay" style={{ zIndex: 1100 }}>
+        <div className="modal-overlay" style={{ zIndex: 10500 }}>
             <div
                 className="styled-modal"
                 onClick={e => e.stopPropagation()}

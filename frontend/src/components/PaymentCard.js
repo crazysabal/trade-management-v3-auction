@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import ConfirmModal from './ConfirmModal';
+import { formatCurrency } from '../utils/formatUtils';
 
 /**
  * PaymentCard - 입출금 관련 공통 컴포넌트
@@ -48,9 +49,7 @@ function PaymentCard({
   const fs = (size) => `${(size * fontScale).toFixed(2)}rem`;
 
   // 숫자 포맷
-  const formatCurrency = (value) => {
-    return new Intl.NumberFormat('ko-KR').format(value || 0);
-  };
+  // formatCurrency - imported from formatUtils
 
   // 입출금 추가 모달 상태
   const [addPaymentModal, setAddPaymentModal] = useState({
@@ -545,7 +544,7 @@ function PaymentCard({
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            zIndex: 1000
+            zIndex: 10500
           }}
           onKeyDown={(e) => {
             if (e.key === 'Escape') {
@@ -677,7 +676,7 @@ function PaymentCard({
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            zIndex: 1000
+            zIndex: 10500
           }}
           onKeyDown={(e) => {
             if (e.key === 'Escape') {
@@ -805,7 +804,7 @@ function PaymentCard({
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            zIndex: 1000
+            zIndex: 10500
           }}
           onKeyDown={(e) => {
             if (e.key === 'Escape') {

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { tradeAPI, purchaseInventoryAPI } from '../services/api';
 import TradeDetailModal from '../components/TradeDetailModal';
+import { formatCurrency } from '../utils/formatUtils';
 
 function Dashboard() {
   const navigate = useNavigate();
@@ -114,9 +115,7 @@ function Dashboard() {
     }
   };
 
-  const formatCurrency = (value) => {
-    return new Intl.NumberFormat('ko-KR').format(value);
-  };
+  // formatCurrency - imported from formatUtils
 
 
   if (loading) {

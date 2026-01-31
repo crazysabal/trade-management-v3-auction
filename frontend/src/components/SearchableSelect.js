@@ -177,6 +177,7 @@ const SearchableSelect = forwardRef(({
   isDisabled = false,
   size = 'normal',
   noOptionsMessage = '검색 결과 없음',
+  onEnterSelect, // [NEW] 엔터키로 항목 선택 시 호출될 콜백
 
   ...rest
 }, ref) => {
@@ -184,8 +185,12 @@ const SearchableSelect = forwardRef(({
   const selectedOption = options.find(opt => opt.value === value) || null;
 
   // onChange 핸들러 래핑
-  const handleChange = (option) => {
+  const handleChange = (option, actionMeta) => {
     onChange(option);
+    // 엔터키로 선택했을 때 콜백 호출 (select-option 액션일 때)
+    if (option && actionMeta?.action === 'select-option' && onEnterSelect) {
+      onEnterSelect(option);
+    }
   };
 
   // 스타일 계산

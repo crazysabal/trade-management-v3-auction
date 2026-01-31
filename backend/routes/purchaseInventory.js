@@ -927,6 +927,312 @@ router.get('/available/:productId', async (req, res) => {
 });
 
 /**
+ * 재고 무결성 검증
+ * GET /api/purchase-inventory/integrity-check
+ * 
+ * remaining_quantity가 expected(original - matched - adjustments - transfers 등)와 
+ * 일치하지 않는 재고를 검출합니다.
+ * 
+ * ⚠️ 중요: 이 라우트는 /:id 보다 먼저 정의되어야 함
+ */
+router.get('/integrity-check', async (req, res) => {
+  try {
+    // 종합 무결성 검증: remaining vs (original - matched - transfer_out + transfer_in - ...)
+    const [discrepancies] = await db.query(`
+      SELECT 
+        pi.id,
+        p.product_name,
+        p.grade,
+        p.weight,
+        p.weight_unit,
+        pi.original_quantity,
+        pi.remaining_quantity,
+        COALESCE(matched.total, 0) as total_matched,
+        COALESCE(trans_out.total, 0) as total_transfer_out,
+        COALESCE(trans_in.total, 0) as total_transfer_in,
+        COALESCE(prod_out.total, 0) as total_production_out,
+        COALESCE(adjust.total, 0) as total_adjustments,
+        COALESCE(vendor_return.total, 0) as total_vendor_return,
+        (pi.original_quantity 
+          - COALESCE(matched.total, 0) 
+          - COALESCE(trans_out.total, 0) 
+          + COALESCE(trans_in.total, 0)
+          - COALESCE(prod_out.total, 0) 
+          + COALESCE(adjust.total, 0)
+          - COALESCE(vendor_return.total, 0)
+        ) as expected_remaining,
+        pi.remaining_quantity - (pi.original_quantity 
+          - COALESCE(matched.total, 0) 
+          - COALESCE(trans_out.total, 0) 
+          + COALESCE(trans_in.total, 0)
+          - COALESCE(prod_out.total, 0) 
+          + COALESCE(adjust.total, 0)
+          - COALESCE(vendor_return.total, 0)
+        ) as discrepancy,
+        pi.status,
+        pi.updated_at,
+        w.name as warehouse_name
+      FROM purchase_inventory pi
+      JOIN products p ON pi.product_id = p.id
+      LEFT JOIN warehouses w ON pi.warehouse_id = w.id
+      -- 1. 매칭 출고
+      LEFT JOIN (
+        SELECT purchase_inventory_id, SUM(matched_quantity) as total
+        FROM sale_purchase_matching GROUP BY purchase_inventory_id
+      ) matched ON pi.id = matched.purchase_inventory_id
+      -- 2. 창고 이동 출고
+      LEFT JOIN (
+        SELECT purchase_inventory_id, SUM(quantity) as total
+        FROM warehouse_transfers WHERE purchase_inventory_id IS NOT NULL
+        GROUP BY purchase_inventory_id
+      ) trans_out ON pi.id = trans_out.purchase_inventory_id
+      -- 3. 창고 이동 입고 (이동으로 인한 증가) - 중요!
+      -- 주의: new_inventory_id로 들어온 양은 '이미 original_quantity'에 포함된 것으로 간주되는지 여부에 따라 다름.
+      -- 우리의 새로운 정책: 병합된 양은 original에 포함되지 않으므로, 여기서 더해줘야 함.
+      -- 하지만 '생성(Creator)'된 양은 original에 이미 있으므로 더하면 안 됨.
+      -- 이것을 쿼리로 구분하기 어려우므로, 여기서는 '단순 이동 합계'만 가져오고, 
+      -- 어플리케이션 레벨에서 original 보정 후 비교하거나, 
+      -- 일단은 '이동 입고'는 original에 반영되지 않았다고 가정하고 더하는 로직을 사용 (우리가 original을 깎았으므로!)
+      LEFT JOIN (
+        SELECT new_inventory_id, SUM(quantity) as total
+        FROM warehouse_transfers WHERE new_inventory_id IS NOT NULL AND purchase_inventory_id IS NOT NULL
+        GROUP BY new_inventory_id
+      ) trans_in ON pi.id = trans_in.new_inventory_id
+      -- 4. 생산 투입 출고
+      LEFT JOIN (
+        SELECT used_inventory_id, SUM(used_quantity) as total
+        FROM inventory_production_ingredients GROUP BY used_inventory_id
+      ) prod_out ON pi.id = prod_out.used_inventory_id
+      -- 5. 재고 조정
+      LEFT JOIN (
+        SELECT purchase_inventory_id, SUM(quantity_change) as total
+        FROM inventory_adjustments GROUP BY purchase_inventory_id
+      ) adjust ON pi.id = adjust.purchase_inventory_id
+      -- 6. 매입 반품
+      LEFT JOIN (
+        SELECT pi_inner.id as inventory_id, SUM(ABS(td.quantity)) as total
+        FROM trade_details td
+        JOIN trade_masters tm ON td.trade_master_id = tm.id
+        JOIN purchase_inventory pi_inner ON td.parent_detail_id = pi_inner.trade_detail_id
+        WHERE tm.trade_type = 'PURCHASE' AND td.parent_detail_id IS NOT NULL
+        GROUP BY pi_inner.id
+      ) vendor_return ON pi.id = vendor_return.inventory_id
+      WHERE pi.status != 'CANCELLED'
+      HAVING ABS(discrepancy) > 0.001
+      ORDER BY ABS(discrepancy) DESC
+      LIMIT 100
+    `);
+
+    // 음수 재고 검출 (가장 중요한 무결성 문제)
+    const [negativeInventory] = await db.query(`
+      SELECT 
+        pi.id,
+        p.product_name,
+        p.grade,
+        p.weight,
+        p.weight_unit,
+        pi.original_quantity,
+        pi.remaining_quantity,
+        pi.status,
+        w.name as warehouse_name,
+        pi.updated_at
+      FROM purchase_inventory pi
+      JOIN products p ON pi.product_id = p.id
+      LEFT JOIN warehouses w ON pi.warehouse_id = w.id
+      WHERE pi.remaining_quantity < 0
+      ORDER BY pi.remaining_quantity ASC
+      LIMIT 50
+    `);
+
+    // 상태 불일치 (remaining > 0인데 DEPLETED, 또는 remaining <= 0인데 AVAILABLE)
+    const [statusMismatch] = await db.query(`
+      SELECT 
+        pi.id,
+        p.product_name,
+        p.grade,
+        pi.original_quantity,
+        pi.remaining_quantity,
+        pi.status,
+        CASE 
+          WHEN pi.remaining_quantity > 0 THEN 'AVAILABLE'
+          ELSE 'DEPLETED'
+        END as expected_status,
+        w.name as warehouse_name
+      FROM purchase_inventory pi
+      JOIN products p ON pi.product_id = p.id
+      LEFT JOIN warehouses w ON pi.warehouse_id = w.id
+      WHERE pi.status != 'CANCELLED'
+        AND (
+          (pi.remaining_quantity > 0 AND pi.status = 'DEPLETED')
+          OR (pi.remaining_quantity <= 0 AND pi.status = 'AVAILABLE')
+        )
+      LIMIT 50
+    `);
+
+    res.json({
+      success: true,
+      data: {
+        discrepancies,
+        negativeInventory,
+        statusMismatch,
+        summary: {
+          totalDiscrepancies: discrepancies.length,
+          totalNegative: negativeInventory.length,
+          totalStatusMismatch: statusMismatch.length,
+          checkedAt: new Date().toISOString()
+        }
+      }
+    });
+  } catch (error) {
+    console.error('재고 무결성 검증 오류:', error);
+    res.status(500).json({ success: false, message: '서버 오류가 발생했습니다.' });
+  }
+});
+
+/**
+ * 재고 무결성 복원
+ * POST /api/purchase-inventory/integrity-fix
+ * 
+ * 불일치 재고의 remaining_quantity를 올바른 값으로 복원합니다.
+ * 
+ * Body: { ids: [1, 2, 3] } - 복원할 재고 ID 목록 (생략 시 모두 복원)
+ */
+router.post('/integrity-fix', async (req, res) => {
+  const connection = await db.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    const { ids } = req.body;
+
+    let query = `
+      SELECT 
+        pi.id,
+        pi.original_quantity,
+        pi.remaining_quantity,
+        COALESCE(matched.total, 0) as total_matched,
+        (pi.original_quantity 
+          - COALESCE(matched.total, 0) 
+          - COALESCE(trans_out.total, 0) 
+          + COALESCE(trans_in.total, 0)
+          - COALESCE(prod_out.total, 0) 
+          + COALESCE(adjust.total, 0)
+          - COALESCE(vendor_return.total, 0)
+        ) as expected_remaining
+      FROM purchase_inventory pi
+      LEFT JOIN (SELECT purchase_inventory_id, SUM(matched_quantity) as total FROM sale_purchase_matching GROUP BY purchase_inventory_id) matched ON pi.id = matched.purchase_inventory_id
+      LEFT JOIN (SELECT purchase_inventory_id, SUM(quantity) as total FROM warehouse_transfers WHERE purchase_inventory_id IS NOT NULL GROUP BY purchase_inventory_id) trans_out ON pi.id = trans_out.purchase_inventory_id
+      LEFT JOIN (SELECT new_inventory_id, SUM(quantity) as total FROM warehouse_transfers WHERE new_inventory_id IS NOT NULL AND purchase_inventory_id IS NOT NULL GROUP BY new_inventory_id) trans_in ON pi.id = trans_in.new_inventory_id
+      LEFT JOIN (SELECT used_inventory_id, SUM(used_quantity) as total FROM inventory_production_ingredients GROUP BY used_inventory_id) prod_out ON pi.id = prod_out.used_inventory_id
+      LEFT JOIN (SELECT purchase_inventory_id, SUM(quantity_change) as total FROM inventory_adjustments GROUP BY purchase_inventory_id) adjust ON pi.id = adjust.purchase_inventory_id
+      LEFT JOIN (
+        SELECT pi_inner.id as inventory_id, SUM(ABS(td.quantity)) as total
+        FROM trade_details td
+        JOIN trade_masters tm ON td.trade_master_id = tm.id
+        JOIN purchase_inventory pi_inner ON td.parent_detail_id = pi_inner.trade_detail_id
+        WHERE tm.trade_type = 'PURCHASE' AND td.parent_detail_id IS NOT NULL
+        GROUP BY pi_inner.id
+      ) vendor_return ON pi.id = vendor_return.inventory_id
+      WHERE pi.status != 'CANCELLED'
+    `;
+    const params = [];
+
+    if (ids && ids.length > 0) {
+      query += ' AND pi.id IN (?)';
+      params.push(ids);
+    }
+
+    query += `
+      GROUP BY pi.id
+      HAVING ABS(pi.remaining_quantity - expected_remaining) > 0.001
+    `;
+
+    const [toFix] = await connection.query(query, params);
+
+    let fixedCount = 0;
+    const fixedItems = [];
+
+    for (const item of toFix) {
+      const newRemaining = parseFloat(item.expected_remaining);
+      const newStatus = newRemaining <= 0 ? 'DEPLETED' : 'AVAILABLE';
+
+      await connection.query(
+        `UPDATE purchase_inventory SET remaining_quantity = ?, status = ? WHERE id = ?`,
+        [newRemaining, newStatus, item.id]
+      );
+
+      fixedItems.push({
+        id: item.id,
+        oldRemaining: parseFloat(item.remaining_quantity),
+        newRemaining,
+        matched: parseFloat(item.total_matched)
+      });
+      fixedCount++;
+    }
+
+    await connection.commit();
+
+    res.json({
+      success: true,
+      message: `${fixedCount}건의 재고가 복원되었습니다.`,
+      data: {
+        fixedCount,
+        fixedItems
+      }
+    });
+  } catch (error) {
+    await connection.rollback();
+    console.error('재고 무결성 복원 오류:', error);
+    res.status(500).json({ success: false, message: '서버 오류가 발생했습니다.' });
+  } finally {
+    connection.release();
+  }
+});
+
+/**
+ * 상태 불일치 수정
+ * POST /api/purchase-inventory/status-fix
+ * 
+ * remaining_quantity에 맞게 status를 올바르게 설정합니다.
+ */
+router.post('/status-fix', async (req, res) => {
+  const connection = await db.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    // remaining > 0인데 DEPLETED인 것 → AVAILABLE로 변경
+    const [fixToAvailable] = await connection.query(`
+      UPDATE purchase_inventory 
+      SET status = 'AVAILABLE' 
+      WHERE remaining_quantity > 0 AND status = 'DEPLETED'
+    `);
+
+    // remaining <= 0인데 AVAILABLE인 것 → DEPLETED로 변경
+    const [fixToDepleted] = await connection.query(`
+      UPDATE purchase_inventory 
+      SET status = 'DEPLETED' 
+      WHERE remaining_quantity <= 0 AND status = 'AVAILABLE'
+    `);
+
+    await connection.commit();
+
+    res.json({
+      success: true,
+      message: `${fixToAvailable.affectedRows + fixToDepleted.affectedRows}건의 상태가 수정되었습니다.`,
+      data: {
+        fixedToAvailable: fixToAvailable.affectedRows,
+        fixedToDepleted: fixToDepleted.affectedRows
+      }
+    });
+  } catch (error) {
+    await connection.rollback();
+    console.error('상태 불일치 수정 오류:', error);
+    res.status(500).json({ success: false, message: '서버 오류가 발생했습니다.' });
+  } finally {
+    connection.release();
+  }
+});
+
+/**
  * 매입 건별 재고 상세 조회
  * GET /api/purchase-inventory/:id
  * 

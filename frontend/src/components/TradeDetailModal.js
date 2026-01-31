@@ -2,6 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { tradeAPI, paymentAPI } from '../services/api';
 import { useModalDraggable } from '../hooks/useModalDraggable';
+import { formatCurrency, formatNumber, formatDate } from '../utils/formatUtils';
+import '../styles/TradeDetailModal.css';
 
 /**
  * 전표 상세 보기 모달 컴포넌트
@@ -100,21 +102,7 @@ function TradeDetailModal({ isOpen, onClose, tradeId, highlightId }) {
 
   if (!isOpen) return null;
 
-  const formatCurrency = (value) => {
-    return new Intl.NumberFormat('ko-KR').format(value || 0);
-  };
-
-  const formatNumber = (value) => {
-    return new Intl.NumberFormat('ko-KR', {
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 2
-    }).format(value || 0);
-  };
-
-  const formatDate = (dateString) => {
-    if (!dateString) return '-';
-    return dateString.split('T')[0];
-  };
+  // formatCurrency, formatNumber, formatDate - imported from formatUtils
 
   const getTradeTypeBadge = (type) => {
     const isSale = type === 'SALE';

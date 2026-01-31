@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, memo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { openProductPopup } from '../utils/popup';
 import { formatLocalDate } from '../utils/dateUtils';
@@ -32,11 +32,18 @@ const AuctionItemRow = React.memo(({
     const sortedOptions = useMemo(() => {
         const totalWeight = parseFloat(item.weight) || 0;
         const auctionGrade = item.grade || '';
+        const auctionProductName = (item.product_name || '').toLowerCase().trim();
 
         // Sort the pre-computed baseOptions
         return [...baseOptions].sort((a, b) => {
             const aKg = getWeightInKg(a.weight, a.weightUnit);
             const bKg = getWeightInKg(b.weight, b.weightUnit);
+
+            // Name match (품목명 포함 여부)
+            const aNameMatch = auctionProductName && a.productName &&
+                a.productName.toLowerCase().includes(auctionProductName);
+            const bNameMatch = auctionProductName && b.productName &&
+                b.productName.toLowerCase().includes(auctionProductName);
 
             // Weight match (tolerance 0.05kg)
             const aWeightMatch = totalWeight > 0 && Math.abs(aKg - totalWeight) < 0.05;
@@ -48,11 +55,23 @@ const AuctionItemRow = React.memo(({
             const bGradeMatch = auctionGrade && b.grade &&
                 String(b.grade).toLowerCase() === String(auctionGrade).toLowerCase();
 
-            // Full match priority
+            // Perfect match: 품목명 + 중량 + 등급 모두 일치
+            const aPerfectMatch = aNameMatch && aWeightMatch && aGradeMatch;
+            const bPerfectMatch = bNameMatch && bWeightMatch && bGradeMatch;
+            if (aPerfectMatch && !bPerfectMatch) return -1;
+            if (!aPerfectMatch && bPerfectMatch) return 1;
+
+            // Full match: 중량 + 등급 일치
             const aFullMatch = aWeightMatch && aGradeMatch;
             const bFullMatch = bWeightMatch && bGradeMatch;
             if (aFullMatch && !bFullMatch) return -1;
             if (!aFullMatch && bFullMatch) return 1;
+
+            // Name + Weight match
+            const aNameWeightMatch = aNameMatch && aWeightMatch;
+            const bNameWeightMatch = bNameMatch && bWeightMatch;
+            if (aNameWeightMatch && !bNameWeightMatch) return -1;
+            if (!aNameWeightMatch && bNameWeightMatch) return 1;
 
             // Weight match priority
             if (aWeightMatch && !bWeightMatch) return -1;
@@ -62,11 +81,15 @@ const AuctionItemRow = React.memo(({
             if (aGradeMatch && !bGradeMatch) return -1;
             if (!aGradeMatch && bGradeMatch) return 1;
 
+            // Name match only
+            if (aNameMatch && !bNameMatch) return -1;
+            if (!aNameMatch && bNameMatch) return 1;
+
             // Fallback: sortOrder, name
             if (a.sortOrder !== b.sortOrder) return (a.sortOrder || 0) - (b.sortOrder || 0);
             return (a.productName || '').localeCompare(b.productName || '', 'ko');
         });
-    }, [baseOptions, item.weight, item.grade]);
+    }, [baseOptions, item.weight, item.grade, item.product_name]);
 
     // Find currently selected option
     const selectedOption = useMemo(() =>
@@ -186,7 +209,7 @@ const AuctionItemRow = React.memo(({
 });
 
 // --- Main Component ---
-function AuctionImportV2({ isWindow, onTradeChange, onClose }) {
+function AuctionImportV2({ isWindow, onTradeChange, onClose, panelId }) {
     const navigate = useNavigate();
     const [accounts, setAccounts] = useState([]);
     const [rawData, setRawData] = useState([]);
@@ -605,6 +628,22 @@ function AuctionImportV2({ isWindow, onTradeChange, onClose }) {
         // Optimsitic UI Update
         setMappings(prev => ({ ...prev, [key]: productId || null }));
 
+        // [NEW] 매핑 성공 시 해당 행 자동 체크 / 매핑 해제 시 체크 해제
+        if (productId && rawItem.status === 'PENDING') {
+            setSelectedItems(prev => {
+                const next = new Set(prev);
+                next.add(rawItem.id);
+                return next;
+            });
+        } else if (!productId) {
+            // 매핑 해제 시 체크 해제
+            setSelectedItems(prev => {
+                const next = new Set(prev);
+                next.delete(rawItem.id);
+                return next;
+            });
+        }
+
         try {
             await auctionAPI.saveMapping({
                 auction_product_name: rawItem.product_name,
@@ -619,6 +658,12 @@ function AuctionImportV2({ isWindow, onTradeChange, onClose }) {
             setMappings(prev => {
                 const next = { ...prev };
                 delete next[key];
+                return next;
+            });
+            // [NEW] 매핑 실패 시 체크 해제
+            setSelectedItems(prev => {
+                const next = new Set(prev);
+                next.delete(rawItem.id);
                 return next;
             });
             setModal({
@@ -806,7 +851,7 @@ function AuctionImportV2({ isWindow, onTradeChange, onClose }) {
                 onConfirm: () => {
                     if (onTradeChange) onTradeChange();
                     if (onClose) {
-                        onClose();
+                        onClose(panelId);
                     } else {
                         navigate('/trades?type=PURCHASE');
                     }
@@ -1431,4 +1476,4 @@ function AuctionImportV2({ isWindow, onTradeChange, onClose }) {
     );
 }
 
-export default AuctionImportV2;
+export default memo(AuctionImportV2);

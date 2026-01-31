@@ -5,6 +5,7 @@ import { tradeAPI, companyInfoAPI, paymentAPI } from '../services/api';
 import { useModalDraggable } from '../hooks/useModalDraggable';
 import { useAuth } from '../context/AuthContext';
 import ConfirmModal from './ConfirmModal';
+import { formatCurrency, formatNumber } from '../utils/formatUtils';
 
 /**
 /**
@@ -12,16 +13,7 @@ import ConfirmModal from './ConfirmModal';
  * A4 가로 이등분 출력 (좌우 동일 내용)
  */
 
-const formatCurrency = (value) => {
-  return new Intl.NumberFormat('ko-KR').format(value || 0);
-};
-
-const formatNumber = (value) => {
-  return new Intl.NumberFormat('ko-KR', {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 2
-  }).format(value || 0);
-};
+// formatCurrency, formatNumber - imported from formatUtils
 
 const formatDate = (dateString) => {
   if (!dateString) return '-';
@@ -788,7 +780,7 @@ function TradePrintModal({ isOpen, onClose, tradeId }) {
         alignItems: 'flex-start',
         paddingTop: '60px',
         paddingBottom: '50px',
-        zIndex: 1050 // Navbar(1000)보다 높고, 최상위 알림(9999)보다는 낮게 조정
+        zIndex: 10500 // TradePanel(10000), TradeDetailModal 등과 동일 레벨
       }}
     >
       <div

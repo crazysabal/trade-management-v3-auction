@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback, memo } from 'react';
 import { Link } from 'react-router-dom';
 import { createPortal } from 'react-dom';
 import { tradeAPI } from '../services/api';
@@ -6,6 +6,7 @@ import ConfirmModal from '../components/ConfirmModal';
 import TradeDetailModal from '../components/TradeDetailModal';
 import TradePrintModal from '../components/TradePrintModal';
 import { useAuth } from '../context/AuthContext';
+import { formatCurrency } from '../utils/formatUtils';
 
 // 기본 날짜 설정 (해당 달 1일, 당일)
 const formatDate = (date) => {
@@ -24,10 +25,7 @@ const getDefaultDates = () => {
   };
 };
 
-// 금액 포맷 함수 (컴포넌트 외부)
-const formatCurrency = (value) => {
-  return new Intl.NumberFormat('ko-KR').format(value || 0);
-};
+// 금액 포맷 함수 - imported from formatUtils
 
 // 다중 필터링 함수 (AND 조건, 금액은 쉼표 유무 모두 지원) - 컴포넌트 외부
 const filterTrades = (trades, filterText) => {
@@ -913,4 +911,4 @@ const formatNumber = (value) => {
   }).format(value || 0);
 };
 
-export default TradeList;
+export default memo(TradeList);

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { inventoryProductionAPI } from '../services/api';
+import { formatCurrency as formatCurrencyBase, formatNumber as formatNumberBase, formatDate } from '../utils/formatUtils'; // [Refactor] 공통 유틸리티 사용
 import { useModalDraggable } from '../hooks/useModalDraggable';
 import { useConfirmModal } from './ConfirmModal';
 

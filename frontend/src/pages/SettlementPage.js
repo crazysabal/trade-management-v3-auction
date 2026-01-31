@@ -4,6 +4,7 @@ import { format, parseISO, addDays, differenceInDays, startOfDay, startOfMonth, 
 import { ko } from 'date-fns/locale';
 import './SettlementPage.css';
 import ConfirmModal from '../components/ConfirmModal';
+import { formatCurrency as formatCurrencyBase } from '../utils/formatUtils';
 
 const SettlementPage = ({ isWindow, initialHistory }) => {
   // Modes: 'new' (Drafting next settlement) | 'view' (Viewing history)
@@ -329,7 +330,7 @@ const SettlementPage = ({ isWindow, initialHistory }) => {
     });
   };
 
-  const formatCurrency = (val) => new Intl.NumberFormat('ko-KR').format(val || 0) + '원';
+  const formatCurrency = (val) => formatCurrencyBase(val) + '원';
 
   const formatWithCommas = (val) => {
     if (!val && val !== 0) return '';

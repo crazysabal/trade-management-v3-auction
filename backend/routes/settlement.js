@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../config/database');
+const settlementService = require('../services/settlementService');
 
 /**
  * 정산 요약 조회 (기간별 손익계산서)
@@ -279,8 +280,12 @@ router.get('/closing/:date', async (req, res) => {
             [date]
         );
 
-        // 만약 이미 마감된 데이터가 있다면 그대로 반환
-        if (closingRows.length > 0) {
+        // [FIX] 마감 데이터가 있더라도, today_inventory_value가 0이면 플레이스홀더로 간주하고 역산 수행
+        // (정산 확정 시 플레이스홀더만 생성되고 값이 채워지지 않는 경우 대응)
+        const hasValidClosingData = closingRows.length > 0
+            && parseFloat(closingRows[0].today_inventory_value || 0) > 0;
+
+        if (hasValidClosingData) {
             return res.json({
                 success: true,
                 created: true,
@@ -292,6 +297,7 @@ router.get('/closing/:date', async (req, res) => {
                 }
             });
         }
+
 
         // ==========================================
         // 마감 데이터가 없을 경우: 시스템 실시간 계산
@@ -584,22 +590,11 @@ router.get('/closing/:date', async (req, res) => {
  */
 router.get('/last-closed', async (req, res) => {
     try {
-        const [rows] = await db.query(`
-            SELECT * FROM period_closings ORDER BY end_date DESC LIMIT 1
-        `);
-
-        if (rows.length === 0) {
-            return res.json({ success: true, lastDate: null, lastInventory: 0 });
-        }
-
-        res.json({
-            success: true,
-            lastDate: rows[0].end_date,
-            lastInventory: rows[0].today_inventory || 0
-        });
+        const result = await settlementService.getLastClosed();
+        res.json({ success: true, ...result });
     } catch (error) {
         console.error('마지막 마감일 조회 오류:', error);
-        res.status(500).json({ false: false, message: '서버 오류' });
+        res.status(500).json({ success: false, message: '서버 오류' });
     }
 });
 
@@ -610,22 +605,7 @@ router.get('/last-closed', async (req, res) => {
 router.get('/history', async (req, res) => {
     try {
         const { startDate, endDate } = req.query;
-        let query = 'SELECT * FROM period_closings';
-        const params = [];
-
-        if (startDate && endDate) {
-            query += ' WHERE start_date >= ? AND end_date <= ?';
-            params.push(startDate, endDate);
-        }
-
-        query += ' ORDER BY start_date DESC';
-
-        // Use limit only if no filter
-        if (!startDate || !endDate) {
-            query += ' LIMIT 60';
-        }
-
-        const [rows] = await db.query(query, params);
+        const rows = await settlementService.getHistory(startDate, endDate);
         res.json({ success: true, data: rows });
     } catch (error) {
         console.error('마감 이력 조회 오류:', error);
@@ -856,25 +836,7 @@ router.post('/closing', async (req, res) => {
  */
 router.get('/audit/list', async (req, res) => {
     try {
-        const query = `
-            SELECT 
-                pi.id,
-                pi.purchase_date,
-                pi.remaining_quantity as system_quantity,
-                pi.unit_price,
-                pi.warehouse_id,
-                pi.sender, 
-                p.product_name,
-                p.grade,
-                p.weight,
-                w.name as warehouse_name
-            FROM purchase_inventory pi
-            JOIN products p ON pi.product_id = p.id
-            LEFT JOIN warehouses w ON pi.warehouse_id = w.id
-            WHERE pi.remaining_quantity > 0 AND pi.status = 'AVAILABLE'
-            ORDER BY p.product_name ASC, pi.purchase_date ASC
-        `;
-        const [rows] = await db.query(query);
+        const rows = await settlementService.getAuditList();
         res.json({ success: true, data: rows });
     } catch (error) {
         console.error('재고 실사 리스트 조회 오류:', error);
@@ -887,48 +849,13 @@ router.get('/audit/list', async (req, res) => {
  * POST /api/settlement/audit
  */
 router.post('/audit', async (req, res) => {
-    const connection = await db.getConnection();
     try {
-        await connection.beginTransaction();
-
-        const { audits } = req.body; // Array of { id, system_quantity, actual_quantity, reason }
-
-        for (const item of audits) {
-            const diff = parseFloat(item.actual_quantity) - parseFloat(item.system_quantity);
-
-            // 차이가 없으면 스킵
-            if (diff === 0) continue;
-
-            // 1. Inventory Adjustment 기록
-            await connection.query(`
-                INSERT INTO inventory_adjustments 
-                (purchase_inventory_id, adjustment_type, quantity_change, reason, notes, created_by)
-                VALUES (?, ?, ?, 'AUDIT', ?, 'system')
-            `, [
-                item.id,
-                diff > 0 ? 'INCREASE' : 'DECREASE',
-                Math.abs(diff),
-                item.reason || '재고 실사 보정'
-            ]);
-
-            // 2. Purchase Inventory 업데이트
-            await connection.query(`
-                UPDATE purchase_inventory 
-                SET remaining_quantity = ?, 
-                    status = IF(? <= 0, 'DEPLETED', 'AVAILABLE')
-                WHERE id = ?
-            `, [item.actual_quantity, item.actual_quantity, item.id]);
-        }
-
-        await connection.commit();
-        res.json({ success: true, message: '재고 실사가 반영되었습니다.' });
-
+        const { audits } = req.body;
+        const result = await settlementService.processAudit(audits);
+        res.json(result);
     } catch (error) {
-        await connection.rollback();
         console.error('재고 실사 반영 오류:', error);
         res.status(500).json({ success: false, message: '서버 오류가 발생했습니다.' });
-    } finally {
-        connection.release();
     }
 });
 

@@ -1,29 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { purchaseInventoryAPI } from '../services/api';
+import { formatCurrency, formatNumber, formatDate } from '../utils/formatUtils'; // [Refactor] 공통 유틸리티 사용
 import TradeDetailModal from './TradeDetailModal';
 import useDraggable from '../hooks/useDraggable';
 
-// 헬퍼 함수
-const formatCurrency = (value) => {
-    return new Intl.NumberFormat('ko-KR').format(value || 0);
-};
-
-const formatNumber = (value) => {
-    return new Intl.NumberFormat('ko-KR', {
-        minimumFractionDigits: 0,
-        maximumFractionDigits: 2
-    }).format(value || 0);
-};
-
-const formatDate = (dateString) => {
-    if (!dateString) return '-';
-    const date = new Date(dateString);
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
-};
+// formatCurrency, formatNumber, formatDate imported from formatUtils.js
 
 const getStatusBadge = (status) => {
     switch (status) {

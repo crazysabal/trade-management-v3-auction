@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import FloatingWindow from '../components/FloatingWindow';
 import Navbar from '../components/Navbar';
 import Taskbar from '../components/Taskbar';
@@ -52,6 +52,9 @@ const DesktopManager = () => {
     const { hasPermission } = usePermission(); // RBAC Hook
     const { openModal, ConfirmModalComponent } = useConfirmModal(); // [FIX] Move to top to avoid TDZ in launchApp
     const getScopedKey = useCallback((key) => user?.id ? `u${user.id}_${key}` : key, [user?.id]);
+
+    // [Performance] Debounce 타이머 참조 (localStorage 저장 최적화)
+    const saveTimersRef = useRef({});
 
     // ... (rest of code)
 
@@ -117,14 +120,23 @@ const DesktopManager = () => {
         localStorage.setItem(getScopedKey('window_mode'), mode);
     };
 
-    // 윈도우 상태 변경 시 localStorage 저장
+    // 윈도우 상태 변경 시 localStorage 저장 (Debounced)
     useEffect(() => {
         // [FIX] 로딩 전(null)에는 저장하지 않음 (빈 배열로 덮어쓰기 방지)
         if (windows === null) return;
 
-        // 불필요한 속성(isDirty 등) 제외하고 저장하거나, 초기화하여 저장
-        const dataToSave = windows.map(({ isDirty, ...rest }) => rest);
-        localStorage.setItem(getScopedKey('desktop_windows'), JSON.stringify(dataToSave));
+        // [Performance] 드래그 등 잦은 상태 변화로 인한 무거운 직렬화 작업(JSON.stringify) 최적화
+        const timerKey = 'global_desktop_save';
+        clearTimeout(saveTimersRef.current[timerKey]);
+
+        saveTimersRef.current[timerKey] = setTimeout(() => {
+            // 불필요한 속성(isDirty 등) 제외하고 저장하거나, 초기화하여 저장
+            const dataToSave = windows.map(({ isDirty, ...rest }) => rest);
+            localStorage.setItem(getScopedKey('desktop_windows'), JSON.stringify(dataToSave));
+            // console.log('💾 Desktop state saved to localStorage');
+        }, 1000); // 전체 저장은 1초 주기로 넉넉하게
+
+        return () => clearTimeout(saveTimersRef.current[timerKey]);
     }, [windows, getScopedKey]);
 
     useEffect(() => {
@@ -135,8 +147,8 @@ const DesktopManager = () => {
         }
     }, [activeWindowId, getScopedKey]);
 
-    const closeWindow = (id) => {
-        setWindows(prev => prev.filter(w => w.id !== id));
+    const closeWindow = useCallback((id) => {
+        setWindows(prev => prev ? prev.filter(w => w.id !== id) : prev);
         if (activeWindowId === id) {
             setActiveWindowId(null);
         }
@@ -145,7 +157,7 @@ const DesktopManager = () => {
             const { [`win-${id}`]: _, ...rest } = prev;
             return rest;
         });
-    };
+    }, [activeWindowId]);
 
     const bringToFront = (id) => {
         setWindows(prev => {
@@ -412,19 +424,22 @@ const DesktopManager = () => {
         });
     }, [closeAll, openModal]);
 
-    // 앱 렌더링 헬퍼
+    // [Performance] TradeList용 안정된 콜백
+    const handleOpenTradeEdit = useCallback((type, tradeId, viewMode = false) => {
+        launchApp(type, { initialTradeId: tradeId, initialViewMode: viewMode });
+    }, [launchApp]);
+
+    // 앱 렌더링 헬퍼 (각 컴포넌트는 자체 React.memo로 보호됨)
     const renderAppContent = (win) => {
         const { type, componentProps } = win;
 
         switch (type) {
-            case 'PURCHASE': return <TradePanel tradeType="PURCHASE" panelId={`win-${win.id}`} onClose={() => closeWindow(win.id)} onPrint={handlePrint} onInventoryUpdate={handleInventoryUpdate} onTradeChange={handleTradeChange} onDirtyChange={(isDirty) => handleWindowDirtyChange(`win-${win.id}`, isDirty)} updateProps={(props) => updateActiveWindowProps(`win-${win.id}`, props)} onLaunchApp={launchApp} {...componentProps} />;
-            case 'SALE': return <TradePanel tradeType="SALE" panelId={`win-${win.id}`} onClose={() => closeWindow(win.id)} onPrint={handlePrint} onInventoryUpdate={handleInventoryUpdate} onTradeChange={handleTradeChange} onDirtyChange={(isDirty) => handleWindowDirtyChange(`win-${win.id}`, isDirty)} updateProps={(props) => updateActiveWindowProps(`win-${win.id}`, props)} onLaunchApp={launchApp} {...componentProps} />;
-            case 'TRADE_LIST': return <TradeList isWindow={true} refreshKey={tradeRefreshKey} onOpenTradeEdit={(type, tradeId, viewMode = false) => launchApp(type, { initialTradeId: tradeId, initialViewMode: viewMode })} {...componentProps} />;
+            case 'PURCHASE': return <TradePanel tradeType="PURCHASE" panelId={`win-${win.id}`} onClose={closeWindow} onPrint={handlePrint} onInventoryUpdate={handleInventoryUpdate} onTradeChange={handleTradeChange} onDirtyChange={handleWindowDirtyChange} updateProps={updateActiveWindowProps} onLaunchApp={launchApp} {...componentProps} />;
+            case 'SALE': return <TradePanel tradeType="SALE" panelId={`win-${win.id}`} onClose={closeWindow} onPrint={handlePrint} onInventoryUpdate={handleInventoryUpdate} onTradeChange={handleTradeChange} onDirtyChange={handleWindowDirtyChange} updateProps={updateActiveWindowProps} onLaunchApp={launchApp} {...componentProps} />;
+            case 'TRADE_LIST': return <TradeList isWindow={true} refreshKey={tradeRefreshKey} onOpenTradeEdit={handleOpenTradeEdit} {...componentProps} />;
             case 'COMPANY_LIST': return <CompanyList isWindow={true} {...componentProps} />;
             case 'PRODUCT_LIST': return <IntegratedProductManagement isWindow={true} {...componentProps} />;
-            case 'INVENTORY_QUICK': return <InventoryQuickView isWindow={true} inventoryAdjustments={mergedInventoryAdjustments} refreshKey={inventoryRefreshKey} onInventoryLoaded={(items) => {
-                // 필요시 로드된 재고 정보를 상위로 전달
-            }} {...componentProps} />;
+            case 'INVENTORY_QUICK': return <InventoryQuickView isWindow={true} inventoryAdjustments={mergedInventoryAdjustments} refreshKey={inventoryRefreshKey} {...componentProps} />;
             case 'INVENTORY_LIST': return <InventoryList isWindow={true} {...componentProps} />;
             case 'INVENTORY_TRANSFER': return <InventoryTransferManagement isWindow={true} {...componentProps} />;
             case 'INVENTORY_PRODUCTION': return <InventoryProductionManagement isWindow={true} {...componentProps} />;
@@ -432,7 +447,7 @@ const DesktopManager = () => {
             case 'INVENTORY_AUDIT': return <InventoryAuditPage isWindow={true} {...componentProps} />;
 
             case 'MATCHING': return <MatchingPage isWindow={true} refreshKey={tradeRefreshKey} onTradeChange={handleTradeChange} onLaunchApp={launchApp} {...componentProps} />;
-            case 'AUCTION_IMPORT': return <AuctionImportV2 isWindow={true} onTradeChange={handleTradeChange} onClose={() => closeWindow(win.id)} {...componentProps} />;
+            case 'AUCTION_IMPORT': return <AuctionImportV2 isWindow={true} panelId={win.id} onTradeChange={handleTradeChange} onClose={closeWindow} {...componentProps} />;
             case 'AUCTION_STATEMENT': return <AuctionStatement isWindow={true} {...componentProps} />;
             case 'AUCTION_ACCOUNTS': return <AuctionAccounts isWindow={true} {...componentProps} />;
             case 'COMPANY_BALANCES': return <CompanyBalances isWindow={true} {...componentProps} />;
@@ -482,14 +497,26 @@ const DesktopManager = () => {
                     onMouseDown={() => bringToFront(win.id)}
                     onResizeStop={(newSize) => {
                         if (!isMobile) {
-                            localStorage.setItem(getScopedKey(`window_size_${win.type}`), JSON.stringify(newSize));
+                            // 상태는 즉시 업데이트 (UI 반영)
                             setWindows(prev => prev.map(w => w.id === win.id ? { ...w, size: newSize } : w));
+                            // localStorage 저장은 debounce (300ms)
+                            const timerKey = `size_${win.id}`;
+                            clearTimeout(saveTimersRef.current[timerKey]);
+                            saveTimersRef.current[timerKey] = setTimeout(() => {
+                                localStorage.setItem(getScopedKey(`window_size_${win.type}`), JSON.stringify(newSize));
+                            }, 300);
                         }
                     }}
                     onDragStop={(newPos) => {
                         if (!isMobile) {
-                            localStorage.setItem(getScopedKey(`window_position_${win.type}`), JSON.stringify(newPos));
+                            // 상태는 즉시 업데이트 (UI 반영)
                             setWindows(prev => prev.map(w => w.id === win.id ? { ...w, position: newPos } : w));
+                            // localStorage 저장은 debounce (300ms)
+                            const timerKey = `pos_${win.id}`;
+                            clearTimeout(saveTimersRef.current[timerKey]);
+                            saveTimersRef.current[timerKey] = setTimeout(() => {
+                                localStorage.setItem(getScopedKey(`window_position_${win.type}`), JSON.stringify(newPos));
+                            }, 300);
                         }
                     }}
                 >

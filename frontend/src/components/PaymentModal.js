@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { paymentAPI } from '../services/api';
 import { useModalDraggable } from '../hooks/useModalDraggable';
+import { formatCurrency } from '../utils/formatUtils';
 
 /**
  * 입금/출금 설정 공통 모달
@@ -125,16 +126,14 @@ const PaymentModal = ({
     onConfirm({ amount: 0, displayAmount: '', payment_method: '', notes: '' });
   };
 
-  const formatCurrency = (val) => {
-    return new Intl.NumberFormat('ko-KR').format(val || 0);
-  };
+  // formatCurrency - imported from formatUtils
 
   if (!isOpen) return null;
 
   const modalTitle = isPurchase ? '💸 출금(결제) 설정' : '💰 입금(수금) 설정';
 
   return createPortal(
-    <div className="modal-overlay" style={{ zIndex: 1100 }}>
+    <div className="modal-overlay" style={{ zIndex: 10500 }}>
       <div
         className="styled-modal"
         style={{

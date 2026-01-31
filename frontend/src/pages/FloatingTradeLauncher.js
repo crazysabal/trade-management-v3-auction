@@ -140,7 +140,7 @@ function FloatingTradeLauncher() {
                 key={win.id}
                 tradeType={win.type}
                 panelId={`floating-${win.id}`}
-                onSaveSuccess={(id) => console.log('Saved:', id)}
+                onSaveSuccess={() => { }}
                 onPrint={(tradeId) => setPrintModal({ isOpen: true, tradeId })}
                 onDirtyChange={() => { }}
                 onInventoryUpdate={handleInventoryUpdate}

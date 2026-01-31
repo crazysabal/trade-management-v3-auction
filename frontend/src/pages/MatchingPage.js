@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, memo } from 'react';
 import { createPortal } from 'react-dom';
 import { matchingAPI } from '../services/api';
 import { Link } from 'react-router-dom';
@@ -6,6 +6,8 @@ import ConfirmModal from '../components/ConfirmModal';
 import MatchingHistoryModal from '../components/MatchingHistoryModal';
 import MatchingQuantityInputModal from '../components/MatchingQuantityInputModal';
 import QuickPurchaseModal from '../components/QuickPurchaseModal';
+import { formatCurrency, formatNumber, formatDateShort } from '../utils/formatUtils';
+import '../styles/MatchingModal.css';
 
 function MatchingPage({ isWindow, refreshKey, onTradeChange, onLaunchApp }) {
   // 조회 조건
@@ -308,19 +310,7 @@ function MatchingPage({ isWindow, refreshKey, onTradeChange, onLaunchApp }) {
     });
   };
 
-  const formatCurrency = (value) => new Intl.NumberFormat('ko-KR').format(value || 0);
-
-  const formatNumber = (value) => new Intl.NumberFormat('ko-KR', {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 2
-  }).format(value || 0);
-
-  const formatDateShort = (dateString) => {
-    if (!dateString) return '-';
-    const date = dateString.split('T')[0];
-    const parts = date.split('-');
-    return `${parts[1]}-${parts[2]}`;
-  };
+  // formatCurrency, formatNumber, formatDateShort - imported from formatUtils
 
   // 품목 표시 형식: "품목명 중량kg (등급)" - 전표 등록 화면과 동일
   const formatProductName = (item) => {
@@ -1423,4 +1413,4 @@ function MatchingPage({ isWindow, refreshKey, onTradeChange, onLaunchApp }) {
   );
 }
 
-export default MatchingPage;
+export default memo(MatchingPage);

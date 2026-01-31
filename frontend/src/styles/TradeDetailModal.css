@@ -1,0 +1,203 @@
+﻿/* ?꾪몴 ?곸꽭 紐⑤떖 */
+.trade-detail-modal {
+  background: #fff;
+  border-radius: 12px;
+  width: 90%;
+  max-width: 800px;
+  max-height: 85vh;
+  overflow: hidden;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  display: flex;
+  flex-direction: column;
+}
+
+.trade-detail-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid #e5e7eb;
+  background: #f8fafc;
+}
+
+.trade-detail-modal-header-left {
+  display: flex;
+  align-items: center;
+}
+
+.trade-detail-modal-header h2 {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.trade-detail-header-summary {
+  display: flex;
+  align-items: center;
+  margin-left: 1.5rem;
+  font-size: 0.95rem;
+}
+
+.trade-detail-header-summary .summary-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.trade-detail-header-summary .summary-label {
+  color: #64748b;
+  font-size: 0.85rem;
+}
+
+.trade-detail-header-summary .summary-value {
+  color: #1e293b;
+  font-weight: 500;
+}
+
+.trade-detail-header-summary .summary-value.highlight {
+  color: #3b82f6;
+  font-weight: 600;
+}
+
+.trade-detail-header-summary .summary-divider {
+  margin: 0 0.75rem;
+  color: #d1d5db;
+}
+
+.trade-detail-modal-close {
+  background: none;
+  border: none;
+  font-size: 1.75rem;
+  cursor: pointer;
+  color: #94a3b8;
+  line-height: 1;
+  padding: 0;
+  transition: color 0.15s;
+}
+
+.trade-detail-modal-close:hover {
+  color: #64748b;
+}
+
+.trade-detail-modal-body {
+  flex: 1;
+  padding: 1rem;
+  overflow-y: auto;
+}
+
+.trade-detail-modal-loading,
+.trade-detail-modal-error,
+.trade-detail-modal-empty {
+  text-align: center;
+  padding: 3rem 1rem;
+  color: #64748b;
+}
+
+.trade-detail-modal-error {
+  color: #dc2626;
+}
+
+.trade-detail-info-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1rem;
+  padding: 0.75rem;
+  background: #f8fafc;
+  border-radius: 8px;
+  margin-bottom: 1.5rem;
+}
+
+.trade-detail-info-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.trade-detail-info-item.full-width {
+  grid-column: 1 / -1;
+}
+
+.trade-detail-info-item label {
+  font-size: 0.8rem;
+  color: #64748b;
+  font-weight: 500;
+}
+
+.trade-detail-info-value {
+  font-size: 0.95rem;
+  color: #1e293b;
+}
+
+.trade-detail-info-value.highlight {
+  color: #3b82f6;
+  font-weight: 600;
+}
+
+.trade-detail-info-value.total {
+  font-weight: 700;
+  color: #1565c0;
+  font-size: 1rem;
+}
+
+.trade-detail-section-title {
+  margin: 0 0 1rem 0;
+  color: #1e293b;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.trade-detail-table-container {
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.trade-detail-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.trade-detail-table thead tr {
+  background: #334155;
+}
+
+.trade-detail-table thead th {
+  padding: 0.75rem;
+  color: #fff;
+  font-weight: 500;
+  font-size: 0.875rem;
+  text-align: left;
+}
+
+.trade-detail-table tbody tr {
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.trade-detail-table tbody tr:last-child {
+  border-bottom: none;
+}
+
+.trade-detail-table tbody td {
+  padding: 0.75rem;
+  font-size: 0.9rem;
+}
+
+.trade-detail-table tfoot tr {
+  background: #f1f5f9;
+  border-top: 2px solid #e5e7eb;
+}
+
+.trade-detail-table tfoot td {
+  padding: 0.75rem;
+  font-size: 0.9rem;
+}
+
+.trade-detail-modal-footer {
+  padding: 1rem 1.5rem;
+  border-top: 1px solid #e5e7eb;
+  background: #f8fafc;
+  display: flex;
+  justify-content: flex-end;
+}
+

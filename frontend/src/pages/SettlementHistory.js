@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { format, parseISO, startOfMonth, endOfMonth, differenceInDays } from 'date-fns';
 import { ko } from 'date-fns/locale';
+import { formatCurrency as formatCurrencyBase } from '../utils/formatUtils'; // [Refactor] 공통 유틸리티 사용
 import './SettlementPage.css'; // Share styles or create new
 
 const SettlementHistory = ({ isWindow, onOpenDetail }) => {
@@ -35,7 +36,7 @@ const SettlementHistory = ({ isWindow, onOpenDetail }) => {
         }
     };
 
-    const formatCurrency = (val) => new Intl.NumberFormat('ko-KR').format(val || 0) + '원';
+    const formatCurrency = (val) => formatCurrencyBase(val) + '원'; // [Refactor] 래퍼 유지 ('원' 접미사)
 
     return (
         <div className="settlement-history-page" style={{ padding: '20px', height: '100%', overflow: 'auto', background: '#fff' }}>
