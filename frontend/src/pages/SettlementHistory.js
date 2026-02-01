@@ -1,6 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { format, parseISO, startOfMonth, endOfMonth, differenceInDays } from 'date-fns';
+import format from 'date-fns/format';
+import parseISO from 'date-fns/parseISO';
+import startOfMonth from 'date-fns/startOfMonth';
+import endOfMonth from 'date-fns/endOfMonth';
+import differenceInDays from 'date-fns/differenceInDays';
 import { ko } from 'date-fns/locale';
 import { formatCurrency as formatCurrencyBase } from '../utils/formatUtils'; // [Refactor] 공통 유틸리티 사용
 import './SettlementPage.css'; // Share styles or create new

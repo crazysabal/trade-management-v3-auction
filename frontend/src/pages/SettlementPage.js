@@ -1,6 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { format, parseISO, addDays, differenceInDays, startOfDay, startOfMonth, endOfMonth } from 'date-fns';
+import format from 'date-fns/format';
+import parseISO from 'date-fns/parseISO';
+import addDays from 'date-fns/addDays';
+import differenceInDays from 'date-fns/differenceInDays';
+import startOfDay from 'date-fns/startOfDay';
+import startOfMonth from 'date-fns/startOfMonth';
+import endOfMonth from 'date-fns/endOfMonth';
 import { ko } from 'date-fns/locale';
 import './SettlementPage.css';
 import ConfirmModal from '../components/ConfirmModal';

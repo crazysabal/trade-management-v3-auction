@@ -43,8 +43,10 @@ const RoleManagement = () => {
     const actionNames = { 'READ': '조회', 'CREATE': '등록', 'UPDATE': '수정', 'DELETE': '삭제' };
 
     useEffect(() => {
-        fetchRoles();
-        fetchPermissions();
+        const fetchInitialData = async () => {
+            await Promise.all([fetchRoles(), fetchPermissions()]);
+        };
+        fetchInitialData();
     }, []);
 
     const fetchRoles = async () => {
