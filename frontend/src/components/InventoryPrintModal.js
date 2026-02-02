@@ -437,7 +437,7 @@ const InventoryPrintModal = ({ isOpen, onClose, inventory, warehouses }) => {
                     }}>
                         {(() => {
                             const isDouble = layoutMode === 'double';
-                            const ROWS_PER_COLUMN = isDouble ? 40 : 36;
+                            const ROWS_PER_COLUMN = 36; // 1열/2열 모두 동일하게 36줄
                             const ROWS_PER_PAGE = isDouble ? ROWS_PER_COLUMN * 2 : ROWS_PER_COLUMN;
                             const allRows = [];
 
@@ -609,6 +609,7 @@ const InventoryPrintModal = ({ isOpen, onClose, inventory, warehouses }) => {
                                         Cols.push(<col key="g" style={{ width: `${sw.grade}%` }} />);
                                         Cols.push(<col key="q" style={{ width: `${sw.qty}%` }} />);
                                         Cols.push(<col key="p" style={{ width: `${sw.price}%` }} />);
+                                        if (showAllWarehouses) Cols.push(<col key="wh" style={{ width: '8%' }} />);
                                         if (showRemarks) Cols.push(<col key="r" style={{ width: `${sw.remarks}%` }} />);
 
                                         colGroup = <colgroup>{Cols}</colgroup>;
@@ -689,8 +690,8 @@ const InventoryPrintModal = ({ isOpen, onClose, inventory, warehouses }) => {
                                         );
                                     }
 
-                                    const fontSize = isDouble ? '8pt' : '10pt';
-                                    const rowHeight = isDouble ? '24px' : '28px'; // Taller rows for single column
+                                    const fontSize = '10pt'; // 1열/2열 동일한 폰트 크기
+                                    const rowHeight = '28px'; // 1열/2열 동일한 행 높이
 
                                     return (
                                         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: fontSize, tableLayout: 'fixed' }}>
@@ -702,6 +703,7 @@ const InventoryPrintModal = ({ isOpen, onClose, inventory, warehouses }) => {
                                                     let spanCount = 6;
                                                     if (showRemarks) spanCount++;
                                                     if (!isDouble && showDate) spanCount++;
+                                                    if (showAllWarehouses) spanCount++; // 창고 컨럼 추가
 
                                                     if (row.type === 'warehouse') {
                                                         return (
@@ -735,13 +737,18 @@ const InventoryPrintModal = ({ isOpen, onClose, inventory, warehouses }) => {
                                                                 <td style={{ textAlign: 'center', padding: '0', border: 'none' }}>
                                                                     {row.hideWeight ? '' : (Number(item.product_weight) > 0 ? `${Number(item.product_weight)}${(item.product_weight_unit || item.weight_unit || 'kg')}` : '-')}
                                                                 </td>
-                                                                <td style={{ textAlign: 'center', padding: '0', border: 'none' }}>{item.grade || '-'}</td>
+                                                                <td style={{ textAlign: 'center', padding: '0', border: 'none', whiteSpace: 'nowrap' }}>{item.grade || '-'}</td>
                                                                 <td className="text-right" style={{ textAlign: 'right', padding: '0 5px', border: 'none' }}>
                                                                     {Number(item.remaining_quantity).toLocaleString()}
                                                                 </td>
                                                                 <td className="text-right" style={{ textAlign: 'right', padding: '0 5px', border: 'none' }}>
                                                                     {item.unit_price ? Number(item.unit_price).toLocaleString() : '-'}
                                                                 </td>
+                                                                {showAllWarehouses && (
+                                                                    <td style={{ textAlign: 'center', padding: '0 3px', border: 'none', whiteSpace: 'nowrap', fontSize: '0.85em', color: '#666' }}>
+                                                                        {row.warehouseName || '-'}
+                                                                    </td>
+                                                                )}
                                                                 {showRemarks && <td style={{ border: 'none' }}></td>}
                                                             </tr>
                                                         );

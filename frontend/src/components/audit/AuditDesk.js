@@ -365,45 +365,74 @@ const AuditDesk = ({ audit, items, onUpdate, isSaving, reorderMode, setReorderMo
                             </tr>
                         </thead>
                         <Droppable droppableId="audit-list" type="AUDIT_ITEM">
-                            {(provided) => (
-                                <tbody ref={provided.innerRef} {...provided.droppableProps}>
-                                    {filteredItems.map((item, index) => (
-                                        <Draggable
-                                            key={item.id}
-                                            draggableId={String(item.id)}
-                                            index={index}
-                                            isDragDisabled={!canReorder}
-                                        >
-                                            {(provided, snapshot) => (
-                                                <TableDndRow provided={provided} snapshot={snapshot}>
-                                                    <AuditRow
-                                                        item={item}
+                            {(provided) => {
+                                // 전체 창고 모드(audit.warehouse_id가 없음)일 때 창고별 헤더 표시를 위한 로직
+                                const isAllWarehouseMode = !audit.warehouse_id;
+                                let lastWarehouseId = null;
+                                const colSpan = canReorder ? 7 : 6;
+
+                                return (
+                                    <tbody ref={provided.innerRef} {...provided.droppableProps}>
+                                        {filteredItems.map((item, index) => {
+                                            const showWarehouseHeader = isAllWarehouseMode && item.warehouse_id !== lastWarehouseId;
+                                            lastWarehouseId = item.warehouse_id;
+
+                                            return (
+                                                <React.Fragment key={item.id}>
+                                                    {showWarehouseHeader && (
+                                                        <tr style={{ backgroundColor: '#2d3748' }}>
+                                                            <td
+                                                                colSpan={colSpan}
+                                                                style={{
+                                                                    padding: '0.6rem 1rem',
+                                                                    fontWeight: 700,
+                                                                    fontSize: '0.95rem',
+                                                                    color: 'white',
+                                                                    borderTop: index > 0 ? '2px solid #1a202c' : 'none'
+                                                                }}
+                                                            >
+                                                                📦 {item.warehouse_name || '미지정 창고'}
+                                                            </td>
+                                                        </tr>
+                                                    )}
+                                                    <Draggable
+                                                        draggableId={String(item.id)}
                                                         index={index}
-                                                        canReorder={canReorder}
-                                                        audit={audit}
-                                                        onUpdate={onUpdate}
-                                                        columnWidths={columnWidths}
-                                                        provided={provided}
-                                                        snapshot={snapshot}
-                                                        onSync={async (itemId) => {
-                                                            try {
-                                                                const res = await inventoryAuditAPI.syncItem(audit.id, itemId);
-                                                                if (res.data.success) {
-                                                                    onRefresh(); // 부모 컴포넌트 새로고침 (데이터 다시 가져오기)
-                                                                }
-                                                            } catch (error) {
-                                                                console.error('동기화 실패:', error);
-                                                                alert('동기화 중 오류가 발생했습니다.');
-                                                            }
-                                                        }}
-                                                    />
-                                                </TableDndRow>
-                                            )}
-                                        </Draggable>
-                                    ))}
-                                    {provided.placeholder}
-                                </tbody>
-                            )}
+                                                        isDragDisabled={!canReorder}
+                                                    >
+                                                        {(provided, snapshot) => (
+                                                            <TableDndRow provided={provided} snapshot={snapshot}>
+                                                                <AuditRow
+                                                                    item={item}
+                                                                    index={index}
+                                                                    canReorder={canReorder}
+                                                                    audit={audit}
+                                                                    onUpdate={onUpdate}
+                                                                    columnWidths={columnWidths}
+                                                                    provided={provided}
+                                                                    snapshot={snapshot}
+                                                                    onSync={async (itemId) => {
+                                                                        try {
+                                                                            const res = await inventoryAuditAPI.syncItem(audit.id, itemId);
+                                                                            if (res.data.success) {
+                                                                                onRefresh(); // 부모 컴포넌트 새로고침 (데이터 다시 가져오기)
+                                                                            }
+                                                                        } catch (error) {
+                                                                            console.error('동기화 실패:', error);
+                                                                            alert('동기화 중 오류가 발생했습니다.');
+                                                                        }
+                                                                    }}
+                                                                />
+                                                            </TableDndRow>
+                                                        )}
+                                                    </Draggable>
+                                                </React.Fragment>
+                                            );
+                                        })}
+                                        {provided.placeholder}
+                                    </tbody>
+                                );
+                            }}
                         </Droppable>
                     </table>
                 </DragDropContext>

@@ -329,6 +329,7 @@ const AuditHistory = ({ onStart, onSelect, limit }) => {
                             autoFocus
                         >
                             <option value="">창고 선택</option>
+                            <option value="ALL" style={{ fontWeight: '600', color: '#2563eb' }}>📦 전체 창고 (통합 실사)</option>
                             {warehouses.length > 0 ? (
                                 warehouses.map(w => (
                                     <option key={w.id} value={w.id}>{w.name}</option>
@@ -418,7 +419,7 @@ const AuditHistory = ({ onStart, onSelect, limit }) => {
                                                 backgroundColor: index % 2 === 0 ? '#ffffff' : '#f8fafc'
                                             }}
                                         >
-                                            <td style={{ padding: '0.5rem 0.5rem', fontWeight: 600, color: '#2d3748', fontSize: '0.85rem' }}>{audit.warehouse_name}</td>
+                                            <td style={{ padding: '0.5rem 0.5rem', fontWeight: 600, color: '#2d3748', fontSize: '0.85rem' }}>{audit.warehouse_name || '📦 전체 창고'}</td>
                                             <td style={{ padding: '0.5rem 0.5rem', textAlign: 'center', color: '#4a5568', fontSize: '0.85rem' }}>{audit.audit_date}</td>
                                             <td style={{ padding: '0.5rem 0.5rem', textAlign: 'center' }}>
                                                 <span className={`session-status status-${audit.status.toLowerCase()}`} style={{ fontSize: '0.75rem', padding: '0.2rem 0.6rem' }}>

@@ -77,15 +77,18 @@ router.get('/:id', async (req, res) => {
                 pi.purchase_date,
                 pi.unit_price as unit_cost,
                 pi.remaining_quantity as current_quantity,
+                pi.warehouse_id,
+                w.name as warehouse_name,
                 c.company_name as purchase_store_name
             FROM inventory_audit_items ai
             LEFT JOIN products p ON ai.product_id = p.id
             LEFT JOIN purchase_inventory pi ON ai.inventory_id = pi.id
+            LEFT JOIN warehouses w ON pi.warehouse_id = w.id
             LEFT JOIN trade_details td ON pi.trade_detail_id = td.id
             LEFT JOIN trade_masters tm ON td.trade_master_id = tm.id
             LEFT JOIN companies c ON tm.company_id = c.id
             WHERE ai.audit_id = ?
-            ORDER BY pi.display_order ASC
+            ORDER BY pi.warehouse_id ASC, pi.display_order ASC
         `, [id]);
 
         res.json({
@@ -115,30 +118,53 @@ router.post('/start', async (req, res) => {
             throw new Error('창고와 실사 날짜는 필수 항목입니다.');
         }
 
-        // 1. 실약중인 동일 창고 실사 세션 확인
-        const [existing] = await connection.query(
-            'SELECT id FROM inventory_audits WHERE warehouse_id = ? AND status = "IN_PROGRESS"',
-            [warehouse_id]
-        );
+        const isAllWarehouses = warehouse_id === 'ALL';
 
-        if (existing.length > 0) {
-            throw new Error('해당 창고에 이미 진행 중인 실사 세션이 있습니다.');
+        // 1. 진행중인 동일 창고 실사 세션 확인
+        if (!isAllWarehouses) {
+            const [existing] = await connection.query(
+                'SELECT id FROM inventory_audits WHERE warehouse_id = ? AND status = "IN_PROGRESS"',
+                [warehouse_id]
+            );
+
+            if (existing.length > 0) {
+                throw new Error('해당 창고에 이미 진행 중인 실사 세션이 있습니다.');
+            }
+        } else {
+            // 전체 창고 모드: 아무 창고에서나 진행 중인 실사가 있으면 차단
+            const [existingAny] = await connection.query(
+                'SELECT id, warehouse_id FROM inventory_audits WHERE status = "IN_PROGRESS"'
+            );
+            if (existingAny.length > 0) {
+                throw new Error('진행 중인 실사 세션이 있습니다. 기존 실사를 완료하거나 취소 후 다시 시도하세요.');
+            }
         }
 
-        // 2. 마스터 생성
+        // 2. 마스터 생성 (전체 창고일 경우 warehouse_id는 NULL)
         const [masterResult] = await connection.query(`
             INSERT INTO inventory_audits (warehouse_id, audit_date, notes, status)
             VALUES (?, ?, ?, 'IN_PROGRESS')
-        `, [warehouse_id, audit_date, notes || '']);
+        `, [isAllWarehouses ? null : warehouse_id, audit_date, notes || '']);
 
         const audit_id = masterResult.insertId;
 
-        // 3. 현재 재고 스냅샷 생성 (해당 창고의 잔량 > 0 인 항목들)
-        const [inventoryItems] = await connection.query(`
-            SELECT id as inventory_id, product_id, remaining_quantity as system_quantity
+        // 3. 현재 재고 스냅샷 생성
+        let inventoryQuery = `
+            SELECT id as inventory_id, product_id, remaining_quantity as system_quantity, warehouse_id
             FROM purchase_inventory
-            WHERE warehouse_id = ? AND remaining_quantity > 0 AND status = 'AVAILABLE'
-        `, [warehouse_id]);
+            WHERE remaining_quantity > 0 AND status = 'AVAILABLE'
+        `;
+        const queryParams = [];
+
+        if (!isAllWarehouses) {
+            inventoryQuery += ' AND warehouse_id = ?';
+            queryParams.push(warehouse_id);
+        }
+
+        // 창고별, display_order 순으로 정렬
+        inventoryQuery += ' ORDER BY warehouse_id ASC, display_order ASC';
+
+        const [inventoryItems] = await connection.query(inventoryQuery, queryParams);
 
         if (inventoryItems.length > 0) {
             const auditItems = inventoryItems.map(item => [

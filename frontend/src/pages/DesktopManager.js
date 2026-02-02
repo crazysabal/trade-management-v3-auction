@@ -39,6 +39,7 @@ import UserManagement from './UserManagement';
 import PaymentMethodManagement from './PaymentMethodManagement';
 import { RESOURCE_METADATA } from '../config/menuConfig';
 import RoleManagement from './RoleManagement'; // RBAC Page
+import VoiceTradeTest from './VoiceTradeTest'; // 음성 전표 실험
 
 /**
  * DesktopManager
@@ -464,6 +465,7 @@ const DesktopManager = () => {
             case 'USER_MANAGEMENT': return <UserManagement isWindow={true} {...componentProps} />;
             case 'ROLE_MANAGEMENT': return <RoleManagement isWindow={true} {...componentProps} />;
             case 'PAYMENT_METHODS': return <PaymentMethodManagement isWindow={true} {...componentProps} />;
+            case 'VOICE_TRADE_TEST': return <VoiceTradeTest isWindow={true} {...componentProps} />;
             default: return <div>Unknown App: {type}</div>;
         }
     };

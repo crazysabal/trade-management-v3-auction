@@ -159,7 +159,7 @@ const AuditSession = ({ auditId, onBack, isMobile }) => {
                     </button>
                     <div style={{ flex: 1, overflow: 'hidden' }}>
                         <h1 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                            {audit.warehouse_name} <span style={{ fontSize: '0.9rem', color: '#718096', fontWeight: 400, marginLeft: '4px' }}>{audit.audit_date}</span>
+                            {audit.warehouse_name || '📦 전체 창고'} <span style={{ fontSize: '0.9rem', color: '#718096', fontWeight: 400, marginLeft: '4px' }}>{audit.audit_date}</span>
                         </h1>
                     </div>
 
@@ -214,7 +214,7 @@ const AuditSession = ({ auditId, onBack, isMobile }) => {
                         목록으로
                     </button>
                     <h1 className="page-title" style={{ fontSize: '1.25rem', fontWeight: 700, marginBottom: 0 }}>
-                        {audit.warehouse_name} 실사
+                        {audit.warehouse_name || '📦 전체 창고'} 실사
                         <span className={`session-status status-${audit.status.toLowerCase()}`} style={{ marginLeft: '0.75rem' }}>
                             {audit.status === 'IN_PROGRESS' ? '진행 중' : audit.status === 'COMPLETED' ? '완료' : '취소됨'}
                         </span>

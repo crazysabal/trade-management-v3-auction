@@ -93,6 +93,7 @@ export const MENU_CONFIG = [
             { id: 'USER_MANAGEMENT', label: '사용자/직원 관리', icon: '👥' },
             { id: 'ROLE_MANAGEMENT', label: '권한 관리', icon: '🔒' },
             { id: 'MESSAGE_TEST', label: '시스템 테스트', icon: '🧪' },
+            { id: 'VOICE_TRADE_TEST', label: '음성 전표 (실험)', icon: '🎤' },
         ]
     }
 ];
