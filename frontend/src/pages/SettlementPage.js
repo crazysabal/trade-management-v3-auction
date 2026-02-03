@@ -13,8 +13,8 @@ import ConfirmModal from '../components/ConfirmModal';
 import { formatCurrency as formatCurrencyBase } from '../utils/formatUtils';
 
 const SettlementPage = ({ isWindow, initialHistory }) => {
-  // Modes: 'new' (Drafting next settlement) | 'view' (Viewing history)
-  const [mode, setMode] = useState('new');
+  // Modes: 'idle' (Initial) | 'new' (Drafting next settlement) | 'view' (Viewing history)
+  const [mode, setMode] = useState('idle');
   const [historyList, setHistoryList] = useState([]);
 
   // Date State for NEW Settlement
@@ -56,8 +56,8 @@ const SettlementPage = ({ isWindow, initialHistory }) => {
   // --- Initialization ---
   useEffect(() => {
     fetchHistory();
-    initializeNextSettlement();
     fetchPaymentMethods();
+    // [Changed] Don't auto-initialize next settlement on mount
   }, []);
 
   // [New] Deep link support
@@ -122,6 +122,7 @@ const SettlementPage = ({ isWindow, initialHistory }) => {
 
   // --- Effect: When Dates Change or History Selected ---
   useEffect(() => {
+    if (mode === 'idle') return; // Skip fetching in idle mode
     let start, end;
     if (mode === 'new') {
       start = nextStartDate;
@@ -135,8 +136,14 @@ const SettlementPage = ({ isWindow, initialHistory }) => {
       const startStr = format(start, 'yyyy-MM-dd');
       const endStr = format(end, 'yyyy-MM-dd');
       fetchSettlementData(startStr, endStr);
+    } else if (mode === 'new') {
+      // [FIX] If range is invalid, reset calculations to zero but keep prev inventory
+      setSettlementData(prev => ({
+        ...defaultSettlementData,
+        prev_inventory_value: fixedPrevInventory
+      }));
     }
-  }, [mode, nextStartDate, targetEndDate, selectedHistory]);
+  }, [mode, nextStartDate, targetEndDate, selectedHistory, fixedPrevInventory]);
 
   // --- Effect: When History Selected ---
   useEffect(() => {
@@ -353,7 +360,7 @@ const SettlementPage = ({ isWindow, initialHistory }) => {
       <div className="settlement-sidebar">
         <div className="sidebar-header">
           <h3>📅 정산 이력</h3>
-          <button className="btn-new-settle" onClick={() => { initializeNextSettlement(); setMode('new'); }}>+ 새 정산</button>
+          <button className="btn-new-settle" onClick={() => { initializeNextSettlement(); }}>+ 새 정산</button>
         </div>
         <div className="history-list timeline">
           {historyList.length === 0 && <div style={{ padding: '1rem', color: '#888', textAlign: 'center' }}>이력이 없습니다.</div>}
@@ -382,363 +389,374 @@ const SettlementPage = ({ isWindow, initialHistory }) => {
 
       {/* Main Content */}
       <div className="settlement-main">
-        {/* Context Header */}
-        <div className="main-header">
-          <div className="context-title">
-            {mode === 'new' ? (
-              <>
-                <span className="badge new">새 정산</span>
-                <h3>차기 정산 수행</h3>
-              </>
-            ) : (
-              <>
-                <span className="badge view">이력 조회</span>
-                <h3>정산 상세 조회</h3>
-              </>
-            )}
+        {mode === 'idle' ? (
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#7f8c8d' }}>
+            <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>📊</div>
+            <h3 style={{ margin: '0 0 0.5rem 0', color: '#555' }}>정산 리포트</h3>
+            <p style={{ margin: 0, fontSize: '0.9rem' }}>왼쪽에서 정산 이력을 선택하거나,</p>
+            <p style={{ margin: '0.3rem 0 1rem 0', fontSize: '0.9rem' }}>"+ 새 정산" 버튼을 클릭하여 새로운 정산을 시작하세요.</p>
           </div>
+        ) : (
+          <>
+            {/* Context Header */}
+            <div className="main-header">
+              <div className="context-title">
+                {mode === 'new' ? (
+                  <>
+                    <span className="badge new">새 정산</span>
+                    <h3>차기 정산 수행</h3>
+                  </>
+                ) : (
+                  <>
+                    <span className="badge view">이력 조회</span>
+                    <h3>정산 상세 조회</h3>
+                  </>
+                )}
+              </div>
 
 
-          <div className="date-control-group">
-            <div className="date-field readonly">
-              <label>시작일 {mode === 'new' ? '(자동 지정)' : ''}</label>
-              <input
-                value={mode === 'new' ? format(nextStartDate, 'yyyy-MM-dd') : (selectedHistory ? format(parseISO(selectedHistory.start_date), 'yyyy-MM-dd') : '')}
-                disabled
-              />
-            </div>
-            <span className="arrow">➜</span>
-            <div className={`date-field ${mode === 'view' ? 'readonly' : ''}`}>
-              <label>마감 기준일</label>
-              <input
-                type="date"
-                value={targetEndDate ? format(targetEndDate, 'yyyy-MM-dd') : ''}
-                onChange={(e) => mode === 'new' && setTargetEndDate(parseISO(e.target.value))}
-                min={format(nextStartDate, 'yyyy-MM-dd')}
-                disabled={mode === 'view'}
-                style={{
-                  width: '100%',
-                  padding: '0.4rem',
-                  border: '1px solid #ddd',
-                  borderRadius: '4px',
-                  backgroundColor: mode === 'view' ? '#f5f5f5' : 'white',
-                  height: '36px'
-                }}
-              />
-            </div>
-            <div className="info-txt">
-              {mode === 'new'
-                ? `${getDurationDays(nextStartDate, targetEndDate)}일간 정산`
-                : (selectedHistory ? `${getDurationDays(parseISO(selectedHistory.start_date), parseISO(selectedHistory.end_date))}일간 정산` : '')}
-            </div>
-          </div>
-        </div>
-
-        {/* P&L Section */}
-        <div className="section-pnl">
-          <h2>📊 손익 리포트 ({mode === 'new'
-            ? `${format(nextStartDate, 'MM/dd')} ~ ${format(targetEndDate, 'MM/dd')}`
-            : (selectedHistory ? `${format(parseISO(selectedHistory.start_date), 'MM/dd')} ~ ${format(parseISO(selectedHistory.end_date), 'MM/dd')}` : '정산 이력')})</h2>
-          <div className="pnl-summary-row">
-            <div className="pnl-box revenue">
-              <span className="lbl">매출액</span>
-              <span className="val">{formatCurrency(settlementData.revenue)}</span>
-            </div>
-            <div className="op">-</div>
-            <div className="pnl-box cost">
-              <span className="lbl">매출원가</span>
-              <span className="val text-red">{formatCurrency(settlementData.cogs)}</span>
-            </div>
-            <div className="op">=</div>
-            <div className="pnl-box profit">
-              <span className="lbl">매출총이익</span>
-              <span className="val text-blue">{formatCurrency(settlementData.grossProfit)}</span>
-            </div>
-            <div className="op">-</div>
-            <div className="pnl-box expense">
-              <span className="lbl">판관비</span>
-              <span className="val text-red">{formatCurrency(settlementData.expenses)}</span>
-            </div>
-            {settlementData.inventoryLoss !== 0 && (
-              <>
-                <div className="op">+</div>
-                <div className="pnl-box adjustment">
-                  <span className="lbl">재고 조정 손익</span>
-                  <span className={`val ${settlementData.inventoryLoss >= 0 ? 'text-blue' : 'text-red'}`}>
-                    {formatCurrency(settlementData.inventoryLoss)}
-                  </span>
+              <div className="date-control-group">
+                <div className="date-field readonly">
+                  <label>시작일 {mode === 'new' ? '(자동 지정)' : ''}</label>
+                  <input
+                    value={mode === 'new' ? format(nextStartDate, 'yyyy-MM-dd') : (selectedHistory ? format(parseISO(selectedHistory.start_date), 'yyyy-MM-dd') : '')}
+                    disabled
+                  />
                 </div>
-              </>
-            )}
-            <div className="op">=</div>
-            <div className="pnl-box net highlight">
-              <span className="lbl">순이익</span>
-              <span className="val text-green">{formatCurrency(settlementData.netProfit)}</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Closing Section */}
-        <div className="section-closing">
-          <h2>{mode === 'new' ? '📝 정산 확인 및 확정' : '📝 정산 당시 기록'}</h2>
-
-          <div className="closing-grid">
-            <div className="card-panel">
-              <h4>📊 자산 흐름</h4>
-              <div className="asset-flow-box">
-                <div className="flow-row">
-                  <span className="lbl">기초 재고 ({mode === 'new' ? format(nextStartDate, 'MM/dd') : (selectedHistory ? format(parseISO(selectedHistory.start_date), 'MM/dd') : '-')})</span>
-                  <span className="val">{formatCurrency(settlementData.prev_inventory_value)}</span>
+                <span className="arrow">➜</span>
+                <div className={`date-field ${mode === 'view' ? 'readonly' : ''}`}>
+                  <label>마감 기준일</label>
+                  <input
+                    type="date"
+                    value={targetEndDate ? format(targetEndDate, 'yyyy-MM-dd') : ''}
+                    onChange={(e) => mode === 'new' && setTargetEndDate(parseISO(e.target.value))}
+                    min={format(nextStartDate, 'yyyy-MM-dd')}
+                    disabled={mode === 'view'}
+                    style={{
+                      width: '100%',
+                      padding: '0.4rem',
+                      border: '1px solid #ddd',
+                      borderRadius: '4px',
+                      backgroundColor: mode === 'view' ? '#f5f5f5' : 'white',
+                      height: '36px'
+                    }}
+                  />
                 </div>
-                <div className="flow-op">+</div>
-                <div className="flow-row">
-                  <span className="lbl">기간 매입 ({mode === 'new' ? getDurationDays(nextStartDate, targetEndDate) : (selectedHistory ? getDurationDays(parseISO(selectedHistory.start_date), parseISO(selectedHistory.end_date)) : 0)}일간)</span>
-                  <span className="val">{formatCurrency(settlementData.today_purchase_cost)}</span>
+                <div className="info-txt">
+                  {mode === 'new'
+                    ? `${getDurationDays(nextStartDate, targetEndDate)}일간 정산`
+                    : (selectedHistory ? `${getDurationDays(parseISO(selectedHistory.start_date), parseISO(selectedHistory.end_date))}일간 정산` : '')}
+                </div>
+              </div>
+            </div>
+
+            {/* P&L Section */}
+            <div className="section-pnl">
+              <h2>📊 손익 리포트 ({mode === 'new'
+                ? `${format(nextStartDate, 'MM/dd')} ~ ${format(targetEndDate, 'MM/dd')}`
+                : (selectedHistory ? `${format(parseISO(selectedHistory.start_date), 'MM/dd')} ~ ${format(parseISO(selectedHistory.end_date), 'MM/dd')}` : '정산 이력')})</h2>
+              <div className="pnl-summary-row">
+                <div className="pnl-box revenue">
+                  <span className="lbl">매출액</span>
+                  <span className="val">{formatCurrency(settlementData.revenue)}</span>
+                </div>
+                <div className="op">-</div>
+                <div className="pnl-box cost">
+                  <span className="lbl">매출원가</span>
+                  <span className="val text-red">{formatCurrency(settlementData.cogs)}</span>
+                </div>
+                <div className="op">=</div>
+                <div className="pnl-box profit">
+                  <span className="lbl">매출총이익</span>
+                  <span className="val text-blue">{formatCurrency(settlementData.grossProfit)}</span>
+                </div>
+                <div className="op">-</div>
+                <div className="pnl-box expense">
+                  <span className="lbl">판관비</span>
+                  <span className="val text-red">{formatCurrency(settlementData.expenses)}</span>
                 </div>
                 {settlementData.inventoryLoss !== 0 && (
                   <>
-                    <div className="flow-op">{settlementData.inventoryLoss > 0 ? '+' : '-'}</div>
-                    <div className="flow-row">
-                      <span className="lbl">재고 조정</span>
-                      <span className="val">{formatCurrency(Math.abs(settlementData.inventoryLoss))}</span>
+                    <div className="op">+</div>
+                    <div className="pnl-box adjustment">
+                      <span className="lbl">재고 조정 손익</span>
+                      <span className={`val ${settlementData.inventoryLoss >= 0 ? 'text-blue' : 'text-red'}`}>
+                        {formatCurrency(settlementData.inventoryLoss)}
+                      </span>
                     </div>
                   </>
                 )}
-                <div className="flow-op">-</div>
-                <div className="flow-row">
-                  <span className="lbl">
-                    기말 재고 ({mode === 'new' ? format(targetEndDate, 'MM/dd') : (selectedHistory ? format(parseISO(selectedHistory.end_date), 'MM/dd') : '-')})
-                    {settlementData.isReconstructed && <span className="recon-badge">역산됨</span>}
-                  </span>
-                  <span className="val">{formatCurrency(settlementData.today_inventory_value)}</span>
+                <div className="op">=</div>
+                <div className="pnl-box net highlight">
+                  <span className="lbl">순이익</span>
+                  <span className="val text-green">{formatCurrency(settlementData.netProfit)}</span>
                 </div>
-                {settlementData.isReconstructed && (
-                  <div className="recon-note">
-                    * {format(targetEndDate, 'MM/dd')} 당시 저장된 기록이 없어 수불부를 기반으로 역산된 추정치입니다.
-                  </div>
-                )}
-                <div className="divider"></div>
-                <div className="flow-row result">
-                  <span className="lbl">산출 원가 (재고 기준)</span>
-                  <span className="val">{formatCurrency(settlementData.calculated_cogs)}</span>
-                </div>
-                <div className="comparison-note">
-                  <span>판매 매칭 원가: {formatCurrency(settlementData.cogs)}</span>
-                  {Math.abs(settlementData.cogs - settlementData.calculated_cogs) > 100 && (
-                    <div className="diff-warning-box">
-                      ⚠️ 오차 발생: {formatCurrency(settlementData.cogs - settlementData.calculated_cogs)}
-                      <br />
-                      <small>(과거 재고 역산 과정에서 실시간 단가 적용 등으로 인한 차이가 발생할 수 있습니다.)</small>
+              </div>
+            </div>
+
+            {/* Closing Section */}
+            <div className="section-closing">
+              <h2>{mode === 'new' ? '📝 정산 확인 및 확정' : '📝 정산 당시 기록'}</h2>
+
+              <div className="closing-grid">
+                <div className="card-panel">
+                  <h4>📊 자산 흐름</h4>
+                  <div className="asset-flow-box">
+                    <div className="flow-row">
+                      <span className="lbl">기초 재고 ({mode === 'new' ? format(nextStartDate, 'MM/dd') : (selectedHistory ? format(parseISO(selectedHistory.start_date), 'MM/dd') : '-')})</span>
+                      <span className="val">{formatCurrency(settlementData.prev_inventory_value)}</span>
                     </div>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            <div className="card-panel">
-              <h4>💰 현금 흐름</h4>
-              <div className="asset-flow-box">
-                <div className="flow-row">
-                  <span className="lbl">입금</span>
-                  <span className={`val ${settlementData.cash_inflow >= 0 ? 'text-blue' : 'text-red'}`}>
-                    {(settlementData.cash_inflow >= 0 ? '+' : '') + formatCurrency(settlementData.cash_inflow)}
-                  </span>
-                </div>
-                <div className="flow-row">
-                  <span className="lbl">출금</span>
-                  <span className={`val ${settlementData.cash_outflow >= 0 ? 'text-red' : 'text-blue'}`}>
-                    {(settlementData.cash_outflow >= 0 ? '-' : '+') + formatCurrency(Math.abs(settlementData.cash_outflow))}
-                  </span>
-                </div>
-                <div className="flow-row">
-                  <span className="lbl">지출</span>
-                  <span className={`val ${settlementData.cash_expense >= 0 ? 'text-red' : 'text-blue'}`}>
-                    {(settlementData.cash_expense >= 0 ? '-' : '+') + formatCurrency(Math.abs(settlementData.cash_expense))}
-                  </span>
-                </div>
-
-                {/* [NEW] Detailed Breakdown - Grouped by Payment Method */}
-                {/* [NEW] Detailed Breakdown - Grouped by Payment Method & Detail */}
-                <div className="flow-breakdown" style={{ marginTop: '1.2rem' }}>
-                  {(() => {
-                    const groups = {};
-
-                    // Group Inflow/Outflow/Expenses and keep list
-                    (settlementData.cashFlowDetails || []).forEach(d => {
-                      const method = d.payment_method || '미지정';
-                      if (!groups[method]) groups[method] = { receipts: 0, payments: 0, expenses: 0, list: [] };
-                      if (d.transaction_type === 'RECEIPT') {
-                        groups[method].receipts += parseFloat(d.amount);
-                        groups[method].list.push({ type: 'RECEIPT', label: d.detail, amount: d.amount });
-                      } else {
-                        groups[method].payments += parseFloat(d.amount);
-                        groups[method].list.push({ type: 'PAYMENT', label: d.detail, amount: d.amount });
-                      }
-                    });
-
-                    (settlementData.expenseDetails || []).forEach(d => {
-                      const method = d.payment_method || '미지정';
-                      if (!groups[method]) groups[method] = { receipts: 0, payments: 0, expenses: 0, list: [] };
-                      groups[method].expenses += parseFloat(d.amount);
-                      groups[method].list.push({ type: 'EXPENSE', label: d.detail, amount: d.amount });
-                    });
-
-                    if (Object.keys(groups).length === 0) return <div className="empty-flow" style={{ fontSize: '0.85rem', color: '#888', textAlign: 'center', padding: '1rem' }}>해당 기간의 상세 내역이 없습니다.</div>;
-
-                    return Object.entries(groups).map(([method, vals], idx) => (
-                      <div key={idx} className="method-group-box" style={{ marginBottom: '1rem', background: '#f8fafc', padding: '0.8rem', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-                        <div style={{ fontWeight: 700, fontSize: '0.9rem', color: '#334155', marginBottom: '8px', display: 'flex', justifyContent: 'space-between' }}>
-                          <span>💳 {method}</span>
-                          <span style={{ fontSize: '0.8rem', fontWeight: 400 }}>{vals.list.length}건</span>
+                    <div className="flow-op">+</div>
+                    <div className="flow-row">
+                      <span className="lbl">기간 매입 ({mode === 'new' ? getDurationDays(nextStartDate, targetEndDate) : (selectedHistory ? getDurationDays(parseISO(selectedHistory.start_date), parseISO(selectedHistory.end_date)) : 0)}일간)</span>
+                      <span className="val">{formatCurrency(settlementData.today_purchase_cost)}</span>
+                    </div>
+                    {settlementData.inventoryLoss !== 0 && (
+                      <>
+                        <div className="flow-op">{settlementData.inventoryLoss > 0 ? '+' : '-'}</div>
+                        <div className="flow-row">
+                          <span className="lbl">재고 조정</span>
+                          <span className="val">{formatCurrency(Math.abs(settlementData.inventoryLoss))}</span>
                         </div>
-
-                        {/* Detail List */}
-                        <div className="group-detail-list">
-                          {vals.list.map((item, i) => {
-                            const impact = item.type === 'RECEIPT' ? item.amount : -item.amount;
-                            return (
-                              <div key={i} className="flow-sub-row" style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem', padding: '2px 0' }}>
-                                <span className="sub-lbl" style={{ color: '#475569', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, marginRight: '8px' }}>
-                                  <span style={{ fontSize: '0.7rem', color: '#94a3b8', marginRight: '4px' }}>[{item.type === 'RECEIPT' ? '입금' : item.type === 'PAYMENT' ? '출금' : '지출'}]</span>
-                                  {item.label}
-                                </span>
-                                <span className={`sub-val ${impact >= 0 ? 'text-blue' : 'text-red'}`} style={{ fontWeight: 500, whiteSpace: 'nowrap' }}>
-                                  {formatCurrency(impact)}
-                                </span>
-                              </div>
-                            );
-                          })}
-                        </div>
-
-                        {/* Summary for this method */}
-                        <div className="flow-sub-row" style={{ marginTop: '6px', borderTop: '1px solid #e2e8f0', paddingTop: '6px', textAlign: 'right' }}>
-                          <span style={{ fontSize: '0.8rem', color: '#64748b', marginRight: '8px' }}>수단별 소계:</span>
-                          <span className={`sub-val ${vals.receipts - vals.payments - vals.expenses >= 0 ? 'text-blue' : 'text-red'}`} style={{ fontWeight: 700 }}>
-                            {formatCurrency(vals.receipts - vals.payments - vals.expenses)}
-                          </span>
-                        </div>
+                      </>
+                    )}
+                    <div className="flow-op">-</div>
+                    <div className="flow-row">
+                      <span className="lbl">
+                        기말 재고 ({mode === 'new' ? format(targetEndDate, 'MM/dd') : (selectedHistory ? format(parseISO(selectedHistory.end_date), 'MM/dd') : '-')})
+                        {settlementData.isReconstructed && <span className="recon-badge">역산됨</span>}
+                      </span>
+                      <span className="val">{formatCurrency(settlementData.today_inventory_value)}</span>
+                    </div>
+                    {settlementData.isReconstructed && (
+                      <div className="recon-note">
+                        * {format(targetEndDate, 'MM/dd')} 당시 저장된 기록이 없어 수불부를 기반으로 역산된 추정치입니다.
                       </div>
-                    ));
-                  })()}
-                </div>
-
-                <div className="divider"></div>
-                <div className="flow-row result">
-                  <span className="lbl">순 현금 흐름</span>
-                  <span className="val">{formatCurrency(settlementData.cash_inflow - settlementData.cash_outflow - settlementData.cash_expense)}</span>
-                </div>
-                <div className="comparison-note" style={{ marginTop: '0.5rem', fontSize: '0.85rem', color: '#666' }}>
-                  * 위 흐름은 '선택 기간' 동안 발생한 합계입니다.
-                </div>
-              </div>
-            </div>
-
-            <div className="card-panel">
-              <h4>📋 실물 자산 정산 ({mode === 'new' ? '확인' : '기록'})</h4>
-              <div className="asset-flow-box">
-                <div className="audit-table-header" style={{ display: 'flex', fontSize: '0.85rem', fontWeight: 800, color: '#334155', marginBottom: '8px', padding: '0 4px', borderBottom: '2px solid #e2e8f0', paddingBottom: '4px' }}>
-                  <span style={{ flex: 1.5 }}>결제 수단</span>
-                  <span style={{ flex: 1.2, textAlign: 'right' }}>전산(기간)</span>
-                  <span style={{ flex: 1.2, textAlign: 'right' }}>실제(입력)</span>
-                </div>
-
-                {(() => {
-                  // [IMPORTANT] Use dynamic methods from DB
-                  // If not loaded yet, fallback to common ones
-                  const methods = paymentMethods.length > 0
-                    ? paymentMethods.filter(m => mode === 'new' ? m.is_active : true)
-                    : [{ code: 'CASH', name: '현금' }, { code: 'BANK', name: '계좌이체' }];
-
-                  // Create Name -> Code mapping for normalization (for cashFlowDetails/expenseDetails)
-                  const nameToCode = {};
-                  paymentMethods.forEach(pm => {
-                    nameToCode[pm.name] = pm.code;
-                    nameToCode[pm.code] = pm.code;
-                  });
-
-                  // Calculate system period totals per method (normalize to codes)
-                  const systemTotals = {};
-                  (settlementData.cashFlowDetails || []).forEach(d => {
-                    const code = nameToCode[d.payment_method] || d.payment_method;
-                    if (!systemTotals[code]) systemTotals[code] = 0;
-                    systemTotals[code] += (d.transaction_type === 'RECEIPT' ? d.amount : -d.amount);
-                  });
-                  (settlementData.expenseDetails || []).forEach(d => {
-                    const code = nameToCode[d.payment_method] || d.payment_method;
-                    if (!systemTotals[code]) systemTotals[code] = 0;
-                    systemTotals[code] -= d.amount;
-                  });
-
-                  return methods.map(m => {
-                    const code = m.code;
-                    const sysVal = systemTotals[code] || 0;
-                    const actVal = settlementData.actualMethodValues?.[code] ?? (mode === 'view' ? sysVal : '');
-                    const diff = (parseFloat(actVal) || 0) - sysVal;
-
-                    return (
-                      <div key={code} className={`audit-row ${Math.abs(diff) > 0 ? 'has-diff' : ''}`} style={{ display: 'flex', alignItems: 'center', marginBottom: '6px', padding: '6px', borderRadius: '6px', background: Math.abs(diff) > 0 ? '#fff1f2' : '#f8fafc', border: '1px solid', borderColor: Math.abs(diff) > 0 ? '#fda4af' : '#e2e8f0' }}>
-                        <span style={{ flex: 1.5, fontSize: '0.85rem', fontWeight: 600 }}>{m.name}</span>
-                        <span style={{ flex: 1.2, textAlign: 'right', fontSize: '0.8rem', color: '#475569' }}>{formatCurrency(sysVal)}</span>
-                        <div style={{ flex: 1.2, display: 'flex', justifyContent: 'flex-end' }}>
-                          <input
-                            type="text"
-                            placeholder="0"
-                            style={{ width: '90%', textAlign: 'right', padding: '4px 8px', fontSize: '1rem', fontWeight: '800', border: '1px solid #cbd5e1', borderRadius: '4px', color: '#1d4ed8', backgroundColor: mode === 'new' ? '#fff' : '#f8fafc' }}
-                            value={formatWithCommas(actVal)}
-                            onChange={(e) => {
-                              if (mode !== 'new') return;
-                              const rawVal = e.target.value.replace(/[^0-9-]/g, '');
-                              setSettlementData(prev => ({
-                                ...prev,
-                                actualMethodValues: { ...prev.actualMethodValues, [code]: rawVal }
-                              }));
-                            }}
-                            disabled={mode === 'view'}
-                          />
+                    )}
+                    <div className="divider"></div>
+                    <div className="flow-row result">
+                      <span className="lbl">산출 원가 (재고 기준)</span>
+                      <span className="val">{formatCurrency(settlementData.calculated_cogs)}</span>
+                    </div>
+                    <div className="comparison-note">
+                      <span>판매 매칭 원가: {formatCurrency(settlementData.cogs)}</span>
+                      {Math.abs(settlementData.cogs - settlementData.calculated_cogs) > 100 && (
+                        <div className="diff-warning-box">
+                          ⚠️ 오차 발생: {formatCurrency(settlementData.cogs - settlementData.calculated_cogs)}
+                          <br />
+                          <small>(과거 재고 역산 과정에서 실시간 단가 적용 등으로 인한 차이가 발생할 수 있습니다.)</small>
                         </div>
-                        {Math.abs(diff) > 0 && (
-                          <div style={{ position: 'absolute', right: '-85px', fontSize: '0.75rem', color: '#e11d48', fontWeight: 700 }}>
-                            {diff > 0 ? '+' : ''}{formatCurrency(diff)}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  });
-                })()}
-
-                <div className="divider" style={{ margin: '12px 0' }}></div>
-
-                {mode === 'view' && (
-                  <div className="read-only-note" style={{ marginTop: '1rem' }}>
-                    <label>마감 승인 일시</label>
-                    <div className="val">{settlementData.closedAt ? format(parseISO(settlementData.closedAt), 'yyyy-MM-dd HH:mm:ss') : '-'}</div>
+                      )}
+                    </div>
                   </div>
-                )}
+                </div>
 
-                <textarea
-                  className="memo-box"
-                  placeholder={mode === 'new' ? "마감 노트 입력 (예: 시재 오차 사유, 특이사항)" : "(내용 없음)"}
-                  value={settlementData.closing_note}
-                  onChange={(e) => setSettlementData(p => ({ ...p, closing_note: e.target.value }))}
-                  disabled={mode === 'view'}
-                  style={{ marginTop: mode === 'view' ? '0.5rem' : '1rem' }}
-                />
+                <div className="card-panel">
+                  <h4>💰 현금 흐름</h4>
+                  <div className="asset-flow-box">
+                    <div className="flow-row">
+                      <span className="lbl">입금</span>
+                      <span className={`val ${settlementData.cash_inflow >= 0 ? 'text-blue' : 'text-red'}`}>
+                        {(settlementData.cash_inflow >= 0 ? '+' : '') + formatCurrency(settlementData.cash_inflow)}
+                      </span>
+                    </div>
+                    <div className="flow-row">
+                      <span className="lbl">출금</span>
+                      <span className={`val ${settlementData.cash_outflow >= 0 ? 'text-red' : 'text-blue'}`}>
+                        {(settlementData.cash_outflow >= 0 ? '-' : '+') + formatCurrency(Math.abs(settlementData.cash_outflow))}
+                      </span>
+                    </div>
+                    <div className="flow-row">
+                      <span className="lbl">지출</span>
+                      <span className={`val ${settlementData.cash_expense >= 0 ? 'text-red' : 'text-blue'}`}>
+                        {(settlementData.cash_expense >= 0 ? '-' : '+') + formatCurrency(Math.abs(settlementData.cash_expense))}
+                      </span>
+                    </div>
 
-                {mode === 'new' ? (
-                  <button className="confirm-btn" onClick={performSave}>정산 확정</button>
-                ) : (
-                  isLatestHistory && (
-                    <button className="rollback-btn" onClick={handleDelete}>🗑️ 정산 확정 취소</button>
-                  )
-                )}
+                    {/* [NEW] Detailed Breakdown - Grouped by Payment Method */}
+                    {/* [NEW] Detailed Breakdown - Grouped by Payment Method & Detail */}
+                    <div className="flow-breakdown" style={{ marginTop: '1.2rem' }}>
+                      {(() => {
+                        const groups = {};
+
+                        // Group Inflow/Outflow/Expenses and keep list
+                        (settlementData.cashFlowDetails || []).forEach(d => {
+                          const method = d.payment_method || '미지정';
+                          if (!groups[method]) groups[method] = { receipts: 0, payments: 0, expenses: 0, list: [] };
+                          if (d.transaction_type === 'RECEIPT') {
+                            groups[method].receipts += parseFloat(d.amount);
+                            groups[method].list.push({ type: 'RECEIPT', label: d.detail, amount: d.amount });
+                          } else {
+                            groups[method].payments += parseFloat(d.amount);
+                            groups[method].list.push({ type: 'PAYMENT', label: d.detail, amount: d.amount });
+                          }
+                        });
+
+                        (settlementData.expenseDetails || []).forEach(d => {
+                          const method = d.payment_method || '미지정';
+                          if (!groups[method]) groups[method] = { receipts: 0, payments: 0, expenses: 0, list: [] };
+                          groups[method].expenses += parseFloat(d.amount);
+                          groups[method].list.push({ type: 'EXPENSE', label: d.detail, amount: d.amount });
+                        });
+
+                        if (Object.keys(groups).length === 0) return <div className="empty-flow" style={{ fontSize: '0.85rem', color: '#888', textAlign: 'center', padding: '1rem' }}>해당 기간의 상세 내역이 없습니다.</div>;
+
+                        return Object.entries(groups).map(([method, vals], idx) => (
+                          <div key={idx} className="method-group-box" style={{ marginBottom: '1rem', background: '#f8fafc', padding: '0.8rem', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                            <div style={{ fontWeight: 700, fontSize: '0.9rem', color: '#334155', marginBottom: '8px', display: 'flex', justifyContent: 'space-between' }}>
+                              <span>💳 {method}</span>
+                              <span style={{ fontSize: '0.8rem', fontWeight: 400 }}>{vals.list.length}건</span>
+                            </div>
+
+                            {/* Detail List */}
+                            <div className="group-detail-list">
+                              {vals.list.map((item, i) => {
+                                const impact = item.type === 'RECEIPT' ? item.amount : -item.amount;
+                                return (
+                                  <div key={i} className="flow-sub-row" style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem', padding: '2px 0' }}>
+                                    <span className="sub-lbl" style={{ color: '#475569', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, marginRight: '8px' }}>
+                                      <span style={{ fontSize: '0.7rem', color: '#94a3b8', marginRight: '4px' }}>[{item.type === 'RECEIPT' ? '입금' : item.type === 'PAYMENT' ? '출금' : '지출'}]</span>
+                                      {item.label}
+                                    </span>
+                                    <span className={`sub-val ${impact >= 0 ? 'text-blue' : 'text-red'}`} style={{ fontWeight: 500, whiteSpace: 'nowrap' }}>
+                                      {formatCurrency(impact)}
+                                    </span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+
+                            {/* Summary for this method */}
+                            <div className="flow-sub-row" style={{ marginTop: '6px', borderTop: '1px solid #e2e8f0', paddingTop: '6px', textAlign: 'right' }}>
+                              <span style={{ fontSize: '0.8rem', color: '#64748b', marginRight: '8px' }}>수단별 소계:</span>
+                              <span className={`sub-val ${vals.receipts - vals.payments - vals.expenses >= 0 ? 'text-blue' : 'text-red'}`} style={{ fontWeight: 700 }}>
+                                {formatCurrency(vals.receipts - vals.payments - vals.expenses)}
+                              </span>
+                            </div>
+                          </div>
+                        ));
+                      })()}
+                    </div>
+
+                    <div className="divider"></div>
+                    <div className="flow-row result">
+                      <span className="lbl">순 현금 흐름</span>
+                      <span className="val">{formatCurrency(settlementData.cash_inflow - settlementData.cash_outflow - settlementData.cash_expense)}</span>
+                    </div>
+                    <div className="comparison-note" style={{ marginTop: '0.5rem', fontSize: '0.85rem', color: '#666' }}>
+                      * 위 흐름은 '선택 기간' 동안 발생한 합계입니다.
+                    </div>
+                  </div>
+                </div>
+
+                <div className="card-panel">
+                  <h4>📋 실물 자산 정산 ({mode === 'new' ? '확인' : '기록'})</h4>
+                  <div className="asset-flow-box">
+                    <div className="audit-table-header" style={{ display: 'flex', fontSize: '0.85rem', fontWeight: 800, color: '#334155', marginBottom: '8px', padding: '0 4px', borderBottom: '2px solid #e2e8f0', paddingBottom: '4px' }}>
+                      <span style={{ flex: 1.5 }}>결제 수단</span>
+                      <span style={{ flex: 1.2, textAlign: 'right' }}>전산(기간)</span>
+                      <span style={{ flex: 1.2, textAlign: 'right' }}>실제(입력)</span>
+                    </div>
+
+                    {(() => {
+                      // [IMPORTANT] Use dynamic methods from DB
+                      // If not loaded yet, fallback to common ones
+                      const methods = paymentMethods.length > 0
+                        ? paymentMethods.filter(m => mode === 'new' ? m.is_active : true)
+                        : [{ code: 'CASH', name: '현금' }, { code: 'BANK', name: '계좌이체' }];
+
+                      // Create Name -> Code mapping for normalization (for cashFlowDetails/expenseDetails)
+                      const nameToCode = {};
+                      paymentMethods.forEach(pm => {
+                        nameToCode[pm.name] = pm.code;
+                        nameToCode[pm.code] = pm.code;
+                      });
+
+                      // Calculate system period totals per method (normalize to codes)
+                      const systemTotals = {};
+                      (settlementData.cashFlowDetails || []).forEach(d => {
+                        const code = nameToCode[d.payment_method] || d.payment_method;
+                        if (!systemTotals[code]) systemTotals[code] = 0;
+                        systemTotals[code] += (d.transaction_type === 'RECEIPT' ? d.amount : -d.amount);
+                      });
+                      (settlementData.expenseDetails || []).forEach(d => {
+                        const code = nameToCode[d.payment_method] || d.payment_method;
+                        if (!systemTotals[code]) systemTotals[code] = 0;
+                        systemTotals[code] -= d.amount;
+                      });
+
+                      return methods.map(m => {
+                        const code = m.code;
+                        const sysVal = systemTotals[code] || 0;
+                        const actVal = settlementData.actualMethodValues?.[code] ?? (mode === 'view' ? sysVal : '');
+                        const diff = (parseFloat(actVal) || 0) - sysVal;
+
+                        return (
+                          <div key={code} className={`audit-row ${Math.abs(diff) > 0 ? 'has-diff' : ''}`} style={{ display: 'flex', alignItems: 'center', marginBottom: '6px', padding: '6px', borderRadius: '6px', background: Math.abs(diff) > 0 ? '#fff1f2' : '#f8fafc', border: '1px solid', borderColor: Math.abs(diff) > 0 ? '#fda4af' : '#e2e8f0' }}>
+                            <span style={{ flex: 1.5, fontSize: '0.85rem', fontWeight: 600 }}>{m.name}</span>
+                            <span style={{ flex: 1.2, textAlign: 'right', fontSize: '0.8rem', color: '#475569' }}>{formatCurrency(sysVal)}</span>
+                            <div style={{ flex: 1.2, display: 'flex', justifyContent: 'flex-end' }}>
+                              <input
+                                type="text"
+                                placeholder="0"
+                                style={{ width: '90%', textAlign: 'right', padding: '4px 8px', fontSize: '1rem', fontWeight: '800', border: '1px solid #cbd5e1', borderRadius: '4px', color: '#1d4ed8', backgroundColor: mode === 'new' ? '#fff' : '#f8fafc' }}
+                                value={formatWithCommas(actVal)}
+                                onChange={(e) => {
+                                  if (mode !== 'new') return;
+                                  const rawVal = e.target.value.replace(/[^0-9-]/g, '');
+                                  setSettlementData(prev => ({
+                                    ...prev,
+                                    actualMethodValues: { ...prev.actualMethodValues, [code]: rawVal }
+                                  }));
+                                }}
+                                disabled={mode === 'view'}
+                              />
+                            </div>
+                            {Math.abs(diff) > 0 && (
+                              <div style={{ position: 'absolute', right: '-85px', fontSize: '0.75rem', color: '#e11d48', fontWeight: 700 }}>
+                                {diff > 0 ? '+' : ''}{formatCurrency(diff)}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      });
+                    })()}
+
+                    <div className="divider" style={{ margin: '12px 0' }}></div>
+
+                    {mode === 'view' && (
+                      <div className="read-only-note" style={{ marginTop: '1rem' }}>
+                        <label>마감 승인 일시</label>
+                        <div className="val">{settlementData.closedAt ? format(parseISO(settlementData.closedAt), 'yyyy-MM-dd HH:mm:ss') : '-'}</div>
+                      </div>
+                    )}
+
+                    <textarea
+                      className="memo-box"
+                      placeholder={mode === 'new' ? "마감 노트 입력 (예: 시재 오차 사유, 특이사항)" : "(내용 없음)"}
+                      value={settlementData.closing_note}
+                      onChange={(e) => setSettlementData(p => ({ ...p, closing_note: e.target.value }))}
+                      disabled={mode === 'view'}
+                      style={{ marginTop: mode === 'view' ? '0.5rem' : '1rem' }}
+                    />
+
+                    {mode === 'new' ? (
+                      <button className="confirm-btn" onClick={performSave}>정산 확정</button>
+                    ) : (
+                      isLatestHistory && (
+                        <button className="rollback-btn" onClick={handleDelete}>🗑️ 정산 확정 취소</button>
+                      )
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
-          </div>
-        </div>
-      </div>
+          </>
+        )}
 
-      <ConfirmModal {...modalConfig} onClose={closeModal} />
-    </div >
+        <ConfirmModal {...modalConfig} onClose={closeModal} />
+      </div>
+    </div>
   );
 };
 

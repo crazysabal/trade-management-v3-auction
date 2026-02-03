@@ -143,7 +143,35 @@ router.get('/all-sales', async (req, res) => {
         overall_status = 'PARTIAL';
       }
 
-      // 해당 날짜 기준 잔고 계산
+      // 해당 날짜 기준 전잔금 계산 (전일 마감 잔고)
+      const [prevBalanceResult] = await db.query(`
+        SELECT 
+          IFNULL((
+            SELECT SUM(t.total_price) 
+            FROM trade_masters t 
+            WHERE t.company_id = ? 
+              AND t.trade_type = 'SALE' 
+              AND t.status != 'CANCELLED'
+              AND t.trade_date < ?
+          ), 0) - IFNULL((
+            SELECT SUM(p.amount) 
+            FROM payment_transactions p 
+            WHERE p.company_id = ? 
+              AND p.transaction_type = 'RECEIPT'
+              AND p.transaction_date < ?
+          ), 0) as prev_balance
+      `, [trade.company_id, trade.trade_date, trade.company_id, trade.trade_date]);
+
+      // 해당 날짜 입금액 계산
+      const [depositResult] = await db.query(`
+        SELECT SUM(amount) as today_deposit
+        FROM payment_transactions
+        WHERE company_id = ?
+          AND transaction_type = 'RECEIPT'
+          AND transaction_date = ?
+      `, [trade.company_id, trade.trade_date]);
+
+      // 해당 날짜 기준 마감 잔고 (당일 포함)
       const [balanceResult] = await db.query(`
         SELECT 
           IFNULL((
@@ -162,6 +190,8 @@ router.get('/all-sales', async (req, res) => {
           ), 0) as balance
       `, [trade.company_id, trade.trade_date, trade.company_id, trade.trade_date]);
 
+      const prevBalance = parseFloat(prevBalanceResult[0]?.prev_balance) || 0;
+      const todayDeposit = parseFloat(depositResult[0]?.today_deposit) || 0;
       const balance = parseFloat(balanceResult[0]?.balance) || 0;
       const totalSales = parseFloat(trade.total_sales_amount) || 0;
       const totalPurchase = parseFloat(trade.total_purchase_amount) || 0;
@@ -172,13 +202,145 @@ router.get('/all-sales', async (req, res) => {
         ...trade,
         overall_status,
         unmatched_quantity: parseFloat(trade.total_quantity) - parseFloat(trade.matched_quantity),
+        prev_balance: prevBalance,
+        today_deposit: todayDeposit,
         balance: balance,
         margin: margin,
         margin_rate: marginRate.toFixed(1)
       };
     }));
 
-    res.json({ success: true, data: result });
+    // 개별 입금 내역 조회 (날짜별) - 거래처별 그룹화
+    const [paymentTransactions] = await db.query(`
+      SELECT 
+        pt.id,
+        pt.transaction_date,
+        pt.company_id,
+        pt.payment_method,
+        pt.amount,
+        pt.notes,
+        c.company_name,
+        c.business_name,
+        c.sort_order
+      FROM payment_transactions pt
+      LEFT JOIN companies c ON pt.company_id = c.id
+      WHERE pt.transaction_type = 'RECEIPT'
+        AND pt.transaction_date >= ?
+        AND pt.transaction_date <= ?
+      ORDER BY pt.transaction_date DESC, pt.id DESC
+    `, [filterStartDate, filterEndDate]);
+
+    // 매출 없이 입금만 있는 거래처 찾기 (날짜+거래처 조합 기준)
+    const salesCompanyDateSet = new Set(
+      result.map(r => `${r.trade_date.split('T')[0]}_${r.company_id}`)
+    );
+
+    // 입금만 있는 거래처+날짜 조합을 그룹화
+    const paymentOnlyMap = new Map();
+    for (const pt of paymentTransactions) {
+      const dateStr = pt.transaction_date?.split('T')[0] || pt.transaction_date;
+      const key = `${dateStr}_${pt.company_id}`;
+
+      // 해당 날짜에 매출이 있는 거래처는 스킵
+      if (salesCompanyDateSet.has(key)) continue;
+
+      if (!paymentOnlyMap.has(key)) {
+        paymentOnlyMap.set(key, {
+          trade_date: dateStr,
+          company_id: pt.company_id,
+          company_name: pt.company_name,
+          customer_name: pt.business_name,
+          sort_order: pt.sort_order || 9999,
+          payments: []
+        });
+      }
+      paymentOnlyMap.get(key).payments.push(pt);
+    }
+
+    // 입금만 있는 거래처에 대해 잔고 계산
+    const paymentOnlyCompanies = await Promise.all(
+      Array.from(paymentOnlyMap.values()).map(async (item) => {
+        // 전일 잔액 계산
+        const [prevBalanceResult] = await db.query(`
+          SELECT 
+            IFNULL((
+              SELECT SUM(t.total_price) 
+              FROM trade_masters t 
+              WHERE t.company_id = ? 
+                AND t.trade_type = 'SALE' 
+                AND t.status != 'CANCELLED'
+                AND t.trade_date < ?
+            ), 0) - IFNULL((
+              SELECT SUM(p.amount) 
+              FROM payment_transactions p 
+              WHERE p.company_id = ? 
+                AND p.transaction_type = 'RECEIPT'
+                AND p.transaction_date < ?
+            ), 0) as prev_balance
+        `, [item.company_id, item.trade_date, item.company_id, item.trade_date]);
+
+        // 당일 입금액 합계
+        const todayDeposit = item.payments.reduce((sum, p) => sum + parseFloat(p.amount || 0), 0);
+
+        // 당일 잔금 계산
+        const [balanceResult] = await db.query(`
+          SELECT 
+            IFNULL((
+              SELECT SUM(t.total_price) 
+              FROM trade_masters t 
+              WHERE t.company_id = ? 
+                AND t.trade_type = 'SALE' 
+                AND t.status != 'CANCELLED'
+                AND t.trade_date <= ?
+            ), 0) - IFNULL((
+              SELECT SUM(p.amount) 
+              FROM payment_transactions p 
+              WHERE p.company_id = ? 
+                AND p.transaction_type = 'RECEIPT'
+                AND p.transaction_date <= ?
+            ), 0) as balance
+        `, [item.company_id, item.trade_date, item.company_id, item.trade_date]);
+
+        const prevBalance = parseFloat(prevBalanceResult[0]?.prev_balance) || 0;
+        const balance = parseFloat(balanceResult[0]?.balance) || 0;
+        const paymentMethods = [...new Set(item.payments.map(p => p.payment_method))].join(', ');
+
+        return {
+          trade_master_id: `payment-only-${item.company_id}-${item.trade_date}`,
+          trade_date: item.trade_date,
+          company_id: item.company_id,
+          company_name: item.company_name,
+          customer_name: item.customer_name,
+          sort_order: item.sort_order,
+          total_amount: 0,
+          item_count: 0,
+          overall_status: 'PAYMENT_ONLY',
+          prev_balance: prevBalance,
+          today_deposit: todayDeposit,
+          balance: balance,
+          margin: 0,
+          margin_rate: '0.0',
+          payment_methods: paymentMethods,
+          is_payment_only: true
+        };
+      })
+    );
+
+    // 매출 전표 + 입금만 있는 거래처 합치기
+    const combinedResult = [...result, ...paymentOnlyCompanies];
+
+    // 날짜 내림차순, 정렬순서, 거래처명 순으로 정렬
+    combinedResult.sort((a, b) => {
+      const dateA = a.trade_date.split('T')[0];
+      const dateB = b.trade_date.split('T')[0];
+      if (dateA !== dateB) return dateB.localeCompare(dateA);
+      const sortA = a.sort_order || 9999;
+      const sortB = b.sort_order || 9999;
+      if (sortA !== sortB) return sortA - sortB;
+      return (a.customer_name || '').localeCompare(b.customer_name || '');
+    });
+
+    res.json({ success: true, data: combinedResult, paymentTransactions: paymentTransactions || [] });
   } catch (error) {
     console.error('전체 매출 전표 조회 오류:', error);
     res.status(500).json({ success: false, message: '서버 오류가 발생했습니다.' });

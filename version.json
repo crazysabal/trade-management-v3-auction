@@ -1,6 +1,6 @@
 {
     "system_name": "Hongda Biz",
-    "version": "1.0.40",
-    "description": "Hongda Biz v1.0.40 - Major UX Overhaul, Kanban Drag-Handle & Print/Focus Fixes",
-    "date": "2026-01-24"
+    "version": "1.0.41",
+    "description": "Hongda Biz v1.0.41 - InventoryPrintModal ReferenceError Fix",
+    "date": "2026-02-03"
 }

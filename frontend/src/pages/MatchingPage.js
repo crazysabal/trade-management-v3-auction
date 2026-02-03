@@ -26,6 +26,9 @@ function MatchingPage({ isWindow, refreshKey, onTradeChange, onLaunchApp }) {
   // 미매칭 전체 전표 (오른쪽 패널)
   const [unmatchedTrades, setUnmatchedTrades] = useState([]);
 
+  // 결제 방법별 입금 합계
+  const [paymentTransactions, setPaymentTransactions] = useState([]);
+
   // 매칭 모달
   const [matchingModal, setMatchingModal] = useState({
     isOpen: false,
@@ -145,6 +148,8 @@ function MatchingPage({ isWindow, refreshKey, onTradeChange, onLaunchApp }) {
       setLoading(true);
       const response = await matchingAPI.getAllSales(dateRange);
       const allSales = response.data.data || [];
+      const transactions = response.data.paymentTransactions || [];
+      setPaymentTransactions(transactions);
 
       const dateMap = new Map();
       const start = new Date(dateRange.start_date);
@@ -172,7 +177,7 @@ function MatchingPage({ isWindow, refreshKey, onTradeChange, onLaunchApp }) {
           const dateData = dateMap.get(dateStr);
           dateData.trades.push(trade);
           dateData.totalAmount += parseFloat(trade.total_amount) || 0;
-          if (trade.overall_status !== 'MATCHED') {
+          if (trade.overall_status !== 'MATCHED' && trade.overall_status !== 'PAYMENT_ONLY' && !trade.is_payment_only) {
             dateData.unmatchedCount++;
             unmatched.push(trade);
           }
@@ -865,8 +870,9 @@ function MatchingPage({ isWindow, refreshKey, onTradeChange, onLaunchApp }) {
                       }}>
                         {(() => {
                           const trades = dateData.trades || [];
-                          const total = trades.length;
-                          const completed = trades.filter(t => t.overall_status === 'MATCHED').length;
+                          const salesOnly = trades.filter(t => !t.is_payment_only && t.overall_status !== 'PAYMENT_ONLY');
+                          const total = salesOnly.length;
+                          const completed = salesOnly.filter(t => t.overall_status === 'MATCHED').length;
                           const unmatched = total - completed;
 
                           if (total === 0) return <span style={{ color: '#ccc', fontSize: '0.8rem' }}>-</span>;
@@ -908,11 +914,13 @@ function MatchingPage({ isWindow, refreshKey, onTradeChange, onLaunchApp }) {
                 <tr>
                   <th>거래처명</th>
                   {/* Fixed widths to match the footer */}
+                  <th className="text-right" style={{ width: '100px', whiteSpace: 'nowrap' }}>전잔금</th>
                   <th className="text-right" style={{ width: '100px' }}>매출액</th>
-                  <th className="text-right" style={{ width: '100px' }}>잔고</th>
-                  <th className="text-right" style={{ width: '100px' }}>마진</th>
-                  <th className="text-center" style={{ width: '80px' }}>마진율</th>
-                  <th className="text-center" style={{ width: '80px' }}>상태</th>
+                  <th className="text-right" style={{ width: '90px' }}>마진</th>
+                  <th className="text-center" style={{ width: '70px' }}>마진율</th>
+                  <th className="text-right" style={{ width: '100px', whiteSpace: 'nowrap' }}>입금액</th>
+                  <th className="text-right" style={{ width: '100px' }}>잔금</th>
+                  <th className="text-center" style={{ width: '70px' }}>상태</th>
                 </tr>
               </thead>
               <tbody>
@@ -923,42 +931,63 @@ function MatchingPage({ isWindow, refreshKey, onTradeChange, onLaunchApp }) {
                     </td>
                   </tr>
                 ) : (
-                  salesData.map((sale) => {
-                    const margin = parseFloat(sale.margin) || 0;
-                    const marginRate = parseFloat(sale.margin_rate) || 0;
-                    const balance = parseFloat(sale.balance) || 0;
-                    const isFullyMatched = sale.overall_status === 'MATCHED';
+                  <>
+                    {salesData.map((sale) => {
+                      const margin = parseFloat(sale.margin) || 0;
+                      const marginRate = parseFloat(sale.margin_rate) || 0;
+                      const balance = parseFloat(sale.balance) || 0;
+                      const isFullyMatched = sale.overall_status === 'MATCHED';
+                      const isPaymentOnly = sale.is_payment_only || sale.overall_status === 'PAYMENT_ONLY';
 
-                    return (
-                      <tr
-                        key={sale.trade_master_id}
-                        onDoubleClick={() => handleTradeDoubleClick(sale)}
-                        style={{ cursor: 'pointer' }}
-                        title="더블클릭하여 매칭"
-                      >
-                        <td
-                          style={{ fontWeight: '500', cursor: 'help' }}
-                          title={sale.customer_name}
+                      return (
+                        <tr
+                          key={sale.trade_master_id}
+                          onDoubleClick={() => !isPaymentOnly && handleTradeDoubleClick(sale)}
+                          style={{
+                            cursor: isPaymentOnly ? 'default' : 'pointer',
+                            backgroundColor: isPaymentOnly ? '#e3f2fd' : undefined
+                          }}
+                          title={isPaymentOnly ? '입금만 있는 거래처' : '더블클릭하여 매칭'}
                         >
-                          {sale.company_name || sale.customer_name}
-                        </td>
-                        <td className="text-right">{formatCurrency(sale.total_amount)}</td>
-                        <td className="text-right" style={{ color: balance > 0 ? '#e74c3c' : '#27ae60' }}>
-                          {formatCurrency(balance)}
-                        </td>
-                        <td className="text-right" style={{ color: isFullyMatched ? (margin >= 0 ? '#27ae60' : '#e74c3c') : '#9ca3af' }}>
-                          {isFullyMatched ? formatCurrency(margin) : '-'}
-                        </td>
-                        <td className="text-center" style={{
-                          color: isFullyMatched ? (marginRate >= 0 ? '#27ae60' : '#e74c3c') : '#9ca3af',
-                          fontWeight: '500'
-                        }}>
-                          {isFullyMatched ? `${marginRate}%` : '-'}
-                        </td>
-                        <td className="text-center">{getStatusBadge(sale.overall_status)}</td>
-                      </tr>
-                    );
-                  })
+                          <td
+                            style={{ fontWeight: '500', cursor: 'help', color: isPaymentOnly ? '#1565c0' : undefined }}
+                            title={sale.customer_name}
+                          >
+                            {isPaymentOnly && '💵 '}{sale.company_name || sale.customer_name}
+                          </td>
+                          <td className="text-right" style={{ color: '#7f8c8d' }}>
+                            {formatCurrency(sale.prev_balance || 0)}
+                          </td>
+                          <td className="text-right" style={{ color: isPaymentOnly ? '#7f8c8d' : undefined }}>
+                            {isPaymentOnly ? '-' : formatCurrency(sale.total_amount)}
+                          </td>
+                          <td className="text-right" style={{ color: isPaymentOnly ? '#7f8c8d' : (isFullyMatched ? (margin >= 0 ? '#27ae60' : '#e74c3c') : '#9ca3af') }}>
+                            {isPaymentOnly ? '-' : (isFullyMatched ? formatCurrency(margin) : '-')}
+                          </td>
+                          <td className="text-center" style={{
+                            color: isPaymentOnly ? '#7f8c8d' : (isFullyMatched ? (marginRate >= 0 ? '#27ae60' : '#e74c3c') : '#9ca3af'),
+                            fontWeight: '500'
+                          }}>
+                            {isPaymentOnly ? '-' : (isFullyMatched ? `${marginRate}%` : '-')}
+                          </td>
+                          <td className="text-right" style={{ color: '#2980b9', fontWeight: isPaymentOnly ? '600' : undefined }}>
+                            {formatCurrency(sale.today_deposit || 0)}
+                          </td>
+                          <td className="text-right" style={{ color: '#7f8c8d' }}>
+                            {formatCurrency(balance)}
+                          </td>
+                          <td className="text-center">
+                            {isPaymentOnly ? (
+                              <span style={{ padding: '0.1rem 0.4rem', backgroundColor: '#2980b9', color: '#fff', borderRadius: '3px', fontSize: '0.75rem', whiteSpace: 'nowrap' }}>
+                                {sale.payment_methods || '입금'}
+                              </span>
+                            ) : getStatusBadge(sale.overall_status)}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </>
+
                 )}
               </tbody>
             </table>
@@ -970,18 +999,18 @@ function MatchingPage({ isWindow, refreshKey, onTradeChange, onLaunchApp }) {
                   <col />
                   <col style={{ width: '100px' }} />
                   <col style={{ width: '100px' }} />
+                  <col style={{ width: '90px' }} />
+                  <col style={{ width: '70px' }} />
                   <col style={{ width: '100px' }} />
-                  <col style={{ width: '80px' }} />
-                  <col style={{ width: '80px' }} />
+                  <col style={{ width: '100px' }} />
+                  <col style={{ width: '70px' }} />
                 </colgroup>
                 <tbody>
                   <tr style={{ fontWeight: '600' }}>
                     <td style={{ padding: '0.5rem' }}>합계 ({salesData.length}건)</td>
+                    <td className="text-right" style={{ padding: '0.5rem', color: '#7f8c8d' }}>-</td>
                     <td className="text-right" style={{ padding: '0.5rem' }}>
                       {formatCurrency(salesData.reduce((sum, s) => sum + parseFloat(s.total_amount || 0), 0))}
-                    </td>
-                    <td className="text-right" style={{ padding: '0.5rem', color: '#e74c3c' }}>
-                      {formatCurrency(salesData.reduce((sum, s) => sum + parseFloat(s.balance || 0), 0))}
                     </td>
                     <td className="text-right" style={{
                       padding: '0.5rem',
@@ -989,13 +1018,70 @@ function MatchingPage({ isWindow, refreshKey, onTradeChange, onLaunchApp }) {
                     }}>
                       {formatCurrency(salesData.filter(s => s.overall_status === 'MATCHED').reduce((sum, s) => sum + parseFloat(s.margin || 0), 0))}
                     </td>
-                    <td className="text-center" style={{ padding: '0.5rem', color: '#7f8c8d' }}>-</td>
+                    <td className="text-center" style={{
+                      padding: '0.5rem',
+                      color: (() => {
+                        const totalSales = salesData.reduce((sum, s) => sum + parseFloat(s.total_amount || 0), 0);
+                        const totalMargin = salesData.filter(s => s.overall_status === 'MATCHED').reduce((sum, s) => sum + parseFloat(s.margin || 0), 0);
+                        return totalMargin >= 0 ? '#27ae60' : '#e74c3c';
+                      })()
+                    }}>
+                      {(() => {
+                        const totalSales = salesData.reduce((sum, s) => sum + parseFloat(s.total_amount || 0), 0);
+                        const totalMargin = salesData.filter(s => s.overall_status === 'MATCHED').reduce((sum, s) => sum + parseFloat(s.margin || 0), 0);
+                        if (totalSales === 0) return '-';
+                        return `${(totalMargin / totalSales * 100).toFixed(1)}%`;
+                      })()}
+                    </td>
+                    <td className="text-right" style={{ padding: '0.5rem', color: '#2980b9' }}>
+                      {formatCurrency(salesData.reduce((sum, s) => sum + parseFloat(s.today_deposit || 0), 0))}
+                    </td>
+                    <td className="text-right" style={{ padding: '0.5rem', color: '#7f8c8d' }}>
+                      {formatCurrency(salesData.reduce((sum, s) => sum + parseFloat(s.balance || 0), 0))}
+                    </td>
                     <td className="text-center" style={{ padding: '0.5rem', color: '#7f8c8d' }}>-</td>
                   </tr>
                 </tbody>
               </table>
             </div>
           )}
+
+          {/* 결제 방법별 입금 합계 (선택된 날짜 기준) */}
+          {selectedDate && (() => {
+            const dateStr = selectedDate.date;
+            const filteredPayments = paymentTransactions.filter(item => {
+              const itemDate = item.transaction_date?.split('T')[0] || item.transaction_date;
+              return itemDate === dateStr;
+            });
+            if (filteredPayments.length === 0) return null;
+
+            // 결제 방법별 그룹화
+            const methodTotals = {};
+            filteredPayments.forEach(p => {
+              const method = p.payment_method || '미지정';
+              methodTotals[method] = (methodTotals[method] || 0) + parseFloat(p.amount || 0);
+            });
+
+            return (
+              <div style={{ padding: '0.4rem 0.8rem', borderTop: '1px solid #eee', backgroundColor: '#f0f8ff' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: '0.8rem', color: '#7f8c8d' }}>결제방법별:</span>
+                  {Object.entries(methodTotals).map(([method, total], idx) => (
+                    <span key={idx} style={{
+                      padding: '0.2rem 0.5rem',
+                      backgroundColor: '#2980b9',
+                      color: '#fff',
+                      borderRadius: '4px',
+                      fontSize: '0.8rem',
+                      fontWeight: '500'
+                    }}>
+                      {method}: {formatCurrency(total)}원
+                    </span>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
 
           <div style={{ height: '40px', padding: '0 0.8rem', borderTop: '1px solid #eee', backgroundColor: '#f8f9fa', fontSize: '0.9rem', color: '#7f8c8d', display: 'flex', alignItems: 'center' }}>
             💡 전표를 더블클릭하면 매칭 작업을 할 수 있습니다.

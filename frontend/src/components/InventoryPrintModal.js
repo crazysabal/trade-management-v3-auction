@@ -609,7 +609,7 @@ const InventoryPrintModal = ({ isOpen, onClose, inventory, warehouses }) => {
                                         Cols.push(<col key="g" style={{ width: `${sw.grade}%` }} />);
                                         Cols.push(<col key="q" style={{ width: `${sw.qty}%` }} />);
                                         Cols.push(<col key="p" style={{ width: `${sw.price}%` }} />);
-                                        if (showAllWarehouses) Cols.push(<col key="wh" style={{ width: '8%' }} />);
+
                                         if (showRemarks) Cols.push(<col key="r" style={{ width: `${sw.remarks}%` }} />);
 
                                         colGroup = <colgroup>{Cols}</colgroup>;
@@ -703,7 +703,7 @@ const InventoryPrintModal = ({ isOpen, onClose, inventory, warehouses }) => {
                                                     let spanCount = 6;
                                                     if (showRemarks) spanCount++;
                                                     if (!isDouble && showDate) spanCount++;
-                                                    if (showAllWarehouses) spanCount++; // 창고 컨럼 추가
+
 
                                                     if (row.type === 'warehouse') {
                                                         return (
@@ -744,11 +744,7 @@ const InventoryPrintModal = ({ isOpen, onClose, inventory, warehouses }) => {
                                                                 <td className="text-right" style={{ textAlign: 'right', padding: '0 5px', border: 'none' }}>
                                                                     {item.unit_price ? Number(item.unit_price).toLocaleString() : '-'}
                                                                 </td>
-                                                                {showAllWarehouses && (
-                                                                    <td style={{ textAlign: 'center', padding: '0 3px', border: 'none', whiteSpace: 'nowrap', fontSize: '0.85em', color: '#666' }}>
-                                                                        {row.warehouseName || '-'}
-                                                                    </td>
-                                                                )}
+
                                                                 {showRemarks && <td style={{ border: 'none' }}></td>}
                                                             </tr>
                                                         );
