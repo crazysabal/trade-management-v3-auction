@@ -1,4 +1,4 @@
-import React, { useState, useEffect, memo } from 'react';
+import React, { useState, useEffect, useMemo, memo } from 'react';
 import { purchaseInventoryAPI, warehousesAPI, inventoryAdjustmentAPI, inventoryTransferAPI, inventoryProductionAPI } from '../services/api';
 import { formatLocalDate } from '../utils/dateUtils'; // [FIX] Import date utility
 import { formatNumber } from '../utils/formatUtils'; // [Refactor] 공통 유틸리티 사용
@@ -136,8 +136,8 @@ const InventoryHistory = ({ onOpenTrade }) => {
         }
     };
 
-    // Multi-keyword filtering
-    const getFilteredHistory = () => {
+    // [OPTIMIZATION] useMemo로 검색어/데이터 변경 시에만 필터링 재계산 (입력 시 버벅거림 방지)
+    const displayedHistory = useMemo(() => {
         if (!searchTerm.trim()) return history;
 
         const keywords = searchTerm.toLowerCase().split(/\s+/).filter(k => k.length > 0);
@@ -155,7 +155,7 @@ const InventoryHistory = ({ onOpenTrade }) => {
 
                 // 2. 부가 필드(창고, 산지 위치 등)는 키워드가 짧을 경우 단어 시작 매칭으로 오탐 방지
                 if (kw.length <= 2) {
-                    const wordsForStrictCheck = secondaryText.split(/[\s,()\[\]\-_]+/);
+                    const wordsForStrictCheck = secondaryText.split(/[\s,()[\]\-_]+/);
                     return wordsForStrictCheck.some(word => word.startsWith(kw)) ||
                         (item.trade_number && item.trade_number.toLowerCase().includes(kw));
                 }
@@ -164,9 +164,7 @@ const InventoryHistory = ({ onOpenTrade }) => {
                 return secondaryText.includes(kw);
             });
         });
-    };
-
-    const displayedHistory = getFilteredHistory();
+    }, [searchTerm, history]);
 
     // formatNumber imported from formatUtils.js
 
@@ -426,7 +424,6 @@ const InventoryHistory = ({ onOpenTrade }) => {
                             <th>출하주</th>
                             <th className="text-center">등급</th>
                             <th>수량</th>
-                            <th>잔고</th>
                             <th>거래처</th>
                             <th>전표번호</th>
                             <th>비고</th>
@@ -493,9 +490,6 @@ const InventoryHistory = ({ onOpenTrade }) => {
                                                     return (qty > 0 ? '+' : '') + formatNumber(qty);
                                                 })()}
                                             </strong>
-                                        </td>
-                                        <td style={{ color: '#7f8c8d' }}>
-                                            {formatNumber(item.running_stock)}
                                         </td>
                                         <td>
                                             {item.company_name || '-'}

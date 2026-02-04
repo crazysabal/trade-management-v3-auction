@@ -78,6 +78,14 @@ const TradeController = {
 
             const { master, details } = tradeData;
 
+            // [VALIDATION] 필수 데이터 검증
+            if (!master.company_id || String(master.company_id).trim() === '') {
+                throw {
+                    status: 400,
+                    message: '거래처 정보(company_id)가 누락되었습니다. 거래처를 선택하거나 매핑이 올바른지 확인해주세요.'
+                };
+            }
+
             // 0. 반품 한도 검사
             await TradeController.validateReturnLimits(connection, details);
 
@@ -117,19 +125,51 @@ const TradeController = {
                 );
 
                 // 상세 항목 등록
+                // 상세 항목 등록
                 if (details && details.length > 0) {
+                    // [FIX] seq_no 채번
+                    const [maxSeqResult] = await connection.query(
+                        'SELECT MAX(seq_no) as max_seq FROM trade_details WHERE trade_master_id = ?',
+                        [masterId]
+                    );
+                    let nextSeq = (maxSeqResult[0].max_seq || 0) + 1;
+
+                    // [FIX] 품목 정보 캐싱 (무게 계산용)
+                    const productIds = [...new Set(details.map(d => d.product_id))];
+                    const [productData] = await connection.query(
+                        'SELECT id, weight, weight_unit FROM products WHERE id IN (?)',
+                        [productIds]
+                    );
+                    const productMap = productData.reduce((acc, p) => {
+                        acc[p.id] = p;
+                        return acc;
+                    }, {});
+
                     for (const detail of details) {
+                        const pInfo = productMap[detail.product_id] || {};
+
+                        // 무게 및 단위 보정
+                        const weight_unit = detail.weight_unit || pInfo.weight_unit || 'kg';
+                        let total_weight = detail.total_weight;
+                        if (!total_weight || parseFloat(total_weight) === 0) {
+                            const unitWeight = parseFloat(pInfo.weight) || 0;
+                            total_weight = unitWeight * (parseFloat(detail.quantity) || 0);
+                        }
+
                         await connection.query(
                             `INSERT INTO trade_details (
-                              trade_master_id, product_id, quantity, unit_price,
-                              supply_amount, tax_amount, total_price, notes,
-                              parent_detail_id, inventory_id, shipper_id, location_id, is_agricultural
-                            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                              trade_master_id, seq_no, product_id, parent_detail_id, 
+                              quantity, total_weight, weight_unit, unit_price,
+                              supply_amount, tax_amount, total_amount, auction_price, notes,
+                              shipper_location, sender, purchase_price
+                            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
                             [
-                                masterId, detail.product_id, detail.quantity, detail.unit_price,
-                                detail.supply_amount || 0, detail.tax_amount || 0, detail.total_price || 0, detail.notes,
-                                detail.parent_detail_id || null, detail.inventory_id || null,
-                                detail.shipper_id || null, detail.location_id || null, detail.is_agricultural || 0
+                                masterId, nextSeq++, detail.product_id, detail.parent_detail_id || null,
+                                detail.quantity, total_weight || 0, weight_unit, detail.unit_price,
+                                detail.supply_amount || 0, detail.tax_amount || 0, detail.total_amount || detail.total_price || 0,
+                                detail.auction_price || detail.unit_price || 0, detail.notes || '',
+                                detail.shipper_location || null, detail.sender_name || detail.sender || null,
+                                detail.purchase_price || null
                             ]
                         );
                     }

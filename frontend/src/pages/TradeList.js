@@ -1,7 +1,7 @@
 ﻿import React, { useState, useEffect, useMemo, useRef, useCallback, memo } from 'react';
-import { Link } from 'react-router-dom';
+// Link import removed - registration buttons removed
 import { createPortal } from 'react-dom';
-import { tradeAPI, companyAPI } from '../services/api';
+import { tradeAPI, companyAPI, paymentAPI } from '../services/api';
 import ConfirmModal from '../components/ConfirmModal';
 import TradeDetailModal from '../components/TradeDetailModal';
 import TradePrintModal from '../components/TradePrintModal';
@@ -34,6 +34,7 @@ function TradeList({ isWindow, refreshKey, onOpenTradeEdit }) {
   const [purchaseTrades, setPurchaseTrades] = useState([]);
   const [saleTrades, setSaleTrades] = useState([]);
   const [companies, setCompanies] = useState([]);
+  const [paymentTransactions, setPaymentTransactions] = useState([]); // 결제 방법별 합계용
   const [loading, setLoading] = useState(true);
 
   // Selections
@@ -70,14 +71,16 @@ function TradeList({ isWindow, refreshKey, onOpenTradeEdit }) {
   const loadTrades = async () => {
     try {
       setLoading(true);
-      const [purchaseRes, saleRes, companyRes] = await Promise.all([
+      const [purchaseRes, saleRes, companyRes, paymentRes] = await Promise.all([
         tradeAPI.getAll({ ...queryRange, trade_type: 'PURCHASE' }),
         tradeAPI.getAll({ ...queryRange, trade_type: 'SALE' }),
-        companyAPI.getAll()
+        companyAPI.getAll(),
+        paymentAPI.getTransactions({ start_date: queryRange.start_date, end_date: queryRange.end_date })
       ]);
       setPurchaseTrades(purchaseRes.data.data);
       setSaleTrades(saleRes.data.data);
       setCompanies(companyRes.data.data || []);
+      setPaymentTransactions(paymentRes.data.data || []);
     } catch (error) {
       console.error('Load Error:', error);
       setModal({ isOpen: true, type: 'warning', title: '로딩 실패', message: '데이터를 불러오는데 실패했습니다.', confirmText: '확인', showCancel: false });
@@ -299,7 +302,7 @@ function TradeList({ isWindow, refreshKey, onOpenTradeEdit }) {
       let runningBalance = 0;
       return sorted.map(t => {
         const totalPrice = parseFloat(t.total_price) || 0;
-        const paidAmount = parseFloat(t.paid_amount) || 0;
+        const paidAmount = parseFloat(isPurchase ? t.daily_payment : t.daily_receipt) || 0;
 
         let prevBalance = 0;
         let balance = 0;
@@ -348,7 +351,7 @@ function TradeList({ isWindow, refreshKey, onOpenTradeEdit }) {
                 <th style={{ color: headerTextColor, padding: '0.6rem', textAlign: 'left', fontSize: '0.85rem' }}>거래처</th>
                 {isCompanyMode && <th style={{ color: headerTextColor, padding: '0.6rem', textAlign: 'right', fontSize: '0.85rem' }}>전잔금</th>}
                 <th style={{ color: headerTextColor, padding: '0.6rem', textAlign: 'right', fontSize: '0.85rem' }}>{amountLabel}</th>
-                <th style={{ color: headerTextColor, padding: '0.6rem', textAlign: 'right', fontSize: '0.85rem' }}>입금</th>
+                <th style={{ color: headerTextColor, padding: '0.6rem', textAlign: 'right', fontSize: '0.85rem' }}>{isPurchase ? '출금' : '입금'}</th>
                 <th style={{ color: headerTextColor, padding: '0.6rem', textAlign: 'right', fontSize: '0.85rem' }}>잔금</th>
                 <th style={{ color: headerTextColor, padding: '0.6rem', textAlign: 'center', fontSize: '0.85rem' }}>관리</th>
               </tr>
@@ -421,6 +424,7 @@ function TradeList({ isWindow, refreshKey, onOpenTradeEdit }) {
     const setFilter = isPurchase ? setPurchaseFilter : setSaleFilter;
     const color = isPurchase ? '#c0392b' : '#2980b9';
     const label = isPurchase ? '매입' : '매출';
+    const transactionType = isPurchase ? 'PAYMENT' : 'RECEIPT'; // 매입=출금, 매출=입금
 
     // 2차 필터링 (검색어)
     const finalTrades = trades.filter(t => {
@@ -433,11 +437,40 @@ function TradeList({ isWindow, refreshKey, onOpenTradeEdit }) {
       );
     });
 
+    // 결제 방법별 합계 계산 (현재 뷰모드/선택에 따라 필터링)
+    const getPaymentMethodSummary = () => {
+      // 해당 전표 유형(입금/출금)에 맞는 거래만 필터
+      let filteredPayments = paymentTransactions.filter(p => p.transaction_type === transactionType);
+
+      // 뷰 모드에 따라 추가 필터링
+      if (viewMode === 'DAILY' && selectedDate) {
+        filteredPayments = filteredPayments.filter(p => {
+          const paymentDate = p.transaction_date?.split('T')[0] || p.transaction_date;
+          return paymentDate === selectedDate;
+        });
+      } else if (viewMode === 'COMPANY' && selectedCompany) {
+        // 거래처별 뷰: 해당 거래처의 결제만 표시
+        filteredPayments = filteredPayments.filter(p => p.company_name === selectedCompany);
+      }
+      // PERIOD 모드: 전체 기간 표시 (필터 없음)
+
+      // 결제 방법별 그룹화
+      const methodTotals = {};
+      filteredPayments.forEach(p => {
+        const method = p.payment_method || '미지정';
+        methodTotals[method] = (methodTotals[method] || 0) + parseFloat(p.amount || 0);
+      });
+
+      return methodTotals;
+    };
+
+    const methodTotals = getPaymentMethodSummary();
+    const hasPayments = Object.keys(methodTotals).length > 0;
+
     return (
       <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: '#fff', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)', overflow: 'hidden' }}>
         <div style={{ padding: '0.8rem', background: isPurchase ? '#fff5f5' : '#f0f9ff', borderBottom: `2px solid ${color}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <h3 style={{ margin: 0, color: color, fontSize: '1rem' }}>{label} 목록 <span style={{ fontSize: '0.8rem', background: color, color: '#fff', padding: '1px 6px', borderRadius: '10px' }}>{finalTrades.length}</span></h3>
-          <Link to={`/trades/new?type=${type}`} style={{ textDecoration: 'none', background: color, color: '#fff', padding: '0.3rem 0.6rem', borderRadius: '4px', fontSize: '0.8rem' }}>+ 등록</Link>
         </div>
         <div style={{ padding: '0.5rem', borderBottom: '1px solid #eee' }}>
           <input
@@ -451,6 +484,26 @@ function TradeList({ isWindow, refreshKey, onOpenTradeEdit }) {
         <div style={{ flex: 1, overflow: 'hidden' }}>
           <TradeTable trades={finalTrades} type={type} viewMode={viewMode} />
         </div>
+        {/* 결제 방법별 합계 */}
+        {hasPayments && (
+          <div style={{ padding: '0.4rem 0.8rem', borderTop: '1px solid #eee', backgroundColor: isPurchase ? '#fef2f2' : '#f0f8ff' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+              <span style={{ fontSize: '0.8rem', color: '#7f8c8d' }}>{isPurchase ? '출금방법별:' : '입금방법별:'}</span>
+              {Object.entries(methodTotals).map(([method, total], idx) => (
+                <span key={idx} style={{
+                  padding: '0.2rem 0.5rem',
+                  backgroundColor: color,
+                  color: '#fff',
+                  borderRadius: '4px',
+                  fontSize: '0.8rem',
+                  fontWeight: '500'
+                }}>
+                  {method}: {formatCurrency(total)}원
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     );
   };

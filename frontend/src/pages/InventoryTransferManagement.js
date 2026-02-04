@@ -676,7 +676,8 @@ const InventoryTransferManagement = () => {
                                                                     setDetailModal({ isOpen: true, inventoryId: item.id });
                                                                 }}
                                                                 className="btn-detail"
-                                                                title="매입 상세 보기"
+                                                                title="이력 보기"
+                                                                style={{ margin: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                                                             >
                                                                 🔍
                                                             </button>
