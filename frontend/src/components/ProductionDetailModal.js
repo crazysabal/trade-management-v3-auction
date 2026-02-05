@@ -6,7 +6,7 @@ import { useModalDraggable } from '../hooks/useModalDraggable';
 import { useConfirmModal } from './ConfirmModal';
 
 /**
- * 재고 작업 상세 보기 모달 컴포넌트
+ * 재고 생산 상세 보기 모달 컴포넌트
  * (생산/소분 등 작업 내역의 원재료 및 산출물 상세 표시)
  */
 function ProductionDetailModal({ isOpen, onClose, jobId, highlightId }) {

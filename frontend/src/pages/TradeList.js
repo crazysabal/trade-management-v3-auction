@@ -325,12 +325,9 @@ function TradeList({ isWindow, refreshKey, onOpenTradeEdit }) {
     const sums = useMemo(() => {
       return processedTrades.reduce((acc, t) => ({
         sales: acc.sales + t.totalPrice,
-        paid: acc.paid + t.paidAmount,
-        balance: acc.balance + t.balance
-      }), { sales: 0, paid: 0, balance: 0 });
+        paid: acc.paid + t.paidAmount
+      }), { sales: 0, paid: 0 });
     }, [processedTrades]);
-
-    const finalBalance = sums.sales - sums.paid; // 기간 내 순 증감액
 
     return (
       <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column' }}>
@@ -339,10 +336,9 @@ function TradeList({ isWindow, refreshKey, onOpenTradeEdit }) {
             <colgroup>
               <col style={{ width: '14%' }} />
               <col />
-              {isCompanyMode && <col style={{ width: '16%' }} />}
-              <col style={{ width: '16%' }} />
-              <col style={{ width: '16%' }} />
-              <col style={{ width: '16%' }} />
+              {isCompanyMode && <col style={{ width: '18%' }} />}
+              <col style={{ width: '18%' }} />
+              <col style={{ width: '18%' }} />
               <col style={{ width: '50px' }} />
             </colgroup>
             <thead style={{ position: 'sticky', top: 0, zIndex: 1 }}>
@@ -352,13 +348,12 @@ function TradeList({ isWindow, refreshKey, onOpenTradeEdit }) {
                 {isCompanyMode && <th style={{ color: headerTextColor, padding: '0.6rem', textAlign: 'right', fontSize: '0.85rem' }}>전잔금</th>}
                 <th style={{ color: headerTextColor, padding: '0.6rem', textAlign: 'right', fontSize: '0.85rem' }}>{amountLabel}</th>
                 <th style={{ color: headerTextColor, padding: '0.6rem', textAlign: 'right', fontSize: '0.85rem' }}>{isPurchase ? '출금' : '입금'}</th>
-                <th style={{ color: headerTextColor, padding: '0.6rem', textAlign: 'right', fontSize: '0.85rem' }}>잔금</th>
                 <th style={{ color: headerTextColor, padding: '0.6rem', textAlign: 'center', fontSize: '0.85rem' }}>관리</th>
               </tr>
             </thead>
             <tbody>
               {processedTrades.length === 0 ? (
-                <tr><td colSpan={isCompanyMode ? 7 : 6} style={{ padding: '2rem', textAlign: 'center', color: '#999' }}>데이터가 없습니다.</td></tr>
+                <tr><td colSpan={isCompanyMode ? 6 : 5} style={{ padding: '2rem', textAlign: 'center', color: '#999' }}>데이터가 없습니다.</td></tr>
               ) : (
                 processedTrades.map(t => (
                   <tr key={t.id} style={{ borderBottom: '1px solid #eee', cursor: 'pointer' }} onClick={() => setDetailModal({ isOpen: true, tradeId: t.id })}>
@@ -375,10 +370,6 @@ function TradeList({ isWindow, refreshKey, onOpenTradeEdit }) {
 
                     <td style={{ padding: '0.5rem', textAlign: 'right', fontSize: '0.85rem', color: t.paidAmount > 0 ? '#16a34a' : '#94a3b8' }}>
                       {t.paidAmount > 0 ? formatCurrency(t.paidAmount) : '-'}
-                    </td>
-
-                    <td style={{ padding: '0.5rem', textAlign: 'right', fontSize: '0.85rem', fontWeight: '600', color: t.balance > 0 ? '#dc2626' : '#16a34a' }}>
-                      {formatCurrency(t.balance)}
                     </td>
 
                     <td style={{ padding: '0.5rem', textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
@@ -401,10 +392,6 @@ function TradeList({ isWindow, refreshKey, onOpenTradeEdit }) {
 
                   <td style={{ padding: '0.6rem', textAlign: 'right', color: '#16a34a' }}>
                     {formatCurrency(sums.paid)}
-                  </td>
-
-                  <td style={{ padding: '0.6rem', textAlign: 'right', color: finalBalance > 0 ? '#dc2626' : '#16a34a' }}>
-                    {formatCurrency(finalBalance)}
                   </td>
 
                   <td></td>

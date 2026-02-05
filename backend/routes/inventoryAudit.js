@@ -88,7 +88,8 @@ router.get('/:id', async (req, res) => {
             LEFT JOIN trade_masters tm ON td.trade_master_id = tm.id
             LEFT JOIN companies c ON tm.company_id = c.id
             WHERE ai.audit_id = ?
-            ORDER BY pi.warehouse_id ASC, pi.display_order ASC
+            WHERE ai.audit_id = ?
+            ORDER BY w.display_order ASC, pi.warehouse_id ASC, pi.display_order ASC
         `, [id]);
 
         res.json({
@@ -150,19 +151,20 @@ router.post('/start', async (req, res) => {
 
         // 3. 현재 재고 스냅샷 생성
         let inventoryQuery = `
-            SELECT id as inventory_id, product_id, remaining_quantity as system_quantity, warehouse_id
-            FROM purchase_inventory
-            WHERE remaining_quantity > 0 AND status = 'AVAILABLE'
+            SELECT pi.id as inventory_id, pi.product_id, pi.remaining_quantity as system_quantity, pi.warehouse_id
+            FROM purchase_inventory pi
+            LEFT JOIN warehouses w ON pi.warehouse_id = w.id
+            WHERE pi.remaining_quantity > 0
         `;
         const queryParams = [];
 
         if (!isAllWarehouses) {
-            inventoryQuery += ' AND warehouse_id = ?';
+            inventoryQuery += ' AND pi.warehouse_id = ?';
             queryParams.push(warehouse_id);
         }
 
-        // 창고별, display_order 순으로 정렬
-        inventoryQuery += ' ORDER BY warehouse_id ASC, display_order ASC';
+        // 창고 순서(display_order), 입고 순서(display_order)로 정렬
+        inventoryQuery += ' ORDER BY w.display_order ASC, pi.warehouse_id ASC, pi.display_order ASC';
 
         const [inventoryItems] = await connection.query(inventoryQuery, queryParams);
 

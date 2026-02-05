@@ -143,9 +143,9 @@ router.post('/', async (req, res) => {
             await connection.query(
                 `UPDATE purchase_inventory 
                  SET remaining_quantity = remaining_quantity - ?,
-                     status = CASE WHEN remaining_quantity <= 0 THEN 'DEPLETED' ELSE status END
+                     status = CASE WHEN remaining_quantity - ? <= 0 THEN 'DEPLETED' ELSE 'AVAILABLE' END
                  WHERE id = ?`,
-                [ing.use_quantity, ing.inventory_id]
+                [ing.use_quantity, ing.use_quantity, ing.inventory_id]
             );
 
             // Log Ingredient usage (Table for production history)
@@ -312,17 +312,10 @@ router.delete('/:id', async (req, res) => {
         // 4-2. Delete Production Log
         await connection.query('DELETE FROM inventory_productions WHERE id = ?', [productionId]);
 
-        // 4-3. Delete Output Inventory
-        /* [V1.0.21 REMOVED] - Trigger handles this now
-        const outputTotalWeight = Number(inventory.original_quantity) * Number(inventory.weight || 0);
-        await connection.query(
-            `UPDATE inventory 
-             SET quantity = quantity - ?,
-                 weight = weight - ?
-             WHERE product_id = ?`,
-            [inventory.original_quantity, outputTotalWeight, inventory.product_id]
-        );
-        */
+        // 4-3. Delete related audit items first (FK constraint)
+        await connection.query('DELETE FROM inventory_audit_items WHERE inventory_id = ?', [outputInventoryId]);
+
+        // 4-4. Delete Output Inventory
         await connection.query('DELETE FROM purchase_inventory WHERE id = ?', [outputInventoryId]);
 
         // 4-4. Delete Trade Details & Master (Input & Output)

@@ -1083,8 +1083,8 @@ router.get('/trade/:trade_master_id/inventory', async (req, res) => {
         p.weight_unit as product_weight_unit,
         p.weight_unit as unit,
         tm.trade_number,
-        c.business_name as company_name,
-        c.company_name as alias
+        c.company_name,
+        c.business_name
       FROM purchase_inventory pi
       JOIN products p ON pi.product_id = p.id
       JOIN trade_details td ON pi.trade_detail_id = td.id

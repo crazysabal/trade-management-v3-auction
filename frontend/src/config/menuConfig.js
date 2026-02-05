@@ -52,7 +52,7 @@ export const MENU_CONFIG = [
             { id: 'INVENTORY_LIST', label: '재고 현황', icon: '📊' },
             { id: 'INVENTORY_QUICK', label: '재고 현황 (Quick)', icon: '📊' },
             { id: 'INVENTORY_TRANSFER', label: '재고 이동', icon: '🚚' },
-            { id: 'INVENTORY_PRODUCTION', label: '재고 작업', icon: '🏭' },
+            { id: 'INVENTORY_PRODUCTION', label: '재고 생산', icon: '🏭' },
             { id: 'MATCHING', label: '마감 (매칭)', icon: '🔗' },
             { id: 'INVENTORY_HISTORY', label: '재고 이력', icon: '📜' },
             { id: 'INVENTORY_AUDIT', label: '재고 실사', icon: '🔍' },
@@ -110,7 +110,7 @@ export const RESOURCE_METADATA = MENU_CONFIG.reduce((acc, group) => {
 
 // Add special items not in main menu
 RESOURCE_METADATA['DASHBOARD'] = { id: 'DASHBOARD', label: '대시보드', icon: '🏠', groupName: '시스템' };
-RESOURCE_METADATA['INVENTORY_PRODUCTION_HISTORY'] = { id: 'INVENTORY_PRODUCTION_HISTORY', label: '재고 작업 이력', icon: '📜', groupName: '재고 관리' };
+RESOURCE_METADATA['INVENTORY_PRODUCTION_HISTORY'] = { id: 'INVENTORY_PRODUCTION_HISTORY', label: '재고 생산 이력', icon: '📜', groupName: '재고 관리' };
 
 /**
  * Get display label for a resource

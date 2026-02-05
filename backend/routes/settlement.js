@@ -202,7 +202,7 @@ router.get('/assets', async (req, res) => {
                 COALESCE(SUM(remaining_quantity * unit_price), 0) as total_inventory_value,
                 COUNT(id) as inventory_count
             FROM purchase_inventory
-            WHERE status = 'AVAILABLE' AND remaining_quantity > 0
+            WHERE remaining_quantity > 0
         `);
 
         // 2. 매출 채권 (미수금) - 받을 돈
@@ -332,7 +332,7 @@ router.get('/closing/:date', async (req, res) => {
 
         // 실시간 재고 (비교용)
         const [liveInvRows] = await db.query(
-            `SELECT COALESCE(SUM(remaining_quantity * unit_price), 0) as total FROM purchase_inventory WHERE status = 'AVAILABLE'`
+            `SELECT COALESCE(SUM(remaining_quantity * unit_price), 0) as total FROM purchase_inventory WHERE remaining_quantity > 0`
         );
         const liveInventoryValue = parseFloat(liveInvRows[0]?.total || 0);
 
@@ -703,7 +703,7 @@ router.post('/close', async (req, res) => {
             SELECT 
                 ?, id, remaining_quantity, remaining_quantity, unit_price, (remaining_quantity * unit_price)
             FROM purchase_inventory
-            WHERE status = 'AVAILABLE' AND remaining_quantity > 0
+            WHERE remaining_quantity > 0
         `, [endDate]);
 
         await connection.commit();
@@ -813,7 +813,7 @@ router.post('/closing', async (req, res) => {
                 SELECT 
                     ?, id, remaining_quantity, remaining_quantity, unit_price, (remaining_quantity * unit_price)
                 FROM purchase_inventory
-                WHERE status = 'AVAILABLE' AND remaining_quantity > 0
+                WHERE remaining_quantity > 0
             `, [date]);
 
             await connection.commit();

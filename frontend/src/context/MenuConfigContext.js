@@ -36,16 +36,25 @@ export const MenuConfigProvider = ({ children }) => {
                         const masterGroup = masterGroupMap.get(group.id);
                         if (!masterGroup) return group; // Custom or deprecated group
 
-                        const userItemIds = new Set(group.items.map(i => i.id));
+                        // 1. Update existing items with latest label/icon from master
+                        const updatedItems = group.items.map(item => {
+                            const masterItem = masterGroup.items.find(i => i.id === item.id);
+                            if (masterItem) {
+                                return { ...item, label: masterItem.label, icon: masterItem.icon };
+                            }
+                            return item;
+                        });
+
+                        // 2. Add missing items from master
+                        const userItemIds = new Set(updatedItems.map(i => i.id));
                         const missingItems = masterGroup.items.filter(i => !userItemIds.has(i.id));
 
-                        if (missingItems.length > 0) {
-                            return {
-                                ...group,
-                                items: [...group.items, ...missingItems]
-                            };
-                        }
-                        return group;
+                        return {
+                            ...group,
+                            label: masterGroup.group, // Group label sync
+                            icon: masterGroup.icon,   // Group icon sync
+                            items: [...updatedItems, ...missingItems]
+                        };
                     });
 
                     // 2. Add entirely new groups from master config
