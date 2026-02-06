@@ -88,7 +88,7 @@ router.get('/:id', async (req, res) => {
             LEFT JOIN trade_masters tm ON td.trade_master_id = tm.id
             LEFT JOIN companies c ON tm.company_id = c.id
             WHERE ai.audit_id = ?
-            WHERE ai.audit_id = ?
+
             ORDER BY w.display_order ASC, pi.warehouse_id ASC, pi.display_order ASC
         `, [id]);
 
